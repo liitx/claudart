@@ -89,11 +89,16 @@ Requires Dart SDK `>=3.0.0`.
 git clone https://github.com/liitx/claudart_cli <your-local-path>
 cd <your-local-path>
 dart pub get
-dart pub global activate --source path <your-local-path>
+dart compile exe bin/claudart.dart -o ~/bin/claudart
 ```
 
-> **Note:** When re-activating after code changes, the Dart snapshot cache may be stale.
-> Delete `.dart_tool/pub/bin/claudart_cli/*.snapshot` before re-activating if you see unexpected behaviour.
+Make sure `~/bin` is on your `PATH` (add to `~/.zshrc` if needed):
+
+```bash
+export PATH=$HOME/bin:$PATH
+```
+
+Compiling to a native executable avoids the `Resolving dependencies...` noise that appears when using `dart pub global activate --source path`. After any code change, re-run the compile command.
 
 ---
 
