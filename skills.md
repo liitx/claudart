@@ -1,6 +1,6 @@
 # dc-flutter / media_ivi — Accumulated Skills
 
-> Updated by `dart run bin/ivi.dart teardown` after each resolved session.
+> Updated by `claudart teardown` after each resolved session.
 > Read by `/suggest` and `/debug` at the start of every session.
 > Generic patterns only — no session-specific noise.
 

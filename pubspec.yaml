@@ -1,12 +1,12 @@
-name: ivi_claude
-description: CLI entry point for the dc-flutter IVI debug/suggest workflow.
+name: claudart_cli
+description: A Dart CLI for managing project debug and suggestion sessions via structured markdown handoffs.
 version: 1.0.0
 
 environment:
   sdk: ^3.0.0
 
 executables:
-  ivi: ivi
+  claudart: claudart
 
 dependencies:
   args: ^2.5.0

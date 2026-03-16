@@ -13,7 +13,7 @@ String handoffTemplate({
 
 > Session started: $date | Branch: $branch
 > Source of truth between suggest and debug agents.
-> Managed by: ~/dev/dev_tools/claude/bin/ivi.dart
+> Managed by: claudart (https://github.com/liitx/claudart_cli)
 
 ---
 
@@ -88,7 +88,7 @@ _Nothing yet._
 const String blankHandoff = '''# Agent Handoff — dc-flutter / media_ivi
 
 > Source of truth between suggest and debug agents.
-> Run `dart run ~/dev/dev_tools/claude/bin/ivi.dart setup` to begin a new session.
+> Run `claudart setup` to begin a new session.
 
 ---
 

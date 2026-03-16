@@ -5,15 +5,15 @@ import '../lib/commands/status.dart';
 import '../lib/commands/teardown.dart';
 
 const _usage = '''
-IVI Claude Workflow CLI
+claudart — Dart CLI for structured project debug and suggestion sessions
 
 Usage:
-  ivi <command>
+  claudart <command> [path]
 
 Commands:
-  setup      Start a new debug/suggest session (initializes handoff.md)
-  status     Show current session status
-  teardown   Close session: update skills, archive handoff, suggest commit
+  setup [path]   Start a new session (path defaults to current directory)
+  status         Show current session state
+  teardown       Close session: update skills, archive handoff, suggest commit
 
 Options:
   -h, --help   Show this help message
@@ -37,10 +37,11 @@ Future<void> main(List<String> args) async {
   }
 
   final command = parsed.rest.first;
+  final path = parsed.rest.length > 1 ? parsed.rest[1] : '.';
 
   switch (command) {
     case 'setup':
-      await runSetup();
+      await runSetup(projectPath: path);
     case 'status':
       runStatus();
     case 'teardown':

@@ -4,7 +4,7 @@ import '../paths.dart';
 void runStatus() {
   final content = readFile(handoffPath);
   if (content.isEmpty) {
-    print('\nNo active handoff. Run: dart run bin/ivi.dart setup\n');
+    print('\nNo active handoff. Run: claudart setup\n');
     return;
   }
 
@@ -14,7 +14,7 @@ void runStatus() {
   final unresolved = _readSubSection(content, 'Debug Progress', 'What is still unresolved');
 
   print('\n═══════════════════════════════════════');
-  print('  IVI SESSION STATUS');
+  print('  CLAUDART SESSION STATUS');
   print('═══════════════════════════════════════');
   print('Status   : $status');
   print('Bug      : ${_truncate(bug)}');
@@ -29,15 +29,15 @@ void runStatus() {
   print('\nNext step:');
   switch (status) {
     case 'suggest-investigating':
-      print('  Run /suggest in Claude Code.');
+      print('  Run /suggest in your editor.');
     case 'ready-for-debug':
-      print('  Run /debug in Claude Code.');
+      print('  Run /debug in your editor.');
     case 'debug-in-progress':
       print('  Continue with /debug, or run /suggest if you hit a wall.');
     case 'needs-suggest':
-      print('  Run /suggest in Claude Code — debug has a question for you.');
+      print('  Run /suggest in your editor — debug has a question for you.');
     default:
-      print('  Run: dart run bin/ivi.dart setup');
+      print('  Run: claudart setup');
   }
   print('');
 }

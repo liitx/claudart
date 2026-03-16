@@ -4,10 +4,20 @@ import '../md_io.dart';
 import '../paths.dart';
 import '../handoff_template.dart';
 
-Future<void> runSetup() async {
+Future<void> runSetup({String projectPath = '.'}) async {
   print('\n═══════════════════════════════════════');
-  print('  IVI SESSION SETUP');
+  print('  CLAUDART SESSION SETUP');
   print('═══════════════════════════════════════');
+
+  // Resolve project path
+  final resolvedPath = p.isAbsolute(projectPath)
+      ? projectPath
+      : p.normalize(p.join(Directory.current.path, projectPath));
+
+  if (!Directory(resolvedPath).existsSync()) {
+    print('\n✗ Path not found: $resolvedPath');
+    exit(1);
+  }
 
   // Check for active handoff
   final existing = readFile(handoffPath);
@@ -22,8 +32,8 @@ Future<void> runSetup() async {
     }
   }
 
-  // Detect git branch
-  final branch = await _detectBranch();
+  // Detect git branch from project path
+  final branch = await _detectBranch(resolvedPath);
 
   // Read skills for relevant context
   final skills = readFile(skillsPath);
@@ -37,7 +47,7 @@ Future<void> runSetup() async {
   final bug = prompt('1. What is the bug? (actual behavior)');
   final expected = prompt('2. What should be happening? (expected behavior)');
   final files = prompt(
-    '3. Any files already in mind? (e.g. media_bloc.dart, playback_repository.dart)',
+    '3. Any files already in mind?',
     optional: true,
   );
   final blocs = prompt(
@@ -47,11 +57,12 @@ Future<void> runSetup() async {
 
   // Confirm before writing
   print('\n───────────────────────────────────────');
-  print('Branch : $branch');
-  print('Bug    : $bug');
+  print('Project : $resolvedPath');
+  print('Branch  : $branch');
+  print('Bug     : $bug');
   print('Expected: $expected');
-  if (files != null) print('Files  : $files');
-  if (blocs != null) print('BLoCs  : $blocs');
+  if (files != null) print('Files   : $files');
+  if (blocs != null) print('BLoCs   : $blocs');
   print('───────────────────────────────────────');
 
   if (!confirm('Write handoff with this context?')) {
@@ -73,13 +84,17 @@ Future<void> runSetup() async {
 
   print('\n✓ Handoff written to $handoffPath');
   print('\nNext step:');
-  print('  Open Claude Code and run /suggest to begin exploration.');
+  print('  Open your editor and run /suggest to begin exploration.');
   print('  Or run /debug if you already know the root cause.\n');
 }
 
-Future<String> _detectBranch() async {
+Future<String> _detectBranch(String projectPath) async {
   try {
-    final result = await Process.run('git', ['branch', '--show-current']);
+    final result = await Process.run(
+      'git',
+      ['branch', '--show-current'],
+      workingDirectory: projectPath,
+    );
     final branch = (result.stdout as String).trim();
     if (branch.isNotEmpty) {
       print('\n🌿 Branch detected: $branch');
@@ -87,6 +102,5 @@ Future<String> _detectBranch() async {
     }
   } catch (_) {}
 
-  // Not in a git repo or git not available — ask
   return prompt('Could not detect git branch. Enter branch name manually') ?? 'unknown';
 }
