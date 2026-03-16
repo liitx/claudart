@@ -1,8 +1,14 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../config.dart';
+import '../logging/logger.dart';
 import '../md_io.dart';
 import '../paths.dart';
 import '../handoff_template.dart';
+import '../sensitivity/abstractor.dart';
+import '../sensitivity/detector.dart';
+import '../sensitivity/token_map.dart';
+import 'scan.dart';
 
 Future<void> runSetup({String projectPath = '.'}) async {
   print('\n═══════════════════════════════════════');
@@ -70,10 +76,18 @@ Future<void> runSetup({String projectPath = '.'}) async {
     exit(0);
   }
 
-  // Write handoff
+  // Load config for sensitivity + scan
+  final config = loadConfig();
+
+  // Run scan if sensitivity mode is on and trigger is 'on_setup'
+  if (config.sensitivityMode && config.scanTrigger == 'on_setup') {
+    await runScan(scope: config.scanScope);
+  }
+
+  // Build handoff content
   final date = DateTime.now().toIso8601String().split('T').first;
   final projectName = _detectProjectName(resolvedPath);
-  final content = handoffTemplate(
+  var content = handoffTemplate(
     branch: branch,
     date: date,
     bug: bug!,
@@ -82,7 +96,27 @@ Future<void> runSetup({String projectPath = '.'}) async {
     files: files,
     blocs: blocs,
   );
+
+  // Abstract sensitive tokens from handoff if sensitivity mode on
+  if (config.sensitivityMode) {
+    final tokenMapPath = p.join(claudeDir, 'token_map.json');
+    final tokenMap = TokenMap.load(tokenMapPath);
+    content = abstractor.abstract(content, tokenMap, defaultDetector);
+    if (!abstractor.isNotSensitive(content, defaultDetector)) {
+      print('\n⚠  Handoff still contains sensitive tokens after abstraction.');
+      print('   Review handoff.md manually before sharing.');
+    }
+  }
+
   writeFile(handoffPath, content);
+
+  // Log the setup interaction
+  final logger = SessionLogger(sensitivityMode: config.sensitivityMode);
+  logger.logInteraction(
+    command: 'setup',
+    outcome: 'ok',
+    platform: Platform.operatingSystem,
+  );
 
   print('\n✓ Handoff written to $handoffPath');
   print('\nNext step:');

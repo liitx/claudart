@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../config.dart';
 import '../md_io.dart';
 import '../paths.dart';
 import '../knowledge_templates.dart';
@@ -68,6 +69,59 @@ Future<void> runLink(List<String> args) async {
   print('✓ .claude/  → ${p.join(claudeDir, '.claude')}');
   print('\nWorkspace: $claudeDir');
   print('Project  : $projectName');
+
+  // Sensitivity configuration
+  print('\n───────────────────────────────────────');
+  print('Sensitivity & diagnostics configuration');
+  print('───────────────────────────────────────');
+  final enableSensitivity = confirm('Enable sensitivity protection?');
+
+  String scanScope = 'lib';
+  String scanTrigger = 'on_setup';
+  bool diagnosticReporting = false;
+
+  if (enableSensitivity) {
+    print('\nScan scope:');
+    print('  1. lib/ only (recommended)');
+    print('  2. Full project');
+    print('  3. Scoped to handoff files only');
+    stdout.write('> ');
+    final scopeInput = stdin.readLineSync()?.trim() ?? '1';
+    switch (scopeInput) {
+      case '2':
+        scanScope = 'full';
+      case '3':
+        scanScope = 'handoff';
+      default:
+        scanScope = 'lib';
+    }
+
+    print('\nScan trigger:');
+    print('  1. On setup (when files changed) (recommended)');
+    print('  2. On demand only (claudart scan)');
+    stdout.write('> ');
+    final triggerInput = stdin.readLineSync()?.trim() ?? '1';
+    scanTrigger = triggerInput == '2' ? 'on_demand' : 'on_setup';
+
+    diagnosticReporting =
+        confirm('Share anonymous diagnostic logs?');
+  }
+
+  // Write config.json to workspace
+  final config = WorkspaceConfig(
+    sensitivityMode: enableSensitivity,
+    scanScope: scanScope,
+    scanTrigger: scanTrigger,
+    diagnosticReporting: diagnosticReporting,
+    projectRoot: cwd,
+  );
+  saveConfig(config);
+
+  if (enableSensitivity) {
+    print('\n✓ Sensitivity protection enabled (scope: $scanScope, '
+        'trigger: $scanTrigger)');
+  }
+
   print('\nNext: run `claudart setup` to begin a session.\n');
 }
 
