@@ -196,10 +196,21 @@ String claudeMdTemplate({
   required String workspacePath,
   required String projectName,
   required List<String> genericFiles,
+  String? sdkConstraint,
+  String? flutterConstraint,
 }) {
   final genericRefs = genericFiles
       .map((f) => '- $workspacePath/knowledge/generic/$f')
       .join('\n');
+
+  final envLines = StringBuffer();
+  if (sdkConstraint != null || flutterConstraint != null) {
+    envLines.writeln('\n## Environment\n');
+    if (sdkConstraint != null) envLines.writeln('- Dart SDK: `$sdkConstraint`');
+    if (flutterConstraint != null) envLines.writeln('- Flutter: `$flutterConstraint`');
+    envLines.writeln('\nDo not suggest APIs or syntax unavailable within these constraints.');
+    envLines.writeln('\n---');
+  }
 
   return '''
 # CLAUDE.md
@@ -217,7 +228,7 @@ Always follow this order — no exceptions:
 Never commit before testing. Never skip confirmation.
 
 ---
-
+${envLines}
 ## Knowledge base
 
 Read the following files at the start of every session before doing anything else.

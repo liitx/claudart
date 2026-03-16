@@ -33,6 +33,15 @@ Future<void> runLink(List<String> args) async {
   _checkExisting(claudeLinkPath, '.claude');
   _checkExisting(claudeMdLinkPath, 'CLAUDE.md');
 
+  // Read project SDK constraints from its pubspec.yaml
+  final env = _readProjectEnv(cwd);
+  if (env.sdk != null) {
+    print('\n📦 Detected SDK constraint: ${env.sdk}');
+  }
+  if (env.flutter != null) {
+    print('🐦 Detected Flutter constraint: ${env.flutter}');
+  }
+
   // Generate CLAUDE.md aggregator with expanded absolute paths
   final genericFiles = Directory(genericKnowledgeDir)
       .listSync()
@@ -46,6 +55,8 @@ Future<void> runLink(List<String> args) async {
     workspacePath: claudeDir,
     projectName: projectName,
     genericFiles: genericFiles,
+    sdkConstraint: env.sdk,
+    flutterConstraint: env.flutter,
   ));
 
   // Create symlinks
@@ -84,4 +95,27 @@ String _detectProjectName() {
 
   // Fall back to directory name
   return p.basename(Directory.current.path);
+}
+
+({String? sdk, String? flutter}) _readProjectEnv(String projectDir) {
+  final pubspec = File(p.join(projectDir, 'pubspec.yaml'));
+  if (!pubspec.existsSync()) return (sdk: null, flutter: null);
+
+  final content = pubspec.readAsStringSync();
+
+  // Extract environment block, then pull sdk/flutter lines from it
+  final envBlock = RegExp(
+    r'^environment\s*:\s*\n((?:[ \t]+\S[^\n]*\n?)+)',
+    multiLine: true,
+  ).firstMatch(content)?.group(1) ?? '';
+
+  String? extract(String key) {
+    final m = RegExp(
+      r'''^\s*''' + key + r'''\s*:\s*['"]?([^'"\n]+?)['"]?\s*$''',
+      multiLine: true,
+    ).firstMatch(envBlock);
+    return m?.group(1)?.trim();
+  }
+
+  return (sdk: extract('sdk'), flutter: extract('flutter'));
 }
