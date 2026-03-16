@@ -2,3 +2,5 @@
 build/
 archive/
 pubspec.lock
+.claude/
+CLAUDE.md
