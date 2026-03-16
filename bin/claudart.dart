@@ -1,47 +1,55 @@
 import 'dart:io';
-import 'package:args/args.dart';
+import '../lib/commands/init.dart';
 import '../lib/commands/setup.dart';
 import '../lib/commands/status.dart';
 import '../lib/commands/teardown.dart';
+import '../lib/commands/link.dart';
+import '../lib/commands/unlink.dart';
+import '../lib/commands/launch.dart';
 
 const _usage = '''
 claudart — Dart CLI for structured project debug and suggestion sessions
 
 Usage:
-  claudart <command> [path]
+  claudart                Run the interactive launcher (list projects, start workflow)
+  claudart <command> [arguments]
 
 Commands:
-  setup [path]   Start a new session (path defaults to current directory)
-  status         Show current session state
-  teardown       Close session: update skills, archive handoff, suggest commit
+  init                   Initialize the workspace with generic starter knowledge
+  init --project <name>  Add a project knowledge file to the workspace
+  link [project-name]    Symlink workspace into current project (detects name from git if omitted)
+  unlink                 Remove workspace symlinks from current project
+  setup [path]           Start a new session (path defaults to current directory)
+  status                 Show current session state
+  teardown               Close session: update knowledge, archive handoff, suggest commit
 
 Options:
   -h, --help   Show this help message
 ''';
 
 Future<void> main(List<String> args) async {
-  final parser = ArgParser()
-    ..addFlag('help', abbr: 'h', negatable: false);
-
-  ArgResults parsed;
-  try {
-    parsed = parser.parse(args);
-  } catch (_) {
-    print(_usage);
-    exit(1);
-  }
-
-  if (parsed['help'] as bool || parsed.rest.isEmpty) {
+  if (args.contains('-h') || args.contains('--help')) {
     print(_usage);
     exit(0);
   }
 
-  final command = parsed.rest.first;
-  final path = parsed.rest.length > 1 ? parsed.rest[1] : '.';
+  if (args.isEmpty) {
+    await runLauncher();
+    exit(0);
+  }
+
+  final command = args.first;
+  final rest = args.skip(1).toList();
 
   switch (command) {
+    case 'init':
+      await runInit(rest);
+    case 'link':
+      await runLink(rest);
+    case 'unlink':
+      runUnlink();
     case 'setup':
-      await runSetup(projectPath: path);
+      await runSetup(projectPath: rest.isNotEmpty ? rest.first : '.');
     case 'status':
       runStatus();
     case 'teardown':

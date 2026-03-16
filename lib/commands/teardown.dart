@@ -25,11 +25,9 @@ Future<void> runTeardown() async {
   // Extract session info
   final bug = readSection(handoff, 'Bug');
   final rootCause = readSection(handoff, 'Root Cause');
-  final scopeSection = _extractSection(handoff, 'Scope');
-  final filesInPlay = _readSubSection(scopeSection, 'Files in play');
-  final mustNotTouch = _readSubSection(scopeSection, 'Must not touch');
   final debugProgress = _extractSection(handoff, 'Debug Progress');
-  final filesChanged = _readSubSection(debugProgress, 'What changed (files modified)');
+  // filesChanged reserved for future knowledge routing
+  _readSubSection(debugProgress, 'What changed (files modified)');
   final branch = _extractBranch(handoff);
 
   print('\n───────────────────────────────────────');

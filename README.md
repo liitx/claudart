@@ -2,45 +2,63 @@
 
 A Dart CLI for managing structured debug and suggestion sessions during software development.
 
-`claudart_cli` is a **Dart package** — not a Claude product. It manages session state via local markdown files (handoff, skills, archive) that coordinate between a suggestion agent and a debug agent in your editor. It has no opinions about your project structure; you point it at a workspace directory and it handles the rest.
+`claudart_cli` is a **Dart package** — not a Claude product. It manages session state and accumulated knowledge via local markdown files that coordinate between a suggestion agent and a debug agent in your editor. It has no opinions about your project structure.
 
 ---
 
-## Concept
+## Core concept: the workspace
+
+Your workspace is a **persistent local knowledge base** that lives on your machine — not inside any project. Projects reference it; they don't own it.
 
 ```
-claudart_cli (Dart package)
-      ↕  reads/writes
-$CLAUDART_WORKSPACE/   ← your local workspace (project-specific)
-  handoff.md           ← active session state
-  skills.md            ← accumulated learnings
-  archive/             ← past sessions
+$CLAUDART_WORKSPACE/
+  knowledge/
+    generic/
+      dart_flutter.md     ← generic best practices (version-tagged)
+      bloc.md             ← BLoC patterns
+      riverpod.md         ← Riverpod patterns
+      testing.md          ← testing patterns
+    projects/
+      dc-flutter.md       ← dc-flutter specific context and patterns
+      my-other-app.md     ← another project's knowledge
+  handoff.md              ← current session state (reset each session)
+  skills.md               ← cross-session index
+  archive/                ← full session history
+  .claude/
+    commands/             ← suggest.md, debug.md, teardown.md
+  CLAUDE.md               ← aggregator: declares which knowledge files to load
 ```
 
-Your workspace holds the markdown files that your editor's AI agent commands read from and write to. `claudart` manages those files from the terminal — it does not run inside your editor.
+The workspace grows smarter with every session across every project. You never re-initialize it — you just link it to whichever project you're working in.
 
 ---
 
 ## How the two parts work together
 
-`claudart` and the slash commands (`/suggest`, `/debug`) are **separate tools** that share state through the workspace files.
+`claudart` (terminal) and the slash commands (`/suggest`, `/debug`) are **separate tools** that share state through workspace files.
 
 ```
 Terminal                            Claude Code session (editor)
 ──────────────────────────────────  ────────────────────────────────────
-claudart setup                      (writes handoff.md to workspace)
+claudart init                       (one-time workspace setup)
+claudart init --project dc-flutter  (one-time per project)
+claudart link                       (symlinks workspace into project)
+
+claudart setup                      (writes handoff.md)
                                     /suggest  ← typed inside Claude Code
-                                              reads handoff.md, explores
+                                              reads knowledge/ + handoff.md
                                               writes KT back to handoff.md
                                     /debug    ← typed inside Claude Code
-                                              reads handoff.md, fixes bug
-                                              writes progress to handoff.md
-claudart teardown                   (reads handoff.md, updates skills.md)
+                                              reads knowledge/ + handoff.md
+                                              fixes bug, writes progress
+claudart teardown                   (updates knowledge/, archives handoff)
+
+claudart unlink                     (removes symlinks from project)
 ```
 
-**`/suggest` and `/debug` are Claude Code slash commands** — they are defined as markdown files in your project under `.claude/commands/` and invoked by typing `/suggest` or `/debug` directly inside an active Claude Code session. They are not `claudart` subcommands and cannot be run from the terminal.
+**`/suggest` and `/debug` are Claude Code slash commands** — defined as markdown files under `.claude/commands/` and invoked by typing them inside an active Claude Code session. They are not `claudart` subcommands and cannot be run from the terminal.
 
-**`claudart`** runs only in the terminal. It sets up and tears down the session state those commands depend on.
+**`claudart`** runs only in the terminal. It manages the workspace files those commands depend on.
 
 ---
 
@@ -52,7 +70,7 @@ claudart (global terminal command)
         └── reads/writes $CLAUDART_WORKSPACE/
 
 /suggest, /debug  (Claude Code slash commands)
-  └── defined in <your-project>/.claude/commands/
+  └── symlinked from $CLAUDART_WORKSPACE/.claude/commands/
         └── reads/writes $CLAUDART_WORKSPACE/
 ```
 
@@ -78,141 +96,178 @@ dart pub global activate --source path <your-local-path>
 
 ## Configure your workspace
 
-Set `CLAUDART_WORKSPACE` to wherever your local session files should live.
-Defaults to `~/.claudart/` if not set.
-
 ```bash
 # In your ~/.zshrc or ~/.bashrc
 export CLAUDART_WORKSPACE=~/your/workspace/path
 ```
 
-The workspace directory and its subdirectories are created automatically on first use.
+The workspace directory is created automatically on first use.
 
 ---
 
 ## Usage
 
-`claudart` commands run from the terminal. Run from inside your project directory so git branch detection works.
+### One-time setup
 
 ```bash
-claudart setup [path]   # start a new session (path defaults to current directory)
-claudart status         # check current session state
-claudart teardown       # close session after bug is resolved
+# Initialize the workspace with generic starter knowledge
+claudart init
+
+# Register a project (run from the project root or pass a name)
+claudart init --project dc-flutter
 ```
 
-### setup `[path]`
+`init` only needs to run once per workspace and once per project. After that the knowledge files persist and grow automatically.
 
-Optional `path` argument — the project root used for git branch detection. Defaults to the current directory.
+---
+
+### Starting a session
 
 ```bash
-claudart setup                          # uses pwd
-claudart setup ~/dev/apps/my-project    # explicit path
+# From your project root — wire workspace into the project via symlinks
+claudart link
+
+# Start the session (prompts for bug context, writes handoff.md)
+claudart setup
 ```
 
-Reads accumulated skills, then prompts:
+`link` creates two symlinks in your project directory:
+- `CLAUDE.md` → `$CLAUDART_WORKSPACE/CLAUDE.md`
+- `.claude/` → `$CLAUDART_WORKSPACE/.claude/`
 
-1. What is the bug? (actual behavior)
-2. What should be happening? (expected behavior)
-3. Any files already in mind? *(optional)*
-4. Any BLoC events, provider names, or API calls involved? *(optional)*
+The project repo never contains these files — they are gitignored. The workspace owns them.
 
-Writes a structured `handoff.md` to `$CLAUDART_WORKSPACE`. Once written, open your Claude Code session and run `/suggest` or `/debug`.
+---
 
-### status
+### In your editor
 
-Prints current session state — status, bug summary, what's unresolved — and tells you which slash command to run next inside Claude Code.
+Once `claudart setup` has written the handoff, open your Claude Code session and use the slash commands:
 
-### teardown
+```
+/suggest    ← explore the problem, build knowledge transfer
+/debug      ← scoped fix using the handoff
+/suggest    ← if debug hits a wall, hand back
+```
 
-Run from the terminal after the bug is confirmed resolved. Prompts you to categorize the session, then:
+These read from `$CLAUDART_WORKSPACE/knowledge/` and `handoff.md` automatically.
 
-- Updates `skills.md` with generic patterns (hot paths, root cause, anti-patterns)
-- Archives `handoff.md` to `archive/`
-- Resets `handoff.md` to blank template
-- Drafts a commit message
+---
+
+### Ending a session
+
+```bash
+# After bug is confirmed resolved — updates knowledge, archives handoff
+claudart teardown
+
+# Remove symlinks from project
+claudart unlink
+```
+
+`teardown` prompts you to classify what was learned:
+- **Generic** → written to `knowledge/generic/` (available to all future sessions across all projects)
+- **Project-specific** → written to `knowledge/projects/<name>.md` (available to future sessions on that project)
+
+---
+
+### Subsequent sessions (workspace already has knowledge)
+
+```bash
+# Workspace knowledge is already rich from previous sessions
+claudart link
+claudart setup
+# /suggest and /debug now start with accumulated context
+```
+
+No re-initialization needed. The workspace picks up where it left off.
+
+---
+
+## The continuous improvement loop
+
+```
+Session runs
+    ↓
+claudart teardown classifies learnings:
+    ↓                              ↓
+knowledge/generic/          knowledge/projects/<name>.md
+(any project benefits)      (this project only)
+    ↓
+Next session: agents load richer knowledge automatically
+```
+
+Over time, `knowledge/generic/dart_flutter.md` becomes a version-aware reference for Dart/Flutter best practices built from real debugging sessions — not documentation, but actual patterns that caused and solved bugs.
 
 ---
 
 ## File layout
 
 ```
-<your-local-path>/          ← the Dart package (generic, no project paths)
-  bin/claudart.dart         ← CLI entry point
+<your-local-path>/              ← the Dart package (generic, no project paths)
+  bin/claudart.dart             ← CLI entry point
   lib/
     commands/
+      init.dart
       setup.dart
       status.dart
       teardown.dart
+      link.dart
+      unlink.dart
     handoff_template.dart
     md_io.dart
-    paths.dart              ← resolves workspace from CLAUDART_WORKSPACE
+    paths.dart                  ← resolves workspace from CLAUDART_WORKSPACE
 
-$CLAUDART_WORKSPACE/        ← your local workspace (not part of this package)
-  handoff.md                ← active session state (shared between claudart and slash commands)
-  skills.md                 ← accumulated learnings across sessions
-  archive/                  ← past handoffs (auto-created, keep gitignored)
+$CLAUDART_WORKSPACE/            ← your persistent local workspace
+  knowledge/
+    generic/                    ← grows across all projects
+    projects/                   ← grows per project
+  handoff.md                    ← current session (reset each teardown)
+  skills.md                     ← cross-session index
+  archive/                      ← full session history
+  .claude/commands/             ← symlinked into projects at link time
+  CLAUDE.md                     ← symlinked into projects at link time
 ```
 
 ---
 
 ## Editor slash command setup
 
-The slash commands (`/suggest`, `/debug`, `/teardown`) are separate markdown files that live in your project, not in this package. They must be set up per project.
+The slash commands live in the workspace, not in your project. `claudart link` symlinks them in at session time and `claudart unlink` removes them after.
+
+Add these to your project's `.gitignore` as a safety net:
 
 ```
-<your-project>/
-  .claude/
-    commands/
-      suggest.md    ← Claude Code slash command: /suggest
-      debug.md      ← Claude Code slash command: /debug
-      teardown.md   ← Claude Code slash command: /teardown
-  CLAUDE.md         ← project-level instructions for Claude Code
+.claude/
+CLAUDE.md
 ```
-
-> **These files must never be committed to your project repo.** Add `.claude/` and `CLAUDE.md` to your project's `.gitignore`.
-
-Each command file instructs the AI agent to read from `$CLAUDART_WORKSPACE/handoff.md` and `skills.md`. The agent does not run `claudart` — it reads and writes the markdown files directly.
 
 ---
 
-## Workflow in practice
+## Workflow protocol
 
-```bash
-# Terminal — start session
-cd <your-project>
-claudart setup
+Always follow this order:
 
-# Claude Code session — explore the problem (typed inside Claude Code)
-/suggest
-
-# Claude Code session — fix the bug (typed inside Claude Code)
-/debug
-
-# Claude Code session — if debug hits a wall, hand back to suggest
-/suggest
-
-# Terminal — close session after bug resolved
-claudart teardown
-```
-
-### What each part enforces
-
-| Part | Where it runs | Reads | Writes |
-|---|---|---|---|
-| `claudart setup` | Terminal | skills.md | handoff.md |
-| `/suggest` | Claude Code | skills.md, handoff.md | handoff.md (KT only when confident) |
-| `/debug` | Claude Code | skills.md, handoff.md | handoff.md (progress summary) |
-| `claudart teardown` | Terminal | handoff.md | skills.md |
+1. **Verify** — read and understand current state
+2. **Test** — run safely
+3. **Confirm** — present result, wait for confirmation
+4. **Commit** — only after confirmed
 
 ---
 
 ## Adapting to other projects
 
-1. Clone and globally activate `claudart_cli`
-2. Set `CLAUDART_WORKSPACE` in your shell profile
-3. Create `.claude/commands/suggest.md`, `debug.md`, `teardown.md` in your project pointing to `$CLAUDART_WORKSPACE`
-4. Add `.claude/` and `CLAUDE.md` to your project's `.gitignore`
-5. Run `claudart setup` from the project root
+```bash
+# One-time
+claudart init
+claudart init --project my-project
+
+# Each session
+cd ~/dev/my-project
+claudart link
+claudart setup
+# ... /suggest, /debug in Claude Code ...
+claudart teardown
+claudart unlink
+```
 
 ---
 
