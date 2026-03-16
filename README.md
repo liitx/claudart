@@ -8,7 +8,7 @@ A Dart CLI for managing structured debug and suggestion sessions during software
 
 ## Core concept: the workspace
 
-Your workspace is a **persistent local knowledge base** that lives on your machine — not inside any project. Projects reference it; they don't own it.
+Your workspace is a **persistent local knowledge base** that lives on your machine — not inside any project. Projects reference it via symlinks; they don't own it.
 
 ```
 $CLAUDART_WORKSPACE/
@@ -83,7 +83,7 @@ claudart (global terminal command)
 
 ## Install
 
-Requires Dart SDK `^3.0.0`.
+Requires Dart SDK `>=3.0.0`.
 
 ```bash
 git clone https://github.com/liitx/claudart_cli <your-local-path>
@@ -91,6 +91,9 @@ cd <your-local-path>
 dart pub get
 dart pub global activate --source path <your-local-path>
 ```
+
+> **Note:** When re-activating after code changes, the Dart snapshot cache may be stale.
+> Delete `.dart_tool/pub/bin/claudart_cli/*.snapshot` before re-activating if you see unexpected behaviour.
 
 ---
 
@@ -107,13 +110,30 @@ The workspace directory is created automatically on first use.
 
 ## Usage
 
+### Interactive launcher
+
+Running `claudart` with no arguments starts the interactive launcher:
+
+```
+claudart
+```
+
+It will:
+1. List all projects registered in your workspace (with a `(linked)` indicator if already linked)
+2. Ask whether this is a new bug or an existing one
+3. Route you into the appropriate workflow — linking the workspace if needed, then starting setup
+
+This is the recommended entry point for starting any session.
+
+---
+
 ### One-time setup
 
 ```bash
 # Initialize the workspace with generic starter knowledge
 claudart init
 
-# Register a project (run from the project root or pass a name)
+# Register a project
 claudart init --project dc-flutter
 ```
 
@@ -131,11 +151,27 @@ claudart link
 claudart setup
 ```
 
-`link` creates two symlinks in your project directory:
-- `CLAUDE.md` → `$CLAUDART_WORKSPACE/CLAUDE.md`
-- `.claude/` → `$CLAUDART_WORKSPACE/.claude/`
+`claudart link` does three things:
+- Reads the project's `pubspec.yaml` and extracts the `environment.sdk` and `flutter` constraints
+- Embeds those constraints into the generated `CLAUDE.md` so Claude Code and the Dart analyzer are scoped to the project's actual targets
+- Creates two symlinks in your project directory:
+  - `CLAUDE.md` → `$CLAUDART_WORKSPACE/CLAUDE.md`
+  - `.claude/` → `$CLAUDART_WORKSPACE/.claude/`
 
 The project repo never contains these files — they are gitignored. The workspace owns them.
+
+The generated `CLAUDE.md` will include a section like:
+
+```markdown
+## Environment
+
+- Dart SDK: `^3.8.0`
+- Flutter: `3.32.5`
+
+Do not suggest APIs or syntax unavailable within these constraints.
+```
+
+This scopes every suggestion and code change to the project's actual SDK target.
 
 ---
 
@@ -172,7 +208,8 @@ claudart unlink
 ### Subsequent sessions (workspace already has knowledge)
 
 ```bash
-# Workspace knowledge is already rich from previous sessions
+claudart               ← launcher picks up existing project, routes straight to setup
+# or manually:
 claudart link
 claudart setup
 # /suggest and /debug now start with accumulated context
@@ -203,16 +240,21 @@ Over time, `knowledge/generic/dart_flutter.md` becomes a version-aware reference
 
 ```
 <your-local-path>/              ← the Dart package (generic, no project paths)
-  bin/claudart.dart             ← CLI entry point
+  bin/claudart.dart             ← CLI entry point + interactive launcher
   lib/
     commands/
       init.dart
+      launch.dart               ← interactive launcher logic
+      link.dart                 ← reads pubspec, creates symlinks
+      unlink.dart
       setup.dart
       status.dart
       teardown.dart
-      link.dart
-      unlink.dart
+      suggest_template.dart     ← /suggest slash command content
+      debug_template.dart       ← /debug slash command content
+      teardown_template.dart    ← /teardown slash command content
     handoff_template.dart
+    knowledge_templates.dart    ← starter content + CLAUDE.md generator
     md_io.dart
     paths.dart                  ← resolves workspace from CLAUDART_WORKSPACE
 
@@ -262,11 +304,7 @@ claudart init --project my-project
 
 # Each session
 cd ~/dev/my-project
-claudart link
-claudart setup
-# ... /suggest, /debug in Claude Code ...
-claudart teardown
-claudart unlink
+claudart          ← interactive launcher handles the rest
 ```
 
 ---
