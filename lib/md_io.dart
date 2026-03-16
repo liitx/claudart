@@ -43,7 +43,9 @@ String readFile(String path) {
 }
 
 void writeFile(String path, String content) {
-  File(path).writeAsStringSync(content);
+  File(path)
+    ..parent.createSync(recursive: true)
+    ..writeAsStringSync(content);
 }
 
 /// Prompts the user with a question and returns trimmed input.
