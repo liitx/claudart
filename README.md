@@ -1,4 +1,4 @@
-# claudart_cli
+# claudart
 
 A Dart CLI for managing structured debug and suggestion sessions during software development.
 
