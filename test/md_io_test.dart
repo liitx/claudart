@@ -8,13 +8,13 @@ void main() {
     const doc = '''
 ## Bug
 
-Audio is stuck on the last frame.
+Widget does not update on state change.
 
 ---
 
 ## Root Cause
 
-The event transformer is missing.
+The state listener is not attached.
 
 ---
 
@@ -24,7 +24,7 @@ some content
 ''';
 
     test('returns trimmed section content', () {
-      expect(readSection(doc, 'Bug'), 'Audio is stuck on the last frame.');
+      expect(readSection(doc, 'Bug'), 'Widget does not update on state change.');
     });
 
     test('strips trailing separator', () {

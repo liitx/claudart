@@ -4,10 +4,10 @@ import 'package:claudart/handoff_template.dart';
 void main() {
   group('handoffTemplate', () {
     final result = handoffTemplate(
-      branch: 'fix/audio',
+      branch: 'fix/my-bug',
       date: '2026-03-15',
-      bug: 'Audio stuck on last frame',
-      expected: 'Audio plays continuously',
+      bug: 'Widget does not update on state change',
+      expected: 'Widget reflects latest state immediately',
       projectName: 'my-app',
     );
 
@@ -16,13 +16,13 @@ void main() {
     });
 
     test('includes branch and date', () {
-      expect(result, contains('Branch: fix/audio'));
+      expect(result, contains('Branch: fix/my-bug'));
       expect(result, contains('2026-03-15'));
     });
 
     test('includes bug and expected behavior', () {
-      expect(result, contains('Audio stuck on last frame'));
-      expect(result, contains('Audio plays continuously'));
+      expect(result, contains('Widget does not update on state change'));
+      expect(result, contains('Widget reflects latest state immediately'));
     });
 
     test('sets initial status to suggest-investigating', () {
@@ -40,11 +40,11 @@ void main() {
         bug: 'bug',
         expected: 'expected',
         projectName: 'my-app',
-        files: 'audio_bloc.dart',
-        blocs: 'AudioBloc',
+        files: 'my_feature.dart',
+        blocs: 'MyFeatureBloc',
       );
-      expect(t, contains('audio_bloc.dart'));
-      expect(t, contains('AudioBloc'));
+      expect(t, contains('my_feature.dart'));
+      expect(t, contains('MyFeatureBloc'));
     });
   });
 

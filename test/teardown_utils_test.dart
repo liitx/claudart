@@ -4,8 +4,8 @@ import 'package:claudart/teardown_utils.dart';
 void main() {
   group('extractBranch', () {
     test('extracts branch from handoff header', () {
-      const doc = '> Session started: 2026-01-01 | Branch: fix/audio-freeze\n';
-      expect(extractBranch(doc), 'fix/audio-freeze');
+      const doc = '> Session started: 2026-01-01 | Branch: fix/my-bug\n';
+      expect(extractBranch(doc), 'fix/my-bug');
     });
 
     test('returns unknown when branch not present', () {
@@ -41,14 +41,14 @@ other content
   group('readSubSection', () {
     const section = '''
 ### What was attempted
-Tried restarting the bloc.
+Tried adding a listener.
 
 ### What changed (files modified)
-audio_bloc.dart
+my_feature.dart
 ''';
 
     test('extracts subsection content', () {
-      expect(readSubSection(section, 'What was attempted'), 'Tried restarting the bloc.');
+      expect(readSubSection(section, 'What was attempted'), 'Tried adding a listener.');
     });
 
     test('returns fallback when subsection missing', () {
@@ -93,14 +93,14 @@ _No sessions recorded yet._
 ''';
 
     test('adds new file with single arrow', () {
-      final result = incrementHotPath(blankSkills, 'bloc', 'audio_bloc.dart');
-      expect(result, contains('`audio_bloc.dart` ↑'));
+      final result = incrementHotPath(blankSkills, 'bloc', 'my_feature.dart');
+      expect(result, contains('`my_feature.dart` ↑'));
       expect(result, contains('[bloc]'));
     });
 
     test('increments existing file arrow', () {
-      var skills = incrementHotPath(blankSkills, 'bloc', 'audio_bloc.dart');
-      skills = incrementHotPath(skills, 'bloc', 'audio_bloc.dart');
+      var skills = incrementHotPath(blankSkills, 'bloc', 'my_feature.dart');
+      skills = incrementHotPath(skills, 'bloc', 'my_feature.dart');
       expect(RegExp(r'↑+').firstMatch(skills)?.group(0)?.length, 2);
     });
   });
@@ -138,21 +138,21 @@ _No sessions recorded yet._
 
   group('buildCommitMessage', () {
     test('formats message without root cause', () {
-      final msg = buildCommitMessage('bloc', 'Audio stuck on last frame.', '_Not yet determined._', 'Added restartable transformer');
-      expect(msg, startsWith('fix(bloc): Audio stuck on last frame'));
-      expect(msg, contains('Added restartable transformer'));
+      final msg = buildCommitMessage('bloc', 'Widget does not update on state change.', '_Not yet determined._', 'Attached state listener');
+      expect(msg, startsWith('fix(bloc): Widget does not update on state change'));
+      expect(msg, contains('Attached state listener'));
       expect(msg, isNot(contains('Root cause')));
     });
 
     test('includes root cause when known', () {
-      final msg = buildCommitMessage('bloc', 'Audio stuck.', 'Missing transformer.', 'Fixed it');
-      expect(msg, contains('Root cause: Missing transformer'));
+      final msg = buildCommitMessage('bloc', 'Widget does not update.', 'Listener not attached.', 'Fixed it');
+      expect(msg, contains('Root cause: Listener not attached'));
     });
   });
 
   group('firstSentence', () {
     test('returns up to first dot when short', () {
-      expect(firstSentence('Audio stuck. More detail here.'), 'Audio stuck');
+      expect(firstSentence('Widget broken. More detail here.'), 'Widget broken');
     });
 
     test('truncates at 72 chars when no dot', () {
@@ -169,8 +169,8 @@ _No sessions recorded yet._
 
   group('archiveName', () {
     test('contains branch name with slashes replaced', () {
-      final name = archiveName('fix/audio-freeze');
-      expect(name, contains('fix_audio-freeze'));
+      final name = archiveName('fix/my-bug');
+      expect(name, contains('fix_my-bug'));
       expect(name, startsWith('handoff_'));
       expect(name, endsWith('.md'));
     });
