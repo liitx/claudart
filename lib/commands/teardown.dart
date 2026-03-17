@@ -204,6 +204,17 @@ const List<String> _kCategories = [
   'other (type manually)',
 ];
 
+abstract final class TeardownCategory {
+  static const apiMapping        = 0;
+  static const blocEventHandling = 1;
+  static const ffiBridge         = 2;
+  static const general           = 3;
+  static const legacyPathMigration = 4;
+  static const providerState     = 5;
+  static const widgetLifecycle   = 6;
+  static const other             = 7;
+}
+
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
 

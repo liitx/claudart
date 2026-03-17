@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 import 'package:claudart/commands/save.dart';
-import 'package:claudart/commands/teardown.dart';
+import 'package:claudart/commands/teardown.dart' show runTeardown, TeardownCategory;
 import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:path/path.dart' as p;
@@ -158,7 +158,7 @@ void main() {
           null,  // pattern — accept default (root cause text)
           'Implement raw-mode line editor with ESC sequence handling.',
         ]),
-        pickFn: (_) => 6, // widget-lifecycle
+        pickFn: (_) => TeardownCategory.widgetLifecycle,
         exitFn: (c) => throw Exception('exit($c)'),
       );
 
@@ -193,7 +193,7 @@ void main() {
         promptFn: _prompts([
           'Fixed it.', null, null, null, 'Use line editor.',
         ]),
-        pickFn: (_) => 6, // widget-lifecycle
+        pickFn: (_) => TeardownCategory.widgetLifecycle,
         exitFn: (c) => throw Exception('exit($c)'),
       );
 
