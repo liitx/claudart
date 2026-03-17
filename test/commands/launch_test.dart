@@ -147,7 +147,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : activeMenuBack;
+          return pickCall == 1 ? 1 : ActiveMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -162,7 +162,7 @@ void main() {
         projectRootOverride: _projectRoot,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : freshMenuBack;
+          return pickCall == 1 ? 1 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -179,7 +179,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : lockedMenuKill;
+          return pickCall == 1 ? 1 : LockedMenu.kill;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
@@ -195,7 +195,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : lockedMenuBack;
+          return pickCall == 1 ? 1 : LockedMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -212,7 +212,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : activeMenuKill;
+          return pickCall == 1 ? 1 : ActiveMenu.kill;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
@@ -228,7 +228,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : activeMenuResume;
+          return pickCall == 1 ? 1 : ActiveMenu.resume;
         },
         exitFn: _throwExit,
       );
@@ -245,7 +245,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : freshMenuBack;
+          return pickCall == 1 ? 1 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -297,7 +297,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : freshMenuBack;
+          return pickCall == 1 ? 1 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -314,7 +314,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : freshMenuBack;
+          return pickCall == 1 ? 1 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
