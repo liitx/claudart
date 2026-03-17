@@ -6,17 +6,11 @@ import '../paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart' show SessionState, HandoffStatus;
 import '../session/workspace_guard.dart';
+import '../ui/ansi.dart' as ansi;
+import '../ui/menu.dart';
 import 'kill.dart';
 import 'link.dart';
 import 'setup.dart';
-
-// ANSI hyperlink: ESC]8;;url ESC\ text ESC]8;; ESC\
-// Renders as a clickable link in terminals that support OSC 8.
-const _readmeSensitivityUrl =
-    'https://github.com/liitx/claudart#sensitivity-mode';
-
-String _hyperlink(String text, String url) =>
-    '\x1b]8;;$url\x1b\\$text\x1b]8;;\x1b\\';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
@@ -25,13 +19,13 @@ String _hyperlink(String text, String url) =>
 Future<void> runLauncher({
   FileIO? io,
   String? projectRootOverride,
-  int Function(String prompt, int max)? pickFn,
+  int Function(List<String> items)? pickFn,
   bool Function(String question)? confirmFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
-  final pick_ = pickFn ?? _defaultPick;
+  final pick_ = pickFn ?? arrowMenu;
 
   print('\n═══════════════════════════════════════');
   print('  CLAUDART');
@@ -53,7 +47,6 @@ Future<void> runLauncher({
     exit_(0);
   }
 
-  // Detect active project from current git root (if any).
   final currentEntry = currentRoot != null
       ? registry.findByProjectRoot(currentRoot)
       : null;
@@ -61,38 +54,18 @@ Future<void> runLauncher({
   final entries = registry.entries;
   final canRegister = currentRoot != null && currentEntry == null;
 
-  // Print project list.
-  print('');
-  for (var i = 0; i < entries.length; i++) {
-    final e = entries[i];
-    final isCurrent = e == currentEntry;
-    final locked = isLocked(e.workspacePath, io: fileIO);
-    final symlink = p.join(e.projectRoot, '.claude');
-    final linked = fileIO.linkExists(symlink);
-
-    final markers = [
-      if (isCurrent) '(here)',
-      if (linked) 'linked',
-      if (locked) '⚠ interrupted',
-      if (e.sensitivityMode)
-        _hyperlink('[sensitive]', _readmeSensitivityUrl),
-    ].join('  ');
-
-    final label = '${i + 1}. ${e.name}';
-    final meta = '  last: ${e.lastSession}';
-    print('  $label$meta  $markers'.trimRight());
-  }
-
-  if (canRegister) {
-    print('  ${entries.length + 1}. + Register ${p.basename(currentRoot)}');
-  }
-
   print('');
 
-  // ── User picks project ─────────────────────────────────────────────────────
+  // Build project list items.
+  final projectItems = _buildProjectItems(
+    entries: entries,
+    currentEntry: currentEntry,
+    fileIO: fileIO,
+    currentRoot: currentRoot,
+    canRegister: canRegister,
+  );
 
-  final maxChoice = entries.length + (canRegister ? 1 : 0);
-  final choice = pick_('Select', maxChoice);
+  final choice = pick_(projectItems);
 
   if (canRegister && choice == registerChoice(entries.length)) {
     await runLink(
@@ -105,7 +78,7 @@ Future<void> runLauncher({
     return;
   }
 
-  final selected = entries[choice - 1];
+  final selected = entries[choice];
 
   // ── Phase 2: Workspace load ────────────────────────────────────────────────
 
@@ -116,29 +89,37 @@ Future<void> runLauncher({
   final state = handoff.isNotEmpty ? SessionState.parse(handoff) : null;
   final locked = isLocked(workspace, io: fileIO);
 
-  print('\n─── ${selected.name} ${'─' * (35 - selected.name.length).clamp(0, 35)}');
+  final dashCount = (35 - selected.name.length).clamp(0, 35);
+  print('\n─── ${selected.name} ${'─' * dashCount}');
+
   if (state != null) {
     print('  Branch : ${state.branch}');
-    print('  Status : ${state.status}');
+    final statusColour = _statusColour(state.status);
+    print('  Status : ${ansi.c(statusColour, state.status.value)}');
     if (state.hasActiveContent) {
       print('  Bug    : ${_truncate(state.bug)}');
     }
   } else {
     print('  No active session.');
   }
+
   if (locked) {
     final op = interruptedOperation(workspace, io: fileIO) ?? 'unknown';
-    print('  ⚠  Interrupted during: $op');
+    print('  ${ansi.c(ansi.yellow, '⚠  Interrupted during: $op')}');
   }
+
   print('');
 
   // ── Action menu ───────────────────────────────────────────────────────────
 
+  final int action;
+
   if (locked) {
-    print('  1. Kill session  (clear lock, archive, remove symlink)');
-    print('  2. Back\n');
-    final action = pick_('Choose', 2);
-    if (action == 1) {
+    action = pick_([
+      '${ansi.c(ansi.yellow, 'Kill')}   clear lock · archive · remove symlink',
+      'Back',
+    ]);
+    if (action == LockedMenu.kill) {
       await runKill(
         io: fileIO,
         projectRootOverride: selected.projectRoot,
@@ -152,13 +133,14 @@ Future<void> runLauncher({
   final hasActive = state != null && state.hasActiveContent;
 
   if (hasActive) {
-    print('  1. Resume  (open editor and run /suggest or /debug)');
-    print('  2. Kill    (archive handoff, discard session)');
-    print('  3. Back\n');
-    final action = pick_('Choose', 3);
-    if (action == 1) {
+    action = pick_([
+      '${ansi.c(ansi.green, 'Resume')}  open editor · run /suggest or /debug',
+      '${ansi.c(ansi.red, 'Kill')}    archive handoff · discard session',
+      'Back',
+    ]);
+    if (action == ActiveMenu.resume) {
       _printResumeInstructions(state.status);
-    } else if (action == 2) {
+    } else if (action == ActiveMenu.kill) {
       await runKill(
         io: fileIO,
         projectRootOverride: selected.projectRoot,
@@ -167,42 +149,79 @@ Future<void> runLauncher({
       );
     }
   } else {
-    print('  1. Start new session');
-    print('  2. Back\n');
-    final action = pick_('Choose', 2);
-    if (action == 1) {
+    action = pick_([
+      '${ansi.c(ansi.green, 'Start new session')}',
+      'Back',
+    ]);
+    if (action == FreshMenu.start) {
       await runSetup(projectRootOverride: selected.projectRoot);
     }
   }
 }
 
-/// Returns the menu choice number that maps to the Register action.
+/// Returns the 0-based index that maps to the Register action.
 ///
 /// Exposed so tests can derive the correct pick index from registry size
 /// rather than hard-coding a magic number.
-int registerChoice(int entryCount) => entryCount + 1;
+int registerChoice(int entryCount) => entryCount;
 
-// ── Menu selector namespaces ──────────────────────────────────────────────────
-// Exposed so tests reference named actions instead of magic numbers.
-// Each class maps to one context menu shown in Phase 2.
+// ── Menu choice namespaces ─────────────────────────────────────────────────────
+// 0-based. Exposed so tests reference named actions instead of magic numbers.
 
 /// Locked-workspace menu choices.
 abstract final class LockedMenu {
-  static const kill = 1;
-  static const back = 2;
+  static const kill = 0;
+  static const back = 1;
 }
 
 /// Active-session menu choices.
 abstract final class ActiveMenu {
-  static const resume = 1;
-  static const kill = 2;
-  static const back = 3;
+  static const resume = 0;
+  static const kill = 1;
+  static const back = 2;
 }
 
 /// Fresh-workspace menu choices.
 abstract final class FreshMenu {
-  static const start = 1;
-  static const back = 2;
+  static const start = 0;
+  static const back = 1;
+}
+
+// ── Item builders ─────────────────────────────────────────────────────────────
+
+List<String> _buildProjectItems({
+  required List<RegistryEntry> entries,
+  required RegistryEntry? currentEntry,
+  required FileIO fileIO,
+  required String? currentRoot,
+  required bool canRegister,
+}) {
+  final items = <String>[];
+
+  for (final e in entries) {
+    final isCurrent = e == currentEntry;
+    final locked = isLocked(e.workspacePath, io: fileIO);
+    final linked = fileIO.linkExists(p.join(e.projectRoot, '.claude'));
+
+    final dot = locked
+        ? ansi.c(ansi.yellow, '⚠')
+        : linked
+            ? ansi.c(ansi.green, '●')
+            : ansi.c(ansi.dim, '○');
+
+    final name = isCurrent ? ansi.c(ansi.bold, e.name) : e.name;
+    final sensitive =
+        e.sensitivityMode ? '  ${ansi.c(ansi.dim, '[sensitive]')}' : '';
+    final warn = locked ? '  ${ansi.c(ansi.yellow, '⚠ interrupted')}' : '';
+
+    items.add('$dot  $name   last: ${e.lastSession}$sensitive$warn');
+  }
+
+  if (canRegister && currentRoot != null) {
+    items.add(ansi.c(ansi.cyan, '+  Register ${p.basename(currentRoot)}'));
+  }
+
+  return items;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -224,15 +243,13 @@ void _printResumeInstructions(HandoffStatus status) {
   print('');
 }
 
+String _statusColour(HandoffStatus s) => switch (s) {
+      HandoffStatus.suggestInvestigating => ansi.cyan,
+      HandoffStatus.readyForDebug        => ansi.yellow,
+      HandoffStatus.debugInProgress      => ansi.green,
+      HandoffStatus.needsSuggest         => ansi.red,
+      HandoffStatus.unknown              => ansi.dim,
+    };
+
 String _truncate(String s, {int max = 60}) =>
     s.length > max ? '${s.substring(0, max)}…' : s;
-
-int _defaultPick(String prompt, int max) {
-  while (true) {
-    stdout.write('$prompt (1–$max) > ');
-    final input = stdin.readLineSync()?.trim() ?? '';
-    final n = int.tryParse(input);
-    if (n != null && n >= 1 && n <= max) return n;
-    print('Enter a number between 1 and $max.');
-  }
-}
