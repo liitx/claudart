@@ -63,46 +63,32 @@ Future<void> runExperiment(
   await stdout.flush();
 
   final sw = Stopwatch()..start();
+
+  // inheritStdio: child shares the terminal directly — no piping through the
+  // parent IOSink. Required for interactive commands (raw stdin, arrow keys)
+  // and ensures header/footer print in correct order.
   final process = await Process.start(
     cmdArgs.first,
     cmdArgs.sublist(1),
-    runInShell: false,
+    mode: ProcessStartMode.inheritStdio,
   );
 
-  final logBuffer = StringBuffer();
-
-  // Drain stdout, stderr, and wait for exit concurrently so the streams are
-  // fully consumed before we write the log or print the footer.
-  final results = await Future.wait([
-    process.stdout.fold<StringBuffer>(logBuffer, (buf, bytes) {
-      final text = String.fromCharCodes(bytes);
-      stdout.write(text);
-      buf.write(text);
-      return buf;
-    }),
-    process.stderr.fold<StringBuffer>(logBuffer, (buf, bytes) {
-      final text = String.fromCharCodes(bytes);
-      stderr.write(text);
-      buf.write(text);
-      return buf;
-    }),
-    process.exitCode,
-  ]);
-
-  await stdout.flush();
+  final exitCode = await process.exitCode;
   sw.stop();
-  final exitCode = results[2] as int;
 
-  // ── Write log ──────────────────────────────────────────────────────────────
-  final header = '# Experiment: $name\n'
+  // ── Write metadata log ─────────────────────────────────────────────────────
+  // Raw ANSI output is not captured when inheriting stdio; the log records
+  // run metadata. To capture output use shell: `<cmd> | tee output.ansi`
+  final meta = '# Experiment: $name\n'
       '# Command  : ${cmdArgs.join(' ')}\n'
       '# Started  : $ts\n'
       '# Duration : ${sw.elapsedMilliseconds}ms\n'
-      '# Exit code: $exitCode\n\n';
-  fileIO.write(logFile, header + logBuffer.toString());
+      '# Exit code: $exitCode\n';
+  fileIO.write(logFile, meta);
 
-  print('\n✓ Experiment complete — ${sw.elapsedMilliseconds}ms  (exit $exitCode)');
-  print('  Log: $logFile\n');
+  stdout.writeln('\n✓ Experiment complete — ${sw.elapsedMilliseconds}ms  (exit $exitCode)');
+  stdout.writeln('  Log: $logFile\n');
+  await stdout.flush();
 
   if (exitCode != 0) exit_(exitCode);
 }
