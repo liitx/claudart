@@ -198,11 +198,18 @@ String? Function(String, {bool optional}) _prompts(List<String?> queue) {
   };
 }
 
+/// Builds a pickFn that always selects [index] from the category menu.
+int Function(List<String>) _pick(int index) => (_) => index;
+
+// Category menu indices (matches _kCategories in teardown.dart):
+// 0=api-mapping  1=bloc-event-handling  2=ffi-bridge  3=general
+// 4=legacy-path-migration  5=provider-state  6=widget-lifecycle  7=other
+
 /// Full set of answers for a successful teardown against [_richHandoff].
-/// Prompt order: fixSummary, category, hotFiles, coldFiles, pattern, fixPattern.
+/// Prompt order: fixSummary, hotFiles, coldFiles, pattern, fixPattern.
+/// Category is supplied via pickFn (index 1 = bloc-event-handling).
 List<String?> get _richAnswers => [
       'Replaced stale reference with fresh copy on each event.',  // fixSummary
-      'bloc-event-handling',                                       // category
       null,    // hotFiles — accept pre-populated default
       null,    // coldFiles — skip (optional)
       null,    // pattern — accept pre-populated default
@@ -210,9 +217,9 @@ List<String?> get _richAnswers => [
     ];
 
 /// Full set of answers for a successful teardown against [_bareHandoff].
+/// Category supplied via pickFn (index 5 = provider-state).
 List<String?> get _bareAnswers => [
       'Fixed the issue by adding a null check.',   // fixSummary
-      'provider-state',                            // category
       'lib/provider/my_provider.dart',             // hotFiles — no default, must enter
       null,                                        // coldFiles — skip
       'Provider holds stale state after reload.',  // pattern — no default, must enter
@@ -231,6 +238,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
+          pickFn: _pick(0),
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 0)),
@@ -245,6 +253,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
+          pickFn: _pick(0),
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 0)),
@@ -261,6 +270,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
+          pickFn: _pick(0),
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 1)),
@@ -280,6 +290,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false, // decline
           promptFn: _prompts([]),
+          pickFn: _pick(0),
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 0)),
@@ -294,6 +305,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false,
           promptFn: _prompts([]),
+          pickFn: _pick(0),
           exitFn: _throwExit,
         );
       } on _ExitException {
@@ -313,6 +325,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       expect(_archives(io), hasLength(1));
@@ -325,6 +338,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       expect(p.basename(_archives(io).first), contains('fix_audio-stop'));
@@ -337,6 +351,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final archived = io.read(_archives(io).first);
@@ -350,6 +365,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final handoff = io.read(handoffPathFor(_workspace));
@@ -368,6 +384,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       expect(io.fileExists(skillsPathFor(_workspace)), isTrue);
@@ -380,6 +397,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -395,6 +413,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -408,6 +427,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -419,7 +439,6 @@ void main() {
       final io = _io(handoff: _richHandoff);
       final answers = [
         'Fixed it.',               // fixSummary
-        'bloc-event-handling',     // category
         null,                      // hotFiles default
         'lib/audio/player.dart',   // coldFiles — explore but not the cause
         null,                      // pattern default
@@ -430,6 +449,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(answers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -445,6 +465,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       // Plant a new session and run teardown again.
@@ -454,6 +475,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_bareAnswers),
+        pickFn: _pick(5), // provider-state
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -472,6 +494,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers), // hotFiles answer is null → use default
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -483,7 +506,6 @@ void main() {
       final io = _io(handoff: _richHandoff);
       final answers = [
         'Fixed it.',
-        'bloc-event-handling',
         'lib/audio/stream_handler.dart', // override hotFiles
         null,
         null,                            // accept pattern default
@@ -494,6 +516,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(answers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -507,6 +530,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers), // pattern answer is null → use root cause
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -517,7 +541,6 @@ void main() {
       final io = _io(handoff: _richHandoff);
       final answers = [
         'Fixed it.',
-        'bloc-event-handling',
         null,
         null,
         'Custom pattern override.',  // override pattern
@@ -528,6 +551,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(answers),
+        pickFn: _pick(1), // bloc-event-handling
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -544,6 +568,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_bareAnswers),
+        pickFn: _pick(5), // provider-state
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -558,6 +583,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_bareAnswers),
+        pickFn: _pick(5), // provider-state
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
