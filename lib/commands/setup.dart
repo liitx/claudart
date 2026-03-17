@@ -111,7 +111,7 @@ Future<void> runSetup({
   final bug = prompt_('1. What is the bug? (actual behavior)');
   final expected = prompt_('2. What should be happening? (expected behavior)');
   final files = prompt_('3. Any files already in mind?', optional: true);
-  final blocs = prompt_(
+  final entryPoints = prompt_(
     '4. Any functions, classes, or entry points involved?',
     optional: true,
   );
@@ -123,7 +123,7 @@ Future<void> runSetup({
   print('Bug     : $bug');
   print('Expected: $expected');
   if (files != null) print('Files   : $files');
-  if (blocs != null) print('BLoCs   : $blocs');
+  if (entryPoints != null) print('Entry   : $entryPoints');
   print('───────────────────────────────────────');
 
   if (!confirm_('Write handoff with this context?')) {
@@ -145,7 +145,7 @@ Future<void> runSetup({
     expected: expected!,
     projectName: entry.name,
     files: files,
-    blocs: blocs,
+    entryPoints: entryPoints,
   );
 
   // Abstract sensitive tokens if sensitivity mode on.

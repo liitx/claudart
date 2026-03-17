@@ -22,12 +22,10 @@ claudart preflight test
 ## Step 1 — Read context files first
 
 Read all of the following before doing anything else:
-1. `$workspacePath/knowledge/generic/dart_flutter.md`
-2. `$workspacePath/knowledge/generic/bloc.md`
-3. `$workspacePath/knowledge/generic/riverpod.md`
-4. `$workspacePath/knowledge/generic/testing.md`
-5. `$workspacePath/handoff.md` — current session state
-6. `$workspacePath/skills.md` — cross-session learnings
+1. `$workspacePath/knowledge/generic/dart.md`
+2. `$workspacePath/knowledge/generic/testing.md`
+3. `$workspacePath/handoff.md` — current session state
+4. `$workspacePath/skills.md` — cross-session learnings
 
 Check the handoff for a `## Project` section and also read:
 - `$workspacePath/knowledge/projects/<project-name>.md`
@@ -42,7 +40,7 @@ Use hot paths and known patterns from these files to inform where you explore fi
 
 ## Step 2 — Explore within scope
 
-Explore the relevant package or directory for this project. Read actual code — do not assume behaviour. Trace the data flow: API → repository → BLoC/provider → widget.
+Explore the relevant package or directory for this project. Read actual code — do not assume behaviour. Trace the data flow through the relevant layers for this project.
 
 **Do not explore outside the declared scope without asking the user first.**
 

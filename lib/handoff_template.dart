@@ -5,10 +5,10 @@ String handoffTemplate({
   required String expected,
   required String projectName,
   String? files,
-  String? blocs,
+  String? entryPoints,
 }) {
   final filesSection = files ?? '_Not yet determined._';
-  final blocsSection = blocs ?? '_Not yet determined._';
+  final entryPointsSection = entryPoints ?? '_Not yet determined._';
 
   return '''# Agent Handoff — $projectName
 
@@ -48,8 +48,8 @@ _Not yet determined._
 ### Files in play
 $filesSection
 
-### BLoCs / providers in play
-$blocsSection
+### Key entry points in play
+$entryPointsSection
 
 ### Classes / methods in play
 _Not yet determined._
@@ -147,7 +147,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play

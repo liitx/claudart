@@ -194,25 +194,25 @@ void _updateSkills({
 }
 
 const List<String> _kCategories = [
-  'api-mapping',
-  'bloc-event-handling',
-  'ffi-bridge',
+  'api-integration',
+  'concurrency',
+  'configuration',
+  'data-parsing',
+  'io-filesystem',
+  'state-management',
   'general',
-  'legacy-path-migration',
-  'provider-state',
-  'widget-lifecycle',
   'other (type manually)',
 ];
 
 abstract final class TeardownCategory {
-  static const apiMapping        = 0;
-  static const blocEventHandling = 1;
-  static const ffiBridge         = 2;
-  static const general           = 3;
-  static const legacyPathMigration = 4;
-  static const providerState     = 5;
-  static const widgetLifecycle   = 6;
-  static const other             = 7;
+  static const apiIntegration  = 0;
+  static const concurrency     = 1;
+  static const configuration   = 2;
+  static const dataParsing     = 3;
+  static const ioFilesystem    = 4;
+  static const stateManagement = 5;
+  static const general         = 6;
+  static const other           = 7;
 }
 
 String? _defaultPrompt(String question, {bool optional = false}) =>

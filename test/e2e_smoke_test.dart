@@ -158,7 +158,7 @@ void main() {
           null,  // pattern — accept default (root cause text)
           'Implement raw-mode line editor with ESC sequence handling.',
         ]),
-        pickFn: (_) => TeardownCategory.widgetLifecycle,
+        pickFn: (_) => TeardownCategory.stateManagement,
         exitFn: (c) => throw Exception('exit($c)'),
       );
 
@@ -173,7 +173,7 @@ void main() {
 
       // Skills updated with teardown entries.
       final skills = io.read(skillsPathFor(_ws));
-      expect(skills, contains('widget-lifecycle'));           // category
+      expect(skills, contains('state-management'));           // category
       expect(skills, contains('cooked mode'));                // pre-populated pattern from root cause
       expect(skills, contains('line_editor'));                // pre-populated hot file from changedFiles
       expect(skills, contains('resolved'));                   // session index
@@ -193,7 +193,7 @@ void main() {
         promptFn: _prompts([
           'Fixed it.', null, null, null, 'Use line editor.',
         ]),
-        pickFn: (_) => TeardownCategory.widgetLifecycle,
+        pickFn: (_) => TeardownCategory.stateManagement,
         exitFn: (c) => throw Exception('exit($c)'),
       );
 

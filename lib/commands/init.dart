@@ -38,8 +38,7 @@ Future<void> _initWorkspace() async {
     }
   }
 
-  // Detect Flutter/Dart versions for version-tagged starters
-  final flutterVersion = await _detectVersion('flutter', ['--version', '--machine']) ?? '3.x';
+  // Detect Dart version for version-tagged starters
   final dartVersion = await _detectVersion('dart', ['--version']) ?? '3.x';
 
   // Create directory structure
@@ -53,10 +52,7 @@ Future<void> _initWorkspace() async {
   }
 
   // Write generic knowledge starters
-  _writeIfAbsent(p.join(genericKnowledgeDir, 'dart_flutter.md'),
-      dartFlutterTemplate(flutterVersion, dartVersion));
-  _writeIfAbsent(p.join(genericKnowledgeDir, 'bloc.md'), blocTemplate);
-  _writeIfAbsent(p.join(genericKnowledgeDir, 'riverpod.md'), riverpodTemplate);
+  _writeIfAbsent(p.join(genericKnowledgeDir, 'dart.md'), dartTemplate(dartVersion));
   _writeIfAbsent(p.join(genericKnowledgeDir, 'testing.md'), testingTemplate);
 
   // Write Claude Code slash commands into workspace

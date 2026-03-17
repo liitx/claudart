@@ -205,7 +205,7 @@ int Function(List<String>) _pick(int index) => (_) => index;
 
 /// Full set of answers for a successful teardown against [_richHandoff].
 /// Prompt order: fixSummary, hotFiles, coldFiles, pattern, fixPattern.
-/// Category is supplied via pickFn (index 1 = bloc-event-handling).
+/// Category is supplied via pickFn (index 5 = state-management).
 List<String?> get _richAnswers => [
       'Replaced stale reference with fresh copy on each event.',  // fixSummary
       null,    // hotFiles — accept pre-populated default
@@ -323,7 +323,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       expect(_archives(io), hasLength(1));
@@ -336,7 +336,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       expect(p.basename(_archives(io).first), contains('fix_audio-stop'));
@@ -349,7 +349,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final archived = io.read(_archives(io).first);
@@ -363,7 +363,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final handoff = io.read(handoffPathFor(_workspace));
@@ -382,7 +382,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       expect(io.fileExists(skillsPathFor(_workspace)), isTrue);
@@ -395,11 +395,11 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
-      expect(skills, contains('bloc-event-handling'));
+      expect(skills, contains('state-management'));
       // pre-populated pattern accepted from root cause
       expect(skills, contains('StateNotifier holds stale reference'));
     });
@@ -411,7 +411,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -425,7 +425,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -447,7 +447,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(answers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -463,7 +463,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       // Plant a new session and run teardown again.
@@ -473,7 +473,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_bareAnswers),
-        pickFn: _pick(TeardownCategory.providerState),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -492,7 +492,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers), // hotFiles answer is null → use default
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -514,7 +514,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(answers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -528,7 +528,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_richAnswers), // pattern answer is null → use root cause
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -549,7 +549,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(answers),
-        pickFn: _pick(TeardownCategory.blocEventHandling),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -566,7 +566,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_bareAnswers),
-        pickFn: _pick(TeardownCategory.providerState),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
@@ -581,7 +581,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_bareAnswers),
-        pickFn: _pick(TeardownCategory.providerState),
+        pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));

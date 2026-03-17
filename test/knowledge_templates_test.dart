@@ -2,40 +2,35 @@ import 'package:test/test.dart';
 import 'package:claudart/knowledge_templates.dart';
 
 void main() {
-  group('dartFlutterTemplate', () {
-    test('includes version tags', () {
-      final t = dartFlutterTemplate('3.32.5', '3.8.0');
-      expect(t, contains('Flutter 3.32.5'));
+  group('dartTemplate', () {
+    test('includes version tag', () {
+      final t = dartTemplate('3.8.0');
       expect(t, contains('Dart 3.8.0'));
     });
 
     test('contains core practices', () {
-      final t = dartFlutterTemplate('3.x', '3.x');
+      final t = dartTemplate('3.x');
       expect(t, contains('const'));
       expect(t, contains('sealed'));
     });
-  });
 
-  group('blocTemplate', () {
-    test('is non-empty and contains key headings', () {
-      expect(blocTemplate, contains('## Events'));
-      expect(blocTemplate, contains('## State'));
-      expect(blocTemplate, contains('## BLoC class'));
-    });
-  });
-
-  group('riverpodTemplate', () {
-    test('contains key headings', () {
-      expect(riverpodTemplate, contains('## Providers'));
-      expect(riverpodTemplate, contains('## AsyncNotifier'));
+    test('does not contain Flutter or BLoC references', () {
+      final t = dartTemplate('3.x');
+      expect(t, isNot(contains('Flutter')));
+      expect(t, isNot(contains('BLoC')));
+      expect(t, isNot(contains('bloc')));
     });
   });
 
   group('testingTemplate', () {
     test('contains key headings', () {
       expect(testingTemplate, contains('## Unit tests'));
-      expect(testingTemplate, contains('## Widget tests'));
       expect(testingTemplate, contains('## Coverage'));
+    });
+
+    test('does not contain Flutter-specific sections', () {
+      expect(testingTemplate, isNot(contains('## Widget tests')));
+      expect(testingTemplate, isNot(contains('## Golden tests')));
     });
   });
 
@@ -58,7 +53,7 @@ void main() {
     final base = claudeMdTemplate(
       workspacePath: '/workspace',
       projectName: 'my-app',
-      genericFiles: ['bloc.md', 'dart_flutter.md'],
+      genericFiles: ['dart.md', 'testing.md'],
     );
 
     test('includes project name', () {
@@ -66,8 +61,8 @@ void main() {
     });
 
     test('lists generic knowledge files with absolute paths', () {
-      expect(base, contains('/workspace/knowledge/generic/bloc.md'));
-      expect(base, contains('/workspace/knowledge/generic/dart_flutter.md'));
+      expect(base, contains('/workspace/knowledge/generic/dart.md'));
+      expect(base, contains('/workspace/knowledge/generic/testing.md'));
     });
 
     test('includes project knowledge path', () {
@@ -92,7 +87,6 @@ void main() {
       );
       expect(t, contains('## Environment'));
       expect(t, contains('Dart SDK: `^3.8.0`'));
-      expect(t, isNot(contains('Flutter')));
     });
 
     test('includes flutter constraint when provided', () {

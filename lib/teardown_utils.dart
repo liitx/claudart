@@ -59,12 +59,13 @@ String incrementHotPath(String skills, String area, String file) {
 }
 
 String areaFromCategory(String category) {
-  if (category.contains('bloc') || category.contains('event')) return 'bloc';
-  if (category.contains('provider') || category.contains('riverpod')) return 'provider';
-  if (category.contains('api') || category.contains('repository')) return 'api';
-  if (category.contains('widget') || category.contains('ui')) return 'ui';
-  if (category.contains('ffi') || category.contains('bridge')) return 'ffi';
-  return 'general';
+  if (category.contains('api')) return 'api';
+  if (category.contains('concurrency') || category.contains('async')) return 'async';
+  if (category.contains('config')) return 'config';
+  if (category.contains('filesystem') || category == 'io-filesystem') return 'io';
+  if (category.contains('state')) return 'state';
+  if (category.contains('data') || category.contains('pars')) return 'data';
+  return 'fix';
 }
 
 String buildCommitMessage(String area, String bug, String rootCause, String fix) {

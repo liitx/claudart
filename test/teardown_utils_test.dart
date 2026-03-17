@@ -141,47 +141,47 @@ _No sessions recorded yet._
   });
 
   group('areaFromCategory', () {
-    test('bloc categories', () {
-      expect(areaFromCategory('bloc-event-handling'), 'bloc');
-      expect(areaFromCategory('event-loop'), 'bloc');
-    });
-
-    test('provider categories', () {
-      expect(areaFromCategory('provider-state'), 'provider');
-      expect(areaFromCategory('riverpod-async'), 'provider');
-    });
-
     test('api categories', () {
-      expect(areaFromCategory('api-mapping'), 'api');
-      expect(areaFromCategory('repository-cache'), 'api');
+      expect(areaFromCategory('api-integration'), 'api');
     });
 
-    test('ui categories', () {
-      expect(areaFromCategory('widget-lifecycle'), 'ui');
-      expect(areaFromCategory('ui-rebuild'), 'ui');
+    test('concurrency categories', () {
+      expect(areaFromCategory('concurrency'), 'async');
     });
 
-    test('ffi categories', () {
-      expect(areaFromCategory('ffi-bridge'), 'ffi');
-      expect(areaFromCategory('bridge-call'), 'ffi');
+    test('io categories', () {
+      expect(areaFromCategory('io-filesystem'), 'io');
     });
 
-    test('unknown falls back to general', () {
-      expect(areaFromCategory('something-else'), 'general');
+    test('state categories', () {
+      expect(areaFromCategory('state-management'), 'state');
+    });
+
+    test('config categories', () {
+      expect(areaFromCategory('configuration'), 'config');
+    });
+
+    test('data categories', () {
+      expect(areaFromCategory('data-parsing'), 'data');
+    });
+
+    test('unknown falls back to fix', () {
+      expect(areaFromCategory('general'), 'fix');
+      expect(areaFromCategory('something-else'), 'fix');
     });
   });
 
   group('buildCommitMessage', () {
     test('formats message without root cause', () {
-      final msg = buildCommitMessage('bloc', 'Widget does not update on state change.', '_Not yet determined._', 'Attached state listener');
-      expect(msg, startsWith('fix(bloc): Widget does not update on state change'));
-      expect(msg, contains('Attached state listener'));
+      final msg = buildCommitMessage('api', 'Response not parsed correctly.', '_Not yet determined._', 'Added null check on response body');
+      expect(msg, startsWith('fix(api): Response not parsed correctly'));
+      expect(msg, contains('Added null check on response body'));
       expect(msg, isNot(contains('Root cause')));
     });
 
     test('includes root cause when known', () {
-      final msg = buildCommitMessage('bloc', 'Widget does not update.', 'Listener not attached.', 'Fixed it');
-      expect(msg, contains('Root cause: Listener not attached'));
+      final msg = buildCommitMessage('io', 'File not written.', 'Directory not created first.', 'Fixed it');
+      expect(msg, contains('Root cause: Directory not created first'));
     });
   });
 

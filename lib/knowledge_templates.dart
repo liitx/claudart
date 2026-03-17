@@ -1,9 +1,9 @@
 // Generic starter content for workspace knowledge files.
 // Updated by claudart teardown as sessions accumulate.
 
-String dartFlutterTemplate(String flutterVersion, String dartVersion) => '''
-# Generic Dart / Flutter Practices
-> Flutter $flutterVersion | Dart $dartVersion
+String dartTemplate(String dartVersion) => '''
+# Generic Dart Practices
+> Dart $dartVersion
 > Updated by claudart teardown. Do not edit manually.
 
 ---
@@ -16,97 +16,6 @@ String dartFlutterTemplate(String flutterVersion, String dartVersion) => '''
 - Prefer named parameters for functions with more than two arguments
 - Use `extension` types to wrap primitives with domain meaning
 - `late` is a smell — prefer nullable or required initialisation
-
----
-
-## Flutter
-
-- Never import `material` or `cupertino` directly — use `flutter/widgets.dart`
-- Prefer `const` widgets to minimise rebuild scope
-- Widget build methods should contain zero logic — extract to methods or classes
-- Use `Key` types (`ValueKey`, `ObjectKey`) deliberately; avoid random keys
-- Avoid `setState` inside `initState` — use `WidgetsBinding.addPostFrameCallback`
-
----
-
-## State management
-
-See `bloc.md` and `riverpod.md` for pattern-specific guidance.
-
----
-
-## Patterns to avoid
-
-_Populated by teardown from real sessions._
-''';
-
-const String blocTemplate = '''
-# BLoC Patterns
-> Updated by claudart teardown. Do not edit manually.
-
----
-
-## Events
-
-- One event per user intent — do not reuse events for different triggers
-- Events should be immutable (`final` fields, `const` constructors via `Equatable`)
-- Avoid passing callbacks inside events
-
-## State
-
-- State should be a single sealed class with named subclasses
-- Never emit the same state object twice — `Equatable` handles identity checks
-- Keep state flat; avoid deeply nested state trees
-
-## BLoC class
-
-- Use `EventTransformer` from `bloc_concurrency` for concurrent/sequential control:
-  - `sequential()` — one event at a time, queue the rest
-  - `restartable()` — cancel previous, start new (search, debounce)
-  - `droppable()` — ignore new events while one is in progress
-- Keep BLoC methods private; only expose `add(event)`
-- Never call `add()` from inside the BLoC — use `emit` chains
-
-## Testing
-
-- Test every `(state, event) → state` transition
-- Use `blocTest` from `bloc_test` package
-- Mock repositories with `mocktail`
-
----
-
-## Patterns to avoid
-
-_Populated by teardown from real sessions._
-''';
-
-const String riverpodTemplate = '''
-# Riverpod Patterns
-> Updated by claudart teardown. Do not edit manually.
-
----
-
-## Providers
-
-- Prefer `@riverpod` codegen over manual provider declarations
-- Keep providers small and single-purpose
-- Use `ref.watch` in build methods, `ref.read` in callbacks only
-- Never use `ref.read` inside `build` — it won't rebuild on change
-
-## AsyncNotifier
-
-- Use `AsyncNotifier` for async state with loading/error/data
-- Use `ref.invalidate` to force a refresh; avoid manual state resets
-
-## Family providers
-
-- Use `.family` for parameterised providers (e.g. by ID)
-- Ensure family arguments implement `==` and `hashCode`
-
-## Testing
-
-- Use `ProviderContainer` with `overrides` in tests
-- Use `riverpod_test` for `AsyncNotifier` testing
 
 ---
 
@@ -126,22 +35,9 @@ const String testingTemplate = '''
 - One assertion per test where possible — tests should have one reason to fail
 - Name tests: `given_when_then` or plain English descriptions
 - Mock at the boundary (repository level), not deep in the stack
-- Use `mocktail` — prefer `when(...).thenReturn(...)` over manual fakes
-
-## Widget tests
-
-- Use `WidgetTester.pumpAndSettle` only when animations are involved
-- Prefer `find.byType` over `find.byKey` — keys are implementation details
-- Wrap widgets under test in `MaterialApp` only if routing is under test
-
-## Golden tests
-
-- Use `golden_toolkit` for layout regression
-- Store goldens in `test/goldens/` — regenerate with `--update-goldens` flag
 
 ## Coverage
 
-- 100% line coverage is required for critical packages in this repo
 - Coverage gaps must be justified, not silently ignored
 
 ---

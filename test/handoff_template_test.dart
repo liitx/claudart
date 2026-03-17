@@ -41,10 +41,10 @@ void main() {
         expected: 'expected',
         projectName: 'my-app',
         files: 'my_feature.dart',
-        blocs: 'MyFeatureBloc',
+        entryPoints: 'MyFeatureService',
       );
       expect(t, contains('my_feature.dart'));
-      expect(t, contains('MyFeatureBloc'));
+      expect(t, contains('MyFeatureService'));
     });
   });
 
