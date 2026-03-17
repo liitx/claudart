@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../ui/line_editor.dart' as editor;
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
@@ -149,9 +150,9 @@ void _ensureGitignore(String projectRoot, FileIO fileIO) {
 }
 
 bool _defaultConfirm(String question) {
-  stdout.write('\n$question [y/n] > ');
-  final input = stdin.readLineSync()?.trim().toLowerCase();
-  return input == 'y' || input == 'yes';
+  stdout.write('\n$question [y/n]\n');
+  final input = editor.readLine(optional: true);
+  return input?.toLowerCase() == 'y' || input?.toLowerCase() == 'yes';
 }
 
 String _detectProjectName(String projectRoot) {

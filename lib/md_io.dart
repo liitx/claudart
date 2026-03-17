@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'ui/line_editor.dart' as editor;
 
 /// Reads a section from a markdown file between `## Header` and the next `## `.
 /// Returns the trimmed content, or `_Not yet determined._` if not found.
@@ -53,15 +54,15 @@ void writeFile(String path, String content) {
 String? prompt(String question, {bool optional = false}) {
   stdout.write('\n$question');
   if (optional) stdout.write(' (press enter to skip)');
-  stdout.write('\n> ');
-  final input = stdin.readLineSync()?.trim();
+  stdout.write('\n');
+  final input = editor.readLine(optional: optional);
   if (input == null || input.isEmpty) return optional ? null : prompt(question);
   return input;
 }
 
 /// Prompts yes/no. Returns true for yes.
 bool confirm(String question) {
-  stdout.write('\n$question [y/n] > ');
-  final input = stdin.readLineSync()?.trim().toLowerCase();
-  return input == 'y' || input == 'yes';
+  stdout.write('\n$question [y/n]\n');
+  final input = editor.readLine(optional: true);
+  return input?.toLowerCase() == 'y' || input?.toLowerCase() == 'yes';
 }

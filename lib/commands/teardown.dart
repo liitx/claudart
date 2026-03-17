@@ -50,6 +50,23 @@ Future<void> runTeardown({
     exit_(0);
   }
 
+  // Extract session info upfront so we can pre-populate prompts.
+  final bug = readSection(handoff, 'Bug');
+  final rootCause = readSection(handoff, 'Root Cause');
+  final debugProgress = extractSection(handoff, 'Debug Progress');
+  final changedFiles = readSubSection(debugProgress, 'What changed (files modified)');
+  final branch = extractBranch(handoff);
+
+  // Show session summary before confirming.
+  print('\n───────────────────────────────────────');
+  print('  Bug     : ${_truncate(bug)}');
+  print('  Cause   : ${_truncate(rootCause)}');
+  if (!_isBlank(changedFiles)) {
+    print('  Changed : ${_truncate(changedFiles)}');
+  }
+  print('  Branch  : $branch');
+  print('───────────────────────────────────────\n');
+
   if (!confirm_('Is the bug confirmed resolved?')) {
     print('\nCome back when the fix is confirmed. Continue with /debug or /suggest.\n');
     exit_(0);
@@ -57,25 +74,20 @@ Future<void> runTeardown({
 
   final fixSummary = prompt_('Briefly describe the fix (one or two sentences)');
 
-  // Extract session info.
-  final bug = readSection(handoff, 'Bug');
-  final rootCause = readSection(handoff, 'Root Cause');
-  final debugProgress = extractSection(handoff, 'Debug Progress');
-  readSubSection(debugProgress, 'What changed (files modified)');
-  final branch = extractBranch(handoff);
-
   print('\n───────────────────────────────────────');
-  print('Extracting learnings from session...');
-  print('───────────────────────────────────────');
-  print('\nHelp categorize this session for skills.md:\n');
+  print('Categorize this session for skills.md:');
+  print('───────────────────────────────────────\n');
 
   final category = prompt_(
     'Root cause category?\n  (e.g. bloc-event-handling / provider-state / api-mapping / widget-lifecycle / ffi-bridge)',
   );
 
-  final hotFiles = prompt_(
-    'Which files were confirmed key to the fix? (comma-separated, or "none")',
-    optional: true,
+  // Pre-populate hot files from "What changed" — user confirms or overrides.
+  final hotFilesDefault = _isBlank(changedFiles) ? null : changedFiles.replaceAll('\n', ', ').trim();
+  final hotFiles = _promptWithDefault(
+    prompt_,
+    'Which files were confirmed key to the fix?',
+    hotFilesDefault,
   );
 
   final coldFiles = prompt_(
@@ -83,8 +95,12 @@ Future<void> runTeardown({
     optional: true,
   );
 
-  final pattern = prompt_(
-    'Describe the root cause pattern generically (one sentence)\n  e.g. "BLoC emits stale state when event fires before previous async resolves"',
+  // Pre-populate pattern from root cause — user confirms or overrides.
+  final patternDefault = _isBlank(rootCause) ? null : rootCause.replaceAll('\n', ' ').trim();
+  final pattern = _promptWithDefault(
+    prompt_,
+    'Describe the root cause pattern generically (one sentence)',
+    patternDefault,
   );
 
   final fixPattern = prompt_(
@@ -172,6 +188,27 @@ void _updateSkills({
 
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
+
+String? _promptWithDefault(
+  String? Function(String, {bool optional}) prompt_,
+  String question,
+  String? defaultValue,
+) {
+  if (defaultValue != null) {
+    return prompt_(
+          '$question\n  (press enter to use: "$defaultValue")',
+          optional: true,
+        ) ??
+        defaultValue;
+  }
+  return prompt_(question);
+}
+
+bool _isBlank(String s) =>
+    s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');
+
+String _truncate(String s, {int max = 72}) =>
+    s.length > max ? '${s.substring(0, max)}…' : s;
 
 String _defaultSkillsTemplate() => '''# Accumulated Skills
 

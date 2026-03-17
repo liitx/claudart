@@ -66,7 +66,7 @@ Future<void> runStatus({
   print('  CLAUDART SESSION STATUS');
   print('═══════════════════════════════════════');
   print('Project  : ${entry.name}');
-  print('Branch   : ${state.branch}');
+  print('Branch   : ${currentBranch ?? state.branch}');
   print('Status   : ${state.status.value}');
   print('Bug      : ${_truncate(state.bug)}');
   print('Root cause: ${_truncate(state.rootCause)}');
