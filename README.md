@@ -26,11 +26,13 @@ No cloud sync. No API keys. Everything lives in a local workspace on your machin
 
 - [Quick start](#quick-start)
 - [How it works — the simple version](#how-it-works--the-simple-version)
+- [Token efficiency](#token-efficiency)
 - [Commands at a glance](#commands-at-a-glance)
 - [Glossary](#glossary)
 - [Privacy & sensitivity protection](#privacy--sensitivity-protection)
 - [The continuous improvement loop](#the-continuous-improvement-loop)
 - [Detailed docs](#detailed-docs)
+- [What's coming](#whats-coming)
 
 ---
 
@@ -112,6 +114,8 @@ Projects never contain workspace state. `claudart link` wires a `.claude` symlin
 
 Every session makes the next one smarter. `/save` makes sure no confirmed knowledge is lost between steps.
 
+> **Session state lives in `handoff.md` on disk — not in any terminal process.** After running `claudart setup` in an external terminal, you can close it and continue from the integrated terminal inside your editor. The session is unaffected.
+
 ### The handoff status machine
 
 The session has a status that both `/suggest` and `/debug` respect:
@@ -130,6 +134,26 @@ These statuses are represented internally as the `HandoffStatus` enum in `sessio
 ### Branch awareness
 
 Every command that reads the handoff checks whether your current git branch matches the branch the session was started on. If you switch branches mid-session, claudart warns you before you save or debug against the wrong context. It never blocks — you can always proceed — but the warning is explicit.
+
+---
+
+## Token efficiency
+
+Unstructured AI sessions are expensive. Every time you start fresh, the model re-reads dozens of files to rebuild context it already had. claudart eliminates that.
+
+| Approach | Files read per session | Context reused |
+|---|---|---|
+| Unstructured (no handoff) | 30–60+ speculative reads | None |
+| claudart structured session | ~5–15 targeted reads | Bug, root cause, scope, past patterns |
+
+**How it works:**
+
+- `handoff.md` gives Claude a precise entry point — bug description, confirmed root cause, files in scope. No re-discovery.
+- `skills.md` is queried with sparse TF-IDF cosine similarity — only the top-3 most relevant past patterns are surfaced, not the full history.
+- `/suggest` explores within declared scope only. It does not speculatively read the whole codebase.
+- Sensitivity abstraction produces shorter tokens for abstracted identifiers — `Bloc:A` instead of `AudioPlayerBlocImplementation`.
+
+The first self-hosted claudart session (see `experiments/`) resolved a real bug with **~15 total file reads** across `/suggest` + `/debug` combined.
 
 ---
 
@@ -420,10 +444,11 @@ Preflight exits 0 for clean and warnings (workflow continues). Exits 1 for error
 
 1. Registers the project in `~/.claudart/registry.json` with name, project root, and workspace path
 2. Creates an isolated workspace at `~/.claudart/<project-name>/`
-3. Wires `.claude` symlink from project root to workspace commands directory
-4. Reads `pubspec.yaml` to extract SDK/Flutter constraints for the generated `CLAUDE.md`
-5. Auto-adds `.claude` to `.gitignore` (no duplicate entries)
-6. Prompts for sensitivity mode — stored per-project in the registry
+3. Wires `.claude` symlink from project root to workspace commands directory — **skipped gracefully if `.claude/` already exists as a real directory** (e.g. when linking claudart to itself)
+4. Writes `suggest.md`, `debug.md`, and `save.md` slash command templates to the workspace — always, regardless of symlink state
+5. Reads `pubspec.yaml` to extract SDK/Flutter constraints for the generated `CLAUDE.md`
+6. Auto-adds `.claude` to `.gitignore` when a symlink is created (skipped when `.claude/` is a real tracked directory)
+7. Prompts for sensitivity mode — stored per-project in the registry
 
 Re-linking an existing project updates the symlink and sensitivity mode while preserving the original `createdAt` timestamp and all existing workspace content.
 
@@ -603,6 +628,7 @@ lib/
     suggest_template.dart   ← /suggest slash command definition (written to workspace)
     debug_template.dart     ← /debug slash command definition
     save_template.dart      ← /save slash command definition
+    teardown_template.dart  ← /teardown slash command definition
 
   session/
     session_state.dart      ← immutable parsed view of handoff.md; owns HandoffStatus enum
@@ -652,9 +678,32 @@ lib/
 - No new runtime dependencies — TF-IDF, cosine similarity, and static analysis are all implemented in pure Dart
 - `HandoffStatus` enum in `session_state.dart` — replaces all magic string status comparisons; exhaustive switch enforcement means the compiler catches unhandled statuses and typos at build time, not at runtime
 
-**339 tests. Zero warnings on `dart pub publish --dry-run`.**
+**346 tests. Zero warnings on `dart pub publish --dry-run`.**
 
 </details>
+
+---
+
+## What's coming
+
+claudart is actively developed and self-hosted — bugs and improvements are found by running the tool on itself. The [`experiments/`](experiments/) directory logs each self-hosted session.
+
+Tracked on [GitHub Issues](https://github.com/liitx/claudart/issues). Current priorities:
+
+**CLI experience**
+- Arrow-key interactive menus across all commands (no more numbered picks)
+- Spinners and progress indicators during operations
+- Per-operation and total session timing displayed in output
+- Teardown confirmation table — review all extracted values before committing to skills.md
+
+**Workflow**
+- Framework-agnostic setup questions (remove Flutter/BLoC-specific wording)
+- `claudart setup` false-positive "No project linked" fix when `.claude/` is a real directory
+- `setup.dart` and `teardown.dart` full registry migration
+
+**Quality**
+- GitHub Actions CI enforcing randomized test ordering on every PR
+- README auto-sync on every feature change via `/readme` skill + `readme_sync_test.dart`
 
 ---
 
