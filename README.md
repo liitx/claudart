@@ -8,15 +8,17 @@ A Dart CLI that gives your Claude Code sessions **memory, structure, and privacy
 
 ## The short version
 
-You're debugging a tricky bug. You open Claude Code, type `/suggest`, and it already knows your project's patterns, past mistakes, and what files to avoid. It explores the codebase, confirms the root cause, and writes everything it found into a structured [`handoff.md`](#a-session-step-by-step) — a shared file that carries confirmed knowledge from one agent to the next. [`/save`](#handoffstatusreadyfordebug) locks that confirmed state as a checkpoint. Then `/debug` picks up exactly where `/suggest` left off, with no re-exploration, no guessing. When you're done, `claudart teardown` promotes the learnings into [`skills.md`](#the-continuous-improvement-loop) so next time is smarter.
+Claude Code has no memory between sessions. claudart gives it one.
 
-**That's claudart** — a local CLI that coordinates a structured, stateful Claude Code workflow across sessions.
+| Step | Command | What happens |
+|---|---|---|
+| 1 | [`claudart setup`](#a-session-step-by-step) | Describe the bug. claudart writes a structured [`handoff.md`](#a-session-step-by-step) |
+| 2 | [`/suggest`](#a-session-step-by-step) | Claude explores the codebase, confirms root cause, writes KT to the handoff |
+| 3 | [`/save`](#handoffstatusreadyfordebug) | Locks confirmed state into [`skills.md`](#the-continuous-improvement-loop). Required before `/debug` |
+| 4 | [`/debug`](#a-session-step-by-step) | Scoped fix only. Reads the handoff. Refuses to start without a confirmed root cause |
+| 5 | [`claudart teardown`](#the-continuous-improvement-loop) | Promotes learnings to skills.md. Archives session. Resets for next time |
 
-```
-claudart setup  →  /suggest  →  /save  →  /debug  →  claudart teardown
-```
-
-[`/save`](#handoffstatusreadyfordebug) is the required handshake between `/suggest` and `/debug`. It checkpoints the confirmed [root cause](#a-session-step-by-step) into `skills.md → Pending` before debug begins — no guessing, no stale [session state](#handoffstatus).
+[`/save`](#handoffstatusreadyfordebug) is the required handshake — it is the lock that prevents [`/debug`](#a-session-step-by-step) from working from stale [session state](#handoffstatus).
 
 No cloud sync. No API keys. Everything lives in a [local workspace](#the-workspace) on your machine.
 
