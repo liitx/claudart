@@ -57,9 +57,10 @@ Future<void> runExperiment(
   final logFile = p.join(experimentsDir, '${safeName}_$ts.ansi');
 
   // ── Run command, tee output ────────────────────────────────────────────────
-  print('\n▶  Experiment: $name');
-  print('   Command  : ${cmdArgs.join(' ')}');
-  print('   Log      : $logFile\n');
+  stdout.writeln('\n▶  Experiment: $name');
+  stdout.writeln('   Command  : ${cmdArgs.join(' ')}');
+  stdout.writeln('   Log      : $logFile\n');
+  await stdout.flush();
 
   final sw = Stopwatch()..start();
   final process = await Process.start(
@@ -70,22 +71,27 @@ Future<void> runExperiment(
 
   final logBuffer = StringBuffer();
 
-  // Mirror stdout.
-  process.stdout.listen((bytes) {
-    final text = String.fromCharCodes(bytes);
-    stdout.write(text);
-    logBuffer.write(text);
-  });
+  // Drain stdout, stderr, and wait for exit concurrently so the streams are
+  // fully consumed before we write the log or print the footer.
+  final results = await Future.wait([
+    process.stdout.fold<StringBuffer>(logBuffer, (buf, bytes) {
+      final text = String.fromCharCodes(bytes);
+      stdout.write(text);
+      buf.write(text);
+      return buf;
+    }),
+    process.stderr.fold<StringBuffer>(logBuffer, (buf, bytes) {
+      final text = String.fromCharCodes(bytes);
+      stderr.write(text);
+      buf.write(text);
+      return buf;
+    }),
+    process.exitCode,
+  ]);
 
-  // Mirror stderr.
-  process.stderr.listen((bytes) {
-    final text = String.fromCharCodes(bytes);
-    stderr.write(text);
-    logBuffer.write(text);
-  });
-
-  final exitCode = await process.exitCode;
+  await stdout.flush();
   sw.stop();
+  final exitCode = results[2] as int;
 
   // ── Write log ──────────────────────────────────────────────────────────────
   final header = '# Experiment: $name\n'
