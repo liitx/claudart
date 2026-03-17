@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=\"$CLAUDE_TOOL_INPUT_FILE_PATH\"; case \"$file\" in *lib/commands/*.dart|*lib/session/*.dart|*bin/claudart.dart) echo '📝 README may need updating — run /readme to sync glossary and architecture.' ;; esac # Output is a static string only — never interpolate $file into the echo. File paths may contain sensitive identifiers."
+          }
+        ]
+      }
+    ]
+  }
+}

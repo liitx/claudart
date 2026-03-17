@@ -27,6 +27,7 @@ No cloud sync. No API keys. Everything lives in a local workspace on your machin
 - [Quick start](#quick-start)
 - [How it works — the simple version](#how-it-works--the-simple-version)
 - [Commands at a glance](#commands-at-a-glance)
+- [Glossary](#glossary)
 - [Privacy & sensitivity protection](#privacy--sensitivity-protection)
 - [The continuous improvement loop](#the-continuous-improvement-loop)
 - [Detailed docs](#detailed-docs)
@@ -122,6 +123,8 @@ The session has a status that both `/suggest` and `/debug` respect:
 | `debug-in-progress` | `/debug` is implementing |
 | `needs-suggest` | `/debug` hit a wall — hand back to `/suggest` |
 
+These statuses are represented internally as the `HandoffStatus` enum in `session_state.dart`. Every command that reads the handoff uses exhaustive switch statements on this enum — the Dart compiler enforces that all statuses are handled and catches typos at compile time.
+
 `/debug` refuses to start unless status is `ready-for-debug` or `debug-in-progress`. `/save` is required between the two — it is the lock that prevents debug from working from stale state.
 
 ### Branch awareness
@@ -152,6 +155,120 @@ Every command that reads the handoff checks whether your current git branch matc
 
 ---
 
+## Glossary
+
+> Indexed by the canonical types and values used in the codebase. Each entry maps a concept to where it is and is not used, a minimal example, the rule it enforces, and any immutability constraints — so the vocabulary in code, docs, and tests stays the same word.
+>
+> The [readme sync test](test/readme_sync_test.dart) verifies 1:1 correspondence: every `HandoffStatus` enum value must have an entry, every "Used by" file must exist on disk, every string value must match the `.value` getter. Run `/readme` to sync after any feature change.
+
+---
+
+### `HandoffStatus`
+
+The typed representation of a session's current state. Owned by `lib/session/session_state.dart`. Replaces all magic string comparisons — every command that reads the handoff switches exhaustively on this enum. The Dart compiler enforces that all values are handled and catches typos at build time, not at runtime.
+
+**Values:** `suggestInvestigating` · `readyForDebug` · `debugInProgress` · `needsSuggest` · `unknown`
+
+Commands that read handoff status: `save.dart`, `status.dart`, `launch.dart`, `sync_check.dart`
+Commands that never read handoff status: `setup.dart`, `kill.dart`, `link.dart`, `init.dart`, `unlink.dart`, `scan.dart`, `map_cmd.dart`, `report.dart`
+
+---
+
+#### `HandoffStatus.suggestInvestigating`
+
+> `/suggest` is actively exploring. Root cause not yet confirmed.
+
+**String value:** `suggest-investigating`
+**Used by:** `save.dart` · `status.dart` · `launch.dart`
+**Not used by:** `sync_check.dart` (no preflight check for this value), `setup.dart`, `kill.dart`
+
+**Example — handoff.md:**
+```
+## Status
+suggest-investigating
+```
+
+**Rule:** `/save` skips the `skills.md` Pending entry when status is `suggestInvestigating` — root cause is not yet confirmed so there is nothing to checkpoint. The archive snapshot is still written.
+**Cannot change:** The string `suggest-investigating` is written verbatim to `handoff.md` and every archive snapshot. Renaming it silently breaks all existing sessions.
+
+---
+
+#### `HandoffStatus.readyForDebug`
+
+> `/suggest` has identified a root cause. Run `/save` to lock it, then `/debug` to implement the fix.
+
+**String value:** `ready-for-debug`
+**Used by:** `sync_check.dart` · `save.dart` · `status.dart` · `launch.dart`
+**Not used by:** `setup.dart`, `kill.dart`, `link.dart`, `init.dart`
+
+**Example — handoff.md:**
+```
+## Status
+ready-for-debug
+```
+
+**Rule:** `sync_check.dart` (via `preflight_cmd.dart`) blocks `/debug` unless status is `readyForDebug` or `debugInProgress`. `/save` must be run between `/suggest` and `/debug` — it is the required handshake that locks the confirmed root cause into `skills.md → ## Pending`.
+**Cannot change:** The string `ready-for-debug` is the gate value in `checkHandoffStatus`. Renaming it without migrating all existing `handoff.md` files silently bypasses the debug preflight.
+
+---
+
+#### `HandoffStatus.debugInProgress`
+
+> `/debug` has started implementing the fix. The session is mid-repair.
+
+**String value:** `debug-in-progress`
+**Used by:** `sync_check.dart` · `save.dart` · `status.dart` · `launch.dart`
+**Not used by:** `setup.dart`, `kill.dart`, `link.dart`, `init.dart`
+
+**Example — handoff.md:**
+```
+## Status
+debug-in-progress
+```
+
+**Rule:** `sync_check.dart` allows `/debug` to resume when status is `debugInProgress` — it does not re-block if debug was already running. `/save` can be run mid-debug to checkpoint incremental progress.
+**Cannot change:** The string `debug-in-progress` is written by the `/debug` slash command template. Renaming it without updating the template leaves sessions stuck at `unknown`.
+
+---
+
+#### `HandoffStatus.needsSuggest`
+
+> `/debug` hit a blocker it cannot resolve. Broader exploration is needed before repair can continue.
+
+**String value:** `needs-suggest`
+**Used by:** `sync_check.dart` · `save.dart` · `status.dart` · `launch.dart`
+**Not used by:** `setup.dart`, `kill.dart`, `link.dart`, `init.dart`
+
+**Example — handoff.md:**
+```
+## Status
+needs-suggest
+```
+
+**Rule:** `checkHandoffStatus` surfaces an error when `/debug` is attempted with `needsSuggest` status, directing the user back to `/suggest`. It is the only status where the workflow explicitly reverses direction.
+**Cannot change:** The string `needs-suggest` is written by the `/debug` slash command template on blocker detection. Renaming it without updating the template silently drops the reverse-direction signal.
+
+---
+
+#### `HandoffStatus.unknown`
+
+> Status field is missing, empty, or contains an unrecognised value. Treated as a fresh or corrupted session.
+
+**String value:** _(none — this is the parse fallback for any unrecognised string)_
+**Used by:** `session_state.dart` · `status.dart` · `save.dart` · `launch.dart`
+**Not used by:** `sync_check.dart` (unknown is not a condition any preflight check distinguishes)
+
+**Example — what triggers it:**
+```
+## Status
+          ← blank, or any string not matching the four canonical values
+```
+
+**Rule:** `HandoffStatus.fromString` returns `unknown` for any input that does not match the four canonical strings — it never throws. Commands treat `unknown` as "needs setup": `status.dart` suggests running `claudart setup`, `launch.dart` shows the start-new-session menu.
+**Cannot change:** `unknown` is a Dart-side sentinel, not a value the workflow writes intentionally. If it appears in a handoff, the file was manually edited or corrupted — it is a signal to run `claudart setup`, not a state to route on.
+
+---
+
 ## Privacy & sensitivity protection
 
 When you're working on a proprietary codebase, you might not want class names, function signatures, or module structure going to Anthropic's servers verbatim.
@@ -166,6 +283,8 @@ When enabled during `claudart link`, it:
 4. Replaces sensitive identifiers in `handoff.md` *before* Claude reads it
 
 Claude sees the full picture — BLoC types, relationships, dependency graphs — just never the real names.
+
+**KT writes are also protected.** When `/save` deposits the confirmed root cause and hot file paths into `skills.md → ## Pending`, it passes that content through the same abstractor first. Sensitive identifiers never appear in `skills.md` in plaintext — the knowledge base stays private even as it grows.
 
 ```
 Your code                    What Claude sees
@@ -486,7 +605,7 @@ lib/
     save_template.dart      ← /save slash command definition
 
   session/
-    session_state.dart      ← immutable parsed view of handoff.md
+    session_state.dart      ← immutable parsed view of handoff.md; owns HandoffStatus enum
     session_ops.dart        ← transactional session close with rollback
     workspace_guard.dart    ← lock file mechanism for interrupted state detection
     sync_check.dart         ← preflight pure functions: status, skills, branch, coverage gaps
@@ -531,8 +650,9 @@ lib/
 - Injectable parameters (`exitFn`, `confirmFn`, `pickFn`, `projectRootOverride`) on every command — prevents `exit()` from terminating the test process
 - Transactional session close in `session_ops.dart` — archive → reset → unlink with full rollback on any step failure
 - No new runtime dependencies — TF-IDF, cosine similarity, and static analysis are all implemented in pure Dart
+- `HandoffStatus` enum in `session_state.dart` — replaces all magic string status comparisons; exhaustive switch enforcement means the compiler catches unhandled statuses and typos at build time, not at runtime
 
-**335 tests. Zero warnings on `dart pub publish --dry-run`.**
+**339 tests. Zero warnings on `dart pub publish --dry-run`.**
 
 </details>
 
