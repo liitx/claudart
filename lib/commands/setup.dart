@@ -91,7 +91,7 @@ Future<void> runSetup({
   final expected = prompt_('2. What should be happening? (expected behavior)');
   final files = prompt_('3. Any files already in mind?', optional: true);
   final blocs = prompt_(
-    '4. Any BLoC events, provider names, or API calls involved?',
+    '4. Any functions, classes, or entry points involved?',
     optional: true,
   );
 
@@ -113,7 +113,7 @@ Future<void> runSetup({
   // Run sensitivity scan if enabled.
   // TODO: migrate scan.dart to accept workspace path instead of using claudeDir.
   if (entry.sensitivityMode) {
-    await runScan(scope: null);
+    await runScan(scope: null, projectRootOverride: projectRoot);
   }
 
   // Build handoff content.
