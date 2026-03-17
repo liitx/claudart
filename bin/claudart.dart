@@ -1,4 +1,6 @@
 import 'dart:io';
+import '../lib/git_utils.dart';
+import '../lib/registry.dart';
 import '../lib/commands/experiment.dart';
 import '../lib/commands/init.dart';
 import '../lib/commands/kill.dart';
@@ -87,7 +89,11 @@ Future<void> main(List<String> args) async {
           scope = rest[i + 1];
         }
       }
-      await runScan(scope: scope, full: full);
+      final scanRoot = detectGitContext()?.root;
+      final scanWorkspace = scanRoot != null
+          ? Registry.load().findByProjectRoot(scanRoot)?.workspacePath
+          : null;
+      await runScan(scope: scope, full: full, workspacePath: scanWorkspace);
     case 'report':
       final fileIssue = rest.contains('--file-issue');
       await runReport(fileIssue: fileIssue);

@@ -132,9 +132,8 @@ Future<void> runSetup({
   }
 
   // Run sensitivity scan if enabled.
-  // TODO: migrate scan.dart to accept workspace path instead of using claudeDir.
   if (entry.sensitivityMode) {
-    await runScan(scope: null, projectRootOverride: projectRoot);
+    await runScan(scope: null, projectRootOverride: projectRoot, workspacePath: workspace);
   }
 
   // Build handoff content.
@@ -162,8 +161,7 @@ Future<void> runSetup({
   fileIO.write(handoffFile, content);
 
   // Log the setup interaction.
-  // TODO: migrate SessionLogger to accept workspace path instead of claudeDir.
-  final logger = SessionLogger(sensitivityMode: entry.sensitivityMode);
+  final logger = SessionLogger(sensitivityMode: entry.sensitivityMode, workspacePath: workspace);
   logger.logInteraction(
     command: 'setup',
     outcome: 'ok',

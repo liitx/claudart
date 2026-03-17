@@ -10,22 +10,26 @@ const int _maxInteractions = 500;
 const int _maxErrors = 200;
 const int _maxPerformance = 50;
 
-String get _logsDir => p.join(claudeDir, 'logs');
-String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
-String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-String get _performancePath => p.join(_logsDir, 'performance.md');
-
 /// Appends structured log entries to workspace log files.
 class SessionLogger {
   final FileIO _io;
   final bool sensitivityMode;
   final TokenMap? tokenMap;
+  final String _logsDir;
 
   SessionLogger({
     FileIO? io,
     this.sensitivityMode = false,
     this.tokenMap,
-  }) : _io = io ?? const RealFileIO();
+    String? workspacePath,
+  })  : _io = io ?? const RealFileIO(),
+        _logsDir = workspacePath != null
+            ? logsDirFor(workspacePath)
+            : p.join(claudeDir, 'logs');
+
+  String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
+  String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
+  String get _performancePath => p.join(_logsDir, 'performance.md');
 
   void logInteraction({
     required String command,

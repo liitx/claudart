@@ -8,18 +8,18 @@ import '../scanner/scan_threshold_exception.dart';
 import '../sensitivity/token_map.dart';
 import '../logging/logger.dart';
 
-String get _tokenMapPath => p.join(claudeDir, 'token_map.json');
-
 /// Runs an explicit on-demand scan of the project.
 /// [scope] overrides config.scanScope ('lib', 'full', or 'handoff').
 /// [full] is a convenience flag that sets scope to 'full'.
 /// [projectRootOverride] bypasses the legacy config lookup — used when the
 /// caller already knows the project root (e.g. setup.dart via registry).
+/// [workspacePath] routes token_map.json and logs to the per-project workspace.
 Future<void> runScan({
   String? scope,
   bool full = false,
   FileIO? io,
   String? projectRootOverride,
+  String? workspacePath,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final config = projectRootOverride != null
@@ -40,14 +40,19 @@ Future<void> runScan({
   print('═══════════════════════════════════════');
   print('Scanning $projectRoot/$effectiveScope...');
 
+  final tokenMapPath = workspacePath != null
+      ? tokenMapPathFor(workspacePath)
+      : p.join(claudeDir, 'token_map.json');
+
   final ignoreRules = loadIgnoreRules(projectRoot, io: fileIO);
-  final tokenMap = TokenMap.load(_tokenMapPath, io: fileIO);
+  final tokenMap = TokenMap.load(tokenMapPath, io: fileIO);
   final previousSize = tokenMap.size;
 
   final logger = SessionLogger(
     io: fileIO,
     sensitivityMode: config.sensitivityMode,
     tokenMap: tokenMap,
+    workspacePath: workspacePath,
   );
 
   ScanResult result;
@@ -84,7 +89,7 @@ Future<void> runScan({
     byType.putIfAbsent(entity.typePrefix, () => []).add(entity.realName);
   }
 
-  tokenMap.save(_tokenMapPath, io: fileIO);
+  tokenMap.save(tokenMapPath, io: fileIO);
   final newTokens = tokenMap.size - previousSize;
 
   // Print grouped summary
@@ -104,7 +109,7 @@ Future<void> runScan({
   if (newTokens > 0) {
     print('  + $newTokens new token${newTokens == 1 ? '' : 's'} since last scan');
   }
-  print('Token map updated: $_tokenMapPath');
+  print('Token map updated: $tokenMapPath');
 
   logger.logInteraction(
     command: 'scan',
