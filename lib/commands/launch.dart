@@ -116,7 +116,7 @@ Future<void> runLauncher({
   final state = handoff.isNotEmpty ? SessionState.parse(handoff) : null;
   final locked = isLocked(workspace, io: fileIO);
 
-  print('\n─── ${selected.name} ${'─' * (35 - selected.name.length)}');
+  print('\n─── ${selected.name} ${'─' * (35 - selected.name.length).clamp(0, 35)}');
   if (state != null) {
     print('  Branch : ${state.branch}');
     print('  Status : ${state.status}');
