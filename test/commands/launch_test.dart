@@ -123,14 +123,13 @@ void main() {
   group('launch — empty registry', () {
     test('exits when no projects registered', () async {
       final io = MemoryFileIO();
-      // Write an empty registry.
       Registry.empty().save(io: io);
 
       await expectLater(
         runLauncher(
           io: io,
           projectRootOverride: null,
-          pickFn: (_, __) => 1,
+          pickFn: (_) => 0,
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>()),
@@ -145,9 +144,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : ActiveMenu.back;
+          return pickCall == 1 ? 0 : ActiveMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -160,9 +159,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: _projectRoot,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -177,9 +176,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : LockedMenu.kill;
+          return pickCall == 1 ? 0 : LockedMenu.kill;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
@@ -193,9 +192,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : LockedMenu.back;
+          return pickCall == 1 ? 0 : LockedMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -210,9 +209,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : ActiveMenu.kill;
+          return pickCall == 1 ? 0 : ActiveMenu.kill;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
@@ -220,15 +219,15 @@ void main() {
       expect(io.linkExists(_claudeLink), isFalse);
     });
 
-    test('resume picks action 1 without error (display only)', () async {
+    test('resume picks action without error (display only)', () async {
       final io = _io(withHandoff: true, withLink: true);
       var pickCall = 0;
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : ActiveMenu.resume;
+          return pickCall == 1 ? 0 : ActiveMenu.resume;
         },
         exitFn: _throwExit,
       );
@@ -243,9 +242,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -258,20 +257,17 @@ void main() {
 
   group('launch — register unregistered project', () {
     test('routes to runLink with injected io when user picks Register', () async {
-      // Set up: cwd is an unregistered project (projectRootOverride differs from entry).
       final io = _io();
       final unregisteredRoot = '/projects/other-app';
 
-      // registerChoice(1) = 2 — 1 entry in registry + 1 for the Register option.
       await runLauncher(
         io: io,
         projectRootOverride: unregisteredRoot,
-        pickFn: (_, max) => registerChoice(1),
-        confirmFn: (_) => false, // decline sensitivity mode prompt in runLink
+        pickFn: (_) => registerChoice(1),
+        confirmFn: (_) => false,
         exitFn: _throwExit,
       );
 
-      // runLink should have written a registry entry for the new project.
       final registry = Registry.load(io: io);
       expect(registry.findByProjectRoot(unregisteredRoot), isNotNull);
     });
@@ -295,9 +291,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
@@ -312,9 +308,9 @@ void main() {
       await runLauncher(
         io: io,
         projectRootOverride: null,
-        pickFn: (_, max) {
+        pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 1 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back;
         },
         exitFn: _throwExit,
       );
