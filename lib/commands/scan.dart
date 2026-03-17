@@ -13,13 +13,18 @@ String get _tokenMapPath => p.join(claudeDir, 'token_map.json');
 /// Runs an explicit on-demand scan of the project.
 /// [scope] overrides config.scanScope ('lib', 'full', or 'handoff').
 /// [full] is a convenience flag that sets scope to 'full'.
+/// [projectRootOverride] bypasses the legacy config lookup — used when the
+/// caller already knows the project root (e.g. setup.dart via registry).
 Future<void> runScan({
   String? scope,
   bool full = false,
   FileIO? io,
+  String? projectRootOverride,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final config = loadConfig(io: fileIO);
+  final config = projectRootOverride != null
+      ? WorkspaceConfig(projectRoot: projectRootOverride)
+      : loadConfig(io: fileIO);
 
   if (config.projectRoot == null) {
     print('\n✗ No project linked. Run `claudart link` first.\n');
