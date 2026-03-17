@@ -1,25 +1,25 @@
-# /test_commands — kill command test and rule checker
+# /test_commands — kill and status command test and rule checker
 
 ## Module context
 
-**Owns:** `lib/commands/kill.dart`,
-`test/commands/kill_test.dart`
+**Owns:** `lib/commands/kill.dart`, `test/commands/kill_test.dart`,
+`lib/commands/status.dart`, `test/commands/status_test.dart`
 
 **Invoked by:** `/test` reads this file inline when any owned file changes.
 
-**Standalone:** Run `/test_commands` directly for focused kill testing.
+**Standalone:** Run `/test_commands` directly for focused kill and status testing.
 
 ---
 
-Scope: `lib/commands/kill.dart`, `test/commands/kill_test.dart`
-Run when: any change to `kill.dart` or `kill_test.dart`.
+Scope: `lib/commands/kill.dart`, `test/commands/kill_test.dart`, `lib/commands/status.dart`, `test/commands/status_test.dart`
+Run when: any change to `kill.dart`, `kill_test.dart`, `status.dart`, or `status_test.dart`.
 
 ---
 
 ## Step 1 — Run scoped tests
 
 ```
-dart test test/commands/kill_test.dart \
+dart test test/commands/kill_test.dart test/commands/status_test.dart \
   --test-randomize-ordering-seed=random --reporter=expanded
 ```
 
@@ -28,6 +28,21 @@ Record seed and result. Stop if any test fails.
 ---
 
 ## Step 2 — Module rules
+
+### status.dart
+
+**Rule: `status` prefers live git branch over handoff branch.**
+When `detectGitContext()` succeeds, the live branch should be displayed rather than
+the stale branch from the handoff. Only fall back to handoff branch when git is undetectable.
+> Check: line 69 must use `currentBranch ?? state.branch`, not just `state.branch`
+
+**Rule: `status` never mutates state.**
+Status is read-only. It must not modify the handoff, registry, or any workspace files.
+> Check: `grep -n "fileIO.write\|io.write" lib/commands/status.dart` → no results
+
+**Rule: Mismatch warning preserved.**
+The warning at lines 78-82 that alerts when current branch differs from handoff branch
+must remain — it serves a different purpose (detecting mid-session branch switches).
 
 ### kill.dart
 
@@ -61,6 +76,10 @@ Project root → registry lookup → workspace path. No hardcoded paths from
 
 | Scenario                                          | Covered |
 |---------------------------------------------------|---------|
+| status — displays live git branch when available  | ✓       |
+| status — falls back to handoff branch when not    | ✓       |
+| status — exits 1 when no registry entry           | ✓       |
+| status — exits 1 when not in git repo             | ✓       |
 | kill — success: archives handoff                  | ✓       |
 | kill — success: resets handoff to blank           | ✓       |
 | kill — success: removes symlink                   | ✓       |
@@ -82,6 +101,7 @@ Commands module
   Passed  : <n>
   Failed  : <n>
 
+  status rules    : ✓ / ✗
   kill rules      : ✓ / ✗
   Coverage gaps   : none / <list>
 ```

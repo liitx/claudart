@@ -59,6 +59,8 @@ command) and Step 2 (module rules) inline before proceeding to the full suite.
 | `test/commands/preflight_cmd_test.dart` | `.claude/commands/test_preflight.md`    |
 | `lib/commands/kill.dart`              | `.claude/commands/test_commands.md`       |
 | `test/commands/kill_test.dart`        | `.claude/commands/test_commands.md`       |
+| `lib/commands/status.dart`            | `.claude/commands/test_commands.md`       |
+| `test/commands/status_test.dart`      | `.claude/commands/test_commands.md`       |
 | `lib/session/session_state.dart`      | `.claude/commands/test_session.md`        |
 | `test/session/session_state_test.dart` | `.claude/commands/test_session.md`       |
 | `lib/file_io.dart`                    | all feature files (read each in sequence) |
