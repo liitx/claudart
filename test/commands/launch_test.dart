@@ -287,6 +287,34 @@ void main() {
     });
   });
 
+  group('launch — long project name', () {
+    test('does not throw when project name exceeds 35 characters', () async {
+      final longName = 'my-company-internal-flutter-app-with-extras';
+      final entry = RegistryEntry(
+        name: longName,
+        projectRoot: '/projects/$longName',
+        workspacePath: '/workspaces/$longName',
+        createdAt: '2026-01-01',
+        lastSession: '2026-03-15',
+        sensitivityMode: false,
+      );
+      final io = MemoryFileIO();
+      Registry.empty().add(entry).save(io: io);
+
+      var pickCall = 0;
+      await runLauncher(
+        io: io,
+        projectRootOverride: null,
+        pickFn: (_, max) {
+          pickCall++;
+          return pickCall == 1 ? 1 : 2; // pick project, then Back
+        },
+        exitFn: _throwExit,
+      );
+      expect(pickCall, equals(2));
+    });
+  });
+
   group('launch — sensitivity mode display', () {
     test('does not crash when sensitivity mode is on', () async {
       final io = _io(withHandoff: false, withLink: false, sensitivityMode: true);
