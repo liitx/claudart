@@ -1,11 +1,40 @@
 import '../teardown_utils.dart';
 
+/// Typed representation of the handoff status field.
+///
+/// Replaces all magic string comparisons — the compiler enforces exhaustiveness
+/// in switch expressions and catches typos at compile time.
+enum HandoffStatus {
+  suggestInvestigating,
+  readyForDebug,
+  debugInProgress,
+  needsSuggest,
+  unknown;
+
+  static HandoffStatus fromString(String s) => switch (s) {
+        'suggest-investigating' => suggestInvestigating,
+        'ready-for-debug' => readyForDebug,
+        'debug-in-progress' => debugInProgress,
+        'needs-suggest' => needsSuggest,
+        _ => unknown,
+      };
+
+  /// The canonical string value written to and read from handoff.md.
+  String get value => switch (this) {
+        suggestInvestigating => 'suggest-investigating',
+        readyForDebug => 'ready-for-debug',
+        debugInProgress => 'debug-in-progress',
+        needsSuggest => 'needs-suggest',
+        unknown => 'unknown',
+      };
+}
+
 /// Read-only structured view of a handoff.md file.
 ///
 /// Parsed once at command startup; never mutated. Callers use this to
 /// display session context before destructive operations like `kill`.
 class SessionState {
-  final String status;
+  final HandoffStatus status;
   final String branch;
   final String bug;
   final String rootCause;
@@ -39,7 +68,7 @@ class SessionState {
   factory SessionState.parse(String content) {
     final debugProgress = extractSection(content, 'Debug Progress');
     return SessionState(
-      status: _clean(extractSection(content, 'Status')),
+      status: HandoffStatus.fromString(_clean(extractSection(content, 'Status'))),
       branch: extractBranch(content),
       bug: _clean(extractSection(content, 'Bug')),
       rootCause: _clean(extractSection(content, 'Root Cause')),

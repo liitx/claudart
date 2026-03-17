@@ -83,7 +83,7 @@ void main() {
     setUp(() => state = SessionState.parse(_activeHandoff));
 
     test('reads status', () {
-      expect(state.status, equals('ready-for-debug'));
+      expect(state.status, equals(HandoffStatus.readyForDebug));
     });
 
     test('reads branch', () {
@@ -117,7 +117,7 @@ void main() {
     setUp(() => state = SessionState.parse(blankHandoff));
 
     test('status is suggest-investigating', () {
-      expect(state.status, equals('suggest-investigating'));
+      expect(state.status, equals(HandoffStatus.suggestInvestigating));
     });
 
     test('branch is unknown (no branch line)', () {
@@ -144,7 +144,7 @@ void main() {
   group('SessionState.parse — edge cases', () {
     test('empty string returns all empty/unknown', () {
       final state = SessionState.parse('');
-      expect(state.status, isEmpty);
+      expect(state.status, equals(HandoffStatus.unknown));
       expect(state.branch, equals('unknown'));
       expect(state.hasActiveContent, isFalse);
     });
