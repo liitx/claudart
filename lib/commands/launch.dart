@@ -182,6 +182,23 @@ Future<void> runLauncher({
 /// rather than hard-coding a magic number.
 int registerChoice(int entryCount) => entryCount + 1;
 
+// ── Menu choice constants ─────────────────────────────────────────────────────
+// Exposed so tests reference named actions instead of magic numbers.
+// Each set maps to a specific context menu shown in Phase 2.
+
+/// Locked-workspace menu: 1=Kill, 2=Back
+const lockedMenuKill = 1;
+const lockedMenuBack = 2;
+
+/// Active-session menu: 1=Resume, 2=Kill, 3=Back
+const activeMenuResume = 1;
+const activeMenuKill = 2;
+const activeMenuBack = 3;
+
+/// Fresh-workspace menu: 1=Start new session, 2=Back
+const freshMenuStart = 1;
+const freshMenuBack = 2;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 void _printResumeInstructions(String status) {
