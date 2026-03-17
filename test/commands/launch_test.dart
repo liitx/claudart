@@ -141,32 +141,28 @@ void main() {
   group('launch — project list', () {
     test('lists registered projects without error', () async {
       final io = _io(withHandoff: true, withLink: true);
-      // Select project 1, then "Back" (action 3 — no active path)
-      // For active session: choices are resume(1), kill(2), back(3).
       var pickCall = 0;
       await runLauncher(
         io: io,
-        projectRootOverride: null, // not detected as current
+        projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 3; // pick project 1, then back
+          return pickCall == 1 ? 1 : activeMenuBack;
         },
         exitFn: _throwExit,
       );
-      // No exception means it ran cleanly.
       expect(pickCall, equals(2));
     });
 
     test('highlights current project when cwd matches', () async {
-      // This is display-only — we verify it doesn't crash when cwd matches.
       final io = _io(withHandoff: false, withLink: false);
       var pickCall = 0;
       await runLauncher(
         io: io,
-        projectRootOverride: _projectRoot, // matches the registered entry
+        projectRootOverride: _projectRoot,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 2; // pick project, then back (fresh)
+          return pickCall == 1 ? 1 : freshMenuBack;
         },
         exitFn: _throwExit,
       );
@@ -183,12 +179,11 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return 1; // pick project, then kill (only option besides back)
+          return pickCall == 1 ? 1 : lockedMenuKill;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
       );
-      // Lock cleared — verifies launch correctly routed to kill and kill completed.
       expect(isLocked(_workspace, io: io), isFalse);
     });
 
@@ -200,11 +195,10 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 2; // pick project, then Back
+          return pickCall == 1 ? 1 : lockedMenuBack;
         },
         exitFn: _throwExit,
       );
-      // Lock should still be present (back = no action taken).
       expect(isLocked(_workspace, io: io), isTrue);
     });
   });
@@ -218,13 +212,11 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 2; // pick project, then Kill
+          return pickCall == 1 ? 1 : activeMenuKill;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
       );
-      // Symlink gone — verifies launch correctly routed to kill and kill completed.
-      // Archive mechanics are tested in session_ops_test.dart.
       expect(io.linkExists(_claudeLink), isFalse);
     });
 
@@ -236,11 +228,10 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 1; // pick project, then Resume
+          return pickCall == 1 ? 1 : activeMenuResume;
         },
         exitFn: _throwExit,
       );
-      // Session symlink still intact — resume just prints instructions.
       expect(io.linkExists(_claudeLink), isTrue);
     });
   });
@@ -254,11 +245,10 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 2; // pick project, then Back
+          return pickCall == 1 ? 1 : freshMenuBack;
         },
         exitFn: _throwExit,
       );
-      // Back was selected — no session started, no archive written.
       final archived = io.files.keys
           .where((k) => k.startsWith(p.join(_workspace, 'archive')))
           .toList();
@@ -307,7 +297,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 2; // pick project, then Back
+          return pickCall == 1 ? 1 : freshMenuBack;
         },
         exitFn: _throwExit,
       );
@@ -324,7 +314,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_, max) {
           pickCall++;
-          return pickCall == 1 ? 1 : 2; // pick project, then back
+          return pickCall == 1 ? 1 : freshMenuBack;
         },
         exitFn: _throwExit,
       );
