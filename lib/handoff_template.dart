@@ -13,6 +13,7 @@ String handoffTemplate({
   return '''# Agent Handoff — $projectName
 
 > Session started: $date | Branch: $branch
+> Updated: $date
 > Source of truth between suggest and debug agents.
 > Managed by: claudart (https://github.com/liitx/claudart)
 
@@ -84,6 +85,30 @@ _Nothing yet._
 
 _Nothing yet._
 ''';
+}
+
+/// Updates (or inserts) the `> Updated: …` line in an existing handoff.
+///
+/// Operates on the raw string — no full parse required. Safe to call on any
+/// handoff regardless of age or format.
+String stampHandoffUpdated(String handoff) {
+  final ts = DateTime.now().toIso8601String().split('.').first;
+  final updatedLine = '> Updated: $ts';
+  final pattern = RegExp(r'^> Updated: .+$', multiLine: true);
+  if (pattern.hasMatch(handoff)) {
+    return handoff.replaceFirst(pattern, updatedLine);
+  }
+  // Insert after the first `> Session started:` line if present.
+  final startedPattern = RegExp(r'^(> Session started: .+)$', multiLine: true);
+  final match = startedPattern.firstMatch(handoff);
+  if (match != null) {
+    return handoff.replaceFirst(
+      match.group(0)!,
+      '${match.group(0)}\n$updatedLine',
+    );
+  }
+  // Fallback: prepend to the first `>` block.
+  return handoff.replaceFirst(RegExp(r'^(> )', multiLine: true), '$updatedLine\n> ');
 }
 
 const String blankHandoff = '''# Agent Handoff

@@ -33,6 +33,7 @@ String projectsKnowledgeDirFor(String ws) => p.join(ws, 'knowledge', 'projects')
 String claudeCommandsDirFor(String ws) => p.join(ws, '.claude', 'commands');
 String tokenMapPathFor(String ws) => p.join(ws, 'token_map.json');
 String logsDirFor(String ws) => p.join(ws, 'logs');
+String experimentsDirFor(String ws) => p.join(ws, 'experiments');
 
 // ── Legacy single-workspace paths ──────────────────────────────────────────
 // Kept for backward compatibility while commands migrate to workspaceFor().

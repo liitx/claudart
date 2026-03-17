@@ -22,6 +22,7 @@ Future<void> runKill({
   final fileIO = io ?? const RealFileIO();
   final confirm_ = confirmFn ?? _defaultConfirm;
   final exit_ = exitFn ?? exit;
+  final sw = Stopwatch()..start();
 
   print('\n═══════════════════════════════════════');
   print('  CLAUDART SESSION KILL');
@@ -104,7 +105,8 @@ Future<void> runKill({
   // 8 — Update registry timestamp.
   registry.touchSession(entry.name).save(io: fileIO);
 
-  print('\n✓ Session killed: ${entry.name}');
+  sw.stop();
+  print('\n✓ Session killed: ${entry.name}  (${sw.elapsedMilliseconds}ms)');
   print('  Handoff archived to ${p.join(workspace, 'archive')}');
   print('  Handoff reset to blank.');
   print('  Symlink removed.\n');

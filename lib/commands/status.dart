@@ -5,11 +5,13 @@ import '../paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart';
 import '../teardown_utils.dart';
+import '../ui/ansi.dart' as ansi;
 
 Future<void> runStatus({
   FileIO? io,
   String? projectRootOverride,
   Never Function(int code)? exitFn,
+  bool prompt = false,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
@@ -19,6 +21,7 @@ Future<void> runStatus({
   final currentBranch = gitCtx?.branch;
 
   if (projectRoot == null) {
+    if (prompt) return; // silent in prompt mode — not in a registered project
     print('✗ Not inside a git repository. Cannot detect project.');
     exit_(1);
   }
@@ -26,6 +29,7 @@ Future<void> runStatus({
   final registry = Registry.load(io: fileIO);
   final entry = registry.findByProjectRoot(projectRoot);
   if (entry == null) {
+    if (prompt) return; // silent in prompt mode
     print('✗ No claudart session found for this project.');
     print('  Run `claudart link` to register it.');
     exit_(1);
@@ -37,11 +41,20 @@ Future<void> runStatus({
       fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
 
   if (content.isEmpty) {
+    if (prompt) return;
     print('\nNo active handoff. Run: claudart setup\n');
     return;
   }
 
   final state = SessionState.parse(content);
+
+  // ── Prompt mode: compact single-line output for shell RPROMPT/PS1 ──────────
+  if (prompt) {
+    final colour = _statusColour(state.status);
+    stdout.write('${ansi.c(ansi.dim, '[')}${ansi.c(ansi.bold, entry.name)}${ansi.c(ansi.dim, '|')}${ansi.c(colour, state.status.value)}${ansi.c(ansi.dim, ']')}');
+    return;
+  }
+
   final unresolved =
       readSubSection(extractSection(content, 'Debug Progress'),
           'What is still unresolved');
@@ -89,3 +102,11 @@ String _truncate(String s, {int max = 80}) {
   final single = s.replaceAll('\n', ' ').trim();
   return single.length > max ? '${single.substring(0, max)}…' : single;
 }
+
+String _statusColour(HandoffStatus s) => switch (s) {
+      HandoffStatus.suggestInvestigating => ansi.cyan,
+      HandoffStatus.readyForDebug        => ansi.yellow,
+      HandoffStatus.debugInProgress      => ansi.green,
+      HandoffStatus.needsSuggest         => ansi.red,
+      HandoffStatus.unknown              => ansi.dim,
+    };

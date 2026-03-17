@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../lib/commands/experiment.dart';
 import '../lib/commands/init.dart';
 import '../lib/commands/kill.dart';
 import '../lib/commands/save.dart';
@@ -26,7 +27,7 @@ Commands:
   link [project-name]    Symlink workspace into current project (detects name from git if omitted)
   unlink                 Remove workspace symlinks from current project
   setup [path]           Start a new session (path defaults to current directory)
-  status                 Show current session state
+  status [--prompt]      Show current session state; --prompt outputs a compact colored string for shell RPROMPT/PS1
   teardown               Close session: update knowledge, archive handoff, suggest commit
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
   kill                   Abandon session: archive handoff, remove symlink (no skills update)
@@ -34,6 +35,7 @@ Commands:
   scan [--scope lib|full|handoff] [--full]  Re-scan project for sensitive tokens
   report [--file-issue]  Show diagnostic report; --file-issue files GitHub issues
   map                    Generate token_map.md from token_map.json
+  experiment <name> -- <cmd> [args]  Run a command and tee output to experiments/<name>_<ts>.ansi
 
 Options:
   -h, --help   Show this help message
@@ -65,7 +67,7 @@ Future<void> main(List<String> args) async {
         projectRootOverride: rest.isNotEmpty ? rest.first : null,
       );
     case 'status':
-      await runStatus();
+      await runStatus(prompt: rest.contains('--prompt'));
     case 'teardown':
       await runTeardown();
     case 'save':
@@ -91,6 +93,8 @@ Future<void> main(List<String> args) async {
       await runReport(fileIssue: fileIssue);
     case 'map':
       runMap();
+    case 'experiment':
+      await runExperiment(rest);
     default:
       print('Unknown command: $command\n');
       print(_usage);
