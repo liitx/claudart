@@ -10,13 +10,15 @@ A Dart CLI that gives your Claude Code sessions **memory, structure, and privacy
 
 Claude Code has no memory between sessions. claudart gives it one.
 
-| Step | Command | What happens |
-|---|---|---|
-| 1 | [`claudart setup`](#a-session-step-by-step) | Describe the bug. claudart writes a structured [`handoff.md`](#a-session-step-by-step) |
-| 2 | [`/suggest`](#a-session-step-by-step) | Claude explores the codebase, confirms root cause, writes KT to the handoff |
-| 3 | [`/save`](#handoffstatusreadyfordebug) | Locks confirmed state into [`skills.md`](#the-continuous-improvement-loop). Required before `/debug` |
-| 4 | [`/debug`](#a-session-step-by-step) | Scoped fix only. Reads the handoff. Refuses to start without a confirmed root cause |
-| 5 | [`claudart teardown`](#the-continuous-improvement-loop) | Promotes learnings to skills.md. Archives session. Resets for next time |
+| Step | Command | Run in | What happens |
+|---|---|---|---|
+| 1 | [`claudart setup`](#a-session-step-by-step) | terminal | Describe the bug. claudart writes a structured [`handoff.md`](#a-session-step-by-step) |
+| 2 | [`/suggest`](#a-session-step-by-step) | Claude Code | Claude explores the codebase, confirms root cause, writes KT to the handoff |
+| 3 | [`/save`](#handoffstatusreadyfordebug) | Claude Code | Locks confirmed state into [`skills.md`](#the-continuous-improvement-loop). Required before `/debug` |
+| 4 | [`/debug`](#a-session-step-by-step) | Claude Code | Scoped fix only. Reads the handoff. Refuses to start without a confirmed root cause |
+| 5 | [`claudart teardown`](#the-continuous-improvement-loop) | terminal | Promotes learnings to skills.md. Archives session. Resets for next time |
+
+> **`claudart` commands** run in your terminal. **`/suggest`, `/save`, `/debug`** are slash commands — type them in the Claude Code chat panel inside your editor.
 
 [`/save`](#handoffstatusreadyfordebug) is the required handshake — it is the lock that prevents [`/debug`](#a-session-step-by-step) from working from stale [session state](#handoffstatus).
 
@@ -88,30 +90,31 @@ Projects never contain workspace state. `claudart link` wires a `.claude` symlin
 ### A session, step by step
 
 ```
+── Terminal ──────────────────────────────────────────────────
 1. claudart setup
-   You describe the bug. claudart writes a structured handoff.md.
+   Describe the bug. claudart writes a structured handoff.md.
 
-2. /suggest  (inside Claude Code)
-   Claude reads your knowledge base + handoff.
-   Explores the codebase. Builds a theory.
-   Writes its findings back to handoff.md. Sets status → ready-for-debug.
+── Claude Code (chat panel) ──────────────────────────────────
+2. /suggest
+   Reads your knowledge base + handoff.
+   Explores the codebase. Confirms root cause.
+   Writes findings to handoff.md. Sets status → ready-for-debug.
 
-3. /save  (inside Claude Code — required handshake)
-   Runs `claudart save` under the hood.
+3. /save  ← required handshake
    Checkpoints the handoff to archive/.
    Deposits the confirmed root cause to skills.md → Pending.
    Does NOT reset the session — work continues.
 
-4. /debug  (inside Claude Code)
+4. /debug
    Reads the checkpointed handoff. Runs preflight — refuses to start
    if status is wrong or skills.md is out of sync.
    Implements a scoped fix. Only touches what it said it would touch.
 
+── Terminal ──────────────────────────────────────────────────
 5. claudart teardown
-   You confirm the fix. Describe what changed.
-   claudart extracts the learnings and adds them to skills.md.
-   Archives the full session. Resets handoff for next time.
-   Suggests a commit message.
+   Confirm the fix. Describe what changed.
+   claudart extracts learnings, adds them to skills.md.
+   Archives the session. Resets handoff. Suggests a commit message.
 ```
 
 Every session makes the next one smarter. `/save` makes sure no confirmed knowledge is lost between steps.
