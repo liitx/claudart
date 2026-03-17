@@ -42,7 +42,7 @@ Options:
 ''';
 
 Future<void> main(List<String> args) async {
-  if (args.contains('-h') || args.contains('--help')) {
+  if (args.firstOrNull == '-h' || args.firstOrNull == '--help') {
     print(_usage);
     exit(0);
   }
