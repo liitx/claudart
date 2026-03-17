@@ -117,12 +117,12 @@ SyncCheckResult checkHandoffStatus(String operation, String handoffContent) {
 
   switch (operation) {
     case 'debug':
-      if (state.status != 'ready-for-debug' &&
-          state.status != 'debug-in-progress') {
+      if (state.status != HandoffStatus.readyForDebug &&
+          state.status != HandoffStatus.debugInProgress) {
         return SyncCheckResult([
           SyncIssue(
             IssueSeverity.error,
-            'Handoff status is "${state.status}" — debug requires ready-for-debug.',
+            'Handoff status is "${state.status.value}" — debug requires ready-for-debug.',
             suggestion:
                 'Complete /suggest first, then run /save to lock the root cause.',
           ),

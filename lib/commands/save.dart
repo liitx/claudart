@@ -4,6 +4,9 @@ import '../file_io.dart';
 import '../git_utils.dart';
 import '../paths.dart';
 import '../registry.dart';
+import '../sensitivity/abstractor.dart';
+import '../sensitivity/detector.dart';
+import '../sensitivity/token_map.dart';
 import '../session/session_state.dart';
 import '../teardown_utils.dart';
 
@@ -65,6 +68,8 @@ Future<SkillsUpdateResult> runSave({
   final skillsResult = _updatePendingSkills(
     fileIO: fileIO,
     skillsFile: skillsFile,
+    tokenMapFile: tokenMapPathFor(workspace),
+    sensitivityMode: entry.sensitivityMode,
     state: state,
   );
 
@@ -82,6 +87,8 @@ Future<SkillsUpdateResult> runSave({
 SkillsUpdateResult _updatePendingSkills({
   required FileIO fileIO,
   required String skillsFile,
+  required String tokenMapFile,
+  required bool sensitivityMode,
   required SessionState state,
 }) {
   if (_isBlank(state.rootCause)) return SkillsUpdateResult.skipped;
@@ -91,18 +98,24 @@ SkillsUpdateResult _updatePendingSkills({
       ? fileIO.read(skillsFile)
       : _blankSkillsTemplate;
 
+  // Abstract KT content before writing when sensitivity mode is on.
+  // This ensures root cause and hot file paths are not written in plaintext.
+  String sanitize(String text) {
+    if (!sensitivityMode) return text;
+    final tokenMap = TokenMap.load(tokenMapFile);
+    return abstractor.abstract(text, tokenMap, defaultDetector);
+  }
+
   // Root cause entry — always written when confirmed.
-  final causeEntry =
-      '- `${state.branch}` ($today): root cause — '
-      '${state.rootCause.replaceAll('\n', ' ').trim()}';
-  skills = appendToSection(skills, 'Pending', causeEntry);
+  final cause = sanitize(state.rootCause.replaceAll('\n', ' ').trim());
+  skills = appendToSection(
+      skills, 'Pending', '- `${state.branch}` ($today): root cause — $cause');
 
   // Hot files entry — written when files changed are confirmed.
   if (!_isBlank(state.changed)) {
-    final filesEntry =
-        '- `${state.branch}` ($today): hot files — '
-        '${state.changed.replaceAll('\n', ' ').trim()}';
-    skills = appendToSection(skills, 'Pending', filesEntry);
+    final changed = sanitize(state.changed.replaceAll('\n', ' ').trim());
+    skills = appendToSection(
+        skills, 'Pending', '- `${state.branch}` ($today): hot files — $changed');
   }
 
   fileIO.write(skillsFile, skills);
@@ -132,7 +145,7 @@ void _printReport(
 ) {
   print('\n✓ Checkpoint: ${p.basename(checkpointFile)}');
   print('  Branch : ${state.branch}');
-  print('  Status : ${state.status}');
+  print('  Status : ${state.status.value}');
 
   if (skillsResult == SkillsUpdateResult.written) {
     print('  Skills : pending entry written (root cause confirmed)');
@@ -142,13 +155,14 @@ void _printReport(
 
   print('');
   switch (state.status) {
-    case 'suggest-investigating':
+    case HandoffStatus.suggestInvestigating:
       print('Continue exploring. Run /save again when root cause is confirmed.');
-    case 'ready-for-debug':
+    case HandoffStatus.readyForDebug:
       print('Root cause locked. Run /debug to implement the fix.');
-    case 'debug-in-progress':
+    case HandoffStatus.debugInProgress:
       print('Fix in progress. Run /save again after confirming the fix.');
-    default:
+    case HandoffStatus.needsSuggest:
+    case HandoffStatus.unknown:
       print('Run /suggest or /debug to continue.');
   }
   print('');

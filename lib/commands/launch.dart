@@ -4,7 +4,7 @@ import '../file_io.dart';
 import '../git_utils.dart';
 import '../paths.dart';
 import '../registry.dart';
-import '../session/session_state.dart';
+import '../session/session_state.dart' show SessionState, HandoffStatus;
 import '../session/workspace_guard.dart';
 import 'kill.dart';
 import 'link.dart';
@@ -207,18 +207,18 @@ abstract final class FreshMenu {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-void _printResumeInstructions(String status) {
+void _printResumeInstructions(HandoffStatus status) {
   print('');
   switch (status) {
-    case 'suggest-investigating':
+    case HandoffStatus.suggestInvestigating:
       print('Open your editor and run /suggest to continue exploration.');
-    case 'ready-for-debug':
+    case HandoffStatus.readyForDebug:
       print('Root cause identified. Run /debug to implement the fix.');
-    case 'debug-in-progress':
+    case HandoffStatus.debugInProgress:
       print('Fix in progress. Run /debug to continue.');
-    case 'needs-suggest':
+    case HandoffStatus.needsSuggest:
       print('Debug hit a blocker. Run /suggest for broader exploration.');
-    default:
+    case HandoffStatus.unknown:
       print('Run /suggest to begin or /debug if root cause is known.');
   }
   print('');

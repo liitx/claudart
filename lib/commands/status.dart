@@ -51,10 +51,11 @@ Future<void> runStatus({
   print('═══════════════════════════════════════');
   print('Project  : ${entry.name}');
   print('Branch   : ${state.branch}');
-  print('Status   : ${state.status}');
+  print('Status   : ${state.status.value}');
   print('Bug      : ${_truncate(state.bug)}');
   print('Root cause: ${_truncate(state.rootCause)}');
-  if (state.status == 'debug-in-progress' || state.status == 'needs-suggest') {
+  if (state.status == HandoffStatus.debugInProgress ||
+      state.status == HandoffStatus.needsSuggest) {
     print('Unresolved: ${_truncate(unresolved)}');
   }
 
@@ -70,15 +71,15 @@ Future<void> runStatus({
 
   print('\nNext step:');
   switch (state.status) {
-    case 'suggest-investigating':
+    case HandoffStatus.suggestInvestigating:
       print('  Run /suggest in your editor.');
-    case 'ready-for-debug':
+    case HandoffStatus.readyForDebug:
       print('  Run /debug in your editor.');
-    case 'debug-in-progress':
+    case HandoffStatus.debugInProgress:
       print('  Continue with /debug, or run /suggest if you hit a wall.');
-    case 'needs-suggest':
+    case HandoffStatus.needsSuggest:
       print('  Run /suggest in your editor — debug has a question for you.');
-    default:
+    case HandoffStatus.unknown:
       print('  Run: claudart setup');
   }
   print('');
