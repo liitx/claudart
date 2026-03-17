@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../handoff_template.dart';
@@ -10,6 +9,9 @@ import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../sensitivity/token_map.dart';
 import '../logging/logger.dart';
+import '../session/session_state.dart' show SessionState, HandoffStatus;
+import '../ui/ansi.dart' as ansi;
+import '../ui/menu.dart';
 import 'scan.dart';
 
 Future<void> runSetup({
@@ -17,12 +19,14 @@ Future<void> runSetup({
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
   String? Function(String question, {bool optional})? promptFn,
+  int Function(List<String> items)? pickFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final confirm_ = confirmFn ?? confirm;
   final prompt_ = promptFn ?? _defaultPrompt;
+  final pick_ = pickFn ?? arrowMenu;
 
   print('\n═══════════════════════════════════════');
   print('  CLAUDART SESSION SETUP');
@@ -54,18 +58,35 @@ Future<void> runSetup({
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
 
-  // Check for active handoff.
+  // Check for active handoff — offer menu if one exists with real content.
   final existing =
       fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
   if (existing.isNotEmpty) {
-    final status = readStatus(existing);
-    if (status != 'suggest-investigating' &&
-        !existing.contains('_Not yet determined._\n\n---\n\n## Expected')) {
-      print('\n⚠  Active handoff found (status: $status)');
-      if (!confirm_('Overwrite and start a new session?')) {
-        print('\nSetup cancelled. Run /suggest or /debug to continue the existing session.');
+    final state = SessionState.parse(existing);
+    if (state.hasActiveContent) {
+      final statusColour = _statusColour(state.status);
+      print('\n─── ${entry.name} ───────────────────────────────');
+      print('  Branch : ${state.branch}');
+      print('  Status : ${ansi.c(statusColour, state.status.value)}');
+      print('  Bug    : ${_truncate(state.bug)}');
+      print('');
+
+      final choice = pick_([
+        '${ansi.c(ansi.green, 'Continue')}  resume existing session',
+        '${ansi.c(ansi.yellow, 'Start fresh')}  overwrite handoff with new context',
+        'Back',
+      ]);
+
+      if (choice == _SetupMenu.back) {
+        print('\nSetup cancelled.\n');
         exit_(0);
       }
+      if (choice == _SetupMenu.resume) {
+        print('\nOpen your editor and run /suggest or /debug to continue.\n');
+        exit_(0);
+      }
+      assert(choice == _SetupMenu.startFresh);
+      // Fall through to questions below.
     }
   }
 
@@ -157,3 +178,20 @@ Future<void> runSetup({
 
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
+
+abstract final class _SetupMenu {
+  static const resume = 0;
+  static const startFresh = 1; // fall-through: proceeds to questions
+  static const back = 2;
+}
+
+String _statusColour(HandoffStatus s) => switch (s) {
+      HandoffStatus.suggestInvestigating => ansi.cyan,
+      HandoffStatus.readyForDebug        => ansi.yellow,
+      HandoffStatus.debugInProgress      => ansi.green,
+      HandoffStatus.needsSuggest         => ansi.red,
+      HandoffStatus.unknown              => ansi.dim,
+    };
+
+String _truncate(String s, {int max = 60}) =>
+    s.length > max ? '${s.substring(0, max)}…' : s;
