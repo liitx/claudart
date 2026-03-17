@@ -171,7 +171,7 @@ Future<void> runLauncher({
     print('  2. Back\n');
     final action = pick_('Choose', 2);
     if (action == 1) {
-      await runSetup(projectPath: selected.projectRoot);
+      await runSetup(projectRootOverride: selected.projectRoot);
     }
   }
 }

@@ -61,7 +61,9 @@ Future<void> main(List<String> args) async {
     case 'unlink':
       runUnlink();
     case 'setup':
-      await runSetup(projectPath: rest.isNotEmpty ? rest.first : '.');
+      await runSetup(
+        projectRootOverride: rest.isNotEmpty ? rest.first : null,
+      );
     case 'status':
       await runStatus();
     case 'teardown':

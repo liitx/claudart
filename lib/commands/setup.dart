@@ -1,69 +1,103 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../config.dart';
-import '../logging/logger.dart';
+import '../file_io.dart';
+import '../git_utils.dart';
+import '../handoff_template.dart';
 import '../md_io.dart';
 import '../paths.dart';
-import '../handoff_template.dart';
+import '../registry.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../sensitivity/token_map.dart';
+import '../logging/logger.dart';
 import 'scan.dart';
 
-Future<void> runSetup({String projectPath = '.'}) async {
+Future<void> runSetup({
+  FileIO? io,
+  String? projectRootOverride,
+  bool Function(String question)? confirmFn,
+  String? Function(String question, {bool optional})? promptFn,
+  Never Function(int code)? exitFn,
+}) async {
+  final fileIO = io ?? const RealFileIO();
+  final exit_ = exitFn ?? exit;
+  final confirm_ = confirmFn ?? confirm;
+  final prompt_ = promptFn ?? _defaultPrompt;
+
   print('\n═══════════════════════════════════════');
   print('  CLAUDART SESSION SETUP');
   print('═══════════════════════════════════════');
 
-  // Resolve project path
-  final resolvedPath = p.isAbsolute(projectPath)
-      ? projectPath
-      : p.normalize(p.join(Directory.current.path, projectPath));
+  // Resolve project root.
+  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final projectRoot = projectRootOverride ?? gitCtx?.root;
 
-  if (!Directory(resolvedPath).existsSync()) {
-    print('\n✗ Path not found: $resolvedPath');
-    exit(1);
+  if (projectRoot == null) {
+    print('\n✗ Not inside a git repository. Cannot detect project root.');
+    exit_(1);
   }
 
-  // Check for active handoff
-  final existing = readFile(handoffPath);
+  if (!fileIO.dirExists(projectRoot)) {
+    print('\n✗ Path not found: $projectRoot');
+    exit_(1);
+  }
+
+  // Registry lookup.
+  final registry = Registry.load(io: fileIO);
+  final entry = registry.findByProjectRoot(projectRoot);
+  if (entry == null) {
+    print('\n✗ No claudart session found for this project.');
+    print('  Run `claudart link` to register it first.');
+    exit_(1);
+  }
+
+  final workspace = entry.workspacePath;
+  final handoffFile = handoffPathFor(workspace);
+
+  // Check for active handoff.
+  final existing =
+      fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
   if (existing.isNotEmpty) {
     final status = readStatus(existing);
-    if (status != 'suggest-investigating' && !existing.contains('_Not yet determined._\n\n---\n\n## Expected')) {
+    if (status != 'suggest-investigating' &&
+        !existing.contains('_Not yet determined._\n\n---\n\n## Expected')) {
       print('\n⚠  Active handoff found (status: $status)');
-      if (!confirm('Overwrite and start a new session?')) {
+      if (!confirm_('Overwrite and start a new session?')) {
         print('\nSetup cancelled. Run /suggest or /debug to continue the existing session.');
-        exit(0);
+        exit_(0);
       }
     }
   }
 
-  // Detect git branch from project path
-  final branch = await _detectBranch(resolvedPath);
+  // Detect branch — use git context already resolved, or fall back to prompt.
+  final branch = gitCtx?.branch ??
+      prompt_('Could not detect git branch. Enter branch name manually') ??
+      'unknown';
 
-  // Read skills for relevant context
-  final skills = readFile(skillsPath);
+  print('\n🌿 Branch: $branch');
+
+  // Surface skills context.
+  final skillsFile = skillsPathFor(workspace);
+  final skills =
+      fileIO.fileExists(skillsFile) ? fileIO.read(skillsFile) : '';
   if (skills.isNotEmpty && !skills.contains('_No sessions recorded yet._')) {
     print('\n📚 Skills loaded — relevant patterns will inform /suggest.');
   }
 
-  // Prompt for session context
+  // Prompt for session context.
   print('\nAnswer the following. Be specific — this seeds the handoff for /suggest.\n');
 
-  final bug = prompt('1. What is the bug? (actual behavior)');
-  final expected = prompt('2. What should be happening? (expected behavior)');
-  final files = prompt(
-    '3. Any files already in mind?',
-    optional: true,
-  );
-  final blocs = prompt(
+  final bug = prompt_('1. What is the bug? (actual behavior)');
+  final expected = prompt_('2. What should be happening? (expected behavior)');
+  final files = prompt_('3. Any files already in mind?', optional: true);
+  final blocs = prompt_(
     '4. Any BLoC events, provider names, or API calls involved?',
     optional: true,
   );
 
-  // Confirm before writing
+  // Confirm before writing.
   print('\n───────────────────────────────────────');
-  print('Project : $resolvedPath');
+  print('Project : ${entry.name}');
   print('Branch  : $branch');
   print('Bug     : $bug');
   print('Expected: $expected');
@@ -71,36 +105,32 @@ Future<void> runSetup({String projectPath = '.'}) async {
   if (blocs != null) print('BLoCs   : $blocs');
   print('───────────────────────────────────────');
 
-  if (!confirm('Write handoff with this context?')) {
+  if (!confirm_('Write handoff with this context?')) {
     print('\nSetup cancelled.');
-    exit(0);
+    exit_(0);
   }
 
-  // Load config for sensitivity + scan
-  final config = loadConfig();
-
-  // Run scan if sensitivity mode is on and trigger is 'on_setup'
-  if (config.sensitivityMode && config.scanTrigger == 'on_setup') {
-    await runScan(scope: config.scanScope);
+  // Run sensitivity scan if enabled.
+  // TODO: migrate scan.dart to accept workspace path instead of using claudeDir.
+  if (entry.sensitivityMode) {
+    await runScan(scope: null);
   }
 
-  // Build handoff content
+  // Build handoff content.
   final date = DateTime.now().toIso8601String().split('T').first;
-  final projectName = _detectProjectName(resolvedPath);
   var content = handoffTemplate(
     branch: branch,
     date: date,
     bug: bug!,
     expected: expected!,
-    projectName: projectName,
+    projectName: entry.name,
     files: files,
     blocs: blocs,
   );
 
-  // Abstract sensitive tokens from handoff if sensitivity mode on
-  if (config.sensitivityMode) {
-    final tokenMapPath = p.join(claudeDir, 'token_map.json');
-    final tokenMap = TokenMap.load(tokenMapPath);
+  // Abstract sensitive tokens if sensitivity mode on.
+  if (entry.sensitivityMode) {
+    final tokenMap = TokenMap.load(tokenMapPathFor(workspace));
     content = abstractor.abstract(content, tokenMap, defaultDetector);
     if (!abstractor.isNotSensitive(content, defaultDetector)) {
       print('\n⚠  Handoff still contains sensitive tokens after abstraction.');
@@ -108,47 +138,22 @@ Future<void> runSetup({String projectPath = '.'}) async {
     }
   }
 
-  writeFile(handoffPath, content);
+  fileIO.write(handoffFile, content);
 
-  // Log the setup interaction
-  final logger = SessionLogger(sensitivityMode: config.sensitivityMode);
+  // Log the setup interaction.
+  // TODO: migrate SessionLogger to accept workspace path instead of claudeDir.
+  final logger = SessionLogger(sensitivityMode: entry.sensitivityMode);
   logger.logInteraction(
     command: 'setup',
     outcome: 'ok',
     platform: Platform.operatingSystem,
   );
 
-  print('\n✓ Handoff written to $handoffPath');
+  print('\n✓ Handoff written to $handoffFile');
   print('\nNext step:');
   print('  Open your editor and run /suggest to begin exploration.');
   print('  Or run /debug if you already know the root cause.\n');
 }
 
-String _detectProjectName(String projectPath) {
-  try {
-    final result = Process.runSync('git', ['remote', 'get-url', 'origin'], workingDirectory: projectPath);
-    final url = (result.stdout as String).trim();
-    if (url.isNotEmpty) {
-      final name = url.split('/').last.replaceAll('.git', '').trim();
-      if (name.isNotEmpty) return name;
-    }
-  } catch (_) {}
-  return p.basename(projectPath);
-}
-
-Future<String> _detectBranch(String projectPath) async {
-  try {
-    final result = await Process.run(
-      'git',
-      ['branch', '--show-current'],
-      workingDirectory: projectPath,
-    );
-    final branch = (result.stdout as String).trim();
-    if (branch.isNotEmpty) {
-      print('\n🌿 Branch detected: $branch');
-      return branch;
-    }
-  } catch (_) {}
-
-  return prompt('Could not detect git branch. Enter branch name manually') ?? 'unknown';
-}
+String? _defaultPrompt(String question, {bool optional = false}) =>
+    prompt(question, optional: optional);
