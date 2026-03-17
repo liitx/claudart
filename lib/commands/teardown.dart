@@ -7,18 +7,21 @@ import '../md_io.dart';
 import '../paths.dart';
 import '../registry.dart';
 import '../teardown_utils.dart';
+import '../ui/menu.dart';
 
 Future<void> runTeardown({
   FileIO? io,
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
   String? Function(String question, {bool optional})? promptFn,
+  int Function(List<String> items)? pickFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final confirm_ = confirmFn ?? confirm;
   final prompt_ = promptFn ?? _defaultPrompt;
+  final pick_ = pickFn ?? arrowMenu;
 
   print('\n═══════════════════════════════════════');
   print('  CLAUDART SESSION TEARDOWN');
@@ -78,9 +81,13 @@ Future<void> runTeardown({
   print('Categorize this session for skills.md:');
   print('───────────────────────────────────────\n');
 
-  final category = prompt_(
-    'Root cause category?\n  (e.g. bloc-event-handling / provider-state / api-mapping / widget-lifecycle / ffi-bridge)',
-  );
+  final categoryChoice = pick_(_kCategories);
+  final String category;
+  if (categoryChoice == _kCategories.length - 1) {
+    category = prompt_('Enter category') ?? 'general';
+  } else {
+    category = _kCategories[categoryChoice];
+  }
 
   // Pre-populate hot files from "What changed" — user confirms or overrides.
   final hotFilesDefault = _isBlank(changedFiles) ? null : changedFiles.replaceAll('\n', ', ').trim();
@@ -112,7 +119,7 @@ Future<void> runTeardown({
     fileIO: fileIO,
     skillsFile: skillsPathFor(workspace),
     branch: branch,
-    category: category!,
+    category: category,
     hotFiles: hotFiles,
     coldFiles: coldFiles,
     pattern: pattern!,
@@ -185,6 +192,17 @@ void _updateSkills({
 
   fileIO.write(skillsFile, skills);
 }
+
+const List<String> _kCategories = [
+  'api-mapping',
+  'bloc-event-handling',
+  'ffi-bridge',
+  'general',
+  'legacy-path-migration',
+  'provider-state',
+  'widget-lifecycle',
+  'other (type manually)',
+];
 
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);

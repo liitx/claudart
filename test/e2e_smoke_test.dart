@@ -153,12 +153,12 @@ void main() {
         confirmFn: (_) => true,
         promptFn: _prompts([
           'Replaced stdin.readLineSync with raw-mode line editor.',  // fixSummary
-          'widget-lifecycle',                                         // category
           null,  // hotFiles — accept default (lib/ui/line_editor.dart etc.)
           null,  // coldFiles — skip
           null,  // pattern — accept default (root cause text)
           'Implement raw-mode line editor with ESC sequence handling.',
         ]),
+        pickFn: (_) => 6, // widget-lifecycle
         exitFn: (c) => throw Exception('exit($c)'),
       );
 
@@ -191,8 +191,9 @@ void main() {
         projectRootOverride: _root,
         confirmFn: (_) => true,
         promptFn: _prompts([
-          'Fixed it.', 'widget-lifecycle', null, null, null, 'Use line editor.',
+          'Fixed it.', null, null, null, 'Use line editor.',
         ]),
+        pickFn: (_) => 6, // widget-lifecycle
         exitFn: (c) => throw Exception('exit($c)'),
       );
 
