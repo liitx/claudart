@@ -36,6 +36,7 @@ class SessionLogger {
     int? tokensTotal,
     int? tokensNew,
     double? scanDuration,
+    int? durationMs,
     String? platform,
     String? claudartVersion,
   }) {
@@ -48,6 +49,7 @@ class SessionLogger {
       if (tokensTotal != null) 'tokensTotal': tokensTotal,
       if (tokensNew != null) 'tokensNew': tokensNew,
       if (scanDuration != null) 'scanDuration': scanDuration,
+      if (durationMs != null) 'durationMs': durationMs,
       if (platform != null) 'platform': platform,
       if (claudartVersion != null) 'claudartVersion': claudartVersion,
       'outcome': outcome,

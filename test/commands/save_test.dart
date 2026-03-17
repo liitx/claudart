@@ -287,11 +287,16 @@ void main() {
       expect(_checkpoints(io).first, endsWith('.md'));
     });
 
-    test('checkpoint content matches handoff exactly', () async {
+    test('checkpoint content contains handoff data and updated timestamp', () async {
       final io = _io();
       await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
       final content = io.read(_checkpoints(io).first);
-      expect(content, equals(_fullHandoff));
+      // Checkpoint is the stamped handoff — verify key content is present and
+      // an Updated: timestamp was injected.
+      expect(content, contains('# Agent Handoff — my-app'));
+      expect(content, contains('ready-for-debug'));
+      expect(content, contains('StateNotifier holds stale reference after hot-reload.'));
+      expect(content, contains('> Updated: '));
     });
 
     test('multiple saves write multiple distinct checkpoints', () async {

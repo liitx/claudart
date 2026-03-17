@@ -7,6 +7,7 @@ import '../registry.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../sensitivity/token_map.dart';
+import '../handoff_template.dart' show stampHandoffUpdated;
 import '../session/session_state.dart';
 import '../teardown_utils.dart';
 
@@ -25,6 +26,7 @@ Future<SkillsUpdateResult> runSave({
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
+  final sw = Stopwatch()..start();
 
   print('\n═══════════════════════════════════════');
   print('  CLAUDART SAVE');
@@ -54,10 +56,14 @@ Future<SkillsUpdateResult> runSave({
     exit_(0);
   }
 
-  final handoff = fileIO.read(handoffFile);
+  var handoff = fileIO.read(handoffFile);
   final state = SessionState.parse(handoff);
 
-  // 3 — Write checkpoint to archive/.
+  // 3 — Stamp updated timestamp and persist.
+  handoff = stampHandoffUpdated(handoff);
+  fileIO.write(handoffFile, handoff);
+
+  // 3b — Write checkpoint to archive/.
   final archiveDir = archiveDirFor(workspace);
   fileIO.createDir(archiveDir);
   final checkpointFile = p.join(archiveDir, _checkpointName(state.branch));
@@ -77,7 +83,8 @@ Future<SkillsUpdateResult> runSave({
   registry.touchSession(entry.name).save(io: fileIO);
 
   // 6 — Report.
-  _printReport(entry.name, state, checkpointFile, skillsResult);
+  sw.stop();
+  _printReport(entry.name, state, checkpointFile, skillsResult, sw.elapsedMilliseconds);
 
   return skillsResult;
 }
@@ -142,8 +149,9 @@ void _printReport(
   SessionState state,
   String checkpointFile,
   SkillsUpdateResult skillsResult,
+  int durationMs,
 ) {
-  print('\n✓ Checkpoint: ${p.basename(checkpointFile)}');
+  print('\n✓ Checkpoint: ${p.basename(checkpointFile)}  (${durationMs}ms)');
   print('  Branch : ${state.branch}');
   print('  Status : ${state.status.value}');
 
