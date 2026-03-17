@@ -701,6 +701,10 @@ Tracked on [GitHub Issues](https://github.com/liitx/claudart/issues). Current pr
 - `claudart setup` false-positive "No project linked" fix when `.claude/` is a real directory
 - `setup.dart` and `teardown.dart` full registry migration
 
+**Docs**
+- Mermaid architecture diagram in README — interactive dependency graph (command → module → interface clusters), zoomable in GitHub and Cursor
+- Glossary extended to cover `FileIO`, `Registry`, `SessionState`, and other core interfaces
+
 **Quality**
 - GitHub Actions CI enforcing randomized test ordering on every PR
 - README auto-sync on every feature change via `/readme` skill + `readme_sync_test.dart`
