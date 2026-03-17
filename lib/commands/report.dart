@@ -4,25 +4,29 @@ import '../file_io.dart';
 import '../paths.dart';
 import '../process_runner.dart';
 
-String get _logsDir => p.join(claudeDir, 'logs');
-String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
-String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-
 const _ghRepo = 'liitx/claudart';
 const _issueLabelBase = 'claudart-generated';
 
 /// Generates a diagnostic report from log files.
 /// With [fileIssue]=true, files/updates GitHub issues via the `gh` CLI.
+/// [workspacePath] routes logs to the per-project workspace.
 Future<void> runReport({
   bool fileIssue = false,
   FileIO? io,
   ProcessRunner? runner,
+  String? workspacePath,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final proc = runner ?? const RealProcessRunner();
 
-  final interactions = _readJsonl(fileIO, _interactionsPath);
-  final errors = _readJsonl(fileIO, _errorsPath);
+  final logsDir = workspacePath != null
+      ? logsDirFor(workspacePath)
+      : p.join(claudeDir, 'logs');
+  final interactionsPath = p.join(logsDir, 'interactions.jsonl');
+  final errorsPath = p.join(logsDir, 'errors.jsonl');
+
+  final interactions = _readJsonl(fileIO, interactionsPath);
+  final errors = _readJsonl(fileIO, errorsPath);
 
   print('\n═══════════════════════════════════════');
   print('  CLAUDART DIAGNOSTIC REPORT');
@@ -119,7 +123,7 @@ Future<void> runReport({
 
   // Write updated errors back
   final content = updatedErrors.map(jsonEncode).join('\n') + '\n';
-  fileIO.write(_errorsPath, content);
+  fileIO.write(errorsPath, content);
   print('\nReport complete.\n');
 }
 

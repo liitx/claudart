@@ -4,16 +4,21 @@ import '../file_io.dart';
 import '../paths.dart';
 import '../sensitivity/token_map.dart';
 
-String get _tokenMapPath => p.join(claudeDir, 'token_map.json');
-String get _tokenMapMdPath => p.join(claudeDir, 'token_map.md');
-
 /// Generates a human-readable token_map.md from token_map.json on demand.
-void runMap({FileIO? io}) {
+/// [workspacePath] routes token_map.json to the per-project workspace.
+void runMap({FileIO? io, String? workspacePath}) {
   final fileIO = io ?? const RealFileIO();
 
-  final raw = fileIO.read(_tokenMapPath);
+  final tokenMapPath = workspacePath != null
+      ? tokenMapPathFor(workspacePath)
+      : p.join(claudeDir, 'token_map.json');
+  final tokenMapMdPath = workspacePath != null
+      ? p.join(workspacePath, 'token_map.md')
+      : p.join(claudeDir, 'token_map.md');
+
+  final raw = fileIO.read(tokenMapPath);
   if (raw.isEmpty) {
-    print('\n✗ No token map found at $_tokenMapPath');
+    print('\n✗ No token map found at $tokenMapPath');
     print('  Run `claudart scan` first to build the token map.\n');
     return;
   }
@@ -26,7 +31,7 @@ void runMap({FileIO? io}) {
     return;
   }
 
-  final tokenMap = TokenMap.load(_tokenMapPath, io: fileIO);
+  final tokenMap = TokenMap.load(tokenMapPath, io: fileIO);
 
   final buf = StringBuffer();
   buf.writeln('# Token Map');
@@ -54,8 +59,8 @@ void runMap({FileIO? io}) {
   buf.writeln('**Total:** ${allTokens.length} tokens '
       '($activeCount active)');
 
-  fileIO.write(_tokenMapMdPath, buf.toString());
-  print('\n✓ Token map written to $_tokenMapMdPath');
+  fileIO.write(tokenMapMdPath, buf.toString());
+  print('\n✓ Token map written to $tokenMapMdPath');
   print('  ${allTokens.length} tokens (${tokenMap.size} active)\n');
 }
 
