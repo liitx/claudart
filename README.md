@@ -8,7 +8,7 @@ A Dart CLI that gives your Claude Code sessions **memory, structure, and privacy
 
 ## The short version
 
-You're debugging a tricky bug. You open Claude Code, type `/suggest`, and it already knows your project's patterns, past mistakes, and what files to avoid. When it finds the root cause, `/save` locks the confirmed state — then `/debug` picks up exactly where `/suggest` left off. When you're done, `claudart teardown` files the learnings so next time is smarter.
+You're debugging a tricky bug. You open Claude Code, type `/suggest`, and it already knows your project's patterns, past mistakes, and what files to avoid. It explores the codebase, confirms the root cause, and writes everything it found into a structured [`handoff.md`](#a-session-step-by-step) — a shared file that carries confirmed knowledge from one agent to the next. [`/save`](#handoffstatusreadyfordebug) locks that confirmed state as a checkpoint. Then `/debug` picks up exactly where `/suggest` left off, with no re-exploration, no guessing. When you're done, `claudart teardown` promotes the learnings into [`skills.md`](#the-continuous-improvement-loop) so next time is smarter.
 
 **That's claudart** — a local CLI that coordinates a structured, stateful Claude Code workflow across sessions.
 
@@ -16,9 +16,9 @@ You're debugging a tricky bug. You open Claude Code, type `/suggest`, and it alr
 claudart setup  →  /suggest  →  /save  →  /debug  →  claudart teardown
 ```
 
-`/save` is the required handshake between `/suggest` and `/debug`. It checkpoints the confirmed root cause before debug begins — no guessing, no stale state.
+[`/save`](#handoffstatusreadyfordebug) is the required handshake between `/suggest` and `/debug`. It checkpoints the confirmed [root cause](#a-session-step-by-step) into `skills.md → Pending` before debug begins — no guessing, no stale [session state](#handoffstatus).
 
-No cloud sync. No API keys. Everything lives in a local workspace on your machine.
+No cloud sync. No API keys. Everything lives in a [local workspace](#the-workspace) on your machine.
 
 ---
 
