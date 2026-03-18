@@ -24,7 +24,8 @@ Future<void> runPreflightCmd(
   // 1 — Git context: project root + current branch in one call.
   final gitCtx = projectRootOverride != null ? null : detectGitContext();
   final projectRoot = projectRootOverride ?? gitCtx?.root;
-  final currentBranch = gitCtx?.branch; // null when override is used (e.g. tests)
+  final currentBranch =
+      gitCtx?.branch; // null when override is used (e.g. tests)
   if (projectRoot == null) {
     print('✗ Not inside a git repository. Cannot detect project.');
     exit_(1);
@@ -50,9 +51,12 @@ Future<void> runPreflightCmd(
   final skillsContent =
       fileIO.fileExists(skillsFile) ? fileIO.read(skillsFile) : '';
 
-  // 4 — Read test files when operation is 'test'.
+  // 4 — Parse operation string once at boundary.
+  final op = ClaudartOperation.fromString(operation);
+
+  // 5 — Read test files when operation is 'test'.
   final testFileContents = <String, String>{};
-  if (operation == 'test') {
+  if (op == ClaudartOperation.test) {
     final commandsDir = claudeCommandsDirFor(workspace);
     if (fileIO.dirExists(commandsDir)) {
       for (final name in _testFileNames) {
@@ -64,9 +68,9 @@ Future<void> runPreflightCmd(
     }
   }
 
-  // 5 — Run preflight.
+  // 6 — Run preflight.
   final result = runPreflight(
-    operation: operation,
+    operation: op,
     currentBranch: currentBranch,
     handoffContent: handoffContent,
     skillsContent: skillsContent,
@@ -96,4 +100,3 @@ const _testFileNames = [
   'test_link.md',
   'test_commands.md',
 ];
-

@@ -49,14 +49,14 @@ Future<void> closeSession(
   // Step 1: archive handoff.
   try {
     archiveHandoff(workspace, originalHandoff, branch, io: fileIO);
-  } catch (e) {
+  } on Exception catch (e) {
     throw SessionCloseException('archive', cause: e);
   }
 
   // Step 2: reset handoff — rollback: delete archive.
   try {
     resetHandoff(workspace, io: fileIO);
-  } catch (e) {
+  } on Exception catch (e) {
     _safeDelete(fileIO, archivePath);
     throw SessionCloseException('reset', cause: e);
   }
@@ -64,7 +64,7 @@ Future<void> closeSession(
   // Step 3: remove symlink — rollback: restore handoff + delete archive.
   try {
     removeSessionLink(projectRoot, io: fileIO);
-  } catch (e) {
+  } on Exception catch (e) {
     _safeWrite(fileIO, handoffPath, originalHandoff);
     _safeDelete(fileIO, archivePath);
     throw SessionCloseException('unlink', cause: e);

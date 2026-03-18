@@ -307,7 +307,7 @@ When you're working on a proprietary codebase, you might not want class names, f
 When enabled during `claudart link`, it:
 
 1. Scans your project's Dart files for sensitive identifiers (class names, BLoC types, repository names, typedefs, etc.)
-2. Assigns them stable abstract tokens: `AudioBloc` → `Bloc:A`, `VehicleRepository` → `Repository:A`
+2. Assigns them stable abstract tokens: `BusterBloc` → `Bloc:A`, `RoverRepository` → `Repository:A`
 3. Builds a **persistent local token map** that grows across sessions
 4. Replaces sensitive identifiers in `handoff.md` *before* Claude reads it
 
@@ -318,13 +318,13 @@ Claude sees the full picture — BLoC types, relationships, dependency graphs �
 ```
 Your code                    What Claude sees
 ─────────────────────        ────────────────────────────────────
-AudioBloc                →   Bloc:A
+BusterBloc                →   Bloc:A
 AudioState               →   BlocState:A
 AudioRepository          →   Repository:A
 fetchTrack(String id)    →   [Method:A]([Param:A])
 ```
 
-The token map lives locally. It never leaves your machine. Anthropic builds understanding of `Bloc:A` across sessions without ever learning it's called `AudioBloc`.
+The token map lives locally. It never leaves your machine. Anthropic builds understanding of `Bloc:A` across sessions without ever learning it's called `BusterBloc`.
 
 **To enable:**
 ```
@@ -477,9 +477,9 @@ Tokens preserve semantic relationships, not just names:
 
 ```json
 {
-  "Bloc:A": { "r": "AudioBloc", "e": "BlocEvent:A", "s": "BlocState:A", "deps": ["Repository:A"] },
+  "Bloc:A": { "r": "BusterBloc", "e": "BlocEvent:A", "s": "BlocState:A", "deps": ["Repository:A"] },
   "BlocState:A": { "r": "AudioState", "b": "Bloc:A" },
-  "Extension:A": { "r": "AudioBlocX", "on": "Bloc:A" }
+  "Extension:A": { "r": "BusterBlocX", "on": "Bloc:A" }
 }
 ```
 
@@ -487,7 +487,7 @@ Claude sees `Extension:A on Bloc:A` and knows it's an extension on that specific
 
 **Append-only, never reassigned**
 
-Once `AudioBloc` → `Bloc:A`, that mapping is permanent. If the class is renamed, the old token gets a `renamedTo` field. If deleted, `deprecated: true`. The token is never reused for a different class. This means Anthropic's understanding of `Bloc:A` accumulates correctly across every session.
+Once `BusterBloc` → `Bloc:A`, that mapping is permanent. If the class is renamed, the old token gets a `renamedTo` field. If deleted, `deprecated: true`. The token is never reused for a different class. This means Anthropic's understanding of `Bloc:A` accumulates correctly across every session.
 
 **The API boundary is enforced**
 

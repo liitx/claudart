@@ -129,14 +129,14 @@ _No sessions recorded yet._
 ''';
 
     test('adds new file with single arrow', () {
-      final result = incrementHotPath(blankSkills, 'bloc', 'my_feature.dart');
+      final result = incrementHotPath(blankSkills, 'state', 'my_feature.dart');
       expect(result, contains('`my_feature.dart` ↑'));
-      expect(result, contains('[bloc]'));
+      expect(result, contains('[state]'));
     });
 
     test('increments existing file arrow', () {
-      var skills = incrementHotPath(blankSkills, 'bloc', 'my_feature.dart');
-      skills = incrementHotPath(skills, 'bloc', 'my_feature.dart');
+      var skills = incrementHotPath(blankSkills, 'state', 'my_feature.dart');
+      skills = incrementHotPath(skills, 'state', 'my_feature.dart');
       expect(RegExp(r'↑+').firstMatch(skills)?.group(0)?.length, 2);
     });
   });
@@ -182,6 +182,16 @@ _No sessions recorded yet._
       expect(TeardownCategory.stateManagement.value, 'state-management');
       expect(TeardownCategory.general.value,         'general');
       expect(TeardownCategory.other.value,           'other');
+    });
+
+    test('each label matches value for non-other variants', () {
+      expect(TeardownCategory.apiIntegration.label,  'api-integration');
+      expect(TeardownCategory.concurrency.label,     'concurrency');
+      expect(TeardownCategory.configuration.label,   'configuration');
+      expect(TeardownCategory.dataParsing.label,     'data-parsing');
+      expect(TeardownCategory.ioFilesystem.label,    'io-filesystem');
+      expect(TeardownCategory.stateManagement.label, 'state-management');
+      expect(TeardownCategory.general.label,         'general');
     });
 
     test('other label is distinct from value', () {

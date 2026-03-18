@@ -29,9 +29,9 @@ symlink.
 |---|---|---|
 | `claudart link` crash (PathExistsException) | `createLink` called unconditionally without `dirExists` check | ✓ during session |
 | `✗ No project linked` false positive in `setup.dart` | `linkExists` check misses real directories | todo #7 |
-| `/suggest` pulled dc-flutter context | No claudart-specific `suggest.md` in `.claude/commands/` | ✓ before session |
+| `/suggest` pulled project context | No claudart-specific `suggest.md` in `.claude/commands/` | ✓ before session |
 | Workspace path used dev_tools root | `CLAUDART_WORKSPACE` env var set to `~/dev/dev_tools/claude` | expected — not a bug |
-| Question 4 in setup references BLoC/Riverpod | Prompt is dc-flutter specific | todo #8 |
+| Question 4 in setup references BLoC/Riverpod | Prompt is claudart-specific | todo #8 |
 
 ---
 

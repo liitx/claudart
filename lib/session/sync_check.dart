@@ -4,6 +4,19 @@ import '../teardown_utils.dart';
 /// Severity of a sync issue found during preflight.
 enum IssueSeverity { warning, error }
 
+/// The claudart operation a preflight check is guarding.
+enum ClaudartOperation {
+  debug,
+  save,
+  test;
+
+  static ClaudartOperation fromString(String s) => switch (s) {
+        'debug' => debug,
+        'save' => save,
+        _ => test,
+      };
+}
+
 /// A single issue found during a preflight sync check.
 class SyncIssue {
   final IssueSeverity severity;
@@ -107,45 +120,32 @@ SyncCheckResult checkBranchSync(String handoffContent, String? currentBranch) {
 // ── Check 3: Handoff status for intended operation ────────────────────────────
 
 /// Checks whether the handoff status is appropriate for [operation].
-///
-/// Operations: `'debug'`, `'save'`, `'test'`.
-/// - `debug` requires `ready-for-debug` or `debug-in-progress`.
-/// - `save` warns when no active content exists.
-/// - `test` always passes — used for routing info only.
-SyncCheckResult checkHandoffStatus(String operation, String handoffContent) {
+SyncCheckResult checkHandoffStatus(
+    ClaudartOperation operation, String handoffContent) {
   final state = SessionState.parse(handoffContent);
 
-  switch (operation) {
-    case 'debug':
-      if (state.status != HandoffStatus.readyForDebug &&
-          state.status != HandoffStatus.debugInProgress) {
-        return SyncCheckResult([
-          SyncIssue(
-            IssueSeverity.error,
-            'Handoff status is "${state.status.value}" — debug requires ready-for-debug.',
-            suggestion:
-                'Complete /suggest first, then run /save to lock the root cause.',
-          ),
-        ]);
-      }
-      return SyncCheckResult.clean();
-
-    case 'save':
-      if (!state.hasActiveContent) {
-        return const SyncCheckResult([
-          SyncIssue(
-            IssueSeverity.warning,
-            'No active session content to checkpoint.',
-            suggestion: 'Run `claudart setup` to start a session first.',
-          ),
-        ]);
-      }
-      return SyncCheckResult.clean();
-
-    case 'test':
-    default:
-      return SyncCheckResult.clean();
-  }
+  return switch (operation) {
+    ClaudartOperation.debug
+        when state.status != HandoffStatus.readyForDebug &&
+            state.status != HandoffStatus.debugInProgress =>
+      SyncCheckResult([
+        SyncIssue(
+          IssueSeverity.error,
+          'Handoff status is "${state.status.value}" — debug requires ready-for-debug.',
+          suggestion:
+              'Complete /suggest first, then run /save to lock the root cause.',
+        ),
+      ]),
+    ClaudartOperation.save when !state.hasActiveContent =>
+      const SyncCheckResult([
+        SyncIssue(
+          IssueSeverity.warning,
+          'No active session content to checkpoint.',
+          suggestion: 'Run `claudart setup` to start a session first.',
+        ),
+      ]),
+    _ => SyncCheckResult.clean(),
+  };
 }
 
 // ── Check 3: Coverage map gaps in a test_X.md file ───────────────────────────
@@ -173,11 +173,11 @@ List<String> checkCoverageGaps(String testFileContent) {
 
 /// Runs all three preflight checks and returns the merged result.
 ///
-/// [operation] is one of `'debug'`, `'save'`, `'test'`.
+/// [operation] guards which workflow step is about to run.
 /// [testFileContents] is an optional map of filename → content for coverage
-/// gap checks (only used when [operation] is `'test'`).
+/// gap checks (only used when [operation] is [ClaudartOperation.test]).
 SyncCheckResult runPreflight({
-  required String operation,
+  required ClaudartOperation operation,
   required String handoffContent,
   String skillsContent = '',
   Map<String, String> testFileContents = const {},
@@ -189,7 +189,7 @@ SyncCheckResult runPreflight({
   result = result.merge(checkSkillsSync(handoffContent, skillsContent));
   result = result.merge(checkBranchSync(handoffContent, currentBranch));
 
-  if (operation == 'test') {
+  if (operation == ClaudartOperation.test) {
     for (final entry in testFileContents.entries) {
       final gaps = checkCoverageGaps(entry.value);
       if (gaps.isNotEmpty) {

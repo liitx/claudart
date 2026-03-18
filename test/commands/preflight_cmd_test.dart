@@ -196,15 +196,15 @@ MemoryFileIO _io({
     createdAt: '2026-01-01',
     lastSession: '2026-03-15',
   );
-  final handoffContent =
-      confirmedRootCause ? _confirmedHandoff : _blankHandoff;
+  final handoffContent = confirmedRootCause ? _confirmedHandoff : _blankHandoff;
   final io = MemoryFileIO(
     files: {
       if (withHandoff) handoffPathFor(_workspace): handoffContent,
       if (withSkills && pendingInSkills)
         skillsPathFor(_workspace): _skillsWithPending,
       if (withSkills && !pendingInSkills)
-        skillsPathFor(_workspace): '# Accumulated Skills\n\n## Pending\n\n_Nothing yet._\n',
+        skillsPathFor(_workspace):
+            '# Accumulated Skills\n\n## Pending\n\n_Nothing yet._\n',
       for (final e in commandFiles.entries)
         '${claudeCommandsDirFor(_workspace)}/${e.key}': e.value,
     },
@@ -259,7 +259,8 @@ void main() {
       expect(caught?.code ?? 0, equals(0));
     });
 
-    test('exits 0 when root cause confirmed and pending entry exists', () async {
+    test('exits 0 when root cause confirmed and pending entry exists',
+        () async {
       final io = _io(
         withHandoff: true,
         withSkills: true,

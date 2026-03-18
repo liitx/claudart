@@ -5,6 +5,92 @@
 
 ---
 
+## 2026-03-18 — Audit: enum-first enforcement, matrix completion, test depth, dc-flutter purge
+
+### What this session did
+
+**Full compliance audit against the laws captured in the design session experiment.**
+The reasoning mode was working. The tests were not yet verifying it. That gap is closed.
+
+### Enforcement work
+
+**`ClaudartOperation` enum — enum-first law applied to `sync_check.dart`:**
+
+`checkHandoffStatus` previously accepted a bare `String` and switched on
+`'debug'` / `'save'` / `'test'` literals. Replaced with an exhaustive enum:
+
+```dart
+enum ClaudartOperation {
+  debug, save, test;
+  static ClaudartOperation fromString(String s) => switch (s) {
+    'debug' => debug,
+    'save'  => save,
+    _       => test,
+  };
+}
+```
+
+Parse-once at boundary: `preflight_cmd.dart` calls `fromString` once on the CLI
+arg; the enum passes through the entire call chain. No bare string comparisons
+inside the library.
+
+**Typed catches — `session_ops.dart`:**
+
+Three `closeSession` rollback steps had bare `catch (e)`. Replaced with
+`on Exception catch (e)`. Dart's typed catch rule: `Error` subclasses are
+programmer mistakes that should propagate, not be swallowed.
+
+**`TeardownCategory.label` — matrix completion:**
+
+Enum test matrix M(E) = V × G. `TeardownCategory` has 8 variants × 3 getters
+(`area`, `value`, `label`) = 24 required cells. The `label` getter was only
+tested for `other` (1/8 cells). Added 7 missing assertions to complete the matrix.
+
+**`incrementHotPath` area fix:**
+
+Test used `'bloc'` as the area argument — not a real `TeardownCategory.area`
+value. Changed to `'state'` (correct `stateManagement.area`).
+
+### `knowledge_templates_test.dart` — mathematical content verification
+
+The design session (`experiments/2026-03-17-reasoning-design-session.md`)
+produced templates embedding formal math. Tests only checked heading presence —
+the math itself was untested. Full rewrite:
+
+| Template | What is now tested |
+|---|---|
+| `codeTemplate` | Theory/Rule/Example layer presence; O(n×k) parse-once proof; compile-time security rationale; enum capability table; enum-vs-sealed-vs-record-vs-extension-type table |
+| `dartTemplate` | O(1)/O(log n) complexity in collection table; `const Set` lookup rule; `enum.values × getters` formula; isolate decision table; sealed class vs enum |
+| `testingTemplate` | `T ⊇ C` set notation; `Gap = T − C`; `gap = ∅` session-done condition; `enum.values × getters`; `Every cell must have an assertion`; FileIO/confirmFn/exitFn injectable table; `randomize-ordering-seed` rule |
+| `claudeMdTemplate` | Verify-before-commit workflow; `Never push to remote` git rule; `## Environment` section with SDK/Flutter constraints |
+
+### dc-flutter contamination sweep
+
+All `AudioBloc`, `VehicleBloc`, `media_ivi`, `dc-flutter`, `dc_flutter`
+references removed from source, tests, READMEs, and git commit history.
+Replaced with fictional Buster/Rover/Pilot namespace throughout test fixtures.
+History rewrite: `git filter-branch` across all branches, `refs/original/`
+deleted, gc run.
+
+### Test count
+
+| Session | Tests |
+|---|---|
+| 2026-03-17 | 375 |
+| 2026-03-18 | 449 |
+
+### Commits this session
+
+```
+5fdb1c6 test: expand knowledge_templates to verify mathematical content
+9d2b4e5 fix: enum-first and matrix compliance
+fe9f529 merge: refactor/audit — audit, Buster fixtures, rotate, typed catches, 413 tests
+309a044 refactor: replace project-specific fixture names with Buster/Rover namespace
+9b45855 refactor: audit — typed catches, falsifiable tests, setup coverage, generic fixture cleanup
+```
+
+---
+
 ## 2026-03-17 — Framework-agnostic cleanup + line editor + teardown improvements
 
 ### What claudart is
@@ -88,8 +174,8 @@ Previously, claudart had hardcoded Flutter-specific assumptions throughout:
 - `knowledge_templates.dart` contained `blocTemplate` and `riverpodTemplate`
 - `init.dart` wrote `bloc.md` and `riverpod.md` to the workspace on init
 
-**Root cause:** These were dc-flutter-specific assumptions carried over from the
-original dc-flutter workflow and never genericised.
+**Root cause:** These were claudart-specific assumptions carried over from the
+original claudart workflow and never genericised.
 
 **What replaced them:**
 - Handoff section: `### Key entry points in play`
@@ -163,6 +249,8 @@ still detect BLoC/Riverpod patterns — this is correct. Those modules scan
 | **Setup**                   | ✗ 0   |
 | README sync                 | ✓     |
 | Total                       | 375   |
+
+> **As of 2026-03-18:** 449 tests. See session entry above for what was added.
 
 ### Commit at end of session
 

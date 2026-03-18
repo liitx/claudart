@@ -9,7 +9,8 @@ String _handoff({
   String status = 'ready-for-debug',
   String rootCause = 'ConfigLoader splits path on spaces.',
   String bug = 'Config not loaded when path has spaces.',
-}) => '''# Agent Handoff — my-app
+}) =>
+    '''# Agent Handoff — my-app
 
 > Session started: 2026-03-16 | Branch: $_branch
 
@@ -279,32 +280,32 @@ void main() {
 
   group('checkHandoffStatus — debug operation', () {
     test('clean when status is ready-for-debug', () {
-      final result =
-          checkHandoffStatus('debug', _handoff(status: 'ready-for-debug'));
+      final result = checkHandoffStatus(
+          ClaudartOperation.debug, _handoff(status: 'ready-for-debug'));
       expect(result.isClean, isTrue);
     });
 
     test('clean when status is debug-in-progress', () {
-      final result =
-          checkHandoffStatus('debug', _handoff(status: 'debug-in-progress'));
+      final result = checkHandoffStatus(
+          ClaudartOperation.debug, _handoff(status: 'debug-in-progress'));
       expect(result.isClean, isTrue);
     });
 
     test('error when status is suggest-investigating', () {
       final result = checkHandoffStatus(
-          'debug', _handoff(status: 'suggest-investigating'));
+          ClaudartOperation.debug, _handoff(status: 'suggest-investigating'));
       expect(result.hasErrors, isTrue);
     });
 
     test('error when status is needs-suggest', () {
-      final result =
-          checkHandoffStatus('debug', _handoff(status: 'needs-suggest'));
+      final result = checkHandoffStatus(
+          ClaudartOperation.debug, _handoff(status: 'needs-suggest'));
       expect(result.hasErrors, isTrue);
     });
 
     test('error message suggests running /suggest then /save', () {
       final result = checkHandoffStatus(
-          'debug', _handoff(status: 'suggest-investigating'));
+          ClaudartOperation.debug, _handoff(status: 'suggest-investigating'));
       expect(result.issues.first.suggestion, contains('/suggest'));
       expect(result.issues.first.suggestion, contains('/save'));
     });
@@ -314,17 +315,17 @@ void main() {
 
   group('checkHandoffStatus — save operation', () {
     test('clean when session has active content', () {
-      final result = checkHandoffStatus('save', _handoff());
+      final result = checkHandoffStatus(ClaudartOperation.save, _handoff());
       expect(result.isClean, isTrue);
     });
 
     test('warning when handoff has no active content', () {
-      final result = checkHandoffStatus('save', _blankHandoff);
+      final result = checkHandoffStatus(ClaudartOperation.save, _blankHandoff);
       expect(result.hasWarnings, isTrue);
     });
 
     test('warning suggestion mentions claudart setup', () {
-      final result = checkHandoffStatus('save', _blankHandoff);
+      final result = checkHandoffStatus(ClaudartOperation.save, _blankHandoff);
       expect(result.issues.first.suggestion, contains('claudart setup'));
     });
   });
@@ -339,8 +340,8 @@ void main() {
         'debug-in-progress',
         'needs-suggest',
       ]) {
-        final result =
-            checkHandoffStatus('test', _handoff(status: status));
+        final result = checkHandoffStatus(
+            ClaudartOperation.test, _handoff(status: status));
         expect(result.isClean, isTrue,
             reason: 'expected clean for status: $status');
       }
@@ -413,7 +414,9 @@ void main() {
 
     test('clean when handoff branch is unknown', () {
       // Handoff with no branch line resolves to "unknown" — no mismatch warning.
-      final result = checkBranchSync('# Agent Handoff\n\n## Status\n\nready-for-debug\n\n## Bug\n\nBroken.\n', 'main');
+      final result = checkBranchSync(
+          '# Agent Handoff\n\n## Status\n\nready-for-debug\n\n## Bug\n\nBroken.\n',
+          'main');
       expect(result.isClean, isTrue);
     });
   });
@@ -423,7 +426,7 @@ void main() {
   group('runPreflight — test operation', () {
     test('clean when handoff synced and no coverage gaps', () {
       final result = runPreflight(
-        operation: 'test',
+        operation: ClaudartOperation.test,
         handoffContent: _handoff(),
         skillsContent: _skillsWithPending(_branch),
         testFileContents: {'test_commands.md': _testFileAllCovered},
@@ -433,7 +436,7 @@ void main() {
 
     test('warning when skills unsynced', () {
       final result = runPreflight(
-        operation: 'test',
+        operation: ClaudartOperation.test,
         handoffContent: _handoff(),
         skillsContent: _skillsNoPending,
       );
@@ -442,7 +445,7 @@ void main() {
 
     test('warning when coverage gaps found', () {
       final result = runPreflight(
-        operation: 'test',
+        operation: ClaudartOperation.test,
         handoffContent: _blankHandoff,
         skillsContent: '',
         testFileContents: {'test_commands.md': _testFileWithGaps},
@@ -452,7 +455,7 @@ void main() {
 
     test('gap warning includes filename', () {
       final result = runPreflight(
-        operation: 'test',
+        operation: ClaudartOperation.test,
         handoffContent: _blankHandoff,
         skillsContent: '',
         testFileContents: {'test_commands.md': _testFileWithGaps},
@@ -462,7 +465,7 @@ void main() {
 
     test('merges skills warning and coverage warning', () {
       final result = runPreflight(
-        operation: 'test',
+        operation: ClaudartOperation.test,
         handoffContent: _handoff(),
         skillsContent: _skillsNoPending,
         testFileContents: {'test_commands.md': _testFileWithGaps},
@@ -474,7 +477,7 @@ void main() {
   group('runPreflight — debug operation', () {
     test('clean when status ready and skills synced', () {
       final result = runPreflight(
-        operation: 'debug',
+        operation: ClaudartOperation.debug,
         handoffContent: _handoff(status: 'ready-for-debug'),
         skillsContent: _skillsWithPending(_branch),
       );
@@ -483,7 +486,7 @@ void main() {
 
     test('error when status invalid — overrides other checks', () {
       final result = runPreflight(
-        operation: 'debug',
+        operation: ClaudartOperation.debug,
         handoffContent: _handoff(status: 'suggest-investigating'),
         skillsContent: _skillsNoPending,
       );
@@ -492,7 +495,7 @@ void main() {
 
     test('reports both error and skills warning independently', () {
       final result = runPreflight(
-        operation: 'debug',
+        operation: ClaudartOperation.debug,
         handoffContent: _handoff(
             status: 'suggest-investigating',
             rootCause: 'StateNotifier holds stale ref.'),
@@ -500,6 +503,35 @@ void main() {
       );
       // Error: wrong status. Warning: unsynced skills.
       expect(result.issues.length, greaterThanOrEqualTo(2));
+    });
+  });
+
+  // ── ClaudartOperation.fromString — V × G matrix ───────────────────────────
+  // V = {debug, save, test}  G = {fromString}  →  3 required assertions
+  // Known variants round-trip through .name; catch-all uses a named sentinel.
+
+  const _unknownOp = 'not-an-operation';
+
+  group('ClaudartOperation.fromString', () {
+    test('debug variant round-trips', () {
+      expect(
+        ClaudartOperation.fromString(ClaudartOperation.debug.name),
+        ClaudartOperation.debug,
+      );
+    });
+
+    test('save variant round-trips', () {
+      expect(
+        ClaudartOperation.fromString(ClaudartOperation.save.name),
+        ClaudartOperation.save,
+      );
+    });
+
+    test('unknown input → catch-all maps to test', () {
+      expect(
+        ClaudartOperation.fromString(_unknownOp),
+        ClaudartOperation.test,
+      );
     });
   });
 
