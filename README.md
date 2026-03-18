@@ -215,7 +215,7 @@ When working on a proprietary codebase, class names, function signatures, and mo
 
 | Your code | What Claude sees |
 |---|---|
-| `BusterBloc` | `Bloc:A` |
+| `VolumeBloc` | `Bloc:A` |
 | `AudioState` | `BlocState:A` |
 | `AudioRepository` | `Repository:A` |
 | `fetchTrack(String id)` | `[Method:A]([Param:A])` |
@@ -252,7 +252,7 @@ claudart link
 | Bloc:A | BlocEvent:A | BlocState:A | Repository:A |
 ```
 
-The token map is append-only. Once `BusterBloc → Bloc:A`, that mapping is permanent. Renamed class: `renamedTo` field added. Deleted class: `deprecated: true`. Tokens are never reused for different classes. Anthropic's understanding of `Bloc:A` accumulates correctly across every session.
+The token map is append-only. Once `VolumeBloc → Bloc:A`, that mapping is permanent. Renamed class: `renamedTo` field added. Deleted class: `deprecated: true`. Tokens are never reused for different classes. Anthropic's understanding of `Bloc:A` accumulates correctly across every session.
 
 </details>
 
@@ -658,15 +658,15 @@ Tokens preserve semantic relationships:
 
 ```json
 {
-  "Bloc:A": { "r": "BusterBloc", "e": "BlocEvent:A", "s": "BlocState:A", "deps": ["Repository:A"] },
+  "Bloc:A": { "r": "VolumeBloc", "e": "BlocEvent:A", "s": "BlocState:A", "deps": ["Repository:A"] },
   "BlocState:A": { "r": "AudioState", "b": "Bloc:A" },
-  "Extension:A": { "r": "BusterBlocX", "on": "Bloc:A" }
+  "Extension:A": { "r": "VolumeBlocX", "on": "Bloc:A" }
 }
 ```
 
 Claude sees `Extension:A on Bloc:A` — it can reason about the architecture without knowing the domain.
 
-**Append-only, never reassigned.** Once `BusterBloc → Bloc:A`, permanent. Renamed class: `renamedTo` field. Deleted: `deprecated: true`. Never reused.
+**Append-only, never reassigned.** Once `VolumeBloc → Bloc:A`, permanent. Renamed class: `renamedTo` field. Deleted: `deprecated: true`. Never reused.
 
 **The API boundary:**
 

@@ -9,9 +9,9 @@ void main() {
     test('default patterns applied when file missing', () {
       final io = MemoryFileIO();
       final rules = loadIgnoreRules(projectRoot, io: io);
-      expect(rules.shouldIgnore('lib/audio.g.dart'), isTrue);
-      expect(rules.shouldIgnore('lib/audio.freezed.dart'), isTrue);
-      expect(rules.shouldIgnore('lib/audio.mocks.dart'), isTrue);
+      expect(rules.shouldIgnore('lib/config.g.dart'), isTrue);
+      expect(rules.shouldIgnore('lib/config.freezed.dart'), isTrue);
+      expect(rules.shouldIgnore('lib/config.mocks.dart'), isTrue);
       expect(rules.shouldIgnore('build/outputs/something.dart'), isTrue);
       expect(rules.shouldIgnore('.dart_tool/package_config.json'), isTrue);
     });
@@ -19,7 +19,7 @@ void main() {
     test('*.g.dart ignored by default', () {
       final io = MemoryFileIO();
       final rules = loadIgnoreRules(projectRoot, io: io);
-      expect(rules.shouldIgnore('lib/models/audio_model.g.dart'), isTrue);
+      expect(rules.shouldIgnore('lib/models/config_model.g.dart'), isTrue);
     });
 
     test('*.freezed.dart ignored by default', () {
@@ -31,7 +31,7 @@ void main() {
     test('regular .dart files not ignored', () {
       final io = MemoryFileIO();
       final rules = loadIgnoreRules(projectRoot, io: io);
-      expect(rules.shouldIgnore('lib/blocs/audio_bloc.dart'), isFalse);
+      expect(rules.shouldIgnore('lib/blocs/counter_bloc.dart'), isFalse);
       expect(rules.shouldIgnore('lib/main.dart'), isFalse);
     });
 
@@ -42,7 +42,7 @@ void main() {
       final rules = loadIgnoreRules(projectRoot, io: io);
       expect(rules.shouldIgnore('lib/foo.generated.dart'), isTrue);
       expect(rules.shouldIgnore('lib/vendor/some_lib.dart'), isTrue);
-      expect(rules.shouldIgnore('lib/audio_bloc.dart'), isFalse);
+      expect(rules.shouldIgnore('lib/counter_bloc.dart'), isFalse);
     });
 
     test('comments and blank lines in ignore file are ignored', () {
@@ -59,7 +59,7 @@ void main() {
         '$projectRoot/.claudartignore': '',
       });
       final rules = loadIgnoreRules(projectRoot, io: io);
-      expect(rules.shouldIgnore('lib/audio.g.dart'), isTrue);
+      expect(rules.shouldIgnore('lib/config.g.dart'), isTrue);
     });
   });
 }

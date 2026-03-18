@@ -16,12 +16,12 @@ void main() {
 
     test('abstract replaces known sensitive token with mapped token', () {
       final result = abs.abstract(
-        'AudioBloc handles audio playback',
+        'VolumeBloc handles search results',
         map,
         detector,
       );
       expect(result, contains('Bloc:A'));
-      expect(result, isNot(contains('AudioBloc')));
+      expect(result, isNot(contains('VolumeBloc')));
     });
 
     test('abstract leaves safe terms untouched', () {
@@ -32,12 +32,12 @@ void main() {
 
     test('deabstract restores original', () {
       final abstractedText = abs.abstract(
-        'AudioBloc handles audio',
+        'VolumeBloc handles search',
         map,
         detector,
       );
       final restored = abs.deabstract(abstractedText, map);
-      expect(restored, contains('AudioBloc'));
+      expect(restored, contains('VolumeBloc'));
     });
 
     test('isNotSensitive returns true when no sensitive tokens remain', () {
@@ -46,28 +46,28 @@ void main() {
     });
 
     test('isNotSensitive returns false when sensitive token present', () {
-      const text = 'AudioBloc bloc = AudioBloc();';
+      const text = 'VolumeBloc bloc = VolumeBloc();';
       expect(abs.isNotSensitive(text, detector), isFalse);
     });
 
     test('round-trip abstract→deabstract preserves text structure', () {
-      const original = 'VehicleBloc extends Bloc<VehicleEvent, VehicleState>';
+      const original = 'RoverBloc extends Bloc<RoverEvent, RoverState>';
       final abstracted = abs.abstract(original, map, detector);
       final restored = abs.deabstract(abstracted, map);
       expect(restored, equals(original));
     });
 
     test('abstract handles multiple different sensitive tokens', () {
-      const text = 'VehicleBloc uses VehicleRepository to fetch VehicleModel';
+      const text = 'RoverBloc uses RoverRepository to fetch RoverModel';
       final result = abs.abstract(text, map, detector);
-      expect(result, isNot(contains('VehicleBloc')));
-      expect(result, isNot(contains('VehicleRepository')));
-      expect(result, isNot(contains('VehicleModel')));
+      expect(result, isNot(contains('RoverBloc')));
+      expect(result, isNot(contains('RoverRepository')));
+      expect(result, isNot(contains('RoverModel')));
     });
 
     test('second abstract call uses same token for same real name', () {
-      abs.abstract('AudioBloc is here', map, detector);
-      final result2 = abs.abstract('AudioBloc again', map, detector);
+      abs.abstract('VolumeBloc is here', map, detector);
+      final result2 = abs.abstract('VolumeBloc again', map, detector);
       expect(result2, contains('Bloc:A'));
     });
   });

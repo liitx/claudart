@@ -40,25 +40,25 @@ void main() {
       final testIo = buildIo(
         projectRoot: '/project',
         dartFiles: {
-          'audio_bloc.dart':
-              'class AudioBloc extends Bloc<AudioEvent, AudioState> {}',
-          'audio_repository.dart': 'class AudioRepository {}',
+          'volume_bloc.dart':
+              'class VolumeBloc extends Bloc<VolumeEvent, VolumeState> {}',
+          'volume_repository.dart': 'class VolumeRepository {}',
         },
       );
       await runScan(io: testIo);
 
       // Token map should be populated
       final tm = TokenMap.load(_tokenMapPath, io: testIo);
-      expect(tm.contains('AudioBloc'), isTrue);
-      expect(tm.contains('AudioRepository'), isTrue);
+      expect(tm.contains('VolumeBloc'), isTrue);
+      expect(tm.contains('VolumeRepository'), isTrue);
     });
 
     test('token map updated after scan', () async {
       final testIo = buildIo(
         projectRoot: '/project',
         dartFiles: {
-          'vehicle_bloc.dart':
-              'class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {}',
+          'rover_bloc.dart':
+              'class RoverBloc extends Bloc<RoverEvent, RoverState> {}',
         },
       );
       expect(TokenMap.load(_tokenMapPath, io: testIo).size, equals(0));
@@ -129,7 +129,7 @@ void main() {
           'scanScope': 'lib',
           'projectRoot': projectRoot,
         }),
-        '$projectRoot/lib/audio.dart': 'class AudioBloc extends Bloc<E, S> {}',
+        '$projectRoot/lib/buster.dart': 'class VolumeBloc extends Bloc<E, S> {}',
       });
       // Should run without throwing even with full scope
       await runScan(full: true, io: testIo);

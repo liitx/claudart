@@ -27,11 +27,11 @@ void main() {
       });
 
       test('unknown PascalCase term is sensitive', () {
-        expect(detector.isSensitive('AudioBloc'), isTrue);
+        expect(detector.isSensitive('VolumeBloc'), isTrue);
       });
 
       test('project-specific repository is sensitive', () {
-        expect(detector.isSensitive('VehicleRepository'), isTrue);
+        expect(detector.isSensitive('RoverRepository'), isTrue);
       });
 
       test('completely unknown identifier is sensitive', () {
@@ -41,11 +41,11 @@ void main() {
 
     group('detectInText', () {
       test('finds sensitive PascalCase identifiers', () {
-        const text = 'class AudioBloc extends Bloc<AudioEvent, AudioState>';
+        const text = 'class VolumeBloc extends Bloc<VolumeEvent, VolumeState>';
         final found = detector.detectInText(text);
-        expect(found, contains('AudioBloc'));
-        expect(found, contains('AudioEvent'));
-        expect(found, contains('AudioState'));
+        expect(found, contains('VolumeBloc'));
+        expect(found, contains('VolumeEvent'));
+        expect(found, contains('VolumeState'));
       });
 
       test('does not flag safe terms', () {
@@ -55,22 +55,22 @@ void main() {
       });
 
       test('detects camelCase compound words', () {
-        const text = 'final audioRepository = AudioRepository();';
+        const text = 'final audioRepository = VolumeRepository();';
         final found = detector.detectInText(text);
         expect(found, contains('audioRepository'));
       });
 
       test('detects multiple sensitive identifiers in snippet', () {
         const text = '''
-          class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
-            final VehicleRepository repository;
+          class RoverBloc extends Bloc<RoverEvent, RoverState> {
+            final RoverRepository repository;
           }
         ''';
         final found = detector.detectInText(text);
-        expect(found, contains('VehicleBloc'));
-        expect(found, contains('VehicleEvent'));
-        expect(found, contains('VehicleState'));
-        expect(found, contains('VehicleRepository'));
+        expect(found, contains('RoverBloc'));
+        expect(found, contains('RoverEvent'));
+        expect(found, contains('RoverState'));
+        expect(found, contains('RoverRepository'));
       });
 
       test('returns empty list for text with no sensitive tokens', () {
@@ -80,9 +80,9 @@ void main() {
       });
 
       test('no duplicate entries in result', () {
-        const text = 'AudioBloc bloc1; AudioBloc bloc2;';
+        const text = 'VolumeBloc bloc1; VolumeBloc bloc2;';
         final found = detector.detectInText(text);
-        expect(found.where((t) => t == 'AudioBloc').length, equals(1));
+        expect(found.where((t) => t == 'VolumeBloc').length, equals(1));
       });
     });
   });

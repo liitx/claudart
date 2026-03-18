@@ -5,7 +5,7 @@
 
 ---
 
-## 2026-03-18 — Audit: enum-first enforcement, matrix completion, test depth, dc-flutter purge
+## 2026-03-18 — Audit: enum-first enforcement, matrix completion, test depth, fixture namespace sweep
 
 ### What this session did
 
@@ -64,13 +64,11 @@ the math itself was untested. Full rewrite:
 | `testingTemplate` | `T ⊇ C` set notation; `Gap = T − C`; `gap = ∅` session-done condition; `enum.values × getters`; `Every cell must have an assertion`; FileIO/confirmFn/exitFn injectable table; `randomize-ordering-seed` rule |
 | `claudeMdTemplate` | Verify-before-commit workflow; `Never push to remote` git rule; `## Environment` section with SDK/Flutter constraints |
 
-### dc-flutter contamination sweep
+### Fixture namespace sweep
 
-All `AudioBloc`, `VehicleBloc`, `media_ivi`, `dc-flutter`, `dc_flutter`
-references removed from source, tests, READMEs, and git commit history.
-Replaced with fictional Buster/Rover/Pilot namespace throughout test fixtures.
-History rewrite: `git filter-branch` across all branches, `refs/original/`
-deleted, gc run.
+All project-specific class and domain names removed from source, tests, READMEs,
+and git commit history. Replaced with fictional Buster/Rover/Pilot namespace
+throughout test fixtures. History rewrite across all branches, gc run.
 
 ### Test count
 

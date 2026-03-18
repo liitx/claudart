@@ -11,31 +11,31 @@ void main() {
     });
 
     test('tokenFor assigns new token first time', () {
-      final token = map.tokenFor('AudioBloc', 'Bloc');
+      final token = map.tokenFor('VolumeBloc', 'Bloc');
       expect(token, equals('Bloc:A'));
     });
 
     test('tokenFor returns same token on second call (stable)', () {
-      final first = map.tokenFor('AudioBloc', 'Bloc');
-      final second = map.tokenFor('AudioBloc', 'Bloc');
+      final first = map.tokenFor('VolumeBloc', 'Bloc');
+      final second = map.tokenFor('VolumeBloc', 'Bloc');
       expect(first, equals(second));
     });
 
     test('sequential tokens increment correctly', () {
-      map.tokenFor('AudioBloc', 'Bloc');
-      final second = map.tokenFor('VideoBloc', 'Bloc');
+      map.tokenFor('VolumeBloc', 'Bloc');
+      final second = map.tokenFor('PilotBloc', 'Bloc');
       expect(second, equals('Bloc:B'));
     });
 
     test('contains returns true after assignment', () {
-      expect(map.contains('AudioBloc'), isFalse);
-      map.tokenFor('AudioBloc', 'Bloc');
-      expect(map.contains('AudioBloc'), isTrue);
+      expect(map.contains('VolumeBloc'), isFalse);
+      map.tokenFor('VolumeBloc', 'Bloc');
+      expect(map.contains('VolumeBloc'), isTrue);
     });
 
     test('realFor reverse lookup works', () {
-      map.tokenFor('AudioRepository', 'Repository');
-      expect(map.realFor('Repository:A'), equals('AudioRepository'));
+      map.tokenFor('VolumeRepository', 'Repository');
+      expect(map.realFor('Repository:A'), equals('VolumeRepository'));
     });
 
     test('realFor returns null for unknown token', () {
@@ -43,32 +43,32 @@ void main() {
     });
 
     test('deprecated token never reassigned', () {
-      map.tokenFor('AudioBloc', 'Bloc');
+      map.tokenFor('VolumeBloc', 'Bloc');
       map.deprecate('Bloc:A');
-      // After deprecation, AudioBloc is removed from forward index
-      expect(map.contains('AudioBloc'), isFalse);
+      // After deprecation, VolumeBloc is removed from forward index
+      expect(map.contains('VolumeBloc'), isFalse);
       // Assigning a new token for same name gets a new token
-      final newToken = map.tokenFor('AudioBloc', 'Bloc');
+      final newToken = map.tokenFor('VolumeBloc', 'Bloc');
       expect(newToken, equals('Bloc:B'));
     });
 
     test('size increments correctly', () {
       expect(map.size, equals(0));
-      map.tokenFor('AudioBloc', 'Bloc');
+      map.tokenFor('VolumeBloc', 'Bloc');
       expect(map.size, equals(1));
-      map.tokenFor('VideoBloc', 'Bloc');
+      map.tokenFor('PilotBloc', 'Bloc');
       expect(map.size, equals(2));
     });
 
     test('metaFor returns metadata', () {
-      map.tokenFor('AudioBloc', 'Bloc');
+      map.tokenFor('VolumeBloc', 'Bloc');
       final meta = map.metaFor('Bloc:A');
       expect(meta, isNotNull);
-      expect(meta!['r'], equals('AudioBloc'));
+      expect(meta!['r'], equals('VolumeBloc'));
     });
 
     test('setMeta adds extra fields', () {
-      map.tokenFor('AudioBloc', 'Bloc');
+      map.tokenFor('VolumeBloc', 'Bloc');
       map.setMeta('Bloc:A', {'kind': 'cubit'});
       expect(map.metaFor('Bloc:A')!['kind'], equals('cubit'));
     });
@@ -77,27 +77,27 @@ void main() {
       final io = MemoryFileIO();
       const path = '/workspace/token_map.json';
 
-      map.tokenFor('AudioBloc', 'Bloc');
-      map.tokenFor('AudioRepository', 'Repository');
+      map.tokenFor('VolumeBloc', 'Bloc');
+      map.tokenFor('VolumeRepository', 'Repository');
       map.save(path, io: io);
 
       final loaded = TokenMap.load(path, io: io);
-      expect(loaded.contains('AudioBloc'), isTrue);
-      expect(loaded.contains('AudioRepository'), isTrue);
-      expect(loaded.realFor('Bloc:A'), equals('AudioBloc'));
-      expect(loaded.realFor('Repository:A'), equals('AudioRepository'));
+      expect(loaded.contains('VolumeBloc'), isTrue);
+      expect(loaded.contains('VolumeRepository'), isTrue);
+      expect(loaded.realFor('Bloc:A'), equals('VolumeBloc'));
+      expect(loaded.realFor('Repository:A'), equals('VolumeRepository'));
     });
 
     test('load preserves counters so next token is sequential', () {
       final io = MemoryFileIO();
       const path = '/workspace/token_map.json';
 
-      map.tokenFor('AudioBloc', 'Bloc');
-      map.tokenFor('VideoBloc', 'Bloc');
+      map.tokenFor('VolumeBloc', 'Bloc');
+      map.tokenFor('PilotBloc', 'Bloc');
       map.save(path, io: io);
 
       final loaded = TokenMap.load(path, io: io);
-      final next = loaded.tokenFor('RadioBloc', 'Bloc');
+      final next = loaded.tokenFor('ApexBloc', 'Bloc');
       expect(next, equals('Bloc:C'));
     });
 

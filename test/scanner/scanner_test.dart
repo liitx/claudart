@@ -18,75 +18,75 @@ void main() {
 
     test('detects Bloc class correctly', () {
       final io = buildIo({
-        'audio_bloc.dart':
-            'class AudioBloc extends Bloc<AudioEvent, AudioState> {}',
+        'volume_bloc.dart':
+            'class VolumeBloc extends Bloc<VolumeEvent, VolumeState> {}',
       });
       final result = scanProject(projectRoot, io: io);
-      expect(result.entities.containsKey('AudioBloc'), isTrue);
+      expect(result.entities.containsKey('VolumeBloc'), isTrue);
       expect(
-        result.entities['AudioBloc']!.tokenType,
+        result.entities['VolumeBloc']!.tokenType,
         equals(EntityType.bloc),
       );
     });
 
     test('detects Repository correctly', () {
       final io = buildIo({
-        'audio_repository.dart':
-            'abstract class AudioRepository { Future<void> play(); }',
+        'volume_repository.dart':
+            'abstract class VolumeRepository { Future<void> play(); }',
       });
       final result = scanProject(projectRoot, io: io);
-      expect(result.entities.containsKey('AudioRepository'), isTrue);
+      expect(result.entities.containsKey('VolumeRepository'), isTrue);
       expect(
-        result.entities['AudioRepository']!.tokenType,
+        result.entities['VolumeRepository']!.tokenType,
         equals(EntityType.repository),
       );
     });
 
     test('detects Extension correctly', () {
       final io = buildIo({
-        'audio_ext.dart': 'extension AudioBlocX on AudioBloc { void stop() {} }',
+        'volume_ext.dart': 'extension VolumeBlocX on VolumeBloc { void stop() {} }',
       });
       final result = scanProject(projectRoot, io: io);
-      expect(result.entities.containsKey('AudioBlocX'), isTrue);
+      expect(result.entities.containsKey('VolumeBlocX'), isTrue);
       expect(
-        result.entities['AudioBlocX']!.tokenType,
+        result.entities['VolumeBlocX']!.tokenType,
         equals(EntityType.extension),
       );
     });
 
     test('detects Enum correctly', () {
       final io = buildIo({
-        'audio_status.dart': 'enum AudioStatus { playing, paused, stopped }',
+        'volume_status.dart': 'enum VolumeStatus { playing, paused, stopped }',
       });
       final result = scanProject(projectRoot, io: io);
-      expect(result.entities.containsKey('AudioStatus'), isTrue);
+      expect(result.entities.containsKey('VolumeStatus'), isTrue);
       expect(
-        result.entities['AudioStatus']!.tokenType,
+        result.entities['VolumeStatus']!.tokenType,
         equals(EntityType.enumType),
       );
     });
 
     test('detects Widget correctly', () {
       final io = buildIo({
-        'audio_widget.dart':
-            'class AudioWidget extends StatelessWidget { @override Widget build(BuildContext context) => SizedBox(); }',
+        'volume_widget.dart':
+            'class VolumeWidget extends StatelessWidget { @override Widget build(BuildContext context) => SizedBox(); }',
       });
       final result = scanProject(projectRoot, io: io);
-      expect(result.entities.containsKey('AudioWidget'), isTrue);
+      expect(result.entities.containsKey('VolumeWidget'), isTrue);
       expect(
-        result.entities['AudioWidget']!.tokenType,
+        result.entities['VolumeWidget']!.tokenType,
         equals(EntityType.widget),
       );
     });
 
     test('detects typedef callback', () {
       final io = buildIo({
-        'callbacks.dart': 'typedef AudioCallback = void Function(String);',
+        'callbacks.dart': 'typedef VolumeCallback = void Function(String);',
       });
       final result = scanProject(projectRoot, io: io);
-      expect(result.entities.containsKey('AudioCallback'), isTrue);
+      expect(result.entities.containsKey('VolumeCallback'), isTrue);
       expect(
-        result.entities['AudioCallback']!.tokenType,
+        result.entities['VolumeCallback']!.tokenType,
         equals(EntityType.callback),
       );
     });
@@ -94,7 +94,7 @@ void main() {
     test('.g.dart files are skipped', () {
       final io = MemoryFileIO(files: {
         '$projectRoot/lib/audio.g.dart':
-            'class AudioBloc extends Bloc<AudioEvent, AudioState> {}',
+            'class VolumeBloc extends Bloc<VolumeEvent, VolumeState> {}',
       });
       final result = scanProject(projectRoot, io: io);
       expect(result.entities, isEmpty);
@@ -125,8 +125,8 @@ void main() {
 
     test('filesScanned reflects actual scanned count', () {
       final io = buildIo({
-        'audio_bloc.dart': 'class AudioBloc extends Bloc<AudioEvent, AudioState> {}',
-        'audio_repository.dart': 'class AudioRepository {}',
+        'volume_bloc.dart': 'class VolumeBloc extends Bloc<VolumeEvent, VolumeState> {}',
+        'volume_repository.dart': 'class VolumeRepository {}',
       });
       final result = scanProject(projectRoot, io: io);
       expect(result.filesScanned, equals(2));
@@ -135,11 +135,11 @@ void main() {
     test('custom ignore rules respected', () {
       final io = MemoryFileIO(files: {
         '$projectRoot/lib/audio.g.dart': 'class Generated {}',
-        '$projectRoot/lib/audio.dart': 'class AudioBloc extends Bloc<E, S> {}',
+        '$projectRoot/lib/buster.dart': 'class VolumeBloc extends Bloc<E, S> {}',
       });
       final rules = loadIgnoreRules(projectRoot, io: io);
       final result = scanProject(projectRoot, ignoreRules: rules, io: io);
-      expect(result.entities.containsKey('AudioBloc'), isTrue);
+      expect(result.entities.containsKey('VolumeBloc'), isTrue);
       expect(result.entities.containsKey('Generated'), isFalse);
     });
   });

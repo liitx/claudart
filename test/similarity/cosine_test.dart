@@ -7,14 +7,14 @@ void main() {
       'the': 0.01,
       'and': 0.01,
       'bloc': 0.1,
-      'audio': 0.8,
+      'buster': 0.8,
       'repository': 0.7,
     };
 
     test('produces non-empty vector for known terms', () {
-      final v = tfidfVector('audio bloc', corpus);
+      final v = tfidfVector('buster bloc', corpus);
       expect(v, isNotEmpty);
-      expect(v.containsKey('audio'), isTrue);
+      expect(v.containsKey('buster'), isTrue);
       expect(v.containsKey('bloc'), isTrue);
     });
 
@@ -35,12 +35,12 @@ void main() {
     });
 
     test('repeated term has correct TF', () {
-      final v = tfidfVector('audio audio bloc', corpus);
-      final audioWeight = v['audio']!;
+      final v = tfidfVector('buster buster bloc', corpus);
+      final busterWeight = v['buster']!;
       final blocWeight = v['bloc']!;
-      // audio appears 2/3 times, bloc 1/3
-      // audio weight > bloc weight (both positive idf)
-      expect(audioWeight, greaterThan(blocWeight));
+      // buster appears 2/3 times, bloc 1/3
+      // buster weight > bloc weight (both positive idf)
+      expect(busterWeight, greaterThan(blocWeight));
     });
   });
 
@@ -73,8 +73,8 @@ void main() {
 
   group('topKChunks', () {
     final corpus = <String, double>{
-      'audio': 0.8,
-      'playback': 0.9,
+      'buster': 0.8,
+      'rover': 0.9,
       'bloc': 0.1,
       'network': 0.85,
       'error': 0.6,
@@ -82,17 +82,17 @@ void main() {
 
     test('returns k most relevant chunks', () {
       final chunks = [
-        'audio playback bloc handles audio state',
+        'buster rover bloc handles buster state',
         'network error handling and retries',
         'general dart coding patterns',
       ];
-      final result = topKChunks('audio playback issue', chunks, 2, corpus);
+      final result = topKChunks('buster rover issue', chunks, 2, corpus);
       expect(result, hasLength(2));
-      expect(result.first, contains('audio'));
+      expect(result.first, contains('buster'));
     });
 
     test('returns all chunks if k > chunks.length', () {
-      final chunks = ['audio bloc', 'network error'];
+      final chunks = ['buster bloc', 'network error'];
       final result = topKChunks('test', chunks, 5, corpus);
       expect(result.length, equals(chunks.length));
     });
@@ -104,10 +104,10 @@ void main() {
     test('most relevant chunk appears first', () {
       final chunks = [
         'unrelated content about databases and sql',
-        'audio playback bloc and state management',
+        'buster rover bloc and state management',
       ];
-      final result = topKChunks('audio bloc playback', chunks, 2, corpus);
-      expect(result.first, contains('audio'));
+      final result = topKChunks('buster bloc rover', chunks, 2, corpus);
+      expect(result.first, contains('buster'));
     });
   });
 }

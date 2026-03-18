@@ -58,8 +58,8 @@ void main() {
 
     test('does not contain Flutter or project-specific references', () {
       expect(codeTemplate, isNot(contains('Flutter')));
-      expect(codeTemplate, isNot(contains('BusterBloc')));
-      expect(codeTemplate, isNot(contains('dc-flutter')));
+      expect(codeTemplate, isNot(contains('VolumeBloc')));
+      expect(codeTemplate, isNot(contains('media_ivi')));
     });
   });
 

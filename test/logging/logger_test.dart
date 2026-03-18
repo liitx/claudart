@@ -123,11 +123,11 @@ void main() {
         errorType: 'error',
         fingerprint: 'test.fp',
         reason: 'crash',
-        stackTrace: 'at AudioBloc.process (audio_bloc.dart:42)',
+        stackTrace: 'at VolumeBloc.process (volume_bloc.dart:42)',
       );
       final entries = readJsonl(_errorsPath);
       final stack = entries.first['stack'] as String;
-      expect(stack, isNot(contains('AudioBloc')));
+      expect(stack, isNot(contains('VolumeBloc')));
     });
 
     test('logPerformance writes header row', () {

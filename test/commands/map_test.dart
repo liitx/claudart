@@ -21,8 +21,8 @@ void main() {
 
     test('generates token_map.md from token_map.json', () {
       final tokenData = {
-        'Bloc:A': {'r': 'AudioBloc', 'e': 'BlocEvent:A', 's': 'BlocState:A'},
-        'Repository:A': {'r': 'AudioRepository'},
+        'Bloc:A': {'r': 'VolumeBloc', 'e': 'BlocEvent:A', 's': 'BlocState:A'},
+        'Repository:A': {'r': 'VolumeRepository'},
         'Class:A': {'r': 'Helper', 'deprecated': true},
       };
       io.write(tokenMapPath, jsonEncode(tokenData));
@@ -31,7 +31,7 @@ void main() {
 
       final output = io.read(tokenMapMdPath);
       expect(output, contains('# Token Map'));
-      expect(output, contains('AudioBloc'));
+      expect(output, contains('VolumeBloc'));
       expect(output, contains('Bloc:A'));
       expect(output, contains('~~deprecated~~'));
       expect(output, contains('2 active'));

@@ -3,7 +3,7 @@ import '../assets/corpus.dart';
 /// Threshold above which a token is considered potentially sensitive.
 const double _sensitiveThreshold = 0.5;
 
-/// Regex: PascalCase identifiers (e.g., AudioBloc, VehicleRepository)
+/// Regex: PascalCase identifiers (e.g., SearchBloc, DataRepository)
 final _pascalCase = RegExp(r'\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b');
 
 /// Regex: camelCase compound words with at least two parts
