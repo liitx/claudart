@@ -86,7 +86,8 @@ Future<void> runTeardown({
   final String category;
   final String area;
   if (cat == TeardownCategory.other) {
-    category = prompt_('Enter category') ?? 'general';
+    final raw = prompt_('Enter category') ?? '';
+    category = raw.trim().isEmpty ? 'general' : raw.trim();
     area = 'fix';
   } else {
     category = cat.value;
