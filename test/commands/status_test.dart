@@ -32,7 +32,7 @@ void main() {
       registry.save(io: io);
 
       // Handoff with 'unknown' branch.
-      final handoff = '''# Agent Handoff — $_projectName
+      const handoff = '''# Agent Handoff — $_projectName
 
 > Session started: 2026-03-17 | Branch: unknown
 > Source of truth between suggest and debug agents.
@@ -47,13 +47,13 @@ suggest-investigating
 
 ## Bug
 
-Test bug description.
+Config not loaded when path has spaces.
 
 ---
 
 ## Expected Behavior
 
-Expected behavior.
+Config loads regardless of spaces in path.
 
 ---
 
@@ -68,7 +68,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -107,19 +107,17 @@ _Nothing yet.
 ''';
       io.write(handoffPathFor(workspace), handoff);
 
-      // Capture stdout (status prints to stdout).
-      // For now, just verify it doesn't crash when run from a git repo
-      // where detectGitContext would return a valid branch.
-      // Note: In tests, projectRootOverride bypasses git detection, so
-      // currentBranch will be null. This test verifies the fallback works.
+      // Note: projectRootOverride bypasses git detection so currentBranch
+      // will be null. The command falls back to reading branch from handoff.
+      // Status is read-only — it must not mutate the handoff file.
+      final handoffBefore = io.read(handoffPathFor(workspace));
       await runStatus(
         io: io,
         projectRootOverride: _projectRoot,
         exitFn: _throwExit,
       );
-
-      // If we got here without exception, the command succeeded.
-      expect(true, isTrue);
+      // Handoff must be unchanged — status is read-only.
+      expect(io.read(handoffPathFor(workspace)), equals(handoffBefore));
     });
 
     test('displays handoff branch when git detection unavailable', () async {
@@ -136,9 +134,9 @@ _Nothing yet.
       ));
       registry.save(io: io);
 
-      final handoff = '''# Agent Handoff — $_projectName
+      const handoff = '''# Agent Handoff — $_projectName
 
-> Session started: 2026-03-17 | Branch: feat/test
+> Session started: 2026-03-17 | Branch: fix/null-ref
 > Source of truth between suggest and debug agents.
 
 ---
@@ -151,13 +149,13 @@ suggest-investigating
 
 ## Bug
 
-Test bug.
+Parser returns empty on malformed input.
 
 ---
 
 ## Expected Behavior
 
-Expected.
+Parser returns null or throws on malformed input.
 
 ---
 
@@ -172,7 +170,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -211,13 +209,14 @@ _Nothing yet.
 ''';
       io.write(handoffPathFor(workspace), handoff);
 
+      final handoffBefore = io.read(handoffPathFor(workspace));
       await runStatus(
         io: io,
         projectRootOverride: _projectRoot,
         exitFn: _throwExit,
       );
-
-      expect(true, isTrue);
+      // Status is read-only — handoff must not be mutated.
+      expect(io.read(handoffPathFor(workspace)), equals(handoffBefore));
     });
   });
 

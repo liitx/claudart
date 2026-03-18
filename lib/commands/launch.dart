@@ -150,7 +150,7 @@ Future<void> runLauncher({
     }
   } else {
     action = pick_([
-      '${ansi.c(ansi.green, 'Start new session')}',
+      (ansi.c(ansi.green, 'Start new session')),
       'Back',
     ]);
     if (action == FreshMenu.start) {

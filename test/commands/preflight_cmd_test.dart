@@ -43,7 +43,7 @@ StateNotifier holds stale reference.
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -117,7 +117,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -189,7 +189,7 @@ MemoryFileIO _io({
   bool pendingInSkills = false,
   Map<String, String> commandFiles = const {},
 }) {
-  final entry = RegistryEntry(
+  const entry = RegistryEntry(
     name: 'my-app',
     projectRoot: _projectRoot,
     workspacePath: _workspace,

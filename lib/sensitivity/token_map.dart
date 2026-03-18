@@ -88,14 +88,14 @@ class TokenMap {
           if (idx >= current) tm._counters[prefix] = idx + 1;
         }
       }
-    } catch (_) {}
+    } on FormatException catch (_) {}
     return tm;
   }
 
   /// Saves the token map to [path].
   void save(String path, {FileIO? io}) {
     final fileIO = io ?? const RealFileIO();
-    final encoder = const JsonEncoder.withIndent('  ');
+    const encoder = JsonEncoder.withIndent('  ');
     fileIO.write(path, encoder.convert(_byToken));
   }
 

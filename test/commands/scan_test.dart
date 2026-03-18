@@ -17,7 +17,7 @@ void main() {
       io = MemoryFileIO();
     });
 
-    MemoryFileIO _buildIo({
+    MemoryFileIO buildIo({
       required String projectRoot,
       Map<String, String>? dartFiles,
     }) {
@@ -37,7 +37,7 @@ void main() {
     }
 
     test('scan with MemoryFileIO finds entities', () async {
-      final testIo = _buildIo(
+      final testIo = buildIo(
         projectRoot: '/project',
         dartFiles: {
           'audio_bloc.dart':
@@ -54,7 +54,7 @@ void main() {
     });
 
     test('token map updated after scan', () async {
-      final testIo = _buildIo(
+      final testIo = buildIo(
         projectRoot: '/project',
         dartFiles: {
           'vehicle_bloc.dart':
@@ -104,7 +104,7 @@ void main() {
     });
 
     test('interaction log written after successful scan', () async {
-      final testIo = _buildIo(
+      final testIo = buildIo(
         projectRoot: '/project',
         dartFiles: {
           'main.dart': 'class MyApp extends StatelessWidget {}',

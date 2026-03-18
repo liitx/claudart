@@ -25,23 +25,22 @@ void main() {
       // Only interactions, no errors
       io.write(
         interactionsPath,
-        jsonEncode({
+        '${jsonEncode({
               'ts': '2026-03-16T10:00:00Z',
               'command': 'setup',
               'outcome': 'ok',
-            }) +
-            '\n',
+            })}\n',
       );
       // Should not throw
       await runReport(io: io, runner: MockProcessRunner(), workspacePath: workspace);
     });
 
     test('report compiles command counts correctly', () async {
-      final lines = [
+      final lines = '${[
         jsonEncode({'command': 'setup', 'outcome': 'ok'}),
         jsonEncode({'command': 'scan', 'outcome': 'ok'}),
         jsonEncode({'command': 'setup', 'outcome': 'ok'}),
-      ].join('\n') + '\n';
+      ].join('\n')}\n';
       io.write(interactionsPath, lines);
       // Should not throw
       await runReport(io: io, runner: MockProcessRunner(), workspacePath: workspace);
@@ -51,7 +50,7 @@ void main() {
       const fp = 'scan.threshold_hit.too_many_files';
       io.write(
         errorsPath,
-        jsonEncode({
+        '${jsonEncode({
               'ts': '2026-03-16T10:00:00Z',
               'command': 'scan',
               'outcome': 'threshold_hit',
@@ -62,8 +61,7 @@ void main() {
               'lastSeen': '2026-03-16T10:00:00Z',
               'filed': true,
               'issueId': '42',
-            }) +
-            '\n',
+            })}\n',
       );
       // With filed=true and fileIssue=false, nothing should be filed
       await runReport(fileIssue: false, io: io, runner: MockProcessRunner(), workspacePath: workspace);
@@ -81,7 +79,7 @@ void main() {
     test('report shows error fingerprints', () async {
       io.write(
         errorsPath,
-        jsonEncode({
+        '${jsonEncode({
               'ts': '2026-03-16T10:00:00Z',
               'command': 'scan',
               'outcome': 'threshold_hit',
@@ -92,8 +90,7 @@ void main() {
               'lastSeen': '2026-03-16T10:00:00Z',
               'filed': false,
               'issueId': null,
-            }) +
-            '\n',
+            })}\n',
       );
       // Should not throw and should include fingerprint in output
       await runReport(io: io, runner: MockProcessRunner(), workspacePath: workspace);

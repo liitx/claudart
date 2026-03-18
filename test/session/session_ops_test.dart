@@ -1,5 +1,4 @@
 import 'package:test/test.dart';
-import 'package:path/path.dart' as p;
 import 'package:claudart/session/session_ops.dart';
 import 'package:claudart/file_io.dart';
 import 'package:claudart/paths.dart';
@@ -30,7 +29,6 @@ Widget does not update after state change.
 MemoryFileIO _io({
   bool withHandoff = true,
   bool withLink = true,
-  bool withArchiveDir = false,
 }) =>
     MemoryFileIO(
       files: {
@@ -43,7 +41,7 @@ void main() {
   group('archiveHandoff', () {
     test('writes file at correct archive path', () {
       final io = _io(withLink: false);
-      archiveHandoff(_workspace, _activeHandoff, 'feat/audio', io: io);
+      archiveHandoff(_workspace, _activeHandoff, 'fix/null-ref', io: io);
       final files = io.files.keys
           .where((k) => k.startsWith(archiveDirFor(_workspace)))
           .toList();
@@ -52,10 +50,10 @@ void main() {
 
     test('filename contains sanitised branch name', () {
       final io = _io(withLink: false);
-      archiveHandoff(_workspace, _activeHandoff, 'feat/audio-fix', io: io);
+      archiveHandoff(_workspace, _activeHandoff, 'fix/null-ref-v2', io: io);
       final key = io.files.keys
           .firstWhere((k) => k.startsWith(archiveDirFor(_workspace)));
-      expect(key, contains('feat_audio-fix'));
+      expect(key, contains('fix_null-ref-v2'));
     });
 
     test('archived content matches original handoff', () {
@@ -79,7 +77,7 @@ void main() {
       resetHandoff(_workspace, io: io);
       expect(
         io.read(handoffPathFor(_workspace)),
-        isNot(contains('Audio stops')),
+        isNot(contains('Widget does not update')),
       );
     });
   });

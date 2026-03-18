@@ -3,7 +3,7 @@ import 'package:claudart/sensitivity/detector.dart';
 
 void main() {
   group('SensitivityDetector', () {
-    final detector = defaultDetector;
+    const detector = defaultDetector;
 
     group('isSensitive', () {
       test('String is not sensitive', () {

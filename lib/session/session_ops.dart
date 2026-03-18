@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../handoff_template.dart';
@@ -73,13 +74,13 @@ Future<void> closeSession(
 void _safeDelete(FileIO io, String path) {
   try {
     io.delete(path);
-  } catch (_) {}
+  } on FileSystemException catch (_) {}
 }
 
 void _safeWrite(FileIO io, String path, String content) {
   try {
     io.write(path, content);
-  } catch (_) {}
+  } on FileSystemException catch (_) {}
 }
 
 class SessionCloseException implements Exception {

@@ -188,7 +188,7 @@ _Key _readKey() {
     }
     try {
       return _Key(_KeyType.char, utf8.decode(charBytes));
-    } catch (_) {
+    } on FormatException catch (_) {
       return const _Key(_KeyType.other);
     }
   }

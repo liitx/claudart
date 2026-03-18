@@ -3,9 +3,9 @@ import 'package:claudart/session/session_state.dart';
 import 'package:claudart/handoff_template.dart';
 
 // A fully-filled handoff as setup would produce it.
-const _activeHandoff = '''# Agent Handoff — dc-flutter
+const _activeHandoff = '''# Agent Handoff — my-app
 
-> Session started: 2026-03-16 | Branch: feat/audio
+> Session started: 2026-03-16 | Branch: fix/null-ref
 
 ---
 
@@ -17,29 +17,29 @@ ready-for-debug
 
 ## Bug
 
-Audio stops after source switch.
+Config not loaded when path has spaces.
 
 ---
 
 ## Expected Behavior
 
-Audio continues seamlessly.
+Config loads regardless of spaces in path.
 
 ---
 
 ## Root Cause
 
-StateNotifier holds stale reference after hot-reload.
+ConfigLoader splits path on spaces before resolving.
 
 ---
 
 ## Scope
 
 ### Files in play
-lib/audio/audio_bloc.dart
+lib/config/loader.dart
 
-### BLoCs / providers in play
-AudioBloc
+### Key entry points in play
+ConfigLoader
 
 ### Classes / methods in play
 _Not yet determined._
@@ -58,10 +58,10 @@ _None yet._
 ## Debug Progress
 
 ### What was attempted
-Traced event through BLoC — confirmed stale ref.
+Traced call through config loader — confirmed split.
 
 ### What changed (files modified)
-lib/audio/audio_bloc.dart — added null guard.
+lib/config/loader.dart — added path quoting.
 
 ### What is still unresolved
 _Nothing yet._
@@ -87,23 +87,23 @@ void main() {
     });
 
     test('reads branch', () {
-      expect(state.branch, equals('feat/audio'));
+      expect(state.branch, equals('fix/null-ref'));
     });
 
     test('reads bug', () {
-      expect(state.bug, contains('Audio stops'));
+      expect(state.bug, contains('Config not loaded'));
     });
 
     test('reads rootCause', () {
-      expect(state.rootCause, contains('StateNotifier'));
+      expect(state.rootCause, contains('ConfigLoader'));
     });
 
     test('reads attempted', () {
-      expect(state.attempted, contains('Traced event'));
+      expect(state.attempted, contains('Traced call'));
     });
 
     test('reads changed', () {
-      expect(state.changed, contains('audio_bloc.dart'));
+      expect(state.changed, contains('loader.dart'));
     });
 
     test('hasActiveContent is true when real content present', () {

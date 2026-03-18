@@ -1,21 +1,21 @@
 import 'dart:io';
-import '../lib/git_utils.dart';
-import '../lib/registry.dart';
-import '../lib/commands/experiment.dart';
-import '../lib/commands/init.dart';
-import '../lib/commands/kill.dart';
-import '../lib/commands/save.dart';
-import '../lib/commands/launch.dart';
-import '../lib/commands/link.dart';
-import '../lib/commands/map_cmd.dart';
-import '../lib/commands/preflight_cmd.dart';
-import '../lib/commands/report.dart';
-import '../lib/commands/scan.dart';
-import '../lib/commands/setup.dart';
-import '../lib/commands/status.dart';
-import '../lib/commands/rotate.dart';
-import '../lib/commands/teardown.dart';
-import '../lib/commands/unlink.dart';
+import 'package:claudart/git_utils.dart';
+import 'package:claudart/registry.dart';
+import 'package:claudart/commands/experiment.dart';
+import 'package:claudart/commands/init.dart';
+import 'package:claudart/commands/kill.dart';
+import 'package:claudart/commands/save.dart';
+import 'package:claudart/commands/launch.dart';
+import 'package:claudart/commands/link.dart';
+import 'package:claudart/commands/map_cmd.dart';
+import 'package:claudart/commands/preflight_cmd.dart';
+import 'package:claudart/commands/report.dart';
+import 'package:claudart/commands/scan.dart';
+import 'package:claudart/commands/setup.dart';
+import 'package:claudart/commands/status.dart';
+import 'package:claudart/commands/rotate.dart';
+import 'package:claudart/commands/teardown.dart';
+import 'package:claudart/commands/unlink.dart';
 
 const _usage = '''
 claudart — Dart CLI for structured project debug and suggestion sessions
@@ -85,7 +85,7 @@ Future<void> main(List<String> args) async {
       await runPreflightCmd(op);
     case 'scan':
       String? scope;
-      bool full = rest.contains('--full');
+      final bool full = rest.contains('--full');
       for (var i = 0; i < rest.length; i++) {
         if (rest[i].startsWith('--scope=')) {
           scope = rest[i].substring('--scope='.length);

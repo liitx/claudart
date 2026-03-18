@@ -83,7 +83,7 @@ class Registry {
         map[entry.name] = entry;
       }
       return Registry._(map);
-    } catch (_) {
+    } on Exception catch (_) {
       return Registry.empty();
     }
   }

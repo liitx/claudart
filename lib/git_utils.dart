@@ -25,7 +25,7 @@ GitContext? detectGitContext() {
     // Detached HEAD returns literal "HEAD" — treat as no branch.
     if (root.isEmpty || branch.isEmpty || branch == 'HEAD') return null;
     return (root: root, branch: branch);
-  } catch (_) {
+  } on ProcessException catch (_) {
     return null;
   }
 }

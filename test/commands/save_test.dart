@@ -11,7 +11,7 @@ const _workspace = '/workspaces/my-app';
 // Handoff with root cause confirmed and files changed.
 const _fullHandoff = '''# Agent Handoff — my-app
 
-> Session started: 2026-03-16 | Branch: feat/audio
+> Session started: 2026-03-16 | Branch: fix/null-ref
 
 ---
 
@@ -23,29 +23,29 @@ ready-for-debug
 
 ## Bug
 
-Audio stops after source switch.
+Config not loaded when path has spaces.
 
 ---
 
 ## Expected Behavior
 
-Audio continues seamlessly.
+Config loads regardless of spaces in path.
 
 ---
 
 ## Root Cause
 
-StateNotifier holds stale reference after hot-reload.
+ConfigLoader splits path on spaces before resolving.
 
 ---
 
 ## Scope
 
 ### Files in play
-lib/audio/audio_bloc.dart
+lib/config/loader.dart
 
-### BLoCs / providers in play
-AudioBloc
+### Key entry points in play
+ConfigLoader
 
 ### Classes / methods in play
 _Not yet determined._
@@ -64,10 +64,10 @@ _None yet._
 ## Debug Progress
 
 ### What was attempted
-Traced event through BLoC.
+Traced call through config loader.
 
 ### What changed (files modified)
-lib/audio/audio_bloc.dart — added null guard.
+lib/config/loader.dart — added path quoting.
 
 ### What is still unresolved
 _Nothing yet._
@@ -85,7 +85,7 @@ _Nothing yet._
 // Handoff with root cause NOT confirmed.
 const _unconfirmedHandoff = '''# Agent Handoff — my-app
 
-> Session started: 2026-03-16 | Branch: feat/audio
+> Session started: 2026-03-16 | Branch: fix/null-ref
 
 ---
 
@@ -97,13 +97,13 @@ suggest-investigating
 
 ## Bug
 
-Audio stops after source switch.
+Config not loaded when path has spaces.
 
 ---
 
 ## Expected Behavior
 
-Audio continues seamlessly.
+Config loads regardless of spaces in path.
 
 ---
 
@@ -118,7 +118,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -171,19 +171,19 @@ ready-for-debug
 
 ## Bug
 
-Something broken.
+Parser returns empty on malformed input.
 
 ---
 
 ## Expected Behavior
 
-Should work.
+Parser returns null or throws on malformed input.
 
 ---
 
 ## Root Cause
 
-Race condition in event handler.
+Missing null guard before JSON decode.
 
 ---
 
@@ -192,7 +192,7 @@ Race condition in event handler.
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -238,7 +238,7 @@ class _ExitException implements Exception {
 Never _throwExit(int code) => throw _ExitException(code);
 
 MemoryFileIO _io({String handoff = _fullHandoff}) {
-  final entry = RegistryEntry(
+  const entry = RegistryEntry(
     name: 'my-app',
     projectRoot: _projectRoot,
     workspacePath: _workspace,
@@ -277,8 +277,8 @@ void main() {
     test('checkpoint filename contains sanitised branch name', () async {
       final io = _io();
       await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
-      // feat/audio → feat_audio
-      expect(p.basename(_checkpoints(io).first), contains('feat_audio'));
+      // fix/null-ref → fix_null-ref
+      expect(p.basename(_checkpoints(io).first), contains('fix_null-ref'));
     });
 
     test('checkpoint filename ends with .md', () async {
@@ -295,7 +295,7 @@ void main() {
       // an Updated: timestamp was injected.
       expect(content, contains('# Agent Handoff — my-app'));
       expect(content, contains('ready-for-debug'));
-      expect(content, contains('StateNotifier holds stale reference after hot-reload.'));
+      expect(content, contains('ConfigLoader splits path on spaces before resolving.'));
       expect(content, contains('> Updated: '));
     });
 
@@ -338,14 +338,14 @@ void main() {
       await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
       final skills = io.read(skillsPathFor(_workspace));
       // Branch name in skills entries is the real branch — not sanitized.
-      expect(skills, contains('feat/audio'));
+      expect(skills, contains('fix/null-ref'));
     });
 
     test('pending entry contains root cause text', () async {
       final io = _io();
       await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
       final skills = io.read(skillsPathFor(_workspace));
-      expect(skills, contains('StateNotifier holds stale reference'));
+      expect(skills, contains('ConfigLoader splits path on spaces'));
     });
 
     test('pending entry contains hot files when changed files are named',
@@ -353,7 +353,7 @@ void main() {
       final io = _io();
       await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
       final skills = io.read(skillsPathFor(_workspace));
-      expect(skills, contains('audio_bloc.dart'));
+      expect(skills, contains('loader.dart'));
     });
 
     test('root cause entry without changed files writes only one pending entry',
@@ -376,7 +376,7 @@ void main() {
       await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
       final skills = io.read(skillsPathFor(_workspace));
       expect(skills, contains('existing entry'));
-      expect(skills, contains('StateNotifier'));
+      expect(skills, contains('ConfigLoader'));
     });
 
     test('multiple saves accumulate distinct entries in Pending section',
@@ -387,7 +387,7 @@ void main() {
       final skills = io.read(skillsPathFor(_workspace));
       // Two root cause entries (one per save).
       final pendingRootCauses =
-          'StateNotifier holds stale reference'.allMatches(skills).length;
+          'ConfigLoader splits path on spaces'.allMatches(skills).length;
       expect(pendingRootCauses, equals(2));
     });
 
@@ -452,7 +452,7 @@ void main() {
     });
 
     test('exits when handoff file missing', () async {
-      final entry = RegistryEntry(
+      const entry = RegistryEntry(
         name: 'my-app',
         projectRoot: _projectRoot,
         workspacePath: _workspace,

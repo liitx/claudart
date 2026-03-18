@@ -3,12 +3,12 @@ import 'package:claudart/session/sync_check.dart';
 
 // ── Shared handoff fixtures ───────────────────────────────────────────────────
 
-const _branch = 'feat/audio';
+const _branch = 'fix/null-ref';
 
 String _handoff({
   String status = 'ready-for-debug',
-  String rootCause = 'StateNotifier holds stale ref.',
-  String bug = 'Audio stops after switch.',
+  String rootCause = 'ConfigLoader splits path on spaces.',
+  String bug = 'Config not loaded when path has spaces.',
 }) => '''# Agent Handoff — my-app
 
 > Session started: 2026-03-16 | Branch: $_branch
@@ -29,7 +29,7 @@ $bug
 
 ## Expected Behavior
 
-Audio continues.
+Config loads regardless of spaces in path.
 
 ---
 
@@ -44,7 +44,7 @@ $rootCause
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -117,7 +117,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -165,7 +165,7 @@ String _skillsWithPending(String branch) => '''# Accumulated Skills
 
 > Confirmed facts from in-progress sessions.
 
-- `$branch` (2026-03-16): root cause — StateNotifier holds stale ref.
+- `$branch` (2026-03-16): root cause — ConfigLoader splits path on spaces.
 
 ---
 
@@ -511,10 +511,10 @@ void main() {
     });
 
     test('merge combines issues from both results', () {
-      final a = SyncCheckResult([
+      const a = SyncCheckResult([
         SyncIssue(IssueSeverity.warning, 'warn A'),
       ]);
-      final b = SyncCheckResult([
+      const b = SyncCheckResult([
         SyncIssue(IssueSeverity.error, 'error B'),
       ]);
       final merged = a.merge(b);
@@ -524,7 +524,7 @@ void main() {
     });
 
     test('merge with clean result is identity', () {
-      final a = SyncCheckResult([SyncIssue(IssueSeverity.warning, 'w')]);
+      const a = SyncCheckResult([SyncIssue(IssueSeverity.warning, 'w')]);
       expect(a.merge(SyncCheckResult.clean()).issues, hasLength(1));
     });
   });

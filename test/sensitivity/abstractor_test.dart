@@ -7,7 +7,7 @@ void main() {
   group('Abstractor', () {
     late Abstractor abs;
     late TokenMap map;
-    final detector = defaultDetector;
+    const detector = defaultDetector;
 
     setUp(() {
       abs = Abstractor();

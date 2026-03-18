@@ -8,7 +8,7 @@ void main() {
   group('DartScanner', () {
     const projectRoot = '/project';
 
-    MemoryFileIO _buildIo(Map<String, String> dartFiles) {
+    MemoryFileIO buildIo(Map<String, String> dartFiles) {
       final files = <String, String>{};
       for (final entry in dartFiles.entries) {
         files['$projectRoot/lib/${entry.key}'] = entry.value;
@@ -17,7 +17,7 @@ void main() {
     }
 
     test('detects Bloc class correctly', () {
-      final io = _buildIo({
+      final io = buildIo({
         'audio_bloc.dart':
             'class AudioBloc extends Bloc<AudioEvent, AudioState> {}',
       });
@@ -30,7 +30,7 @@ void main() {
     });
 
     test('detects Repository correctly', () {
-      final io = _buildIo({
+      final io = buildIo({
         'audio_repository.dart':
             'abstract class AudioRepository { Future<void> play(); }',
       });
@@ -43,7 +43,7 @@ void main() {
     });
 
     test('detects Extension correctly', () {
-      final io = _buildIo({
+      final io = buildIo({
         'audio_ext.dart': 'extension AudioBlocX on AudioBloc { void stop() {} }',
       });
       final result = scanProject(projectRoot, io: io);
@@ -55,7 +55,7 @@ void main() {
     });
 
     test('detects Enum correctly', () {
-      final io = _buildIo({
+      final io = buildIo({
         'audio_status.dart': 'enum AudioStatus { playing, paused, stopped }',
       });
       final result = scanProject(projectRoot, io: io);
@@ -67,7 +67,7 @@ void main() {
     });
 
     test('detects Widget correctly', () {
-      final io = _buildIo({
+      final io = buildIo({
         'audio_widget.dart':
             'class AudioWidget extends StatelessWidget { @override Widget build(BuildContext context) => SizedBox(); }',
       });
@@ -80,7 +80,7 @@ void main() {
     });
 
     test('detects typedef callback', () {
-      final io = _buildIo({
+      final io = buildIo({
         'callbacks.dart': 'typedef AudioCallback = void Function(String);',
       });
       final result = scanProject(projectRoot, io: io);
@@ -124,7 +124,7 @@ void main() {
     });
 
     test('filesScanned reflects actual scanned count', () {
-      final io = _buildIo({
+      final io = buildIo({
         'audio_bloc.dart': 'class AudioBloc extends Bloc<AudioEvent, AudioState> {}',
         'audio_repository.dart': 'class AudioRepository {}',
       });

@@ -63,4 +63,4 @@ class SensitivityDetector {
 }
 
 /// Default detector using the bundled corpus.
-final defaultDetector = SensitivityDetector(dartCorpus);
+const defaultDetector = SensitivityDetector(dartCorpus);

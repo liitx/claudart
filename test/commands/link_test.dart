@@ -232,6 +232,8 @@ void main() {
         Registry.load(io: io).findByName(_projectName)!.sensitivityMode,
         isTrue,
       );
+      // confirmFn was called at least twice: once to change, once to enable.
+      expect(confirmCall, greaterThanOrEqualTo(2));
     });
 
     test('skips symlink when .claude is a real directory', () async {

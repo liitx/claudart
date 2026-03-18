@@ -46,7 +46,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -86,7 +86,7 @@ _Nothing yet._
 
 /// Builds a registry pre-seeded with one entry for _projectRoot → _workspace.
 MemoryFileIO _io({bool withHandoff = true, bool withLink = true}) {
-  final entry = RegistryEntry(
+  const entry = RegistryEntry(
     name: 'my-app',
     projectRoot: _projectRoot,
     workspacePath: _workspace,

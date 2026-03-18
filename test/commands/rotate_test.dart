@@ -2,7 +2,6 @@ import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/handoff_template.dart';
-import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/teardown_utils.dart';
 import '../helpers/mocks.dart';
@@ -178,7 +177,7 @@ _None recorded yet._
 
 MemoryFileIO _io({String handoff = _handoffWithPending}) {
   final handoffFile = handoffPathFor(_workspace);
-  final registryContent = '''
+  const registryContent = '''
 {
   "_warning": "Do not edit manually",
   "workspaces": [

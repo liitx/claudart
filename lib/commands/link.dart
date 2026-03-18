@@ -169,6 +169,6 @@ String _detectProjectName(String projectRoot) {
         if (name.isNotEmpty) return name;
       }
     }
-  } catch (_) {}
+  } on Exception catch (_) {}
   return p.basename(projectRoot);
 }

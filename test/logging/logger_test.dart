@@ -95,10 +95,10 @@ void main() {
 
     test('rotation: interactions exceed max drops oldest', () {
       // Override with a low-max logger by writing pre-existing entries
-      final manyEntries = List.generate(
+      final manyEntries = '${List.generate(
         502,
         (i) => jsonEncode({'ts': 'x', 'command': 'setup', 'n': i, 'outcome': 'ok'}),
-      ).join('\n') + '\n';
+      ).join('\n')}\n';
       io.write(_interactionsPath, manyEntries);
 
       // Simulate new log — recreate logger and log one more

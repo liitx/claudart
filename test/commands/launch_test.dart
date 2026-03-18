@@ -1,7 +1,6 @@
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/launch.dart';
-import 'package:claudart/commands/link.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/session/workspace_guard.dart';
@@ -46,7 +45,7 @@ StateNotifier holds stale ref.
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -66,7 +65,7 @@ _None yet._
 ## Debug Progress
 
 ### What was attempted
-Traced through BLoC.
+Traced call through config loader.
 
 ### What changed (files modified)
 _Nothing yet._
@@ -258,7 +257,7 @@ void main() {
   group('launch — register unregistered project', () {
     test('routes to runLink with injected io when user picks Register', () async {
       final io = _io();
-      final unregisteredRoot = '/projects/other-app';
+      const unregisteredRoot = '/projects/other-app';
 
       await runLauncher(
         io: io,
@@ -275,8 +274,8 @@ void main() {
 
   group('launch — long project name', () {
     test('does not throw when project name exceeds 35 characters', () async {
-      final longName = 'my-company-internal-flutter-app-with-extras';
-      final entry = RegistryEntry(
+      const longName = 'my-company-internal-flutter-app-with-extras';
+      const entry = RegistryEntry(
         name: longName,
         projectRoot: '/projects/$longName',
         workspacePath: '/workspaces/$longName',

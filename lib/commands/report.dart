@@ -122,7 +122,7 @@ Future<void> runReport({
   }
 
   // Write updated errors back
-  final content = updatedErrors.map(jsonEncode).join('\n') + '\n';
+  final content = '${updatedErrors.map(jsonEncode).join('\n')}\n';
   fileIO.write(errorsPath, content);
   print('\nReport complete.\n');
 }
@@ -166,7 +166,7 @@ List<Map<String, dynamic>> _readJsonl(FileIO io, String path) {
       .map((l) {
         try {
           return Map<String, dynamic>.from(jsonDecode(l) as Map);
-        } catch (_) {
+        } on FormatException catch (_) {
           return null;
         }
       })

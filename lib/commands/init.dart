@@ -111,7 +111,7 @@ Future<String?> _detectVersion(String cmd, List<String> args) async {
     final out = (result.stdout as String) + (result.stderr as String);
     final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(out);
     return match?.group(1);
-  } catch (_) {
+  } on ProcessException catch (_) {
     return null;
   }
 }

@@ -11,7 +11,7 @@ const _workspace = '/workspaces/my-app';
 // Handoff with root cause and changed files populated — exercises pre-population.
 const _richHandoff = '''# Agent Handoff — my-app
 
-> Session started: 2026-03-01 | Branch: fix/audio-stop
+> Session started: 2026-03-01 | Branch: fix/null-ref
 
 ---
 
@@ -23,29 +23,29 @@ debug-in-progress
 
 ## Bug
 
-Audio stops after source switch.
+Config not loaded when path has spaces.
 
 ---
 
 ## Expected Behavior
 
-Audio continues seamlessly.
+Config loads regardless of spaces in path.
 
 ---
 
 ## Root Cause
 
-StateNotifier holds stale reference after hot-reload.
+ConfigLoader splits path on spaces before resolving.
 
 ---
 
 ## Scope
 
 ### Files in play
-lib/audio/audio_bloc.dart
+lib/config/loader.dart
 
-### BLoCs / providers in play
-AudioBloc
+### Key entry points in play
+ConfigLoader
 
 ### Classes / methods in play
 _Not yet determined._
@@ -64,10 +64,10 @@ _None yet._
 ## Debug Progress
 
 ### What was attempted
-Traced event through BLoC.
+Traced call through config loader.
 
 ### What changed (files modified)
-lib/audio/audio_bloc.dart
+lib/config/loader.dart
 
 ### What is still unresolved
 _Nothing yet._
@@ -85,7 +85,7 @@ _Nothing yet._
 // Handoff with no context filled in — no pre-population defaults available.
 const _bareHandoff = '''# Agent Handoff — my-app
 
-> Session started: 2026-03-01 | Branch: fix/bare
+> Session started: 2026-03-01 | Branch: feat/parser
 
 ---
 
@@ -97,13 +97,13 @@ suggest-investigating
 
 ## Bug
 
-Something broken.
+Parser returns empty on malformed input.
 
 ---
 
 ## Expected Behavior
 
-Should work.
+Parser returns null or throws on malformed input.
 
 ---
 
@@ -118,7 +118,7 @@ _Not yet determined._
 ### Files in play
 _Not yet determined._
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -165,7 +165,7 @@ Never _throwExit(int code) => throw _ExitException(code);
 
 /// Builds a [MemoryFileIO] pre-seeded with a registry entry and optional handoff.
 MemoryFileIO _io({String? handoff}) {
-  final entry = RegistryEntry(
+  const entry = RegistryEntry(
     name: 'my-app',
     projectRoot: _projectRoot,
     workspacePath: _workspace,
@@ -207,21 +207,21 @@ int Function(List<String>) _pick(TeardownCategory cat) => (_) => cat.index;
 /// Prompt order: fixSummary, hotFiles, coldFiles, pattern, fixPattern.
 /// Category is supplied via pickFn (index 5 = state-management).
 List<String?> get _richAnswers => [
-      'Replaced stale reference with fresh copy on each event.',  // fixSummary
+      'Quoted path before passing to ConfigLoader.',  // fixSummary
       null,    // hotFiles — accept pre-populated default
       null,    // coldFiles — skip (optional)
       null,    // pattern — accept pre-populated default
-      'Replace stale StateNotifier reference in BLoC constructor.',// fixPattern
+      'Always quote paths that may contain spaces.',  // fixPattern
     ];
 
 /// Full set of answers for a successful teardown against [_bareHandoff].
 /// Category supplied via pickFn (index 5 = provider-state).
 List<String?> get _bareAnswers => [
-      'Fixed the issue by adding a null check.',   // fixSummary
-      'lib/provider/my_provider.dart',             // hotFiles — no default, must enter
-      null,                                        // coldFiles — skip
-      'Provider holds stale state after reload.',  // pattern — no default, must enter
-      'Re-initialise provider on lifecycle resume.',// fixPattern
+      'Added null guard before JSON decode.',        // fixSummary
+      'lib/parser.dart',                            // hotFiles — no default, must enter
+      null,                                         // coldFiles — skip
+      'Parser crashes on malformed input.',         // pattern — no default, must enter
+      'Always guard before decode with null check.',// fixPattern
     ];
 
 void main() {
@@ -339,7 +339,7 @@ void main() {
         pickFn: _pick(TeardownCategory.stateManagement),
         exitFn: _throwExit,
       );
-      expect(p.basename(_archives(io).first), contains('fix_audio-stop'));
+      expect(p.basename(_archives(io).first), contains('fix_null-ref'));
     });
 
     test('archive content matches original handoff', () async {
@@ -353,7 +353,7 @@ void main() {
         exitFn: _throwExit,
       );
       final archived = io.read(_archives(io).first);
-      expect(archived, contains('Audio stops after source switch'));
+      expect(archived, contains('Config not loaded when path has spaces'));
     });
 
     test('handoff is reset to blank after teardown', () async {
@@ -367,7 +367,7 @@ void main() {
         exitFn: _throwExit,
       );
       final handoff = io.read(handoffPathFor(_workspace));
-      expect(handoff, isNot(contains('Audio stops after source switch')));
+      expect(handoff, isNot(contains('Config not loaded when path has spaces')));
     });
   });
 
@@ -401,7 +401,7 @@ void main() {
       final skills = io.read(skillsPathFor(_workspace));
       expect(skills, contains('state-management'));
       // pre-populated pattern accepted from root cause
-      expect(skills, contains('StateNotifier holds stale reference'));
+      expect(skills, contains('ConfigLoader splits path on spaces'));
     });
 
     test('appends hot path entry for changed file', () async {
@@ -415,7 +415,7 @@ void main() {
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
-      expect(skills, contains('audio_bloc.dart'));
+      expect(skills, contains('loader.dart'));
     });
 
     test('appends session index entry', () async {
@@ -430,17 +430,17 @@ void main() {
       );
       final skills = io.read(skillsPathFor(_workspace));
       expect(skills, contains('resolved'));
-      expect(skills, contains('fix/audio-stop'));
+      expect(skills, contains('fix/null-ref'));
     });
 
     test('appends cold file anti-pattern entry when provided', () async {
       final io = _io(handoff: _richHandoff);
       final answers = [
-        'Fixed it.',               // fixSummary
-        null,                      // hotFiles default
-        'lib/audio/player.dart',   // coldFiles — explore but not the cause
-        null,                      // pattern default
-        'Re-attach listener.',     // fixPattern
+        'Fixed it.',                     // fixSummary
+        null,                            // hotFiles default
+        'lib/config/validator.dart',     // coldFiles — explore but not the cause
+        null,                            // pattern default
+        'Validate path before loading.', // fixPattern
       ];
       await runTeardown(
         io: io,
@@ -451,7 +451,7 @@ void main() {
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
-      expect(skills, contains('player.dart'));
+      expect(skills, contains('validator.dart'));
       expect(skills, contains('Anti-patterns'));
     });
 
@@ -496,18 +496,18 @@ void main() {
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
-      // Default comes from "What changed" section: lib/audio/audio_bloc.dart
-      expect(skills, contains('audio_bloc.dart'));
+      // Default comes from "What changed" section: lib/config/loader.dart
+      expect(skills, contains('loader.dart'));
     });
 
     test('uses override when user types a different hotFiles value', () async {
       final io = _io(handoff: _richHandoff);
       final answers = [
         'Fixed it.',
-        'lib/audio/stream_handler.dart', // override hotFiles
+        'lib/config/resolver.dart',  // override hotFiles
         null,
-        null,                            // accept pattern default
-        'Re-attach listener.',
+        null,                        // accept pattern default
+        'Always resolve before load.',
       ];
       await runTeardown(
         io: io,
@@ -518,7 +518,7 @@ void main() {
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
-      expect(skills, contains('stream_handler.dart'));
+      expect(skills, contains('resolver.dart'));
     });
 
     test('accepts pre-populated pattern when user returns null', () async {
@@ -532,7 +532,7 @@ void main() {
         exitFn: _throwExit,
       );
       final skills = io.read(skillsPathFor(_workspace));
-      expect(skills, contains('StateNotifier holds stale reference'));
+      expect(skills, contains('ConfigLoader splits path on spaces'));
     });
 
     test('uses override when user types a different pattern', () async {
@@ -554,7 +554,7 @@ void main() {
       );
       final skills = io.read(skillsPathFor(_workspace));
       expect(skills, contains('Custom pattern override.'));
-      expect(skills, isNot(contains('StateNotifier holds stale reference')));
+      expect(skills, isNot(contains('ConfigLoader splits path on spaces')));
     });
 
     test('no hotFiles default when changedFiles is blank', () async {
@@ -571,7 +571,7 @@ void main() {
       );
       final skills = io.read(skillsPathFor(_workspace));
       // User-entered value used.
-      expect(skills, contains('my_provider.dart'));
+      expect(skills, contains('parser.dart'));
     });
 
     test('no pattern default when root cause is blank', () async {
@@ -586,7 +586,7 @@ void main() {
       );
       final skills = io.read(skillsPathFor(_workspace));
       // User-entered pattern used.
-      expect(skills, contains('Provider holds stale state after reload.'));
+      expect(skills, contains('Parser crashes on malformed input.'));
     });
   });
 }

@@ -382,7 +382,7 @@ Always follow this order — no exceptions:
 Never commit before testing. Never skip confirmation.
 
 ---
-${envLines}
+$envLines
 ## Knowledge base
 
 Read the following files at the start of every session before doing anything else.

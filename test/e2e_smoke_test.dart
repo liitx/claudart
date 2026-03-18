@@ -44,7 +44,7 @@ stdin.readLineSync uses cooked mode which has no readline cursor support.
 ### Files in play
 lib/md_io.dart, lib/ui/line_editor.dart
 
-### BLoCs / providers in play
+### Key entry points in play
 _Not yet determined._
 
 ### Classes / methods in play
@@ -86,7 +86,7 @@ _Nothing yet._
 ''';
 
 MemoryFileIO _makeIO() {
-  final entry = RegistryEntry(
+  const entry = RegistryEntry(
     name: 'claudart',
     projectRoot: _root,
     workspacePath: _ws,

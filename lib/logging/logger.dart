@@ -143,7 +143,7 @@ class SessionLogger {
       data = data.sublist(data.length - _maxPerformance);
     }
 
-    _io.write(_performancePath, [...header, ...data].join('\n') + '\n');
+    _io.write(_performancePath, '${[...header, ...data].join('\n')}\n');
   }
 
   // ---- private helpers ----
@@ -157,7 +157,7 @@ class SessionLogger {
         .map((l) {
           try {
             return Map<String, dynamic>.from(jsonDecode(l) as Map);
-          } catch (_) {
+          } on FormatException catch (_) {
             return null;
           }
         })
@@ -184,7 +184,7 @@ class SessionLogger {
     if (trimmed.length > maxLines) {
       trimmed = trimmed.sublist(trimmed.length - maxLines);
     }
-    final content = trimmed.map(jsonEncode).join('\n') + '\n';
+    final content = '${trimmed.map(jsonEncode).join('\n')}\n';
     _io.write(path, content);
   }
 }

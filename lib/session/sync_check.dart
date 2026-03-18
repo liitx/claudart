@@ -63,7 +63,7 @@ SyncCheckResult checkSkillsSync(
   final pendingHasEntry = _pendingHasBranch(skillsContent, state.branch);
   if (pendingHasEntry) return SyncCheckResult.clean();
 
-  return SyncCheckResult([
+  return const SyncCheckResult([
     SyncIssue(
       IssueSeverity.warning,
       'Root cause confirmed in handoff but not checkpointed in skills.md.',
@@ -132,7 +132,7 @@ SyncCheckResult checkHandoffStatus(String operation, String handoffContent) {
 
     case 'save':
       if (!state.hasActiveContent) {
-        return SyncCheckResult([
+        return const SyncCheckResult([
           SyncIssue(
             IssueSeverity.warning,
             'No active session content to checkpoint.',

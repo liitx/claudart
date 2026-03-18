@@ -136,9 +136,9 @@ void main() {
         expect(
           entry,
           contains("'$cmd'"),
-          reason: "Command `$cmd` appears in README \"Commands at a glance\" "
-              "table but has no case in bin/claudart.dart. Add routing or "
-              "remove the row from the table.",
+          reason: 'Command `$cmd` appears in README "Commands at a glance" '
+              'table but has no case in bin/claudart.dart. Add routing or '
+              'remove the row from the table.',
         );
       }
     });

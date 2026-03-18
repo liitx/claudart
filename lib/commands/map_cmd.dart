@@ -26,7 +26,7 @@ void runMap({FileIO? io, String? workspacePath}) {
   Map<String, dynamic> allTokens;
   try {
     allTokens = jsonDecode(raw) as Map<String, dynamic>;
-  } catch (_) {
+  } on FormatException catch (_) {
     print('\n✗ token_map.json is malformed.\n');
     return;
   }
