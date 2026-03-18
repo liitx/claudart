@@ -198,8 +198,8 @@ String? Function(String, {bool optional}) _prompts(List<String?> queue) {
   };
 }
 
-/// Builds a pickFn that always selects [index] from the category menu.
-int Function(List<String>) _pick(int index) => (_) => index;
+/// Builds a pickFn that always selects [cat] from the category menu.
+int Function(List<String>) _pick(TeardownCategory cat) => (_) => cat.index;
 
 // Category selection uses TeardownCategory constants (mirrors menu indices).
 

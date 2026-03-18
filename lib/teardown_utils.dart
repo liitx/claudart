@@ -58,15 +58,6 @@ String incrementHotPath(String skills, String area, String file) {
   return appendToSection(skills, 'Hot Paths', entry);
 }
 
-String areaFromCategory(String category) {
-  if (category.contains('api')) return 'api';
-  if (category.contains('concurrency') || category.contains('async')) return 'async';
-  if (category.contains('config')) return 'config';
-  if (category.contains('filesystem')) return 'io';
-  if (category.contains('state')) return 'state';
-  if (category.contains('data') || category.contains('pars')) return 'data';
-  return 'fix';
-}
 
 String buildCommitMessage(String area, String bug, String rootCause, String fix) {
   final bugLine = bug.replaceAll('\n', ' ').trim();

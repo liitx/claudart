@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:claudart/teardown_utils.dart';
+import 'package:claudart/commands/teardown.dart' show TeardownCategory;
 
 void main() {
   group('extractBranch', () {
@@ -140,34 +141,52 @@ _No sessions recorded yet._
     });
   });
 
-  group('areaFromCategory', () {
-    test('api categories', () {
-      expect(areaFromCategory('api-integration'), 'api');
+  group('TeardownCategory.area', () {
+    test('apiIntegration → api', () {
+      expect(TeardownCategory.apiIntegration.area, 'api');
     });
 
-    test('concurrency categories', () {
-      expect(areaFromCategory('concurrency'), 'async');
+    test('concurrency → async', () {
+      expect(TeardownCategory.concurrency.area, 'async');
     });
 
-    test('io categories', () {
-      expect(areaFromCategory('io-filesystem'), 'io');
+    test('ioFilesystem → io', () {
+      expect(TeardownCategory.ioFilesystem.area, 'io');
     });
 
-    test('state categories', () {
-      expect(areaFromCategory('state-management'), 'state');
+    test('stateManagement → state', () {
+      expect(TeardownCategory.stateManagement.area, 'state');
     });
 
-    test('config categories', () {
-      expect(areaFromCategory('configuration'), 'config');
+    test('configuration → config', () {
+      expect(TeardownCategory.configuration.area, 'config');
     });
 
-    test('data categories', () {
-      expect(areaFromCategory('data-parsing'), 'data');
+    test('dataParsing → data', () {
+      expect(TeardownCategory.dataParsing.area, 'data');
     });
 
-    test('unknown falls back to fix', () {
-      expect(areaFromCategory('general'), 'fix');
-      expect(areaFromCategory('something-else'), 'fix');
+    test('general and other fall back to fix', () {
+      expect(TeardownCategory.general.area, 'fix');
+      expect(TeardownCategory.other.area, 'fix');
+    });
+  });
+
+  group('TeardownCategory.value', () {
+    test('each value matches expected skills.md string', () {
+      expect(TeardownCategory.apiIntegration.value,  'api-integration');
+      expect(TeardownCategory.concurrency.value,     'concurrency');
+      expect(TeardownCategory.configuration.value,   'configuration');
+      expect(TeardownCategory.dataParsing.value,     'data-parsing');
+      expect(TeardownCategory.ioFilesystem.value,    'io-filesystem');
+      expect(TeardownCategory.stateManagement.value, 'state-management');
+      expect(TeardownCategory.general.value,         'general');
+      expect(TeardownCategory.other.value,           'other');
+    });
+
+    test('other label is distinct from value', () {
+      expect(TeardownCategory.other.label, 'other (type manually)');
+      expect(TeardownCategory.other.value, 'other');
     });
   });
 

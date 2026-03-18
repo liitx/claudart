@@ -82,11 +82,15 @@ Future<void> runTeardown({
   print('───────────────────────────────────────\n');
 
   final categoryChoice = pick_(_kCategories);
+  final cat = TeardownCategory.values[categoryChoice];
   final String category;
-  if (categoryChoice == _kCategories.length - 1) {
+  final String area;
+  if (cat == TeardownCategory.other) {
     category = prompt_('Enter category') ?? 'general';
+    area = 'fix';
   } else {
-    category = _kCategories[categoryChoice];
+    category = cat.value;
+    area = cat.area;
   }
 
   // Pre-populate hot files from "What changed" — user confirms or overrides.
@@ -136,7 +140,6 @@ Future<void> runTeardown({
   fileIO.write(handoffFile, blankHandoff);
 
   // Suggest commit message.
-  final area = areaFromCategory(category);
   final commitMsg = buildCommitMessage(area, bug, rootCause, fixSummary!);
 
   print('\n✓ Skills updated: ${skillsPathFor(workspace)}');
@@ -193,27 +196,46 @@ void _updateSkills({
   fileIO.write(skillsFile, skills);
 }
 
-const List<String> _kCategories = [
-  'api-integration',
-  'concurrency',
-  'configuration',
-  'data-parsing',
-  'io-filesystem',
-  'state-management',
-  'general',
-  'other (type manually)',
-];
+enum TeardownCategory {
+  apiIntegration,
+  concurrency,
+  configuration,
+  dataParsing,
+  ioFilesystem,
+  stateManagement,
+  general,
+  other;
 
-abstract final class TeardownCategory {
-  static const apiIntegration  = 0;
-  static const concurrency     = 1;
-  static const configuration   = 2;
-  static const dataParsing     = 3;
-  static const ioFilesystem    = 4;
-  static const stateManagement = 5;
-  static const general         = 6;
-  static const other           = 7;
+  /// Canonical string written to skills.md.
+  String get value => switch (this) {
+        apiIntegration  => 'api-integration',
+        concurrency     => 'concurrency',
+        configuration   => 'configuration',
+        dataParsing     => 'data-parsing',
+        ioFilesystem    => 'io-filesystem',
+        stateManagement => 'state-management',
+        general         => 'general',
+        other           => 'other',
+      };
+
+  /// Commit area label for buildCommitMessage.
+  String get area => switch (this) {
+        apiIntegration  => 'api',
+        concurrency     => 'async',
+        configuration   => 'config',
+        ioFilesystem    => 'io',
+        stateManagement => 'state',
+        dataParsing     => 'data',
+        general         => 'fix',
+        other           => 'fix',
+      };
+
+  /// Display label shown in the interactive menu.
+  String get label => this == other ? 'other (type manually)' : value;
 }
+
+List<String> get _kCategories =>
+    TeardownCategory.values.map((c) => c.label).toList();
 
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
