@@ -11,7 +11,7 @@ Before removing anything:
 1. Verify the artifact has no active consumers (`grep` the codebase)
 2. Identify which commit(s) prove it is superseded or dead
 3. Document the retirement using the template below
-4. Commit the retirement log first, then remove the artifact in the same or next commit
+4. The retirement log and the physical deletion are **one atomic commit** — the log IS the deletion commit. If you are not ready to delete, do not create the log yet. No split commits. No exceptions. A log without a deletion, or a deletion without a log, means the retired/ directory no longer reflects reality and cannot be trusted.
 
 ---
 
