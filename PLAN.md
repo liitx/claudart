@@ -196,6 +196,14 @@ the generated PLAN.md. The section explains: "enum variants that haven't been ex
 each feature appear here as named failures from `matrix.gaps()`." claudart doesn't run the
 matrix — it just gives PLAN.md the right structure to track it.
 
+**claudart's matrix vs dartrix's matrix — distinct, not overlapping:**
+claudart models enum × getter (correctness: does each variant return the right mapped value?).
+dartrix models enum × feature (participation: is each variant exercised in each feature?).
+Same compile-time philosophy, different dimensions. No delegation needed at current scope.
+Future: `testSelector()` could replace claudart's manual 24-cell enum assertions when
+claudart's test volume grows — requires adding dartrix as a dep and restructuring around
+`AppType`/`FeatureType`. Deliberate decision to defer; log here when ready to act.
+
 **zedup:** claudart reads `zedup.md` as a memory artifact — the formal enum taxonomy for zedup's
 domain. When claudart sessions target zedup or dartrix, the handoff should include the relevant
 enum context so Claude understands the typed model without re-reading source files each time.
