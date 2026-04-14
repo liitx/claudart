@@ -132,6 +132,26 @@ The `/test` command always passes `--test-randomize-ordering-seed=random`.
 Tests must never be run without it during development.
 Hard-coded seeds are only acceptable for reproducing a specific failure.
 
+### No repeated test bodies (DRY enforcement)
+A test body must never be duplicated. If the same `expect(fn(...), result)` pattern
+appears more than once across separate `test()` calls, it must be collapsed into a
+data table driven by a single loop:
+
+```dart
+const cases = [
+  (description: '...', input: ..., expected: ...),
+  ...
+];
+for (final c in cases) {
+  test(c.description, () => expect(fn(c.input), c.expected));
+}
+```
+
+Adding a new case = one new row. The test body is written exactly once.
+
+Check: scan the test file for the specific function under test — if its call appears
+in more than one `test()` block, that is a violation.
+
 ---
 
 ## Step 4 — Promotion check (skills → rules)
