@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'ansi.dart' as ansi;
 
 const _prompt = '> ';
 
@@ -26,6 +25,23 @@ String? readLine({bool optional = false}) {
 String? _editLine({required bool optional}) {
   final buf = <String>[];
   var cursor = 0;
+  var lastDrawnLength = 0;
+
+  void redraw() {
+    int termWidth;
+    try {
+      termWidth = stdout.terminalColumns;
+    } catch (_) {
+      termWidth = 80;
+    }
+    final linesUsed = wrappedLineCount(_prompt.length, lastDrawnLength, termWidth);
+    if (linesUsed > 1) stdout.write('\x1b[${linesUsed - 1}A');
+    final text = buf.join();
+    stdout.write('\r\x1b[J$_prompt$text');
+    lastDrawnLength = buf.length;
+    final tail = buf.length - cursor;
+    if (tail > 0) stdout.write('\x1b[${tail}D');
+  }
 
   stdin.echoMode = false;
   stdin.lineMode = false;
@@ -37,45 +53,45 @@ String? _editLine({required bool optional}) {
         case _KeyType.char:
           buf.insert(cursor, key.char!);
           cursor++;
-          _redraw(buf, cursor);
+          redraw();
 
         case _KeyType.left:
           if (cursor > 0) {
             cursor--;
-            _redraw(buf, cursor);
+            redraw();
           }
 
         case _KeyType.right:
           if (cursor < buf.length) {
             cursor++;
-            _redraw(buf, cursor);
+            redraw();
           }
 
         case _KeyType.home:
           cursor = 0;
-          _redraw(buf, cursor);
+          redraw();
 
         case _KeyType.end:
           cursor = buf.length;
-          _redraw(buf, cursor);
+          redraw();
 
         case _KeyType.backspace:
           if (cursor > 0) {
             buf.removeAt(cursor - 1);
             cursor--;
-            _redraw(buf, cursor);
+            redraw();
           }
 
         case _KeyType.delete:
           if (cursor < buf.length) {
             buf.removeAt(cursor);
-            _redraw(buf, cursor);
+            redraw();
           }
 
         case _KeyType.ctrlU:
           buf.clear();
           cursor = 0;
-          _redraw(buf, cursor);
+          redraw();
 
         case _KeyType.enter:
           stdout.write('\n');
@@ -98,14 +114,16 @@ String? _editLine({required bool optional}) {
 
 // ── Display ───────────────────────────────────────────────────────────────────
 
-/// Redraws the current input line and positions the cursor.
+/// Returns the number of terminal lines occupied by [promptLen] + [bufLen]
+/// characters at [termWidth] columns wide. Always returns at least 1.
 ///
-/// [ansi.clearLine] = `\r\x1b[K` — go to start of line, erase to end.
-void _redraw(List<String> buf, int cursor) {
-  final text = buf.join();
-  stdout.write('${ansi.clearLine}$_prompt$text');
-  final tail = buf.length - cursor;
-  if (tail > 0) stdout.write('\x1b[${tail}D');
+/// Used by the [_editLine] redraw closure to know how many lines to clear
+/// when input wraps across terminal width.
+int wrappedLineCount(int promptLen, int bufLen, int termWidth) {
+  if (termWidth <= 0) return 1;
+  final total = promptLen + bufLen;
+  if (total == 0) return 1;
+  return ((total - 1) ~/ termWidth) + 1;
 }
 
 // ── Key reading ───────────────────────────────────────────────────────────────
