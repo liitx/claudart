@@ -1,6 +1,5 @@
 .dart_tool/
 build/
-archive/
 pubspec.lock
 handoff.md
 skills.md

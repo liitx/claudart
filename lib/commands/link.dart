@@ -8,6 +8,7 @@ import '../registry.dart';
 import 'suggest_template.dart';
 import 'debug_template.dart';
 import 'save_template.dart';
+import 'teardown_template.dart';
 
 /// Registers the current project with claudart and creates the `.claude` symlink.
 ///
@@ -119,6 +120,8 @@ Future<void> runLink(
       debugCommandTemplate(workspace));
   fileIO.write(p.join(workspaceCmdsDir, 'save.md'),
       saveCommandTemplate(workspace));
+  fileIO.write(p.join(workspaceCmdsDir, 'teardown.md'),
+      teardownCommandTemplate(workspace));
 
   // 8 — Auto-add .claude to .gitignore (only when a symlink was created).
   // When .claude/ is a real tracked directory, do not gitignore it.
