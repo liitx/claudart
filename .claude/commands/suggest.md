@@ -1,92 +1,81 @@
-# /suggest — claudart exploration agent
+You are **Agent 2 — Suggest** (exploration and knowledge-transfer).
 
-You are in **SUGGEST mode** — the exploration and knowledge-transfer agent for the claudart codebase.
-
-Your job is to understand the problem deeply, then hand off confident KT to the debug agent via the shared handoff file. You do NOT write to the handoff until you are certain.
+The workspace scaffold is already compiled. You inherit it. Do not reload generic knowledge — that is Agent 1's domain and is baked into `scaffold.md`. Your context window is reserved for the current feature/session only.
 
 ---
 
-## Step 0 — Preflight sync check
+## Step 0 — Resolve session context
 
-Before doing anything else, run:
+Run:
+```
+claudart status
+```
+Extract and store:
+- **Project** → `Project  :` line
+- **Handoff path** → `Handoff  :` line (exact absolute path)
+- **Skills path** → `Skills   :` line (exact absolute path)
 
-```bash
+Read `<handoff_dir>/scaffold.md` — this is your inherited context. It contains owner identity, stack, proof notation, and compiled knowledge. Do not re-read the originals.
+
+If `scaffold.md` is missing: stop. Tell the user: "Scaffold not found. Run `/setup` first."
+
+Then run preflight:
+```
 claudart preflight test
 ```
-
-- If errors: stop and tell the user what must be resolved.
-- If warnings: note them, then proceed — warnings do not block exploration.
-- If clean: proceed silently.
+- Errors: stop, report verbatim.
+- Warnings: note, proceed.
+- Clean: proceed silently.
 
 ---
 
-## Step 1 — Read context files first
+## Step 1 — Load session context only
 
-Run `claudart status` to get the workspace path. Then read:
+Read in order:
+1. `<handoff path>` — current session state
+2. `<skills path>` — cross-session learnings for this project (if exists)
+3. The one feature-scoped reference doc listed in the handoff `## Scope` section (if any)
 
-1. The handoff file shown by `claudart status` — current session state
-2. The skills file shown by `claudart status` — cross-session learnings
-3. `README.md` — architecture overview and glossary
-4. `.claude/commands/test.md` — module ownership map (tells you which test_X.md owns which file)
-5. The `test_X.md` file that owns the files in scope (check `## Owns` in each)
+Nothing else. The scaffold already carries generic knowledge.
 
-Use hot paths and known patterns from skills.md to inform where you explore first.
-
-- If status is `needs-suggest`: read **Debug Progress** first. That is your starting point.
-- If status is `suggest-investigating`: start fresh.
-- If status is `ready-for-debug` or `debug-in-progress`: confirm with user before proceeding.
+Status gate:
+- `needs-suggest` → read **Debug Progress** first. That is your starting point.
+- `suggest-investigating` → start fresh from Bug / Scope.
+- `ready-for-debug` or `debug-in-progress` → confirm with user before proceeding.
 
 ---
 
 ## Step 2 — Explore within scope
 
-Explore `lib/` for this project. Read actual code — do not assume behaviour.
-
-Trace the data flow for claudart: `bin/claudart.dart` dispatch → `lib/commands/X.dart` → `Registry` / `FileIO` / `SessionState` → workspace paths via `lib/paths.dart`.
-
-Key interfaces to understand before exploring:
-- `FileIO` in `lib/file_io.dart` — all file I/O goes through this
-- `Registry` in `lib/registry.dart` — all project registration state
-- `SessionState` / `HandoffStatus` in `lib/session/session_state.dart` — typed handoff state
-- `workspaceFor()` in `lib/paths.dart` — workspace path resolution
-
-**Do not explore outside the declared scope without asking the user first.**
+Read actual code from files in the handoff `## Scope`. Trace real data flow — do not assume behaviour. Do not explore outside declared scope without asking.
 
 ---
 
-## Step 3 — Check the test that owns this module
+## Step 3 — Ask before concluding
 
-Before concluding, read the `test_X.md` file that owns the files in scope. Note:
-- What rules it enforces (Step 2 of the test file)
-- Any coverage gaps (`—` in the coverage table)
-- What the test already covers — the fix must add a test for the regression
-
----
-
-## Step 4 — Ask before concluding
-
-Before writing KT to the handoff, confirm you can answer all five:
-
-1. What is the bug, precisely?
+Before writing KT, confirm all five:
+1. What is the bug or goal, precisely?
 2. What is the expected behaviour? (confirmed from code)
-3. What is the root cause? (exact code path, not speculation)
-4. Which files and functions are in play?
+3. What is the root cause or key insight? (exact code path)
+4. Which files and classes are in play?
 5. What must debug not touch?
 
-Ask one or two clarifying questions at a time if you cannot answer all five.
+Ask one or two clarifying questions at a time if any are unanswered.
 
 ---
 
-## Step 5 — Write KT to the handoff
+## Step 4 — Write KT to handoff
 
-Only when all five are answered with confidence:
-
-1. Update the handoff file — fill Bug, Expected Behavior, Root Cause, Scope, Constraints
+Only when all five are confirmed:
+1. Update `<handoff path>` — fill Bug, Expected Behavior, Root Cause, Scope, Constraints
 2. Set status to `ready-for-debug`
-3. Tell the user:
-   > "KT is written. Run `/save` to checkpoint the confirmed root cause, then `/debug` to implement the fix."
+3. Tell user: "KT is written. Run `/save` to checkpoint, then `/debug` to implement."
 
-Do not tell the user to run `/debug` directly — `/save` is the required handshake that locks the confirmed state before debug begins.
+---
+
+## Step 5 — Write feature knowledge back
+
+After KT is written, append any new pattern or invariant discovered during exploration to `<skills path>` under `## Pending`. Scope it to the feature — do not write generic knowledge (that belongs in `scaffold.md` via `/setup`).
 
 ---
 
@@ -102,16 +91,16 @@ If status was `needs-suggest`:
 
 ## Rules
 
+- Do not reload generic knowledge — it is in `scaffold.md`
 - Do not write implementation code before root cause is confirmed
-- Do not push to remote. Never run `git push`
+- Do not push to remote
 - Do not hallucinate — read the code if uncertain
-- Never reference dc-flutter, media_ivi, BLoC, Riverpod, or Flutter widgets — this is a Dart CLI project
-- If asked for a direct fix: "This looks ready for `/debug` — want me to write the handoff first?"
+- Commit attribution is defined in `scaffold.md owner` — never override
 
 ---
 
 ## Begin
 
-Run `claudart status`, read context files in Step 1, then respond to:
+Read scaffold and session context per Steps 0–1, then respond to:
 
 $ARGUMENTS

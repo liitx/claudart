@@ -1,18 +1,26 @@
-# /save — session checkpoint
+You are **Agent 2 — Save** (session checkpoint).
 
-You are running **/save** — the session checkpoint command.
+Locks confirmed knowledge from the current session without ending it. The handoff is NOT reset.
 
-Save locks in confirmed knowledge from the current session without ending it.
-It writes a checkpoint snapshot, deposits confirmed facts into pending skills,
-and updates the registry. The handoff is NOT reset. The session stays open.
+---
+
+## Step 0 — Resolve session context
+
+Run:
+```
+claudart status
+```
+Extract:
+- **Handoff path** → `Handoff  :` line (exact absolute path)
+- **Skills path** → `Skills   :` line (exact absolute path)
+
+Read `<handoff_dir>/scaffold.md` for owner and session config.
 
 ---
 
 ## Step 1 — Read handoff
 
-Run `claudart status` to get the handoff path. Read the handoff file in full.
-
-Display a summary to the user:
+Read `<handoff path>` in full. Display summary:
 
 ```
 Status     : <status>
@@ -28,41 +36,37 @@ Attempted  : <what was attempted — or "nothing yet">
 
 Ask: "Does this reflect the current confirmed state? Any corrections before saving?"
 
-- If corrections: apply them to the handoff file first, then proceed.
-- If confirmed as-is: proceed immediately.
+- Corrections needed: apply to `<handoff path>` first, then proceed.
+- Confirmed: proceed immediately.
 
 ---
 
 ## Step 3 — Run claudart save
 
-```bash
+```
 claudart save
 ```
 
 This writes:
-- A checkpoint to `archive/checkpoint_*` in the workspace
-- Confirmed root cause (if present) to `skills.md` under `## Pending`
+- A checkpoint to `<handoff_dir>/archive/checkpoint_*`
+- Confirmed root cause (if present) to `<skills path>` under `## Pending` — feature-scoped only
 - Updates the registry timestamp
 
 ---
 
-## Step 4 — Report and guide next step
+## Step 4 — Report next step
 
-After `claudart save` completes, tell the user what is next:
-
-| Status                  | Next step                                                  |
-|-------------------------|------------------------------------------------------------|
-| `suggest-investigating` | Continue exploring. Run `/save` when root cause confirmed. |
-| `ready-for-debug`       | Root cause locked. Run `/debug` to implement the fix.      |
-| `debug-in-progress`     | Fix in progress. Run `/save` again after fix confirmed.    |
+| Status | Next step |
+|---|---|
+| `suggest-investigating` | Continue exploring. Run `/save` again when root cause confirmed. |
+| `ready-for-debug` | Root cause locked. Run `/debug` to implement. |
+| `debug-in-progress` | Fix in progress. Run `/save` again after fix confirmed. |
 
 ---
 
 ## Rules
 
-- Never reset the handoff — that is `claudart teardown`'s job.
-- Never skip Step 2 — user must confirm state before checkpointing.
-- If handoff is blank (no session started):
-  > "No active session. Run `claudart setup` first."
-- If root cause is not yet confirmed, the checkpoint is still written —
-  but tell the user: "Skills pending not updated — root cause not yet confirmed."
+- Never reset the handoff — that is `/teardown`'s job
+- Never skip Step 2
+- Skills written here are feature-scoped — generic patterns go to scaffold via `/setup`
+- If handoff is blank: "No active session. Run `/setup` then `/suggest` first."
