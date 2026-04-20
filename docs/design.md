@@ -397,6 +397,27 @@ Enforced at `/setup`: only files listed in `workspace.session.knowledge` are com
 
 `fromString` never throws — unknown values return `null` and are excluded from the parsed list. `/setup` reports them so the user can fix `workspace.json`.
 
+### AgentType install invariant
+
+`AgentType.commandTemplate(workspace)` uses an exhaustive `switch` over all variants:
+
+```
+∀ v ∈ AgentType.values →
+  v.fileName == '${v.name}.md'  ∧  v.commandTemplate(w).isNotEmpty
+```
+
+Dart enforcement: the `switch` has no `default` arm — adding a new `AgentType` variant without a corresponding template arm is a compile error (`missing_enum_constant_in_switch: error`). `claudart link` iterates `AgentType.values`; the install loop is closed under the enum.
+
+| Member | Invariant |
+|---|---|
+| `fileName` | `∀ v → v.fileName == '${v.name}.md'` — bijection between variant and filename |
+| `commandTemplate` | Exhaustive switch — `∄ v` with a missing arm at compile time |
+| install loop | `∀ v ∈ AgentType.values → fileIO.write(cmdsDir/v.fileName, v.commandTemplate(w))` |
+
+This is I₆ in the invariant table below.
+
+---
+
 ### Proof notation enforcement
 
 `ProofNotation.dartGrounded` requires:
@@ -418,3 +439,4 @@ These are the core invariants claudart enforces. They are not conventions — th
 | I₃ | No session n+1 begins unless session n's fix compiles | `rotate` build gate | `exitCode = 0` is the only path to new handoff |
 | I₄ | scaffold.md and session context are disjoint | Agent role separation — Agent 2 reads `scaffold.md`, never the originals | `K_scaffold ∩ K_session = ∅` by construction |
 | I₅ | README updates are gated on workspace ownership | `WorkspaceRole.canUpdateReadme` exhaustive switch | `(role == maintainer) ↔ (canUpdateReadme == true)` |
+| I₆ | Every AgentType variant installs its command template | `AgentType.commandTemplate` exhaustive switch + `AgentType.values` loop in `link.dart` | `∀ v ∈ AgentType.values → v.fileName installed ∧ v.commandTemplate(w).isNotEmpty` |

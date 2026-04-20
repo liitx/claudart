@@ -241,6 +241,15 @@ Determines which generic knowledge files are relevant. `/setup` loads only files
 
 Declares which slash commands are in scope for this workspace. Unknown values are dropped at parse time.
 
+Each variant carries two members that drive `claudart link` automatically:
+
+| Member | Type | Contract |
+|---|---|---|
+| `fileName` | `String` | `'$name.md'` — slash command filename installed into `.claude/commands/` |
+| `commandTemplate(workspace)` | `String` | Exhaustive `switch` — dispatches to the correct template function |
+
+`link.dart` iterates `AgentType.values` in a single loop; adding a new agent variant requires only a new enum case and template function — the install loop never changes. The exhaustive `switch` in `commandTemplate` makes a missing template arm a compile error.
+
 #### `WorkspaceRole`
 `maintainer` · `contributor`
 
