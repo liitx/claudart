@@ -1,5 +1,10 @@
 import 'dart:convert';
 import '../file_io.dart';
+import '../commands/setup_template.dart';
+import '../commands/suggest_template.dart';
+import '../commands/debug_template.dart';
+import '../commands/save_template.dart';
+import '../commands/teardown_template.dart';
 
 // ---------------------------------------------------------------------------
 // Enums — every variant concept in workspace.json is typed here.
@@ -40,6 +45,22 @@ enum AgentType {
       AgentType.values.where((v) => v.name == s).firstOrNull;
 
   String get value => name;
+
+  /// Slash-command file installed into `.claude/commands/`.
+  String get fileName => '$name.md';
+
+  /// Generates the command template for this agent type.
+  ///
+  /// ∀ v ∈ AgentType.values → v.commandTemplate(w).isNotEmpty
+  /// enforced by the exhaustive switch — adding a new variant without a
+  /// template arm is a compile error.
+  String commandTemplate(String workspacePath) => switch (this) {
+        AgentType.setup => setupCommandTemplate(workspacePath),
+        AgentType.suggest => suggestCommandTemplate(workspacePath),
+        AgentType.debug => debugCommandTemplate(workspacePath),
+        AgentType.save => saveCommandTemplate(workspacePath),
+        AgentType.teardown => teardownCommandTemplate(workspacePath),
+      };
 }
 
 /// Ownership role of the workspace owner relative to the project.

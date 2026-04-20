@@ -5,11 +5,7 @@ import '../file_io.dart';
 import '../git_utils.dart';
 import '../paths.dart';
 import '../registry.dart';
-import 'setup_template.dart';
-import 'suggest_template.dart';
-import 'debug_template.dart';
-import 'save_template.dart';
-import 'teardown_template.dart';
+import '../workspace/workspace_config.dart';
 
 /// Registers the current project with claudart and creates the `.claude` symlink.
 ///
@@ -112,19 +108,16 @@ Future<void> runLink(
     fileIO.createLink(symlinkPath, symlinkTarget);
   }
 
-  // 7b — Write suggest/debug/save templates to workspace .claude/commands/.
-  // Always written so the workspace stays in sync regardless of symlink state.
+  // 7b — Write all agent command templates to the workspace .claude/commands/.
+  // Driven by AgentType.values — adding a new agent variant automatically
+  // installs its template; no manual update to this loop required.
   final workspaceCmdsDir = p.join(workspace, '.claude', 'commands');
-  fileIO.write(p.join(workspaceCmdsDir, 'setup.md'),
-      setupCommandTemplate(workspace));
-  fileIO.write(p.join(workspaceCmdsDir, 'suggest.md'),
-      suggestCommandTemplate(workspace));
-  fileIO.write(p.join(workspaceCmdsDir, 'debug.md'),
-      debugCommandTemplate(workspace));
-  fileIO.write(p.join(workspaceCmdsDir, 'save.md'),
-      saveCommandTemplate(workspace));
-  fileIO.write(p.join(workspaceCmdsDir, 'teardown.md'),
-      teardownCommandTemplate(workspace));
+  for (final agent in AgentType.values) {
+    fileIO.write(
+      p.join(workspaceCmdsDir, agent.fileName),
+      agent.commandTemplate(workspace),
+    );
+  }
 
   // 8 — Auto-add .claude to .gitignore (only when a symlink was created).
   // When .claude/ is a real tracked directory, do not gitignore it.
