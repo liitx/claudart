@@ -52,12 +52,16 @@ void writeFile(String path, String content) {
 /// Prompts the user with a question and returns trimmed input.
 /// If [optional] is true, empty input returns null.
 String? prompt(String question, {bool optional = false}) {
-  stdout.write('\n$question');
-  if (optional) stdout.write(' (press enter to skip)');
-  stdout.write('\n');
-  final input = editor.readLine(optional: optional);
-  if (input == null || input.isEmpty) return optional ? null : prompt(question);
-  return input;
+  while (true) {
+    stdout.write('\n$question');
+    if (optional) stdout.write(' (press enter to skip)');
+    stdout.write('\n');
+    final input = editor.readLine(optional: optional);
+    if (optional) return input?.isEmpty == true ? null : input;
+    if (input != null && input.isNotEmpty) return input;
+    // Non-optional and empty — re-prompt once with hint, don't recurse.
+    stdout.write('  (required — please enter a value)\n');
+  }
 }
 
 /// Prompts yes/no. Returns true for yes.
