@@ -122,7 +122,9 @@ int _numberedFallback(List<String> items) {
   stdout.writeln();
   while (true) {
     stdout.write('Select (1–${items.length}) > ');
-    final input = stdin.readLineSync()?.trim() ?? '';
+    final raw = stdin.readLineSync();
+    if (raw == null) return 0;  // EOF — non-interactive, default to first item
+    final input = raw.trim();
     final n = int.tryParse(input);
     if (n != null && n >= 1 && n <= items.length) return n - 1;
     stdout.writeln('Enter a number between 1 and ${items.length}.');
