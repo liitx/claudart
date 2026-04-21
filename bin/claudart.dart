@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:claudart/git_utils.dart';
+import 'package:claudart/version.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/commands/experiment.dart';
 import 'package:claudart/commands/init.dart';
@@ -48,6 +49,11 @@ Options:
 Future<void> main(List<String> args) async {
   if (args.firstOrNull == '-h' || args.firstOrNull == '--help') {
     print(_usage);
+    exit(0);
+  }
+
+  if (args.firstOrNull == '--version' || args.firstOrNull == 'version') {
+    print(claudartVersion);
     exit(0);
   }
 
