@@ -31,7 +31,7 @@ String? _editLine({required bool optional}) {
     int termWidth;
     try {
       termWidth = stdout.terminalColumns;
-    } catch (_) {
+    } on UnsupportedError {
       termWidth = 80;
     }
     final linesUsed = wrappedLineCount(_prompt.length, lastDrawnLength, termWidth);

@@ -9,12 +9,12 @@ import '../registry.dart';
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the
 /// combined output to the terminal in real time.
 ///
-/// Usage:  claudart experiment <name> -- <command> [args...]
+/// Usage:  `claudart experiment <name> -- <command> [args...]`
 ///
 /// Example:
-///   claudart experiment menu-colors -- dart run bin/claudart.dart
+///   `claudart experiment menu-colors -- dart run bin/claudart.dart`
 ///
-/// Log written to:  <workspace>/experiments/<name>_<timestamp>.ansi
+/// Log written to:  `<workspace>/experiments/<name>_<timestamp>.ansi`
 Future<void> runExperiment(
   List<String> args, {
   FileIO? io,
