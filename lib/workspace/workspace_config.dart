@@ -1,10 +1,6 @@
 import 'dart:convert';
 import '../file_io.dart';
-import '../commands/setup_template.dart';
-import '../commands/suggest_template.dart';
-import '../commands/debug_template.dart';
-import '../commands/save_template.dart';
-import '../commands/teardown_template.dart';
+import '../pipeline/agent_flow.dart';
 
 // ---------------------------------------------------------------------------
 // Enums — every variant concept in workspace.json is typed here.
@@ -29,38 +25,6 @@ enum StackType {
       StackType.values.where((v) => v.name == s).firstOrNull;
 
   String get value => name;
-}
-
-/// Workflow agents available to the workspace session.
-///
-/// ∀ a ∈ AgentType: a.value == the string used in workspace.json.
-enum AgentType {
-  setup,
-  suggest,
-  debug,
-  save,
-  teardown;
-
-  static AgentType? fromString(String s) =>
-      AgentType.values.where((v) => v.name == s).firstOrNull;
-
-  String get value => name;
-
-  /// Slash-command file installed into `.claude/commands/`.
-  String get fileName => '$name.md';
-
-  /// Generates the command template for this agent type.
-  ///
-  /// ∀ v ∈ AgentType.values → v.commandTemplate(w).isNotEmpty
-  /// enforced by the exhaustive switch — adding a new variant without a
-  /// template arm is a compile error.
-  String commandTemplate(String workspacePath) => switch (this) {
-        AgentType.setup => setupCommandTemplate(workspacePath),
-        AgentType.suggest => suggestCommandTemplate(workspacePath),
-        AgentType.debug => debugCommandTemplate(workspacePath),
-        AgentType.save => saveCommandTemplate(workspacePath),
-        AgentType.teardown => teardownCommandTemplate(workspacePath),
-      };
 }
 
 /// Ownership role of the workspace owner relative to the project.
@@ -123,17 +87,23 @@ class WorkspaceOwner {
   final String name;
   final String email;
   final String handle;
+  /// When true, agents enforce strict architectural integrity:
+  /// every output is validated against the declared XML schema;
+  /// any violation escalates to the user rather than silently continuing.
+  final bool strict;
 
   const WorkspaceOwner({
     required this.name,
     required this.email,
     required this.handle,
+    this.strict = false,
   });
 
   factory WorkspaceOwner.fromJson(Map<String, dynamic> json) => WorkspaceOwner(
         name: json['name'] as String,
         email: json['email'] as String,
         handle: json['handle'] as String,
+        strict: json['strict'] as bool? ?? false,
       );
 }
 
@@ -168,7 +138,7 @@ class WorkspaceProject {
 }
 
 class WorkspaceSession {
-  final List<AgentType> agents;
+  final List<AgentFlow> agents;
   final List<String> knowledge;
   final ProofNotation proofNotation;
   final bool sensitivityMode;
@@ -184,8 +154,8 @@ class WorkspaceSession {
     final rawAgents = (json['agents'] as List<dynamic>? ?? []).cast<String>();
     return WorkspaceSession(
       agents: rawAgents
-          .map(AgentType.fromString)
-          .whereType<AgentType>()
+          .map(AgentFlow.fromString)
+          .whereType<AgentFlow>()
           .toList(),
       knowledge:
           (json['knowledge'] as List<dynamic>? ?? []).cast<String>(),

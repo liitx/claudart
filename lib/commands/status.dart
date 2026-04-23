@@ -96,6 +96,7 @@ Future<void> runStatus({
     case HandoffStatus.needsSuggest:
       print('  Run /suggest in your editor — debug has a question for you.');
     case HandoffStatus.unknown:
+    case HandoffStatus.noHandoff:
       print('  Run: claudart setup');
   }
   print('');
@@ -112,4 +113,5 @@ String _statusColour(HandoffStatus s) => switch (s) {
       HandoffStatus.debugInProgress      => ansi.green,
       HandoffStatus.needsSuggest         => ansi.red,
       HandoffStatus.unknown              => ansi.dim,
+      HandoffStatus.noHandoff            => ansi.dim,
     };

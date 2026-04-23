@@ -190,6 +190,8 @@ The session has a typed status that both `/suggest` and `/debug` read and enforc
 | `claudart preflight <op>` | Sync check before starting an operation (`debug` \| `save` \| `test`) |
 | `claudart status` | Show current session state |
 | `claudart teardown` | End session — update knowledge, archive, suggest commit |
+| `claudart flow` | [experimental] Freeform prompt → classify → plan → handoff |
+| `claudart archives` | List session archives; resume or view past session snapshots |
 | `claudart unlink` | Remove workspace symlinks from project |
 | `claudart scan` | Re-scan project for sensitive tokens |
 | `claudart map` | Generate a human-readable token map |
@@ -517,6 +519,118 @@ needs-suggest
 
 **Rule:** `HandoffStatus.fromString` returns `unknown` for any input that does not match the four canonical strings — it never throws. Commands treat `unknown` as "needs setup": `status.dart` suggests running `claudart setup`, `launch.dart` shows the start-new-session menu.
 **Cannot change:** `unknown` is a Dart-side sentinel, not a value the workflow writes intentionally. If it appears in a handoff, the file was manually edited or corrupted — it is a signal to run `claudart setup`, not a state to route on.
+
+---
+
+#### `HandoffStatus.noHandoff`
+
+> No active claudart session — `CLAUDART_PROJECT` is unset or `handoff.md` is absent. Used by consumer tools (zedup) to represent the "no session running" state without conflating it with a corrupt or unknown session.
+
+**String value:** `no-handoff`
+**Used by:** `session_state.dart`
+**Not used by:** any claudart command (never written to disk; claudart commands require a workspace)
+
+**Rule:** `noHandoff` is emitted by zedup's `ContextRouter` when no project directory is configured. It is never written to `handoff.md` — it only exists as an in-memory sentinel so consumers can distinguish "no session" from "corrupt session" (`unknown`).
+**Cannot change:** zedup and any other claudart consumer depends on this value being distinguishable from `unknown`. Merging them would break routing logic that treats "no session" as a normal initial state rather than an error.
+
+---
+
+### `AgentFlow`
+
+The typed registry of all agent pipeline variants. Every flow has a `preferredModel`, a step list (or empty for dynamically-constructed flows), and a `hasCommandFile` flag indicating whether a slash-command `.md` file is installed by `claudart link`. Adding a new variant forces all exhaustive switches to update — the compiler enforces coverage.
+
+**Values:** `suggest` · `debug` · `setup` · `save` · `teardown` · `flow` · `research` · `free` · `cli`
+**Owned by:** `lib/pipeline/agent_flow.dart`
+
+---
+
+#### `AgentFlow.suggest`
+
+> Deep exploration and knowledge-transfer session. `/suggest` runs the suggest pipeline: haiku reads scope files, sonnet reasons over findings and writes the handoff KT.
+
+**Preferred model:** `opus` (deepest reasoning for root-cause exploration); pipeline steps use their own step-level models
+**Has command file:** `true` (installs `suggest.md`)
+**Used by:** `suggest.dart` · `agent_flow.dart`
+
+---
+
+#### `AgentFlow.debug`
+
+> Deterministic scoped implementation — minimal diff, no exploration. `/debug` executes the path defined in the handoff.
+
+**Preferred model:** `sonnet`
+**Has command file:** `true` (installs `debug.md`)
+**Used by:** `agent_flow.dart`
+
+---
+
+#### `AgentFlow.setup`
+
+> Session setup — workspace init, handoff scaffold. Runs haiku-tier agents to produce a fresh handoff template.
+
+**Preferred model:** `haiku`
+**Has command file:** `true` (installs `setup.md`)
+**Used by:** `agent_flow.dart`
+
+---
+
+#### `AgentFlow.save`
+
+> Checkpoint session — snapshot handoff, deposit confirmed facts to skills. Lightweight; haiku suffices.
+
+**Preferred model:** `haiku`
+**Has command file:** `true` (installs `save.md`)
+**Used by:** `agent_flow.dart`
+
+---
+
+#### `AgentFlow.teardown`
+
+> Session teardown — close workspace, update project README. Haiku-tier; no exploration required.
+
+**Preferred model:** `haiku`
+**Has command file:** `true` (installs `teardown.md`)
+**Used by:** `agent_flow.dart`
+
+---
+
+#### `AgentFlow.flow`
+
+> Agent-constructed session — user provides freeform prompt; agents classify, plan, get approval, and construct the handoff automatically. Experimental variant of suggest. Steps accessed dynamically via `FlowSteps.*` in `flow.dart`.
+
+**Preferred model:** `sonnet`
+**Has command file:** `true` (installs `flow.md`)
+**Used by:** `flow.dart` · `agent_flow.dart`
+
+---
+
+#### `AgentFlow.research`
+
+> Constrained single-doc lookup — fast, targeted reference answer. No slash-command file; used internally by zedup's `@-reference` routing.
+
+**Preferred model:** `haiku`
+**Has command file:** `false`
+**Used by:** `agent_flow.dart`
+
+---
+
+#### `AgentFlow.free`
+
+> Conversational — no context injection, balanced default. Used by zedup for free-form questions without any session context.
+
+**Preferred model:** `sonnet`
+**Has command file:** `false`
+**Used by:** `agent_flow.dart`
+
+---
+
+#### `AgentFlow.cli`
+
+> CLI shell-out — no API call, no pipeline steps. Used by zedup for slash commands that delegate to claudart CLI directly (e.g. `/save`, `/status`, `/teardown`). `preferredModel` is null.
+
+**Preferred model:** none (`null`)
+**Has command file:** `false`
+**Used by:** `agent_flow.dart` · `agent_flow_ext.dart` (zedup)
 
 ---
 

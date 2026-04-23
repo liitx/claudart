@@ -9,23 +9,53 @@ enum HandoffStatus {
   readyForDebug,
   debugInProgress,
   needsSuggest,
+
+  /// Zedup-local: emitted when CLAUDART_PROJECT is unset or handoff.md absent.
+  /// Never written to disk.
+  noHandoff,
+
   unknown;
 
   static HandoffStatus fromString(String s) => switch (s) {
         'suggest-investigating' => suggestInvestigating,
-        'ready-for-debug' => readyForDebug,
-        'debug-in-progress' => debugInProgress,
-        'needs-suggest' => needsSuggest,
-        _ => unknown,
+        'ready-for-debug'       => readyForDebug,
+        'debug-in-progress'     => debugInProgress,
+        'needs-suggest'         => needsSuggest,
+        _                       => unknown,
       };
 
   /// The canonical string value written to and read from handoff.md.
+  /// [noHandoff] and [unknown] are display-only — never written to disk.
   String get value => switch (this) {
         suggestInvestigating => 'suggest-investigating',
-        readyForDebug => 'ready-for-debug',
-        debugInProgress => 'debug-in-progress',
-        needsSuggest => 'needs-suggest',
-        unknown => 'unknown',
+        readyForDebug        => 'ready-for-debug',
+        debugInProgress      => 'debug-in-progress',
+        needsSuggest         => 'needs-suggest',
+        noHandoff            => 'no-handoff',
+        unknown              => 'unknown',
+      };
+
+  /// Display label used in TUI status badges.
+  String get label => value;
+
+  /// True when the workflow expects `/suggest` next.
+  bool get expectsSuggest => switch (this) {
+        suggestInvestigating => true,
+        needsSuggest         => true,
+        noHandoff            => true,
+        unknown              => true,
+        readyForDebug        => false,
+        debugInProgress      => false,
+      };
+
+  /// True when the workflow expects `/debug` next.
+  bool get expectsDebug => switch (this) {
+        readyForDebug        => true,
+        debugInProgress      => true,
+        suggestInvestigating => false,
+        needsSuggest         => false,
+        noHandoff            => false,
+        unknown              => false,
       };
 }
 

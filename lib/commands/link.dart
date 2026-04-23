@@ -4,8 +4,8 @@ import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../paths.dart';
+import '../pipeline/agent_flow.dart';
 import '../registry.dart';
-import '../workspace/workspace_config.dart';
 
 /// Registers the current project with claudart and creates the `.claude` symlink.
 ///
@@ -109,19 +109,28 @@ Future<void> runLink(
   }
 
   // 7b — Write all agent command templates to the workspace .claude/commands/.
-  // Driven by AgentType.values — adding a new agent variant automatically
-  // installs its template; no manual update to this loop required.
+  // Driven by AgentFlow.values — adding a new flow with hasCommandFile=true
+  // automatically installs its template; no manual update required.
   final workspaceCmdsDir = p.join(workspace, '.claude', 'commands');
-  for (final agent in AgentType.values) {
+  for (final flow in AgentFlow.values.where((f) => f.hasCommandFile)) {
     fileIO.write(
-      p.join(workspaceCmdsDir, agent.fileName),
-      agent.commandTemplate(workspace),
+      p.join(workspaceCmdsDir, flow.fileName),
+      flow.commandTemplate(workspace),
     );
   }
 
-  // 8 — Auto-add .claude to .gitignore (only when a symlink was created).
-  // When .claude/ is a real tracked directory, do not gitignore it.
-  if (!symlinkSkipped) _ensureGitignore(projectRoot, fileIO);
+  // 7c — Create .cursor/commands symlink for Cursor IDE slash command integration.
+  // Cursor reads slash commands from .cursor/commands/ — same markdown format.
+  final cursorDir = p.join(projectRoot, '.cursor');
+  final cursorCmdsLink = p.join(cursorDir, 'commands');
+  fileIO.createDir(cursorDir);
+  if (fileIO.linkExists(cursorCmdsLink)) fileIO.deleteLink(cursorCmdsLink);
+  if (!fileIO.dirExists(cursorCmdsLink)) {
+    fileIO.createLink(cursorCmdsLink, workspaceCmdsDir);
+  }
+
+  // 8 — Auto-add .claude and .cursor/ to .gitignore.
+  _ensureGitignore(projectRoot, fileIO);
 
   print('\n✓ Registered: $effectiveName');
   print('  Workspace : $workspace');
@@ -130,6 +139,7 @@ Future<void> runLink(
   } else {
     print('  Symlink   : $symlinkPath → $symlinkTarget');
   }
+  print('  Cursor    : $cursorCmdsLink → $workspaceCmdsDir');
   if (sensitivityMode) print('  Sensitivity mode: ON');
   print('\nRun `claudart setup` to begin a session.\n');
 }

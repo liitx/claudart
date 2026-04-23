@@ -6,8 +6,10 @@ import '../handoff_template.dart';
 import '../md_io.dart';
 import '../paths.dart';
 import '../registry.dart';
+import '../session/archive_entry.dart';
 import '../teardown_utils.dart';
 import '../ui/menu.dart';
+import '../workspace/workspace_index.dart';
 
 Future<void> runTeardown({
   FileIO? io,
@@ -71,9 +73,31 @@ Future<void> runTeardown({
   print('───────────────────────────────────────\n');
 
   if (!confirm_('Is the bug confirmed resolved?')) {
+    // Offer to save as a reminder so the session can be resumed later.
+    if (confirm_('Save as a reminder to resume later?')) {
+      final description = prompt_("Brief description (what's still pending)", optional: true) ?? '';
+      _writeArchiveEntry(
+        fileIO:      fileIO,
+        workspace:   workspace,
+        kind:        ArchiveKind.reminder,
+        description: description.trim().isEmpty ? bug : description.trim(),
+        branch:      branch,
+        handoff:     handoff,
+        skillsDelta: null,
+      );
+      print('\n✓ Reminder saved. Run `claudart archives` to resume.\n');
+    }
     print('\nCome back when the fix is confirmed. Continue with /debug or /suggest.\n');
     exit_(0);
   }
+
+  // Ask whether to archive or save as reminder (resolved but want to annotate
+  // as "noteworthy reminder" for future sessions — rare but valid).
+  print('\n───────────────────────────────────────');
+  print('Session record type:');
+  print('───────────────────────────────────────\n');
+  final kindChoice = pick_(['archive (resolved — skills updated)', 'reminder (note for future reference)']);
+  final archiveKind = kindChoice == 1 ? ArchiveKind.reminder : ArchiveKind.archive;
 
   final fixSummary = prompt_('Briefly describe the fix (one or two sentences)');
 
@@ -131,11 +155,24 @@ Future<void> runTeardown({
     fixPattern: fixPattern!,
   );
 
-  // Archive handoff.
-  final archiveDirectory = archiveDirFor(workspace);
-  final archiveFile = p.join(archiveDirectory, archiveName(branch));
+  // Archive handoff + write index entry.
+  final archiveDirectory  = archiveDirFor(workspace);
+  final archiveFileName   = archiveName(branch);
+  final archiveFile       = p.join(archiveDirectory, archiveFileName);
   fileIO.createDir(archiveDirectory);
   fileIO.write(archiveFile, handoff);
+  _writeArchiveEntry(
+    fileIO:          fileIO,
+    workspace:       workspace,
+    kind:            archiveKind,
+    description:     fixSummary ?? bug,
+    branch:          branch,
+    handoff:         handoff,
+    handoffFileName: archiveFileName,
+    skillsDelta:     archiveKind == ArchiveKind.archive
+        ? '$category: $pattern → $fixPattern'
+        : null,
+  );
 
   // Reset handoff.
   fileIO.write(handoffFile, blankHandoff);
@@ -297,3 +334,33 @@ _None recorded yet._
 
 _No sessions recorded yet._
 ''';
+
+void _writeArchiveEntry({
+  required FileIO      fileIO,
+  required String      workspace,
+  required ArchiveKind kind,
+  required String      description,
+  required String      branch,
+  required String      handoff,
+  String?              handoffFileName,
+  String?              skillsDelta,
+}) {
+  final ts       = DateTime.now();
+  final fileName = handoffFileName ?? archiveName(branch);
+  // Ensure the handoff file exists (reminder path may not have written it yet).
+  if (handoffFileName == null) {
+    final dir = archiveDirFor(workspace);
+    fileIO.createDir(dir);
+    fileIO.write('$dir/$fileName', handoff);
+  }
+  final entry = ArchiveEntry(
+    id:          '${branch}_${ts.millisecondsSinceEpoch}',
+    kind:        kind,
+    description: description,
+    branch:      branch,
+    createdAt:   ts,
+    handoffFile: fileName,
+    skillsDelta: skillsDelta,
+  );
+  appendToIndex(workspace, entry, io: fileIO);
+}

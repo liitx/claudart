@@ -238,6 +238,7 @@ void _printResumeInstructions(HandoffStatus status) {
     case HandoffStatus.needsSuggest:
       print('Debug hit a blocker. Run /suggest for broader exploration.');
     case HandoffStatus.unknown:
+    case HandoffStatus.noHandoff:
       print('Run /suggest to begin or /debug if root cause is known.');
   }
   print('');
@@ -249,6 +250,7 @@ String _statusColour(HandoffStatus s) => switch (s) {
       HandoffStatus.debugInProgress      => ansi.green,
       HandoffStatus.needsSuggest         => ansi.red,
       HandoffStatus.unknown              => ansi.dim,
+      HandoffStatus.noHandoff            => ansi.dim,
     };
 
 String _truncate(String s, {int max = 60}) =>

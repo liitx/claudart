@@ -50,5 +50,4 @@ that gets promoted to dartrix or claudart's pattern library.
 
 | # | Artifact | Retired in | Reason | Replacement |
 |---|----------|-----------|--------|-------------|
-
-_(no retirements yet — log entries added here as artifacts are retired)_
+| 1 | `AgentType` enum | _(pending)_ | Duplicated `AgentFlow` without model/step awareness | `AgentFlow` (extended with `hasCommandFile`, `commandTemplate`, `teardown`) |

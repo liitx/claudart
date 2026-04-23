@@ -1,0 +1,4 @@
+<CHANGES>
+Add null check for `label` in ExampleWidget.build(): use `label ?? 'Default'`
+instead of directly interpolating the nullable field.
+</CHANGES>

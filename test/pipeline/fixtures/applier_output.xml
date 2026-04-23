@@ -1,0 +1,20 @@
+<ROOT_CAUSE>
+The build() method returns a widget tree that does not handle the null case
+for the optional `label` parameter.
+</ROOT_CAUSE>
+<SCOPE_FILES>
+- `lib/example.dart` — ExampleWidget
+</SCOPE_FILES>
+<SCOPE_ENTRIES>
+- ExampleWidget.build()
+</SCOPE_ENTRIES>
+<SCOPE_CLASSES>
+- ExampleWidget
+</SCOPE_CLASSES>
+<MUST_NOT_TOUCH>
+- lib/main.dart
+</MUST_NOT_TOUCH>
+<CONSTRAINTS>
+- Must not break existing widget tests.
+- Add null check: use `label ?? 'Default'` in build().
+</CONSTRAINTS>

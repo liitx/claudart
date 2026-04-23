@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/version.dart';
 import 'package:claudart/registry.dart';
+import 'package:claudart/commands/archives.dart';
 import 'package:claudart/commands/experiment.dart';
 import 'package:claudart/commands/init.dart';
 import 'package:claudart/commands/kill.dart';
@@ -13,6 +14,8 @@ import 'package:claudart/commands/preflight_cmd.dart';
 import 'package:claudart/commands/report.dart';
 import 'package:claudart/commands/scan.dart';
 import 'package:claudart/commands/setup.dart';
+import 'package:claudart/commands/flow.dart';
+import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/status.dart';
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/commands/teardown.dart';
@@ -26,6 +29,7 @@ Usage:
   claudart <command> [arguments]
 
 Commands:
+  archives               List session archives for the current project; resume or view snapshots
   init                   Initialize the workspace with generic starter knowledge
   init --project <name>  Add a project knowledge file to the workspace
   link [project-name]    Symlink workspace into current project (detects name from git if omitted)
@@ -33,6 +37,8 @@ Commands:
   setup [path]           Start a new session (path defaults to current directory)
   status [--prompt]      Show current session state; --prompt outputs a compact colored string for shell RPROMPT/PS1
   teardown               Close session: update knowledge, archive handoff, suggest commit
+  suggest                Run suggest pipeline: haiku reads scope files, sonnet writes handoff KT
+  flow                   [experimental] Agent-constructed session: classify intent, plan, approve, build handoff
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
   rotate                 Archive current session, run build gate, seed next handoff from Pending Issues
   kill                   Abandon session: archive handoff, remove symlink (no skills update)
@@ -69,6 +75,8 @@ Future<void> main(List<String> args) async {
   final rest = args.skip(1).toList();
 
   switch (command) {
+    case 'archives':
+      await runArchives();
     case 'init':
       await runInit(rest);
     case 'link':
@@ -83,6 +91,10 @@ Future<void> main(List<String> args) async {
       await runStatus(prompt: rest.contains('--prompt'));
     case 'teardown':
       await runTeardown();
+    case 'suggest':
+      await runSuggest();
+    case 'flow':
+      await runFlow();
     case 'save':
       await runSave();
     case 'rotate':

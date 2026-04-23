@@ -30,19 +30,28 @@ Read all of the following before doing anything else:
 Check the handoff for a `## Project` section and also read:
 - `$workspacePath/knowledge/projects/<project-name>.md`
 
-Use hot paths and known patterns from these files to inform where you explore first.
-
-- If status is `needs-suggest`: read **Debug Progress** first. That is your starting point.
-- If status is `suggest-investigating`: start fresh.
-- If status is `ready-for-debug` or `debug-in-progress`: confirm with user before proceeding.
+Status routing — check `## Status` in the handoff:
+- `needs-suggest`: read **Debug Progress** first — that is your starting point, not a blank slate.
+- `suggest-needed` or `suggest-investigating`: proceed to Step 2.
+- `ready-for-debug` or `debug-in-progress`: confirm with user before re-running suggest.
 
 ---
 
 ## Step 2 — Explore within scope
 
-Explore the relevant package or directory for this project. Read actual code — do not assume behaviour. Trace the data flow through the relevant layers for this project.
+The `## Scope / Files in play` section of the handoff is your **complete reading list**. Read each file listed there. Do not read any file that is not listed unless you ask the user first.
 
-**Do not explore outside the declared scope without asking the user first.**
+**If `## Root Cause` is already filled in the handoff:**
+Your job is to verify, not re-explore. Read each scoped file to confirm the root cause matches the code. If it matches, proceed directly to Step 3 — all five questions are already answered. If something doesn't match, ask one clarifying question before updating anything.
+
+**If `## Root Cause` is empty:**
+Read each scoped file. Note what exists vs what is missing. Stay within the listed files.
+
+**Hard limits — do not:**
+- Read files outside the Scope list without asking
+- Run shell commands to search or scan the project
+- Create, modify, or write any files during exploration
+- Infer or assume what code does — read it
 
 ---
 

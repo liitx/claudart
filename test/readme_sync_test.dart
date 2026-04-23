@@ -1,14 +1,16 @@
 import 'dart:io';
+import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 
 /// Verifies that README.md stays 1:1 with the codebase.
 ///
-/// Three groups:
+/// Four groups:
 /// 1. HandoffStatus glossary sync — every enum value has an entry, string
 ///    values match the .value getter, "Used by" files exist on disk.
-/// 2. Architecture file list sync — every .dart path annotated with ← exists.
-/// 3. Command routing sync — every command in the README table has a case
+/// 2. AgentFlow glossary sync — every AgentFlow value has a glossary entry.
+/// 3. Architecture file list sync — every .dart path annotated with ← exists.
+/// 4. Command routing sync — every command in the README table has a case
 ///    in bin/claudart.dart.
 ///
 /// Run: CLAUDART_WORKSPACE=/tmp/claudart_test dart test test/readme_sync_test.dart
@@ -73,7 +75,42 @@ void main() {
     });
   });
 
-  // ── 2. Architecture file list ──────────────────────────────────────────────
+  // ── 2. AgentFlow glossary ─────────────────────────────────────────────────
+
+  group('AgentFlow glossary sync', () {
+    test('every AgentFlow value has a glossary entry', () {
+      for (final flow in AgentFlow.values) {
+        expect(
+          readme,
+          contains('#### `AgentFlow.${flow.name}`'),
+          reason: 'Missing glossary entry for AgentFlow.${flow.name}. '
+              'Add an #### entry under ## Glossary → ### AgentFlow.',
+        );
+      }
+    });
+
+    test('every AgentFlow glossary entry lists its preferred model', () {
+      for (final flow in AgentFlow.values) {
+        final entryPattern = RegExp(
+          r'#### `AgentFlow\.' + flow.name + r'`.*?(?=#### `AgentFlow\.|### |---)',
+          dotAll: true,
+        );
+        final match = entryPattern.firstMatch(readme);
+        expect(
+          match,
+          isNotNull,
+          reason: 'Could not find full entry for AgentFlow.${flow.name}.',
+        );
+        expect(
+          match!.group(0),
+          contains('**Preferred model:**'),
+          reason: 'AgentFlow.${flow.name} glossary entry missing **Preferred model:** line.',
+        );
+      }
+    });
+  });
+
+  // ── 3. Architecture file list ─────────────────────────────────────────────
 
   group('Architecture file list sync', () {
     late List<String> readmePaths;
@@ -116,7 +153,7 @@ void main() {
     });
   });
 
-  // ── 3. Command routing ─────────────────────────────────────────────────────
+  // ── 4. Command routing ────────────────────────────────────────────────────
 
   group('Command routing sync', () {
     test(

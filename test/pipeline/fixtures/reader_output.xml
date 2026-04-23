@@ -1,0 +1,6 @@
+<FINDINGS>
+File: lib/example.dart
+- Contains ExampleWidget with build() method
+- Dependencies: flutter/material.dart
+- No obvious null safety issues
+</FINDINGS>

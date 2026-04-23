@@ -171,6 +171,7 @@ void _printReport(
       print('Fix in progress. Run /save again after confirming the fix.');
     case HandoffStatus.needsSuggest:
     case HandoffStatus.unknown:
+    case HandoffStatus.noHandoff:
       print('Run /suggest or /debug to continue.');
   }
   print('');

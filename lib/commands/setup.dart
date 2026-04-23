@@ -195,6 +195,7 @@ String _statusColour(HandoffStatus s) => switch (s) {
       HandoffStatus.debugInProgress      => ansi.green,
       HandoffStatus.needsSuggest         => ansi.red,
       HandoffStatus.unknown              => ansi.dim,
+      HandoffStatus.noHandoff            => ansi.dim,
     };
 
 String _truncate(String s, {int max = 60}) =>
