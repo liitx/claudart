@@ -46,8 +46,16 @@ abstract final class FlowSteps {
   static const String _constructSystem =
       'You are a handoff constructor. Given an approved plan, construct a '
       'complete handoff.md document. Output only <HANDOFF>...</HANDOFF> '
-      'containing the full markdown document with Status, Bug/Goal, Expected '
-      'Behavior, Root Cause / Key Insight, Scope, and Constraints sections filled.';
+      'with these exact section headers in order:\n'
+      '## Status\nready-for-suggest\n\n'
+      '## Bug\n(concise bug or goal description)\n\n'
+      '## Expected Behavior\n(what should happen)\n\n'
+      '## Root Cause\n(key insight from the plan)\n\n'
+      '## Scope\n'
+      '### Files in play\n'
+      '- `relative/path/to/file` — what changes\n\n'
+      '### Must not touch\n(files or patterns to leave alone)\n\n'
+      '## Constraints\n(implementation constraints from the plan)';
 
   // ── Steps ─────────────────────────────────────────────────────────────────
 
@@ -67,7 +75,7 @@ abstract final class FlowSteps {
     model: AgentModel.sonnet,
     systemPrompt: _planSystem,
     buildPrompt: (PipelineContext ctx) {
-      final classification = ctx['categorize'] ?? '';
+      final classification = ctx[PipelineSlot.categorize] ?? '';
       final clarification  = ctx.clarification ?? '';
       return [
         'Classification:\n$classification',
@@ -87,7 +95,7 @@ abstract final class FlowSteps {
     model: AgentModel.haiku,
     systemPrompt: _clarifySystem,
     buildPrompt: (PipelineContext ctx) =>
-        'Question: ${ctx['__question__'] ?? ''}\n\nOriginal input: ${ctx.bug}',
+        'Question: ${ctx[PipelineSlot.question] ?? ''}\n\nOriginal input: ${ctx.bug}',
     routes: {
       'ANSWER':  const FeedBackTo('plan'),
       'UNKNOWN': const EscalateUser('plan'),
@@ -100,7 +108,7 @@ abstract final class FlowSteps {
     model: AgentModel.sonnet,
     systemPrompt: _constructSystem,
     buildPrompt: (PipelineContext ctx) {
-      final plan = ctx['plan'] ?? '';
+      final plan = ctx[PipelineSlot.plan] ?? '';
       return 'Approved plan:\n$plan\n\nOriginal task:\n${ctx.bug}';
     },
     routes: {

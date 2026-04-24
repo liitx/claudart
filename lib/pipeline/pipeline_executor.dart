@@ -18,6 +18,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../ui/ansi.dart' as ansi;
+import '../ui/menu.dart';
 import 'agent_model.dart';
 import 'agent_step.dart';
 import 'pipeline_context.dart';
@@ -35,21 +36,28 @@ typedef ClaudeRunner = Future<({String text, Usage usage})?> Function({
   required String workingDir,
 });
 
-typedef UserPrompter = Future<String> Function(String question);
+typedef UserPrompter     = Future<String> Function(String question);
+typedef ApprovalSelector = Future<int>   Function(List<String> options);
 
 // ── PipelineExecutor ──────────────────────────────────────────────────────────
 
 class PipelineExecutor {
-  final ClaudeRunner _runner;
-  final UserPrompter _prompter;
+  final ClaudeRunner    _runner;
+  final UserPrompter    _prompter;
+  final ApprovalSelector _approvalSelector;
   /// When true (set via WorkspaceOwner.strict), every step output is validated
   /// against its declared route tags. A step with routes but no matching tag
   /// escalates to the user instead of silently falling through.
   final bool strict;
 
-  PipelineExecutor({ClaudeRunner? runner, UserPrompter? prompter, this.strict = false})
-      : _runner   = runner   ?? _defaultClaudeRunner,
-        _prompter = prompter ?? _defaultPrompter;
+  PipelineExecutor({
+    ClaudeRunner?     runner,
+    UserPrompter?     prompter,
+    ApprovalSelector? approvalSelector,
+    this.strict = false,
+  })  : _runner           = runner           ?? _defaultClaudeRunner,
+        _prompter         = prompter         ?? _defaultPrompter,
+        _approvalSelector = approvalSelector ?? _defaultApprovalSelector;
 
   /// Runs [steps] and emits [PipelineEvent]s for each lifecycle transition.
   ///
@@ -145,7 +153,7 @@ class PipelineExecutor {
 
         case QuestionBranch(:final lookupStepId):
           final question = tagOrNull(result.text, matchedTag!)!;
-          ctx     = ctx.withSlot('__question__', question);
+          ctx     = ctx.withSlot(PipelineSlot.question, question);
           current = stepMap[lookupStepId]!;
 
         case FeedBackTo(:final stepId):
@@ -155,7 +163,7 @@ class PipelineExecutor {
 
         case EscalateUser(:final returnToStepId):
           final unknown  = tagOrNull(result.text, matchedTag!);
-          final question = ctx['__question__'] ?? '';
+          final question = ctx[PipelineSlot.question] ?? '';
           yield AgentEscalating(
             question:       question,
             unknownContext: (unknown != null && unknown.isNotEmpty) ? unknown : null,
@@ -171,12 +179,44 @@ class PipelineExecutor {
           final plan = tagOrNull(result.text, planTag) ?? result.text;
           yield PlanDraft(plan: plan);
           yield const AwaitingApproval();
-          final approval = await _prompter('Approve plan? [y/n]');
-          if (approval.toLowerCase().startsWith('y')) {
-            current = stepMap[nextStepId]!;
-          } else {
+
+          final choice = await _approvalSelector([
+            'approve',
+            'refine  ${ansi.dim}(add feedback · re-plan)${ansi.reset}',
+            'exit  ${ansi.dim}(save checkpoint · resume later)${ansi.reset}',
+          ]);
+
+          if (choice == 2) {
+            ctx = ctx.withSlot(PipelineSlot.flowExit, 'true');
             yield PipelineCompleted(ctx: ctx);
             return;
+          }
+
+          if (choice == 1) {
+            final feedback = await _prompter('  Refinement');
+            if (feedback.isNotEmpty) {
+              ctx = ctx.appendClarification('Refinement: $feedback');
+            }
+            yield const AgentResumed();
+            // loop back to plan step; fall through to approve if plan not in this run
+            final planStep = stepMap['plan'];
+            if (planStep != null) {
+              current = planStep;
+            } else {
+              ctx = ctx.withSlot(PipelineSlot.approved, 'true');
+              yield PipelineCompleted(ctx: ctx);
+              return;
+            }
+          } else {
+            // choice == 0: approve
+            final nextStep = stepMap[nextStepId];
+            if (nextStep != null) {
+              current = nextStep;
+            } else {
+              ctx = ctx.withSlot(PipelineSlot.approved, 'true');
+              yield PipelineCompleted(ctx: ctx);
+              return;
+            }
           }
 
         case Complete():
@@ -353,3 +393,8 @@ Future<String> _defaultPrompter(String question) async {
   }
   return stdin.readLineSync()?.trim() ?? '';
 }
+
+// ── Default ApprovalSelector ─────────────────────────────────────────────────
+
+Future<int> _defaultApprovalSelector(List<String> options) async =>
+    arrowMenu(options);

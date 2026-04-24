@@ -4,10 +4,11 @@ import 'package:path/path.dart' as p;
 // ── Filename constants ─────────────────────────────────────────────────────
 // Single source of truth for all file/dir names used across claudart + consumers.
 
-const String handoffFileName      = 'handoff.md';
-const String skillsFileName       = 'skills.md';
-const String archivesDirName      = 'archive';
-const String archiveIndexFileName = 'index.json';
+const String handoffFileName          = 'handoff.md';
+const String skillsFileName           = 'skills.md';
+const String archivesDirName          = 'archive';
+const String archiveIndexFileName     = 'index.json';
+const String flowCheckpointFileName   = 'flow_checkpoint.json';
 
 /// Extracts the workspace directory from `claudart status` output.
 /// Parses the `Handoff  : <path>/handoff.md` line and returns the parent dir.

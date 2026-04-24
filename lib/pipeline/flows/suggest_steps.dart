@@ -164,8 +164,8 @@ Constraints on how the fix must be implemented.
 ''';
 
 String _plannerPrompt(PipelineContext ctx) {
-  final analysis      = ctx.reasonerOut.isNotEmpty ? ctx.reasonerOut : ctx['reasoner'] ?? '';
-  final feedback      = ctx['user_feedback'] ?? '';
+  final analysis      = ctx.reasonerOut;
+  final feedback      = ctx[PipelineSlot.userFeedback] ?? '';
   final clarification = ctx.clarification;
   final planContext   = clarification != null
       ? '$feedback\n\n$clarification'
@@ -196,7 +196,7 @@ No prose outside the tags.
 }
 
 String _lookupPrompt(PipelineContext ctx) {
-  final question = ctx['__question__'] ?? '';
+  final question = ctx[PipelineSlot.question] ?? '';
   return '''
 Question: $question
 
@@ -220,10 +220,10 @@ ${ctx.readerOut}
 }
 
 String _applierPrompt(PipelineContext ctx) {
-  final changePlan = ctx['planner'] != null
-      ? _extractChanges(ctx['planner']!)
+  final changePlan = ctx[PipelineSlot.planner] != null
+      ? _extractChanges(ctx[PipelineSlot.planner]!)
       : '';
-  final analysis = ctx.reasonerOut.isNotEmpty ? ctx.reasonerOut : ctx['reasoner'] ?? '';
+  final analysis = ctx.reasonerOut;
 
   return '''
 Apply these changes to the analysis:

@@ -3,16 +3,19 @@
 // PipelineContext carries all named data slots that steps read and write,
 // plus accumulated token usage and project-level inputs.
 //
-// Slots follow a naming convention:
-//   step id         → e.g. ctx['reader'], ctx['reasoner'], ctx['planner']
-//   __question__    → the pending question emitted by a QuestionBranch step
-//   __clarification__ → accumulated answers (lookup + user) for planner re-runs
-//   user_feedback   → refinement instruction typed by the user
+// Slot access: prefer PipelineSlot enum values over raw strings.
+//   ctx[PipelineSlot.plan]               — read
+//   ctx.withSlot(PipelineSlot.flowExit, 'true')  — write
+//
+// String keys are still accepted so the executor can write step output by
+// AgentStep.id without a static PipelineSlot reference.
 //
 // Immutability: all mutations return a new PipelineContext via withSlot/withUsage.
-// This makes test assertions trivial — each call produces a predictable snapshot.
 
+import 'pipeline_slot.dart';
 import 'usage.dart';
+
+export 'pipeline_slot.dart';
 
 typedef ScopeFile = ({String relative, String absolute});
 
@@ -35,17 +38,23 @@ class PipelineContext {
 
   // ── Slot access ──────────────────────────────────────────────────────────────
 
-  String? operator [](String key) => _slots[key];
+  /// Read a slot by [PipelineSlot] enum value or raw [String] key.
+  String? operator [](Object key) =>
+      _slots[key is PipelineSlot ? key.key : key as String];
 
   /// Returns a copy with [key] set to [value].
-  PipelineContext withSlot(String key, String value) => PipelineContext(
-    slots:       {..._slots, key: value},
-    usage:       usage,
-    projectRoot: projectRoot,
-    bug:         bug,
-    expected:    expected,
-    files:       files,
-  );
+  /// [key] may be a [PipelineSlot] or a raw [String].
+  PipelineContext withSlot(Object key, String value) {
+    final k = key is PipelineSlot ? key.key : key as String;
+    return PipelineContext(
+      slots:       {..._slots, k: value},
+      usage:       usage,
+      projectRoot: projectRoot,
+      bug:         bug,
+      expected:    expected,
+      files:       files,
+    );
+  }
 
   /// Returns a copy with [newUsage] replacing the current usage.
   PipelineContext withUsage(Usage newUsage) => PipelineContext(
@@ -57,24 +66,42 @@ class PipelineContext {
     files:       files,
   );
 
-  /// Appends [addition] to the `__clarification__` slot, separated by newline.
+  /// Appends [addition] to the clarification slot, separated by newline.
   PipelineContext appendClarification(String addition) {
-    final existing = _slots['__clarification__'] ?? '';
+    final existing = _slots[PipelineSlot.clarification.key] ?? '';
     final updated  = existing.isEmpty ? addition : '$existing\n$addition';
-    return withSlot('__clarification__', updated);
+    return withSlot(PipelineSlot.clarification, updated);
   }
 
   // ── Convenience accessors (step outputs) ────────────────────────────────────
 
-  /// Output of the `reader` step (phase 1 file findings).
-  String get readerOut => _slots['reader'] ?? '';
+  String get readerOut      => _slots[PipelineSlot.reader.key]      ?? '';
+  String get reasonerOut    => _slots[PipelineSlot.reasoner.key]    ?? '';
+  String get applierOut     => _slots[PipelineSlot.applier.key]     ?? '';
+  String get implementerOut => _slots[PipelineSlot.implementer.key] ?? '';
 
-  /// Output of the `reasoner` step (phase 2 XML analysis).
-  String get reasonerOut => _slots['reasoner'] ?? '';
+  String? get clarification => _slots[PipelineSlot.clarification.key];
 
-  /// Output of the `applier` step (refined XML sections).
-  String get applierOut => _slots['applier'] ?? '';
+  // ── Checkpoint serialization ─────────────────────────────────────────────────
 
-  /// Accumulated clarification for the planner re-run.
-  String? get clarification => _slots['__clarification__'];
+  Map<String, String> get slots => Map.unmodifiable(_slots);
+
+  Map<String, Object> toCheckpointJson() => {
+    'slots': Map.fromEntries(
+      _slots.entries.where((e) => !PipelineSlot.values
+          .any((s) => s.isControl && s.key == e.key)),
+    ),
+    'bug':         bug,
+    'expected':    expected,
+    'projectRoot': projectRoot,
+  };
+
+  factory PipelineContext.fromCheckpointJson(Map<String, dynamic> json) =>
+      PipelineContext(
+        slots:       Map<String, String>.from(json['slots'] as Map? ?? {}),
+        bug:         json['bug']         as String? ?? '',
+        expected:    json['expected']    as String? ?? '',
+        projectRoot: json['projectRoot'] as String? ?? '',
+        files:       [],
+      );
 }

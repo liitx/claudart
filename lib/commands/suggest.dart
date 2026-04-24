@@ -10,6 +10,7 @@ import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
+import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 
 Future<void> runSuggest({
@@ -67,7 +68,7 @@ Future<void> runSuggest({
   final bug      = readSection(handoff, 'Bug');
   final expected = readSection(handoff, 'Expected Behavior');
   final scope    = readSection(handoff, 'Scope');
-  final files    = _parseScopeFiles(scope, projectRoot);
+  final files    = parseScopeFiles(scope, projectRoot);
 
   if (files.isEmpty) {
     print(
@@ -140,13 +141,16 @@ Future<void> runSuggest({
     _printSection('CONSTRAINTS',    tagOr(analysisOut, 'CONSTRAINTS'));
     print('${ansi.dim}${'─' * 44}${ansi.reset}\n');
 
-    stdout.write('  [y] write to handoff  [r] refine  [q] quit  →  ');
-    final answer = stdin.readLineSync()?.toLowerCase().trim() ?? '';
+    final choice = arrowMenu([
+      'approve  ${ansi.dim}(save analysis to handoff)${ansi.reset}',
+      'refine  ${ansi.dim}(add feedback · re-analyze)${ansi.reset}',
+      'exit  ${ansi.dim}(quit without saving)${ansi.reset}',
+    ]);
 
-    if (answer == 'y') break;
+    if (choice == 0) break;
 
-    if (answer == 'q') {
-      print('\n  Quit — handoff not written.\n');
+    if (choice == 2) {
+      print('\n  Exit — handoff not written.\n');
       exit_(0);
     }
 
@@ -242,21 +246,3 @@ void _printSection(String title, String body) {
   print('');
 }
 
-// ── Input parsing ─────────────────────────────────────────────────────────────
-
-/// Parses `### Files in play` bullet lines: `- \`path\` — description`.
-List<ScopeFile> _parseScopeFiles(String scopeSection, String projectRoot) {
-  final result  = <ScopeFile>[];
-  var   inFiles = false;
-  for (final line in scopeSection.split('\n')) {
-    if (line.startsWith('### Files in play')) { inFiles = true; continue; }
-    if (inFiles && line.startsWith('###')) break;
-    if (!inFiles) continue;
-    final match = RegExp(r'^-\s+`([^`]+)`').firstMatch(line.trim());
-    if (match != null) {
-      final rel = match.group(1)!;
-      result.add((relative: rel, absolute: p.join(projectRoot, rel)));
-    }
-  }
-  return result;
-}

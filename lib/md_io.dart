@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'pipeline/pipeline_context.dart' show ScopeFile;
 import 'ui/line_editor.dart' as editor;
 
 /// Reads a section from a markdown file between `## Header` and the next `## `.
@@ -41,6 +43,25 @@ String updateStatus(String content, String status) {
 String readFile(String path) {
   final file = File(path);
   return file.existsSync() ? file.readAsStringSync() : '';
+}
+
+/// Parses `### Files in play` bullet lines from a scope section.
+/// Line format: `- \`relative/path\` — description`
+/// Returns a list of [ScopeFile] with absolute paths resolved via [projectRoot].
+List<ScopeFile> parseScopeFiles(String scopeSection, String projectRoot) {
+  final result  = <ScopeFile>[];
+  var   inFiles = false;
+  for (final line in scopeSection.split('\n')) {
+    if (line.startsWith('### Files in play')) { inFiles = true; continue; }
+    if (inFiles && line.startsWith('###')) break;
+    if (!inFiles) continue;
+    final match = RegExp(r'^-\s+`([^`]+)`').firstMatch(line.trim());
+    if (match != null) {
+      final rel = match.group(1)!;
+      result.add((relative: rel, absolute: p.join(projectRoot, rel)));
+    }
+  }
+  return result;
 }
 
 void writeFile(String path, String content) {
