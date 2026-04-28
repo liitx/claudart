@@ -7,16 +7,17 @@ import 'ansi.dart' as ansi;
 /// Items may contain ANSI codes — the menu renderer applies selection styling
 /// on top of them. When stdin is not a TTY (CI, pipe) falls back to a
 /// numbered prompt so behaviour is always well-defined.
-int arrowMenu(List<String> items) {
+int arrowMenu(List<String> items, {int startIndex = 0}) {
   assert(items.isNotEmpty, 'arrowMenu requires at least one item');
+  assert(startIndex >= 0 && startIndex < items.length);
   if (!stdin.hasTerminal) return _numberedFallback(items);
-  return _arrowSelect(items);
+  return _arrowSelect(items, startIndex: startIndex);
 }
 
 // ── Arrow-key implementation ───────────────────────────────────────────────────
 
-int _arrowSelect(List<String> items) {
-  var selected = 0;
+int _arrowSelect(List<String> items, {int startIndex = 0}) {
+  var selected = startIndex;
   stdout.write(ansi.hideCursor);
   stdin.echoMode = false;
   stdin.lineMode = false;
