@@ -6,8 +6,10 @@ import '../teardown_utils.dart';
 /// in switch expressions and catches typos at compile time.
 enum HandoffStatus {
   suggestInvestigating,
+  readyForSuggest,
   readyForDebug,
   debugInProgress,
+  debugComplete,
   needsSuggest,
 
   /// Zedup-local: emitted when CLAUDART_PROJECT is unset or handoff.md absent.
@@ -18,8 +20,10 @@ enum HandoffStatus {
 
   static HandoffStatus fromString(String s) => switch (s) {
         'suggest-investigating' => suggestInvestigating,
+        'ready-for-suggest'     => readyForSuggest,
         'ready-for-debug'       => readyForDebug,
         'debug-in-progress'     => debugInProgress,
+        'debug-complete'        => debugComplete,
         'needs-suggest'         => needsSuggest,
         _                       => unknown,
       };
@@ -28,8 +32,10 @@ enum HandoffStatus {
   /// [noHandoff] and [unknown] are display-only — never written to disk.
   String get value => switch (this) {
         suggestInvestigating => 'suggest-investigating',
+        readyForSuggest      => 'ready-for-suggest',
         readyForDebug        => 'ready-for-debug',
         debugInProgress      => 'debug-in-progress',
+        debugComplete        => 'debug-complete',
         needsSuggest         => 'needs-suggest',
         noHandoff            => 'no-handoff',
         unknown              => 'unknown',
@@ -41,11 +47,13 @@ enum HandoffStatus {
   /// True when the workflow expects `/suggest` next.
   bool get expectsSuggest => switch (this) {
         suggestInvestigating => true,
+        readyForSuggest      => true,
         needsSuggest         => true,
         noHandoff            => true,
         unknown              => true,
         readyForDebug        => false,
         debugInProgress      => false,
+        debugComplete        => false,
       };
 
   /// True when the workflow expects `/debug` next.
@@ -53,6 +61,8 @@ enum HandoffStatus {
         readyForDebug        => true,
         debugInProgress      => true,
         suggestInvestigating => false,
+        readyForSuggest      => false,
+        debugComplete        => false,
         needsSuggest         => false,
         noHandoff            => false,
         unknown              => false,

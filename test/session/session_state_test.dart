@@ -141,6 +141,28 @@ void main() {
     });
   });
 
+  group('HandoffStatus round-trip — new variants', () {
+    test('readyForSuggest round-trips via fromString / value', () {
+      expect(HandoffStatus.fromString('ready-for-suggest'), equals(HandoffStatus.readyForSuggest));
+      expect(HandoffStatus.readyForSuggest.value, equals('ready-for-suggest'));
+    });
+
+    test('debugComplete round-trips via fromString / value', () {
+      expect(HandoffStatus.fromString('debug-complete'), equals(HandoffStatus.debugComplete));
+      expect(HandoffStatus.debugComplete.value, equals('debug-complete'));
+    });
+
+    test('readyForSuggest expectsSuggest is true', () {
+      expect(HandoffStatus.readyForSuggest.expectsSuggest, isTrue);
+      expect(HandoffStatus.readyForSuggest.expectsDebug, isFalse);
+    });
+
+    test('debugComplete expects neither', () {
+      expect(HandoffStatus.debugComplete.expectsSuggest, isFalse);
+      expect(HandoffStatus.debugComplete.expectsDebug, isFalse);
+    });
+  });
+
   group('SessionState.parse — edge cases', () {
     test('empty string returns all empty/unknown', () {
       final state = SessionState.parse('');
