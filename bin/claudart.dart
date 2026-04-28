@@ -14,6 +14,7 @@ import 'package:claudart/commands/preflight_cmd.dart';
 import 'package:claudart/commands/report.dart';
 import 'package:claudart/commands/scan.dart';
 import 'package:claudart/commands/setup.dart';
+import 'package:claudart/commands/debug.dart';
 import 'package:claudart/commands/flow.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/status.dart';
@@ -93,6 +94,8 @@ Future<void> main(List<String> args) async {
       await runTeardown();
     case 'suggest':
       await runSuggest();
+    case 'debug':
+      await runDebug();
     case 'flow':
       await runFlow();
     case 'save':

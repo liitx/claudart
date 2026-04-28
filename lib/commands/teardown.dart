@@ -5,6 +5,10 @@ import '../git_utils.dart';
 import '../handoff_template.dart';
 import '../md_io.dart';
 import '../paths.dart';
+import '../pipeline/flows/teardown_steps.dart';
+import '../pipeline/pipeline_context.dart';
+import '../pipeline/pipeline_executor.dart';
+import '../pipeline/xml_tags.dart';
 import '../registry.dart';
 import '../session/archive_entry.dart';
 import '../teardown_utils.dart';
@@ -16,7 +20,7 @@ Future<void> runTeardown({
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
   String? Function(String question, {bool optional})? promptFn,
-  int Function(List<String> items)? pickFn,
+  int Function(List<String> items, {int startIndex})? pickFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
@@ -91,22 +95,55 @@ Future<void> runTeardown({
     exit_(0);
   }
 
-  // Ask whether to archive or save as reminder (resolved but want to annotate
-  // as "noteworthy reminder" for future sessions — rare but valid).
+  // ── Run teardown analyzer (haiku) to pre-fill all metadata ─────────────────
+
+  print('');
+  final analyzerCtx = await PipelineExecutor().runFuture(
+    steps:        [TeardownSteps.analyzer],
+    ctx:          PipelineContext(
+      projectRoot: projectRoot,
+      bug:         handoff,
+      expected:    '',
+      files:       [],
+    ),
+    displayStep:  1,
+    displayTotal: 1,
+  );
+
+  final _out           = analyzerCtx[TeardownSteps.slotKey] ?? '';
+  final agentCategory  = tagOrNull(_out, 'CATEGORY')           ?? '';
+  final agentSummary   = tagOrNull(_out, 'FIX_SUMMARY')        ?? '';
+  final agentHotFiles  = tagOrNull(_out, 'HOT_FILES');
+  final agentColdFiles = tagOrNull(_out, 'COLD_FILES');
+  final agentRootPat   = tagOrNull(_out, 'ROOT_CAUSE_PATTERN') ?? '';
+  final agentFixPat    = tagOrNull(_out, 'FIX_PATTERN')        ?? '';
+
+  // ── Archive kind ─────────────────────────────────────────────────────────────
+
   print('\n───────────────────────────────────────');
   print('Session record type:');
   print('───────────────────────────────────────\n');
-  final kindChoice = pick_(['archive (resolved — skills updated)', 'reminder (note for future reference)']);
+  final kindChoice  = pick_(['archive (resolved — skills updated)', 'reminder (note for future reference)']);
   final archiveKind = kindChoice == 1 ? ArchiveKind.reminder : ArchiveKind.archive;
 
-  final fixSummary = prompt_('Briefly describe the fix (one or two sentences)');
+  // ── Fix summary (agent pre-filled) ───────────────────────────────────────────
+
+  final fixSummary = _promptWithDefault(
+    prompt_,
+    'Briefly describe the fix (one or two sentences)',
+    agentSummary.isEmpty ? null : agentSummary,
+  );
+
+  // ── Category (agent pre-selected in menu) ────────────────────────────────────
 
   print('\n───────────────────────────────────────');
   print('Categorize this session for skills.md:');
   print('───────────────────────────────────────\n');
 
-  final categoryChoice = pick_(_kCategories);
-  final cat = TeardownCategory.values[categoryChoice];
+  final suggestedIdx   = TeardownCategory.values.indexWhere((c) => c.value == agentCategory);
+  final startIdx       = suggestedIdx >= 0 ? suggestedIdx : TeardownCategory.values.indexOf(TeardownCategory.general);
+  final categoryChoice = pick_(_kCategories, startIndex: startIdx);
+  final cat            = TeardownCategory.values[categoryChoice];
   final String category;
   final String area;
   if (cat == TeardownCategory.other) {
@@ -118,29 +155,40 @@ Future<void> runTeardown({
     area = cat.area;
   }
 
-  // Pre-populate hot files from "What changed" — user confirms or overrides.
-  final hotFilesDefault = _isBlank(changedFiles) ? null : changedFiles.replaceAll('\n', ', ').trim();
+  // ── Hot / cold files (agent pre-filled) ──────────────────────────────────────
+
+  final hotFilesDefault = agentHotFiles?.isNotEmpty == true
+      ? agentHotFiles
+      : (_isBlank(changedFiles) ? null : changedFiles.replaceAll('\n', ', ').trim());
   final hotFiles = _promptWithDefault(
     prompt_,
     'Which files were confirmed key to the fix?',
     hotFilesDefault,
   );
 
-  final coldFiles = prompt_(
+  final coldDefault = agentColdFiles?.toLowerCase() == 'none' ? null : agentColdFiles;
+  final coldFiles   = _promptWithDefault(
+    prompt_,
     'Any files explored but NOT the root cause? (comma-separated, or skip)',
+    coldDefault,
     optional: true,
   );
 
-  // Pre-populate pattern from root cause — user confirms or overrides.
-  final patternDefault = _isBlank(rootCause) ? null : rootCause.replaceAll('\n', ' ').trim();
+  // ── Root cause / fix pattern (agent pre-filled) ───────────────────────────────
+
+  final patternDefault = agentRootPat.isNotEmpty
+      ? agentRootPat
+      : (_isBlank(rootCause) ? null : rootCause.replaceAll('\n', ' ').trim());
   final pattern = _promptWithDefault(
     prompt_,
     'Describe the root cause pattern generically (one sentence)',
     patternDefault,
   );
 
-  final fixPattern = prompt_(
-    'Describe the fix pattern generically (one sentence)\n  e.g. "Added restartable transformer to ensure sequential event processing"',
+  final fixPattern = _promptWithDefault(
+    prompt_,
+    'Describe the fix pattern generically (one sentence)',
+    agentFixPat.isEmpty ? null : agentFixPat,
   );
 
   // Update skills.md.
@@ -281,8 +329,9 @@ String? _defaultPrompt(String question, {bool optional = false}) =>
 String? _promptWithDefault(
   String? Function(String, {bool optional}) prompt_,
   String question,
-  String? defaultValue,
-) {
+  String? defaultValue, {
+  bool optional = false,
+}) {
   if (defaultValue != null) {
     return prompt_(
           '$question\n  (press enter to use: "$defaultValue")',
@@ -290,7 +339,7 @@ String? _promptWithDefault(
         ) ??
         defaultValue;
   }
-  return prompt_(question);
+  return prompt_(question, optional: optional);
 }
 
 bool _isBlank(String s) =>
