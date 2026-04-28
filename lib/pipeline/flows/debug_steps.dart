@@ -6,6 +6,10 @@
 //
 // On PipelineCompleted, the caller parses <EDIT_FILE> tags and writes to disk.
 
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
 import '../agent_model.dart';
 import '../agent_step.dart';
 import '../pipeline_context.dart';
@@ -22,6 +26,8 @@ abstract final class DebugSteps {
       '  - Execute the fix path defined in the handoff exactly.\n'
       '  - Minimal diff only. No refactoring of surrounding code.\n'
       '  - Do not touch files listed under Must not touch.\n'
+      '  - Only reference types, classes, and enums present in the file contents '
+      'and known types list provided. Do not invent or assume types.\n'
       '  - Output ONLY the structured XML tags below. No prose outside tags.\n\n'
       'Output format:\n'
       '<CHANGES>\n'
@@ -70,8 +76,27 @@ ${ctx.files.map((f) => f.absolute).join('\n')}
 String _implementerPrompt(PipelineContext ctx) => '''
 ${ctx.bug}
 
+${_enumInventory(ctx.projectRoot)}
+
 File contents:
 ${ctx.readerOut}
 
 Implement the fix strictly as specified. Output <CHANGES> and one <EDIT_FILE> per modified file.
 ''';
+
+// Returns a one-line inventory of all enum types defined in lib/src/enums/.
+// Injected into the implementer prompt so it cannot reference types that do not exist.
+String _enumInventory(String projectRoot) {
+  final enumDir = Directory(p.join(projectRoot, 'lib', 'src', 'enums'));
+  if (!enumDir.existsSync()) return '';
+  final names = <String>[];
+  for (final file in enumDir.listSync().whereType<File>()) {
+    for (final line in file.readAsLinesSync()) {
+      final m = RegExp(r'^enum\s+(\w+)').firstMatch(line);
+      if (m != null) names.add(m.group(1)!);
+    }
+  }
+  if (names.isEmpty) return '';
+  return 'Known local enum types (lib/src/enums/): ${names.join(', ')}.\n'
+      'External package enums declared in the handoff scope are permitted.';
+}
