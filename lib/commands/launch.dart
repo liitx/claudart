@@ -231,25 +231,30 @@ void _printResumeInstructions(HandoffStatus status) {
   switch (status) {
     case HandoffStatus.suggestInvestigating:
       print('Open your editor and run /suggest to continue exploration.');
+    case HandoffStatus.readyForSuggest:
+      print('Ready for a new suggest cycle. Run /suggest to begin.');
     case HandoffStatus.readyForDebug:
       print('Root cause identified. Run /debug to implement the fix.');
     case HandoffStatus.debugInProgress:
       print('Fix in progress. Run /debug to continue.');
+    case HandoffStatus.debugComplete:
+      print('Debug complete. Run /save then verify with dart test.');
     case HandoffStatus.needsSuggest:
       print('Debug hit a blocker. Run /suggest for broader exploration.');
-    case HandoffStatus.unknown:
-    case HandoffStatus.noHandoff:
+    case HandoffStatus.unknown || HandoffStatus.noHandoff:
       print('Run /suggest to begin or /debug if root cause is known.');
   }
   print('');
 }
 
 String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating => ansi.cyan,
+      HandoffStatus.suggestInvestigating ||
+      HandoffStatus.readyForSuggest      => ansi.cyan,
       HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress      => ansi.green,
+      HandoffStatus.debugInProgress ||
+      HandoffStatus.debugComplete        => ansi.green,
       HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown              => ansi.dim,
+      HandoffStatus.unknown ||
       HandoffStatus.noHandoff            => ansi.dim,
     };
 

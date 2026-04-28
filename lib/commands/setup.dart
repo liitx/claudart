@@ -190,11 +190,13 @@ abstract final class _SetupMenu {
 }
 
 String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating => ansi.cyan,
+      HandoffStatus.suggestInvestigating ||
+      HandoffStatus.readyForSuggest      => ansi.cyan,
       HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress      => ansi.green,
+      HandoffStatus.debugInProgress ||
+      HandoffStatus.debugComplete        => ansi.green,
       HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown              => ansi.dim,
+      HandoffStatus.unknown ||
       HandoffStatus.noHandoff            => ansi.dim,
     };
 

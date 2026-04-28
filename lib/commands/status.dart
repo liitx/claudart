@@ -89,14 +89,17 @@ Future<void> runStatus({
   switch (state.status) {
     case HandoffStatus.suggestInvestigating:
       print('  Run /suggest in your editor.');
+    case HandoffStatus.readyForSuggest:
+      print('  Run /suggest in your editor to begin a new cycle.');
     case HandoffStatus.readyForDebug:
       print('  Run /debug in your editor.');
     case HandoffStatus.debugInProgress:
       print('  Continue with /debug, or run /suggest if you hit a wall.');
+    case HandoffStatus.debugComplete:
+      print('  Verify with dart test, then claudart teardown.');
     case HandoffStatus.needsSuggest:
       print('  Run /suggest in your editor — debug has a question for you.');
-    case HandoffStatus.unknown:
-    case HandoffStatus.noHandoff:
+    case HandoffStatus.unknown || HandoffStatus.noHandoff:
       print('  Run: claudart setup');
   }
   print('');
@@ -108,10 +111,12 @@ String _truncate(String s, {int max = 80}) {
 }
 
 String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating => ansi.cyan,
+      HandoffStatus.suggestInvestigating ||
+      HandoffStatus.readyForSuggest      => ansi.cyan,
       HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress      => ansi.green,
+      HandoffStatus.debugInProgress ||
+      HandoffStatus.debugComplete        => ansi.green,
       HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown              => ansi.dim,
+      HandoffStatus.unknown ||
       HandoffStatus.noHandoff            => ansi.dim,
     };

@@ -165,13 +165,17 @@ void _printReport(
   switch (state.status) {
     case HandoffStatus.suggestInvestigating:
       print('Continue exploring. Run /save again when root cause is confirmed.');
+    case HandoffStatus.readyForSuggest:
+      print('Run /suggest to continue.');
     case HandoffStatus.readyForDebug:
       print('Root cause locked. Run /debug to implement the fix.');
     case HandoffStatus.debugInProgress:
       print('Fix in progress. Run /save again after confirming the fix.');
-    case HandoffStatus.needsSuggest:
-    case HandoffStatus.unknown:
-    case HandoffStatus.noHandoff:
+    case HandoffStatus.debugComplete:
+      print('Debug complete. Verify with dart test, then claudart teardown.');
+    case HandoffStatus.needsSuggest ||
+         HandoffStatus.unknown ||
+         HandoffStatus.noHandoff:
       print('Run /suggest or /debug to continue.');
   }
   print('');

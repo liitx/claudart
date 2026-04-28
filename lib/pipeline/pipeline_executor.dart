@@ -342,18 +342,37 @@ Future<T?> runWithSpinner<T>({
 
 // ── Default ClaudeRunner ──────────────────────────────────────────────────────
 
+File? get _diagLog {
+  final env = Platform.environment;
+  if (env['CLAUDART_DIAG'] != '1') return null;
+  final path = env['CLAUDART_DIAG_PATH'] ?? '/tmp/claudart_diag.log';
+  return File(path);
+}
+
 Future<({String text, Usage usage})?> _defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
   required String message,
   required String workingDir,
 }) async {
+  final ts  = DateTime.now().toIso8601String();
+  final log = _diagLog;
+  log?.writeAsStringSync(
+    '[$ts] STEP: ${model.alias}  workingDir: $workingDir\n'
+    '--- SYSTEM PROMPT ---\n$systemPrompt\n'
+    '--- MESSAGE (first 2000 chars) ---\n${message.substring(0, message.length.clamp(0, 2000))}\n'
+    '--- END INPUT ---\n\n',
+    mode: FileMode.append,
+  );
+
   try {
     final process = await Process.start(
       'claude',
       [
         '--print',
-        '--output-format', 'json',
+        '--verbose',
+        '--output-format',            'stream-json',
+        '--include-partial-messages',
         '--model',         model.alias,
         '--system-prompt', systemPrompt,
         '--dangerously-skip-permissions',
@@ -362,14 +381,35 @@ Future<({String text, Usage usage})?> _defaultClaudeRunner({
     );
     process.stdin.writeln(message);
     await process.stdin.close();
-    final out  = await process.stdout.transform(const Utf8Decoder()).join();
+
+    final lines = <String>[];
+    await for (final line in process.stdout
+        .transform(const Utf8Decoder())
+        .transform(const LineSplitter())) {
+      if (line.trim().isEmpty) continue;
+      lines.add(line);
+      log?.writeAsStringSync('[$ts] STREAM: $line\n', mode: FileMode.append);
+    }
+
     final err  = await process.stderr.transform(const Utf8Decoder()).join();
     final code = await process.exitCode;
+    log?.writeAsStringSync(
+      '[$ts] EXIT: $code  stderr: ${err.trim().isEmpty ? "(none)" : err.trim()}\n\n',
+      mode: FileMode.append,
+    );
+
     if (code != 0) {
       if (err.trim().isNotEmpty) stderr.writeln(err.trim());
       return null;
     }
-    final json  = jsonDecode(out.trim()) as Map<String, dynamic>;
+
+    final resultLine = lines.lastWhere(
+      (l) => l.contains('"type":"result"'),
+      orElse: () => '',
+    );
+    if (resultLine.isEmpty) return null;
+
+    final json  = jsonDecode(resultLine) as Map<String, dynamic>;
     final text  = (json['result'] as String?) ?? '';
     final raw   = json['usage']   as Map<String, dynamic>? ?? {};
     final usage = Usage(
@@ -380,6 +420,7 @@ Future<({String text, Usage usage})?> _defaultClaudeRunner({
     );
     return (text: text, usage: usage);
   } on Exception catch (e) {
+    log?.writeAsStringSync('[$ts] EXCEPTION: $e\n\n', mode: FileMode.append);
     stderr.writeln('claude call failed: $e');
     return null;
   }
