@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../handoff_template.dart';
@@ -14,6 +15,10 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import 'scan.dart';
 
+/// Returns absolute paths of files named [basename] under [projectRoot].
+/// Injectable for tests — default uses the OS `find` command.
+typedef FileFinderFn = List<String> Function(String projectRoot, String basename);
+
 Future<void> runSetup({
   FileIO? io,
   String? projectRootOverride,
@@ -21,12 +26,14 @@ Future<void> runSetup({
   String? Function(String question, {bool optional})? promptFn,
   int Function(List<String> items)? pickFn,
   Never Function(int code)? exitFn,
+  FileFinderFn? fileFinderFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final confirm_ = confirmFn ?? confirm;
   final prompt_ = promptFn ?? _defaultPrompt;
   final pick_ = pickFn ?? arrowMenu;
+  final finder_ = fileFinderFn ?? _defaultFileFinder;
 
   print('\n═══════════════════════════════════════');
   print('  CLAUDART SESSION SETUP');
@@ -150,7 +157,7 @@ Future<void> runSetup({
     bug: bug,
     expected: expected,
     projectName: entry.name,
-    files: files,
+    files: files != null ? _resolveFilePaths(files, projectRoot, finder_) : null,
     entryPoints: entryPoints,
   );
 
@@ -202,3 +209,71 @@ String _statusColour(HandoffStatus s) => switch (s) {
 
 String _truncate(String s, {int max = 60}) =>
     s.length > max ? '${s.substring(0, max)}…' : s;
+
+// ── File resolution ───────────────────────────────────────────────────────────
+
+sealed class _FileResolution {
+  const _FileResolution();
+}
+
+final class _Resolved extends _FileResolution {
+  const _Resolved(this.relativePaths);
+  final List<String> relativePaths; // one entry = unique; many = ambiguous
+}
+
+final class _NotFound extends _FileResolution {
+  const _NotFound(this.token);
+  final String token;
+}
+
+/// Default [FileFinderFn] — delegates to the OS `find` command, skipping
+/// hidden dirs and common build artefacts.
+List<String> _defaultFileFinder(String projectRoot, String basename) {
+  final result = Process.runSync(
+    'find',
+    [projectRoot, '-type', 'f', '-name', basename,
+     '!', '-path', '*/.dart_tool/*',
+     '!', '-path', '*/.git/*',
+     '!', '-path', '*/build/*',
+    ],
+  );
+  return (result.stdout as String)
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList();
+}
+
+/// Resolves a single [token] to a [_FileResolution] using [finder].
+_FileResolution _resolveToken(
+  String token,
+  String projectRoot,
+  FileFinderFn finder,
+) {
+  final paths = finder(projectRoot, p.basename(token))
+      .map((abs) => p.relative(abs, from: projectRoot))
+      .toList();
+
+  return paths.isEmpty ? _NotFound(token) : _Resolved(paths);
+}
+
+/// Converts raw user file input into the backtick-formatted list that
+/// `parseScopeFiles` expects.
+///
+///   "contact_sxm_page.dart, foo.dart"
+///   → "- `ivi/…/contact_sxm_page.dart` — (user-provided)"
+String _resolveFilePaths(String raw, String projectRoot, FileFinderFn finder) {
+  final tokens = raw
+      .split(RegExp(r'[,\n]+'))
+      .map((t) => t.trim())
+      .where((t) => t.isNotEmpty);
+
+  return tokens.expand((token) {
+    return switch (_resolveToken(token, projectRoot, finder)) {
+      _Resolved(:final relativePaths) =>
+        relativePaths.map((rel) => '- `$rel` — (user-provided)'),
+      _NotFound(:final token) =>
+        ['- `$token` — (not found — verify path)'],
+    };
+  }).join('\n');
+}

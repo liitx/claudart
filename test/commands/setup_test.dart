@@ -6,6 +6,26 @@ import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import '../helpers/mocks.dart';
 
+// ── File finder fakes ─────────────────────────────────────────────────────────
+
+/// Returns a [FileFinderFn] that maps basename → absolute paths.
+FileFinderFn _fakeFinder(Map<String, List<String>> results) =>
+    (_, basename) => results[basename] ?? [];
+
+/// Finder that resolves any basename to a single unique absolute path under root.
+FileFinderFn _uniqueFinder(String projectRoot) =>
+    (root, basename) => [p.join(root, 'lib', 'src', basename)];
+
+/// Finder that always returns no matches.
+FileFinderFn get _notFoundFinder => (_, __) => [];
+
+/// Finder that returns two matches for any basename.
+FileFinderFn _ambiguousFinder(String projectRoot) =>
+    (root, basename) => [
+          p.join(root, 'lib', 'a', basename),
+          p.join(root, 'lib', 'b', basename),
+        ];
+
 const _projectRoot = '/projects/my-app';
 const _workspace   = '/workspaces/my-app';
 const _projectName = 'my-app';
@@ -344,7 +364,7 @@ void main() {
       );
     });
 
-    test('contains files when provided', () async {
+    test('contains files when provided — formatted as backtick list', () async {
       final io = _io();
       await runSetup(
         io: io,
@@ -354,15 +374,16 @@ void main() {
           'fix/null-ref',
           'Config not loaded when path has spaces.',
           'Config loads regardless of spaces in path.',
-          'lib/config/loader.dart',
+          'loader.dart',
           null,
         ]),
         pickFn: (_) => 0,
         exitFn: _throwExit,
+        fileFinderFn: _uniqueFinder(_projectRoot),
       );
       expect(
         io.read(handoffPathFor(_workspace)),
-        contains('lib/config/loader.dart'),
+        contains('- `lib/src/loader.dart` — (user-provided)'),
       );
     });
 
@@ -404,6 +425,62 @@ void main() {
       final entry = jsonDecode(raw.trim().split('\n').last) as Map<String, dynamic>;
       expect(entry['command'], equals('setup'));
       expect(entry['outcome'], equals('ok'));
+    });
+  });
+
+  // ── File resolution ──────────────────────────────────────────────────────────
+
+  group('setup — file resolution', () {
+    Future<String> _setupWithFiles(String filesInput, FileFinderFn finder) async {
+      final io = _io();
+      await runSetup(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        promptFn: _prompts([
+          'fix/null-ref',
+          'Some bug.',
+          'Some expected.',
+          filesInput,
+          null,
+        ]),
+        pickFn: (_) => 0,
+        exitFn: _throwExit,
+        fileFinderFn: finder,
+      );
+      return io.read(handoffPathFor(_workspace));
+    }
+
+    test('unique match → backtick-formatted relative path', () async {
+      final handoff = await _setupWithFiles(
+        'loader.dart',
+        _uniqueFinder(_projectRoot),
+      );
+      expect(handoff, contains('- `lib/src/loader.dart` — (user-provided)'));
+    });
+
+    test('not found → kept verbatim with not-found note', () async {
+      final handoff = await _setupWithFiles('missing.dart', _notFoundFinder);
+      expect(handoff, contains('- `missing.dart` — (not found — verify path)'));
+    });
+
+    test('ambiguous match → all paths listed', () async {
+      final handoff = await _setupWithFiles(
+        'widget.dart',
+        _ambiguousFinder(_projectRoot),
+      );
+      expect(handoff, contains('- `lib/a/widget.dart` — (user-provided)'));
+      expect(handoff, contains('- `lib/b/widget.dart` — (user-provided)'));
+    });
+
+    test('comma-separated input → each token resolved independently', () async {
+      final finder = _fakeFinder({
+        'foo.dart': [p.join(_projectRoot, 'lib', 'foo.dart')],
+        'bar.dart': [],
+      });
+      final handoff = await _setupWithFiles('foo.dart, bar.dart', finder);
+      expect(handoff, contains('- `lib/foo.dart` — (user-provided)'));
+      expect(handoff, contains('- `bar.dart` — (not found — verify path)'));
     });
   });
 
