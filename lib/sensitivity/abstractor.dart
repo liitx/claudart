@@ -17,7 +17,8 @@ class Abstractor {
     for (final token in sensitive) {
       final typePrefix = _inferType(token, map);
       final mapped = map.tokenFor(token, typePrefix);
-      result = result.replaceAll(token, mapped);
+      // Use word boundaries to avoid corrupting related tokens
+      result = result.replaceAll(RegExp(r'\b' + RegExp.escape(token) + r'\b'), mapped);
     }
     return result;
   }
@@ -26,15 +27,18 @@ class Abstractor {
   String deabstract(String text, TokenMap map) {
     // Build reverse: mapped token -> real name
     // Collect all tokens by scanning the text for token-shaped strings.
-    final tokenPattern = RegExp(r'[A-Za-z]+:[A-Z]{1,2}');
+    final tokenPattern = RegExp(r'\b[A-Za-z]+:[A-Z]{1,2}\b');
     var result = text;
     final seen = <String>{};
     for (final m in tokenPattern.allMatches(text)) {
       final tok = m.group(0)!;
       if (seen.contains(tok)) continue;
       seen.add(tok);
-      final real = map.realFor(tok);
-      if (real != null) result = result.replaceAll(tok, real);
+      // Verify the token exists in the map before replacing
+      if (map.contains(tok) || map.realFor(tok) != null) {
+        final real = map.realFor(tok);
+        if (real != null) result = result.replaceAll(RegExp(r'\b' + RegExp.escape(tok) + r'\b'), real);
+      }
     }
     return result;
   }

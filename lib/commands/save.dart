@@ -33,7 +33,7 @@ Future<SkillsUpdateResult> runSave({
   print('═══════════════════════════════════════');
 
   // 1 — Registry lookup.
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
+  final projectRoot = projectRootOverride ?? await (await detectGitContext())?.root;
   if (projectRoot == null) {
     print('\n✗ Not inside a git repository. Cannot detect project.\n');
     exit_(1);

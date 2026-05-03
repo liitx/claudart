@@ -158,7 +158,7 @@ void main() {
           null,  // pattern — accept default (root cause text)
           'Implement raw-mode line editor with ESC sequence handling.',
         ]),
-        pickFn: (_) => TeardownCategory.stateManagement.index,
+        pickFn: (_, {__ = 0}) => TeardownCategory.stateManagement.index,
         exitFn: (c) => throw Exception('exit($c)'),
       );
 
@@ -193,7 +193,7 @@ void main() {
         promptFn: _prompts([
           'Fixed it.', null, null, null, 'Use line editor.',
         ]),
-        pickFn: (_) => TeardownCategory.stateManagement.index,
+        pickFn: (_, {__ = 0}) => TeardownCategory.stateManagement.index,
         exitFn: (c) => throw Exception('exit($c)'),
       );
 

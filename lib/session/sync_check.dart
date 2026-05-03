@@ -1,5 +1,6 @@
 import 'session_state.dart';
 import '../teardown_utils.dart';
+export 'utilities.dart';
 
 /// Severity of a sync issue found during preflight.
 enum IssueSeverity { warning, error }
@@ -73,8 +74,8 @@ SyncCheckResult checkSkillsSync(
   final rootCauseConfirmed = !_isBlank(state.rootCause);
   if (!rootCauseConfirmed) return SyncCheckResult.clean();
 
-  final pendingHasEntry = _pendingHasBranch(skillsContent, state.branch);
-  if (pendingHasEntry) return SyncCheckResult.clean();
+  final pendingHasBranch = _pendingHasBranch(skillsContent, state.branch);
+  if (pendingHasBranch) return SyncCheckResult.clean();
 
   return const SyncCheckResult([
     SyncIssue(
@@ -206,6 +207,3 @@ SyncCheckResult runPreflight({
 
   return result;
 }
-
-bool _isBlank(String s) =>
-    s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');

@@ -27,7 +27,7 @@ Future<void> runArchives({
   final exit_  = exitFn ?? exit;
   final pick_  = pickFn ?? arrowMenu;
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
+  final projectRoot = projectRootOverride ?? await (await detectGitContext())?.root;
   if (projectRoot == null) {
     print('✗ Not inside a git repository.');
     exit_(1);

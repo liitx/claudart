@@ -22,7 +22,7 @@ Future<void> runPreflightCmd(
   final exit_ = exitFn ?? exit;
 
   // 1 — Git context: project root + current branch in one call.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = projectRootOverride != null ? null : await detectGitContext();
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   final currentBranch =
       gitCtx?.branch; // null when override is used (e.g. tests)

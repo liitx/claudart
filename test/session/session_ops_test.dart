@@ -234,6 +234,9 @@ class _FailOnWriteIO implements FileIO {
     delegate.write(path, content);
   }
 
+  @override
+  void writeAtomic(String path, String content) => delegate.writeAtomic(path, content);
+
   @override String read(String path) => delegate.read(path);
   @override void delete(String path) => delegate.delete(path);
   @override bool fileExists(String path) => delegate.fileExists(path);
@@ -257,6 +260,7 @@ class _FailOnUnlinkIO implements FileIO {
 
   @override String read(String path) => delegate.read(path);
   @override void write(String path, String content) => delegate.write(path, content);
+  @override void writeAtomic(String path, String content) => delegate.writeAtomic(path, content);
   @override void delete(String path) => delegate.delete(path);
   @override bool fileExists(String path) => delegate.fileExists(path);
   @override bool dirExists(String path) => delegate.dirExists(path);

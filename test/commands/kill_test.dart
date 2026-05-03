@@ -255,6 +255,8 @@ class _FailOnUnlinkIO implements FileIO {
   @override
   void write(String path, String content) => delegate.write(path, content);
   @override
+  void writeAtomic(String path, String content) => delegate.writeAtomic(path, content);
+  @override
   void delete(String path) => delegate.delete(path);
   @override
   bool fileExists(String path) => delegate.fileExists(path);

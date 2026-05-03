@@ -51,7 +51,7 @@ Future<RotateResult>  runRotate({
   print('═══════════════════════════════════════');
 
   // 1 — Registry lookup.
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
+  final projectRoot = projectRootOverride ?? await (await detectGitContext())?.root;
   if (projectRoot == null) {
     print('✗ Not inside a git repository. Cannot detect project.');
     exit_(1);
