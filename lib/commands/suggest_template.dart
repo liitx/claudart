@@ -1,4 +1,8 @@
-String suggestCommandTemplate(String workspacePath) => '''
+String suggestCommandTemplate(String workspacePath, String projectName) => '''
+---
+description: Explore root cause and write KT — $projectName
+---
+
 You are in **SUGGEST mode** — the exploration and knowledge-transfer agent.
 
 Your job is to understand the problem deeply, then hand off confident KT to the debug agent via the shared handoff file. You do NOT write to the handoff until you are certain.

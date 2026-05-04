@@ -123,20 +123,27 @@ enum AgentFlow {
   // ── Workspace / command file ──────────────────────────────────────────────────
 
   /// Filename written to `.claude/commands/` by `claudart link`.
-  String get fileName => '$name.md';
+  /// Suffixed with the project name so picker UIs can distinguish per-workspace.
+  String fileName(String projectName) => '$name-$projectName.md';
+
+  /// Old un-suffixed name — deleted on re-link to clear stale duplicates.
+  String get legacyFileName => '$name.md';
 
   /// Generates the slash command template content for this flow.
   ///
-  /// ∀ v ∈ AgentFlow.values where v.hasCommandFile → v.commandTemplate(w).isNotEmpty
+  /// [projectName] is interpolated into the YAML frontmatter so picker UIs
+  /// (Zed claude-acp, Cursor, Claude Code) can label commands per workspace.
+  ///
+  /// ∀ v ∈ AgentFlow.values where v.hasCommandFile → v.commandTemplate(w, n).isNotEmpty
   /// Enforced by the exhaustive switch — adding a variant without a template arm
   /// is a compile error.
-  String commandTemplate(String workspacePath) => switch (this) {
-        AgentFlow.suggest  => suggestCommandTemplate(workspacePath),
-        AgentFlow.debug    => debugCommandTemplate(workspacePath),
-        AgentFlow.setup    => setupCommandTemplate(workspacePath),
-        AgentFlow.save     => saveCommandTemplate(workspacePath),
-        AgentFlow.teardown => teardownCommandTemplate(workspacePath),
-        AgentFlow.flow     => flowCommandTemplate(workspacePath),
+  String commandTemplate(String workspacePath, String projectName) => switch (this) {
+        AgentFlow.suggest  => suggestCommandTemplate(workspacePath, projectName),
+        AgentFlow.debug    => debugCommandTemplate(workspacePath, projectName),
+        AgentFlow.setup    => setupCommandTemplate(workspacePath, projectName),
+        AgentFlow.save     => saveCommandTemplate(workspacePath, projectName),
+        AgentFlow.teardown => teardownCommandTemplate(workspacePath, projectName),
+        AgentFlow.flow     => flowCommandTemplate(workspacePath, projectName),
         AgentFlow.research => '',
         AgentFlow.free     => '',
         AgentFlow.cli      => '',

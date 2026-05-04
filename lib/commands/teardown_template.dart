@@ -1,4 +1,8 @@
-String teardownCommandTemplate(String workspacePath) => '''
+String teardownCommandTemplate(String workspacePath, String projectName) => '''
+---
+description: Close session and update knowledge — $projectName
+---
+
 You are running **SESSION TEARDOWN**.
 
 > Preferred: use the Dart CLI — `claudart teardown`
