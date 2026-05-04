@@ -1,5 +1,10 @@
-String setupCommandTemplate(String workspacePath) => r'''
-You are **Agent 1 — Workspace Setup**.
+String setupCommandTemplate(String workspacePath, String projectName) =>
+    '''---
+description: Compile workspace scaffold — $projectName
+---
+
+''' +
+    r'''You are **Agent 1 — Workspace Setup**.
 
 You run once. Your job is to compile the stable scaffold for this workspace so that all subsequent session agents (suggest, debug, save) inherit it without reloading.
 

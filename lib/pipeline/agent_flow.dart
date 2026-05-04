@@ -127,16 +127,19 @@ enum AgentFlow {
 
   /// Generates the slash command template content for this flow.
   ///
-  /// ∀ v ∈ AgentFlow.values where v.hasCommandFile → v.commandTemplate(w).isNotEmpty
+  /// [projectName] is interpolated into the YAML frontmatter so picker UIs
+  /// (Zed claude-acp, Cursor, Claude Code) can label commands per workspace.
+  ///
+  /// ∀ v ∈ AgentFlow.values where v.hasCommandFile → v.commandTemplate(w, n).isNotEmpty
   /// Enforced by the exhaustive switch — adding a variant without a template arm
   /// is a compile error.
-  String commandTemplate(String workspacePath) => switch (this) {
-        AgentFlow.suggest  => suggestCommandTemplate(workspacePath),
-        AgentFlow.debug    => debugCommandTemplate(workspacePath),
-        AgentFlow.setup    => setupCommandTemplate(workspacePath),
-        AgentFlow.save     => saveCommandTemplate(workspacePath),
-        AgentFlow.teardown => teardownCommandTemplate(workspacePath),
-        AgentFlow.flow     => flowCommandTemplate(workspacePath),
+  String commandTemplate(String workspacePath, String projectName) => switch (this) {
+        AgentFlow.suggest  => suggestCommandTemplate(workspacePath, projectName),
+        AgentFlow.debug    => debugCommandTemplate(workspacePath, projectName),
+        AgentFlow.setup    => setupCommandTemplate(workspacePath, projectName),
+        AgentFlow.save     => saveCommandTemplate(workspacePath, projectName),
+        AgentFlow.teardown => teardownCommandTemplate(workspacePath, projectName),
+        AgentFlow.flow     => flowCommandTemplate(workspacePath, projectName),
         AgentFlow.research => '',
         AgentFlow.free     => '',
         AgentFlow.cli      => '',

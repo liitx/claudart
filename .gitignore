@@ -4,3 +4,5 @@ pubspec.lock
 handoff.md
 skills.md
 coverage/
+.claude
+.cursor/

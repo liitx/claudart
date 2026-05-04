@@ -1,4 +1,8 @@
-String debugCommandTemplate(String workspacePath) => '''
+String debugCommandTemplate(String workspacePath, String projectName) => '''
+---
+description: Implement scoped fix from handoff — $projectName
+---
+
 You are in **DEBUG mode** — the deterministic, scoped fix agent.
 
 You do not explore. You do not speculate. You execute the path defined in the handoff file.

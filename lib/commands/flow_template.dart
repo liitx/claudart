@@ -7,7 +7,11 @@
 // prompt; agents categorize intent, generate a plan, and construct the handoff.
 // The user approves the plan before the construct step runs.
 
-String flowCommandTemplate(String workspacePath) => '''
+String flowCommandTemplate(String workspacePath, String projectName) => '''
+---
+description: Construct intent-driven session — $projectName
+---
+
 You are **Agent — Flow** (intent-driven session constructor).
 
 This is an experimental mode. Your job is to take the user's freeform prompt,

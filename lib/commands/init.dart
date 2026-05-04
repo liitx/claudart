@@ -56,11 +56,14 @@ Future<void> _initWorkspace() async {
   _writeIfAbsent(p.join(genericKnowledgeDir, 'dart.md'), dartTemplate(dartVersion));
   _writeIfAbsent(p.join(genericKnowledgeDir, 'testing.md'), testingTemplate);
 
-  // Write Claude Code slash commands into workspace
-  writeFile(p.join(claudeCommandsDir, 'suggest.md'), suggestCommandTemplate(claudeDir));
-  writeFile(p.join(claudeCommandsDir, 'debug.md'), debugCommandTemplate(claudeDir));
-  writeFile(p.join(claudeCommandsDir, 'save.md'), saveCommandTemplate(claudeDir));
-  writeFile(p.join(claudeCommandsDir, 'teardown.md'), teardownCommandTemplate(claudeDir));
+  // Write Claude Code slash commands into workspace.
+  // 'workspace' is the project label for global default commands — re-running
+  // `claudart link` in a real project overrides these with the project name.
+  const globalLabel = 'workspace';
+  writeFile(p.join(claudeCommandsDir, 'suggest.md'), suggestCommandTemplate(claudeDir, globalLabel));
+  writeFile(p.join(claudeCommandsDir, 'debug.md'), debugCommandTemplate(claudeDir, globalLabel));
+  writeFile(p.join(claudeCommandsDir, 'save.md'), saveCommandTemplate(claudeDir, globalLabel));
+  writeFile(p.join(claudeCommandsDir, 'teardown.md'), teardownCommandTemplate(claudeDir, globalLabel));
 
   // Write blank handoff and skills if not present
   _writeIfAbsent(handoffPath, blankHandoff);

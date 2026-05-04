@@ -1,5 +1,10 @@
-String saveCommandTemplate(String workspacePath) => r'''
-You are running **/save** — the session checkpoint command.
+String saveCommandTemplate(String workspacePath, String projectName) =>
+    '''---
+description: Checkpoint session — $projectName
+---
+
+''' +
+    r'''You are running **/save** — the session checkpoint command.
 
 Save locks in confirmed knowledge from the current session without ending it.
 It writes a checkpoint snapshot, deposits confirmed facts into pending skills,

@@ -115,7 +115,7 @@ Future<void> runLink(
   for (final flow in AgentFlow.values.where((f) => f.hasCommandFile)) {
     fileIO.write(
       p.join(workspaceCmdsDir, flow.fileName),
-      flow.commandTemplate(workspace),
+      flow.commandTemplate(workspace, effectiveName),
     );
   }
 
