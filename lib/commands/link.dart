@@ -113,8 +113,11 @@ Future<void> runLink(
   // automatically installs its template; no manual update required.
   final workspaceCmdsDir = p.join(workspace, '.claude', 'commands');
   for (final flow in AgentFlow.values.where((f) => f.hasCommandFile)) {
+    // Remove any un-suffixed legacy file first so pickers don't show duplicates.
+    final legacy = p.join(workspaceCmdsDir, flow.legacyFileName);
+    if (fileIO.fileExists(legacy)) fileIO.delete(legacy);
     fileIO.write(
-      p.join(workspaceCmdsDir, flow.fileName),
+      p.join(workspaceCmdsDir, flow.fileName(effectiveName)),
       flow.commandTemplate(workspace, effectiveName),
     );
   }

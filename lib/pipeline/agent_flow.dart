@@ -123,7 +123,11 @@ enum AgentFlow {
   // ── Workspace / command file ──────────────────────────────────────────────────
 
   /// Filename written to `.claude/commands/` by `claudart link`.
-  String get fileName => '$name.md';
+  /// Suffixed with the project name so picker UIs can distinguish per-workspace.
+  String fileName(String projectName) => '$name-$projectName.md';
+
+  /// Old un-suffixed name — deleted on re-link to clear stale duplicates.
+  String get legacyFileName => '$name.md';
 
   /// Generates the slash command template content for this flow.
   ///
