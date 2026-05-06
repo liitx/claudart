@@ -1016,6 +1016,22 @@ Tracked on [GitHub Issues](https://github.com/liitx/claudart/issues). Current pr
 - Corpus expansion — full Dart/Flutter framework vocabulary as allow-list
 - README auto-sync on every feature change via `/readme` skill + `readme_sync_test.dart`
 
+**Cross-project work — coordinating with dartrix and zedup**
+
+Three repos work together: claudart (this repo, session orchestration), [dartrix](https://github.com/liitx/dartrix) (test matrix framework + shoelace coverage visualizer), [zedup](https://github.com/liitx/zedup) (TUI dashboard, work tracking, dartrix data producer). The cross-project roadmap lives in [dartrix/PLAN.md](https://github.com/liitx/dartrix/blob/main/PLAN.md) — it's the master document for the 6-phase rollout coordinating all three repos.
+
+**Phase 5 — GUI design subagent (claudart-side, planned)**
+
+A specialized agent role for visual design work. The planner will route requests with `category=feature × intent=design` (new intent class) to a `gui_design_agent` whose prompt is tuned for color choices, real estate budgets, multi-state rendering, accessibility, and complex layouts. Concrete first work: spec the three-state region rendering for shoelace's schema v3 (passing / failing / missing), and design the `[t]` test screen layout in zedup.
+
+Deliverables:
+- `lib/pipeline/agents/gui_design_agent.dart` — agent definition + prompt template.
+- `lib/pipeline/flows/gui_design_flow.dart` — design → critique → revision sequence.
+- `lib/pipeline/agents/planner.dart` extension — add `intent=design` routing.
+- `lib/logging/planner_log.dart` — log every routing decision to `~/.claudart/planner-decisions.log` for spot-check audits.
+
+> **Deep dive:** [dartrix PLAN.md — Phase 5](https://github.com/liitx/dartrix/blob/main/PLAN.md#the-6-phase-roadmap) carries the full spec, dependencies, and exit criteria.
+
 ---
 
 ## License
