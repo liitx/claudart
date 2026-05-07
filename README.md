@@ -69,7 +69,7 @@ stateDiagram-v2
 
 ---
 
-## The planner — `τ : A × I × C → AgentModel`
+## The planner — `route(category, intent, complexity) → AgentModel`
 
 Every input the planner sees gets classified on three orthogonal axes, then routed to a model via a total function. Sixty cells, exhaustive switch.
 
@@ -79,7 +79,7 @@ flowchart LR
   P --> A[AgentCategory<br/>5 values]:::ax
   P --> I[IntentClass<br/>4 values]:::ax
   P --> C[ComplexityTier<br/>3 values]:::ax
-  A & I & C --> T{{"τ : A × I × C → AgentModel"}}:::fn
+  A & I & C --> T{{"route(category, intent, complexity) → AgentModel"}}:::fn
   T --> Op[opus]:::m
   T --> So[sonnet]:::m
   T --> Hk[haiku]:::m
@@ -108,7 +108,7 @@ Routing rules ([`routeModel`](lib/pipeline/agents/categorization.dart#L78)):
 - Any analyze or implement → **sonnet** (balanced reasoning + generation)
 - Atomic explore or any document → **haiku** (fast structured lookup)
 
-τ is total over all 60 cells — exhaustive switch enforces it.
+`route` is total over all 60 cells — exhaustive switch enforces it.
 
 ---
 
@@ -119,6 +119,7 @@ claudart setup          # bootstrap workspace, write scaffold.md
 claudart status         # show session state
 claudart suggest        # run suggest pipeline (agent dispatch)
 claudart save           # checkpoint, lock root cause
+claudart debug          # run debug pipeline (implement fix)
 claudart teardown       # archive, promote skills, suggest commit
 ```
 
@@ -262,7 +263,7 @@ claudart runs **standalone**. The dartrix and zedup integrations are optional �
 ## Philosophy
 
 - **Typed state.** Every session field is an enum or typed record. Magic strings are bugs in waiting.
-- **Deterministic routing.** `τ` is total and exhaustive — no ambiguous dispatch.
+- **Deterministic routing.** `route` is total and exhaustive — no ambiguous dispatch.
 - **Abstraction by default.** Sensitive identifiers leave your machine only as aliases.
 - **Agent-portable.** The handoff is a single file; any Claude-integrated editor can drive a session.
 
