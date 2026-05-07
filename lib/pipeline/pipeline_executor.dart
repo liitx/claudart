@@ -82,11 +82,16 @@ class PipelineExecutor {
     var current   = steps.first;
 
     while (true) {
+      // Local position within `steps` so the same `run` call advances
+      // through `[1/N], [2/N], …` without the caller tracking it.
+      // `displayStep` is the base offset, useful when this run is one
+      // phase of a larger flow (e.g. resuming from checkpoint).
+      final localIndex = steps.indexOf(current);
       yield AgentStarted(
         stepId:       current.id,
         label:        current.label,
         model:        current.model,
-        displayStep:  displayStep,
+        displayStep:  displayStep + localIndex,
         displayTotal: displayTotal,
       );
 
