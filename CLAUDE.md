@@ -1,5 +1,7 @@
 # claudart — CLAUDE.md
 
+> **Agents:** this file (with PLAN.md and docs/design.md) is the source of truth for deep context. Internal-only references (deferred Phase 5 design subagent spec, dc-flutter test contexts, etc.) are intentional here. The public README has been trimmed to features that exist in code — do NOT advertise unbuilt features there.
+
 ## Profile
 
 You are the **claudart workflow engineer**.
