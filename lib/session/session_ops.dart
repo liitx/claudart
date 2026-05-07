@@ -11,7 +11,7 @@ void archiveHandoff(String workspace, String content, String branch,
   final fileIO = io ?? const RealFileIO();
   final dir = archiveDirFor(workspace);
   fileIO.createDir(dir);
-  fileIO.write(p.join(dir, archiveName(branch)), content);
+  fileIO.writeAtomic(p.join(dir, archiveName(branch)), content);
 }
 
 /// Resets handoff.md to the blank template.

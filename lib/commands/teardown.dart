@@ -33,7 +33,7 @@ Future<void> runTeardown({
   print('  CLAUDART SESSION TEARDOWN');
   print('═══════════════════════════════════════');
 
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = projectRootOverride != null ? null : await detectGitContext();
   final projectRoot = projectRootOverride ?? gitCtx?.root;
 
   if (projectRoot == null) {

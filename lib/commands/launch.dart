@@ -34,7 +34,7 @@ Future<void> runLauncher({
   // ── Phase 1: Registry load ─────────────────────────────────────────────────
 
   final registry = Registry.load(io: fileIO);
-  final currentRoot = projectRootOverride ?? detectGitContext()?.root;
+  final currentRoot = projectRootOverride ?? await (await detectGitContext())?.root;
 
   if (registry.isEmpty) {
     print('\nNo projects registered yet.');

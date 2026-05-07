@@ -34,7 +34,7 @@ Future<void> runExperiment(
   final cmdArgs = args.sublist(sepIdx + 1);
 
   // ── Resolve workspace ──────────────────────────────────────────────────────
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
+  final projectRoot = projectRootOverride ?? await (await detectGitContext())?.root;
   String experimentsDir;
   if (projectRoot != null) {
     final registry = Registry.load(io: fileIO);

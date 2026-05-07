@@ -149,17 +149,32 @@ class PipelineExecutor {
 
       switch (route) {
         case GoTo(:final stepId):
-          current = stepMap[stepId]!;
+          final nextStep = stepMap[stepId];
+          if (nextStep == null) {
+            yield PipelineCompleted(ctx: ctx);
+            return;
+          }
+          current = nextStep;
 
         case QuestionBranch(:final lookupStepId):
           final question = tagOrNull(result.text, matchedTag!)!;
           ctx     = ctx.withSlot(PipelineSlot.question, question);
-          current = stepMap[lookupStepId]!;
+          final nextStep = stepMap[lookupStepId];
+          if (nextStep == null) {
+            yield PipelineCompleted(ctx: ctx);
+            return;
+          }
+          current = nextStep;
 
         case FeedBackTo(:final stepId):
           final answer = tagOrNull(result.text, matchedTag!)!;
           ctx     = ctx.appendClarification('Codebase lookup: $answer');
-          current = stepMap[stepId]!;
+          final nextStep = stepMap[stepId];
+          if (nextStep == null) {
+            yield PipelineCompleted(ctx: ctx);
+            return;
+          }
+          current = nextStep;
 
         case EscalateUser(:final returnToStepId):
           final unknown  = tagOrNull(result.text, matchedTag!);

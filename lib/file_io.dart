@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
 
 /// Abstraction over file system operations.
 /// Swap in [MemoryFileIO] in tests to avoid touching disk.
 abstract class FileIO {
   String read(String path);
   void write(String path, String content);
+  void writeAtomic(String path, String content);
   void delete(String path);
   bool fileExists(String path);
   bool dirExists(String path);
@@ -30,6 +32,32 @@ class RealFileIO implements FileIO {
     File(path)
       ..parent.createSync(recursive: true)
       ..writeAsStringSync(content);
+  }
+
+  @override
+  void writeAtomic(String path, String content) {
+    final file = File(path);
+    final dir = file.parent;
+    final tempPath = p.join(dir.path, '.${p.basename(path)}.tmp');
+
+    // Write to temp file
+    final tempFile = File(tempPath);
+    tempFile.writeAsStringSync(content);
+
+    // Atomic rename
+    try {
+      tempFile.renameSync(path);
+    } on Exception catch (e) {
+      // Clean up temp file on failure
+      if (tempFile.existsSync()) {
+        try {
+          tempFile.deleteSync();
+        } on Exception {
+          // Ignore cleanup errors
+        }
+      }
+      rethrow;
+    }
   }
 
   @override

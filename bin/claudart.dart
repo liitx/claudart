@@ -117,20 +117,20 @@ Future<void> main(List<String> args) async {
           scope = rest[i + 1];
         }
       }
-      final scanRoot = detectGitContext()?.root;
+      final scanRoot = (await detectGitContext())?.root;
       final scanWorkspace = scanRoot != null
           ? Registry.load().findByProjectRoot(scanRoot)?.workspacePath
           : null;
       await runScan(scope: scope, full: full, workspacePath: scanWorkspace);
     case 'report':
       final fileIssue = rest.contains('--file-issue');
-      final reportRoot = detectGitContext()?.root;
+      final reportRoot = (await detectGitContext())?.root;
       final reportWorkspace = reportRoot != null
           ? Registry.load().findByProjectRoot(reportRoot)?.workspacePath
           : null;
       await runReport(fileIssue: fileIssue, workspacePath: reportWorkspace);
     case 'map':
-      final mapRoot = detectGitContext()?.root;
+      final mapRoot = (await detectGitContext())?.root;
       final mapWorkspace = mapRoot != null
           ? Registry.load().findByProjectRoot(mapRoot)?.workspacePath
           : null;

@@ -32,6 +32,9 @@ class MemoryFileIO implements FileIO {
   void write(String path, String content) => files[path] = content;
 
   @override
+  void writeAtomic(String path, String content) => files[path] = content;
+
+  @override
   void delete(String path) => files.remove(path);
 
   @override

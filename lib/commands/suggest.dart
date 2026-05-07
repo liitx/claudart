@@ -24,7 +24,7 @@ Future<void> runSuggest({
 
   // ── Locate project ─────────────────────────────────────────────────────────
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
+  final projectRoot = projectRootOverride ?? await (await detectGitContext())?.root;
   if (projectRoot == null) {
     print('✗ Not inside a git repository.');
     exit_(1);

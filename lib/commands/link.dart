@@ -30,7 +30,7 @@ Future<void> runLink(
   print('═══════════════════════════════════════');
 
   // 1 — Detect project root.
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
+  final projectRoot = projectRootOverride ?? await (await detectGitContext())?.root;
   if (projectRoot == null) {
     print('\n✗ Not inside a git repository. Cannot detect project root.\n');
     exit_(1);

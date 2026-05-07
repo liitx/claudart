@@ -40,7 +40,7 @@ Future<void> runSetup({
   print('═══════════════════════════════════════');
 
   // Resolve project root.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = projectRootOverride != null ? null : await detectGitContext();
   final projectRoot = projectRootOverride ?? gitCtx?.root;
 
   if (projectRoot == null) {
