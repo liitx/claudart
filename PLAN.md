@@ -1,8 +1,25 @@
 # claudart — plan
 
+> **Agents:** this file is the source of truth for deep context (FSA proofs, sensitivity internals, full pipeline architecture, deferred Phase 5 design subagent spec). Read before editing the public README.
+
 This file is the never-lose-context document for claudart.
 README.md = current public API (curated view). CHANGELOG.md = version history. PLAN.md = vision + reasoning + where we are.
 docs/design.md = formal session state machine (FSA). docs/session_log.md = design decision record.
+
+---
+
+## Phase 5 — design subagent (deferred)
+
+A specialized agent role for visual design work. The planner would route requests with `category=feature × intent=design` (a new `IntentClass` variant) to a `gui_design_agent`. Planned deliverables:
+
+- `lib/pipeline/agents/gui_design_agent.dart` (new)
+- `lib/pipeline/flows/gui_design_flow.dart` (new)
+- `lib/pipeline/agents/planner.dart` (extension; `IntentClass.design` variant)
+- `lib/logging/planner_log.dart` (new)
+
+**Status:** none of the above exist in code. `IntentClass` currently has only `explore`, `analyze`, `implement`, `document` ([categorization.dart:48](lib/pipeline/agents/categorization.dart#L48)). Public README scrubbed of this section to keep it honest.
+
+**Restart criteria:** when a real design task surfaces that warrants a dedicated agent role, lift this section back into the public roadmap.
 
 ---
 
