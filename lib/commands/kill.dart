@@ -96,6 +96,9 @@ Future<void> runKill({
   } on SessionCloseException catch (e) {
     print('\n✗ Kill failed at step "${e.failedStep}": ${e.cause}');
     print('  Workspace state has been rolled back. No partial changes remain.\n');
+    // closeSession's own rollback already restored the workspace, so the
+    // lock withGuard left behind is not signaling a real interrupted state.
+    clearLock(workspace, io: fileIO);
     exit_(1);
   } on WorkspaceLockedException catch (e) {
     print('\n✗ ${e.toString()}\n');

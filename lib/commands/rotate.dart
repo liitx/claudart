@@ -7,6 +7,8 @@ import '../git_utils.dart';
 import '../handoff_template.dart';
 import '../paths.dart';
 import '../registry.dart';
+import '../session/archive_entry.dart';
+import '../session/session_ops.dart';
 import '../session/session_state.dart';
 import '../teardown_utils.dart';
 import '../md_io.dart' show confirm;
@@ -95,11 +97,17 @@ Future<RotateResult>  runRotate({
   // 4 — Extract pending issues before overwriting anything.
   final pending = extractPendingIssues(handoff);
 
-  // 5 — Archive current handoff.
-  final archiveDirectory = archiveDirFor(workspace);
-  fileIO.createDir(archiveDirectory);
-  final archiveFile = p.join(archiveDirectory, archiveName(state.branch));
-  fileIO.write(archiveFile, handoff);
+  // 5 — Archive current handoff + index entry, so a rotated session is
+  // visible to `claudart archives` like a killed or torn-down one is.
+  final archiveEntry = writeArchiveEntry(
+    workspace:   workspace,
+    branch:      state.branch,
+    handoff:     handoff,
+    kind:        ArchiveKind.reminder,
+    description: state.bug,
+    io:          fileIO,
+  );
+  final archiveFile = p.join(archiveDirFor(workspace), archiveEntry.handoffFile);
 
   // 6 — Build gate: must pass before the next session can start.
   final config = _loadConfig(fileIO, workspace);
