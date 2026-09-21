@@ -31,6 +31,24 @@ import 'pipeline_context.dart';
 import 'route_tag.dart';
 import 'step_route.dart';
 
+// ── ToolGrant ─────────────────────────────────────────────────────────────────
+
+/// Which tools a step's spawned `claude` process may use. Every current step
+/// (reader, reasoner, planner, lookup, applier, categorize, clarify,
+/// construct, the debug implementer, the chat turn) only emits text for the
+/// caller to parse — none edits files or runs commands itself — so
+/// [readOnly] is the only variant so far. Add a variant here, with its own
+/// CLI args in `defaultClaudeRunner`, the day a step needs more.
+enum ToolGrant {
+  /// Read-only: file reads and searches, nothing else.
+  readOnly(tools: ['Read', 'Glob', 'Grep']);
+
+  const ToolGrant({required this.tools});
+
+  /// Value passed to the `--allowedTools` CLI flag (comma-joined).
+  final List<String> tools;
+}
+
 /// Resolves a step's model from the current [PipelineContext]. Total
 /// — must return an [AgentModel]. Selectors that need a fallback for
 /// malformed context embed it themselves (see
@@ -66,6 +84,11 @@ class AgentStep {
   /// preserves insertion order).
   final Map<RouteTag, StepRoute> routes;
 
+  /// Tools the spawned process may use. Defaults to [ToolGrant.readOnly] —
+  /// every step's edits are parsed from its output and applied by the
+  /// caller, so no step needs write or execute tools yet.
+  final ToolGrant toolGrant;
+
   const AgentStep({
     required this.id,
     required this.label,
@@ -74,6 +97,7 @@ class AgentStep {
     required this.buildPrompt,
     this.modelSelector,
     this.routes = const {},
+    this.toolGrant = ToolGrant.readOnly,
   });
 
   /// Resolves the model the executor should invoke for this step given

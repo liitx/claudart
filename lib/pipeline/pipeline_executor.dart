@@ -40,6 +40,7 @@ typedef ClaudeRunner = Future<({String text, Usage usage})?> Function({
   required String systemPrompt,
   required String message,
   required String workingDir,
+  required ToolGrant toolGrant,
 });
 
 typedef UserPrompter     = Future<String> Function(String question);
@@ -110,6 +111,7 @@ class PipelineExecutor {
         systemPrompt: current.systemPrompt,
         message:      current.buildPrompt(ctx),
         workingDir:   ctx.projectRoot,
+        toolGrant:    current.toolGrant,
       );
 
       if (result == null) {
@@ -358,11 +360,34 @@ Future<T?> runWithSpinner<T>({
 
 // ── Default ClaudeRunner ──────────────────────────────────────────────────────
 
+/// Builds the `claude` CLI args for one step call. Pulled out of
+/// [defaultClaudeRunner] so the grant a step gets is assertable without
+/// spawning a real process. Every step is read-only today, so this always
+/// grants [ToolGrant.tools] via `--allowedTools` and never
+/// `--dangerously-skip-permissions` — add the skip flag here, gated on a
+/// future non-read-only [ToolGrant] variant, the day one exists.
+List<String> buildClaudeArgs({
+  required AgentModel model,
+  required String systemPrompt,
+  required String sessionId,
+  required ToolGrant toolGrant,
+}) => [
+  '--print',
+  '--verbose',
+  '--output-format',            'stream-json',
+  '--include-partial-messages',
+  '--session-id',    sessionId,
+  '--model',         model.alias,
+  '--system-prompt', systemPrompt,
+  '--allowedTools',  toolGrant.tools.join(','),
+];
+
 Future<({String text, Usage usage})?> defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
   required String message,
   required String workingDir,
+  required ToolGrant toolGrant,
 }) async {
   // `StepDebugTrace.start()` resolves the log file via `debugLogFile()`.
   // When debug mode is off, every `trace.write*` below is a no-op.
@@ -383,16 +408,12 @@ Future<({String text, Usage usage})?> defaultClaudeRunner({
     // token rotates and a copied credential goes stale).
     final process = await Process.start(
       'claude',
-      [
-        '--print',
-        '--verbose',
-        '--output-format',            'stream-json',
-        '--include-partial-messages',
-        '--session-id',    newClaudeSessionId(),
-        '--model',         model.alias,
-        '--system-prompt', systemPrompt,
-        '--dangerously-skip-permissions',
-      ],
+      buildClaudeArgs(
+        model:        model,
+        systemPrompt: systemPrompt,
+        sessionId:    newClaudeSessionId(),
+        toolGrant:    toolGrant,
+      ),
       workingDirectory: workingDir,
     );
     process.stdin.writeln(message);
