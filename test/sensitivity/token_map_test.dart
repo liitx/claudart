@@ -107,5 +107,23 @@ void main() {
       final loaded = TokenMap.load(path, io: io);
       expect(loaded.size, equals(0));
     });
+
+    test('letter suffix at index 703 does not throw and follows AAA', () {
+      // Drive the per-prefix counter through 0, 25, 26, 701, 702, 703.
+      String tokenAt(int idx) => map.tokenFor('name$idx', 'X');
+
+      for (var i = 0; i < 25; i++) {
+        tokenAt(i);
+      }
+      expect(tokenAt(25), equals('X:Z'));
+      expect(tokenAt(26), equals('X:AA'));
+      for (var i = 27; i < 701; i++) {
+        tokenAt(i);
+      }
+      expect(tokenAt(701), equals('X:ZZ'));
+      expect(() => tokenAt(702), returnsNormally);
+      expect(map.realFor('X:AAA'), equals('name702'));
+      expect(tokenAt(703), equals('X:AAB'));
+    });
   });
 }
