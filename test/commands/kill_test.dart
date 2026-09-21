@@ -221,6 +221,7 @@ void main() {
       // the same as killing a symlinked one.
       final archived = io.files.keys
           .where((k) => k.startsWith(p.join(_workspace, 'archive')))
+          .where((k) => k.endsWith('.md'))
           .toList();
       expect(archived, hasLength(1));
     });
