@@ -14,6 +14,16 @@ import '../ui/render.dart' as render;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 
+/// Resolves a model-supplied edit path against [projectRoot], refusing
+/// anything that would land outside it. Returns null (never throws) when
+/// [relPath] is absolute or its normalised join escapes [projectRoot].
+String? resolveEditPath(String projectRoot, String relPath) {
+  if (p.isAbsolute(relPath)) return null;
+  final joined = p.normalize(p.join(projectRoot, relPath));
+  if (!p.isWithin(projectRoot, joined)) return null;
+  return joined;
+}
+
 Future<void> runDebug({
   FileIO? io,
   String? projectRootOverride,
@@ -137,7 +147,15 @@ Future<void> runDebug({
   // ── Review ───────────────────────────────────────────────────────────────────
 
   final changes  = tagOr(ctx.implementerOut, 'CHANGES');
-  final editTags = _parseEditFiles(ctx.implementerOut);
+  final parsedTags = _parseEditFiles(ctx.implementerOut);
+  final editTags = <_EditFile>[];
+  for (final f in parsedTags) {
+    if (resolveEditPath(projectRoot, f.path) == null) {
+      print('  ${ansi.yellow}⚠${ansi.reset}  Refusing edit outside project root: ${f.path}');
+      continue;
+    }
+    editTags.add(f);
+  }
 
   print('\n  ${ansi.dim}──────────────────────────────────────${ansi.reset}');
   print('  ${ansi.dim}  Total  ${ctx.usage.format()}${ansi.reset}\n');
@@ -148,7 +166,7 @@ Future<void> runDebug({
   print('  ${ansi.bold}FILES TO WRITE${ansi.reset}');
   print('  ${ansi.dim}─────────────${ansi.reset}');
   for (final f in editTags) {
-    final abs    = p.join(projectRoot, f.path);
+    final abs    = resolveEditPath(projectRoot, f.path)!;
     final exists = File(abs).existsSync();
     final tag    = exists ? ansi.c(ansi.yellow, 'MOD') : ansi.c(ansi.green, 'NEW');
     print('    [$tag]  ${f.path}');
@@ -173,7 +191,7 @@ Future<void> runDebug({
 
   var written = 0;
   for (final f in editTags) {
-    final abs = p.join(projectRoot, f.path);
+    final abs = resolveEditPath(projectRoot, f.path)!;
     writeFile(abs, f.content);
     written++;
   }
