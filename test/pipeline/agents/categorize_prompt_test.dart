@@ -12,6 +12,13 @@ import 'package:claudart/pipeline/agents/categorization.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('taxonomy cell count matches the documented 6 × 5 × 3 = 90', () {
+    final cells = AgentCategory.values.length *
+        IntentClass.values.length *
+        ComplexityTier.values.length;
+    expect(cells, equals(90));
+  });
+
   // ── allowedValues per tag is sourced from the right axis enum ─────────────
 
   group('CategorizeTag.allowedValues mirrors the target enum', () {
