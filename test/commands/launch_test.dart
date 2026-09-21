@@ -202,7 +202,7 @@ void main() {
   });
 
   group('launch — active session routing', () {
-    test('kill from resume menu removes symlink', () async {
+    test('kill from resume menu leaves the symlink in place', () async {
       final io = _io(withHandoff: true, withLink: true);
       var pickCall = 0;
       await runLauncher(
@@ -215,7 +215,9 @@ void main() {
         confirmFn: (_) => true,
         exitFn: _throwExit,
       );
-      expect(io.linkExists(_claudeLink), isFalse);
+      // kill closes the session, it does not deregister the project —
+      // unlink is what removes the symlink.
+      expect(io.linkExists(_claudeLink), isTrue);
     });
 
     test('resume picks action without error (display only)', () async {
