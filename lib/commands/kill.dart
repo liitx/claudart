@@ -1,8 +1,8 @@
 import 'dart:io';
-import '../ui/line_editor.dart' as editor;
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../md_io.dart' show confirm;
 import '../paths.dart';
 import '../registry.dart';
 import '../session/session_ops.dart';
@@ -22,7 +22,7 @@ Future<void> runKill({
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final confirm_ = confirmFn ?? _defaultConfirm;
+  final confirm_ = confirmFn ?? confirm;
   final exit_ = exitFn ?? exit;
   final sw = Stopwatch()..start();
 
@@ -138,10 +138,4 @@ String _truncate(String s, {int max = 72}) =>
 
 bool _isBlank(String s) =>
     s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');
-
-bool _defaultConfirm(String question) {
-  stdout.write('\n$question [y/n]\n');
-  final input = editor.readLine(optional: true);
-  return input?.toLowerCase() == 'y' || input?.toLowerCase() == 'yes';
-}
 
