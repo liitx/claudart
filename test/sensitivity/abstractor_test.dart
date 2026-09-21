@@ -70,5 +70,11 @@ void main() {
       final result2 = abs.abstract('VolumeBloc again', map, detector);
       expect(result2, contains('Bloc:A'));
     });
+
+    test('abstracted output is not itself flagged as sensitive', () {
+      const text = 'FooState handles the payload';
+      final abstracted = abs.abstract(text, map, detector);
+      expect(abs.isNotSensitive(abstracted, detector), isTrue);
+    });
   });
 }
