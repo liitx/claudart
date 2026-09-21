@@ -47,6 +47,32 @@ String appendToSection(String content, String header, String newEntry) {
   return content.replaceFirst(pattern, '${match.group(1)}$updated\n');
 }
 
+/// Removes `## Pending` entries for [branch] from skills.md.
+///
+/// `claudart save` writes pending entries for a branch; teardown promotes
+/// that branch's findings into the permanent sections and must clear its
+/// pending entries so the sync check fires again on the branch's next save.
+/// Entries for other branches are left untouched.
+String clearPendingForBranch(String skills, String branch) {
+  final pattern = RegExp(r'(## Pending\n+)([\s\S]*?)(?=\n## |\s*$)');
+  final match = pattern.firstMatch(skills);
+  if (match == null) return skills;
+
+  final lines = match.group(2)!.split('\n');
+  final metaLines = lines.where((l) => l.trimLeft().startsWith('>')).toList();
+  final kept = lines
+      .where((l) => !l.trimLeft().startsWith('>'))
+      .where((l) => !l.contains('`$branch`'))
+      .join('\n')
+      .trim();
+
+  final isBlank =
+      kept.isEmpty || kept.startsWith('_No') || kept.startsWith('_Nothing');
+  final meta = metaLines.isNotEmpty ? '${metaLines.join('\n')}\n\n' : '';
+  final body = isBlank ? '${meta}_Nothing yet._' : '$meta$kept';
+  return skills.replaceFirst(pattern, '${match.group(1)}$body\n');
+}
+
 String incrementHotPath(String skills, String area, String file) {
   final existingPattern = RegExp(r'- `' + RegExp.escape(file) + r'` (↑+)');
   if (existingPattern.hasMatch(skills)) {
