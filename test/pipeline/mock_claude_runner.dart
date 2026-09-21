@@ -31,6 +31,7 @@ class MockClaudeRunner {
         required String systemPrompt,
         required String message,
         required String workingDir,
+        required ToolGrant toolGrant,
       }) async {
         captured.add(CallRecord(
           model:        model,
