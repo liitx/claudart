@@ -1,55 +1,39 @@
 import 'package:test/test.dart';
 import 'package:claudart/config.dart';
-import 'helpers/mocks.dart';
 
 void main() {
   group('ProjectConfig', () {
-    test('load returns defaults when file missing', () {
-      final io = MemoryFileIO();
-      final cfg = loadConfig(io: io);
+    test('fromJson returns defaults for an empty map', () {
+      final cfg = ProjectConfig.fromJson(const {});
       expect(cfg.sensitivityMode, isFalse);
-      expect(cfg.scanScope, equals('lib'));
+      expect(cfg.scanScope, equals(ScanScope.lib));
       expect(cfg.scanTrigger, equals('on_setup'));
       expect(cfg.diagnosticReporting, isFalse);
       expect(cfg.lastScan, isNull);
       expect(cfg.projectRoot, isNull);
+      expect(cfg.afterFixCommand, equals('make rebuild'));
     });
 
-    test('load parses all fields correctly', () {
-      final io = MemoryFileIO(files: {
-        configPath: '{"sensitivityMode":true,"scanScope":"full",'
-            '"scanTrigger":"on_demand","diagnosticReporting":true,'
-            '"lastScan":"2026-03-16T10:00:00Z",'
-            '"projectRoot":"/home/user/project"}',
+    test('fromJson parses all fields correctly', () {
+      final cfg = ProjectConfig.fromJson(const {
+        'sensitivityMode': true,
+        'scanScope': 'full',
+        'scanTrigger': 'on_demand',
+        'diagnosticReporting': true,
+        'lastScan': '2026-03-16T10:00:00Z',
+        'projectRoot': '/home/user/project',
+        'afterFixCommand': 'dart test',
       });
-      final cfg = loadConfig(io: io);
       expect(cfg.sensitivityMode, isTrue);
       expect(cfg.scanScope, equals('full'));
       expect(cfg.scanTrigger, equals('on_demand'));
       expect(cfg.diagnosticReporting, isTrue);
       expect(cfg.lastScan, equals('2026-03-16T10:00:00Z'));
       expect(cfg.projectRoot, equals('/home/user/project'));
+      expect(cfg.afterFixCommand, equals('dart test'));
     });
 
-    test('save writes valid json', () {
-      final io = MemoryFileIO();
-      const cfg = ProjectConfig(
-        sensitivityMode: true,
-        scanScope: 'full',
-        scanTrigger: 'on_demand',
-        diagnosticReporting: true,
-        lastScan: '2026-03-16T10:00:00Z',
-        projectRoot: '/tmp/proj',
-      );
-      saveConfig(cfg, io: io);
-      final raw = io.read(configPath);
-      expect(raw, contains('"sensitivityMode": true'));
-      expect(raw, contains('"scanScope": "full"'));
-      expect(raw, contains('"projectRoot": "/tmp/proj"'));
-    });
-
-    test('round-trip load/save preserves values', () {
-      final io = MemoryFileIO();
+    test('round-trip toJson/fromJson preserves values', () {
       const original = ProjectConfig(
         sensitivityMode: true,
         scanScope: 'full',
@@ -57,21 +41,16 @@ void main() {
         diagnosticReporting: false,
         lastScan: '2026-01-01T00:00:00Z',
         projectRoot: '/projects/myapp',
+        afterFixCommand: 'dart test',
       );
-      saveConfig(original, io: io);
-      final loaded = loadConfig(io: io);
+      final loaded = ProjectConfig.fromJson(original.toJson());
       expect(loaded.sensitivityMode, equals(original.sensitivityMode));
       expect(loaded.scanScope, equals(original.scanScope));
       expect(loaded.scanTrigger, equals(original.scanTrigger));
       expect(loaded.diagnosticReporting, equals(original.diagnosticReporting));
       expect(loaded.lastScan, equals(original.lastScan));
       expect(loaded.projectRoot, equals(original.projectRoot));
-    });
-
-    test('load returns defaults on malformed json', () {
-      final io = MemoryFileIO(files: {configPath: 'not-json'});
-      final cfg = loadConfig(io: io);
-      expect(cfg.sensitivityMode, isFalse);
+      expect(loaded.afterFixCommand, equals(original.afterFixCommand));
     });
 
     test('copyWith produces updated config', () {
