@@ -5,6 +5,7 @@ import 'package:claudart/file_io.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/session/workspace_guard.dart';
+import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -116,9 +117,22 @@ void main() {
         exitFn: (code) => throw _ExitException(code),
       );
       final archived = io.files.keys
-          .where((k) => k.startsWith(p.join(_workspace, 'archive')))
+          .where((k) => k.startsWith(p.join(_workspace, 'archive')) && k.endsWith('.md'))
           .toList();
       expect(archived, hasLength(1));
+    });
+
+    test('archived session is visible to `claudart archives` (index entry appended)', () async {
+      final io = _io();
+      await runKill(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        exitFn: (code) => throw _ExitException(code),
+      );
+      final entries = loadIndex(_workspace, io: io);
+      expect(entries, hasLength(1));
+      expect(entries.first.branch, equals('feat/fix'));
     });
 
     test('resets handoff to blank', () async {
@@ -231,6 +245,19 @@ void main() {
       }
       expect(caught, isNotNull);
       expect(caught!.code, equals(1));
+    });
+
+    test('clears the lock after a successful rollback — nothing is actually interrupted', () async {
+      final io = _FailOnUnlinkIO(delegate: _io());
+      try {
+        await runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          exitFn: (code) => throw _ExitException(code),
+        );
+      } on _ExitException catch (_) {}
+      expect(isLocked(_workspace, io: io.delegate), isFalse);
     });
   });
 }
