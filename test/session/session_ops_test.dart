@@ -3,6 +3,7 @@ import 'package:claudart/session/session_ops.dart';
 import 'package:claudart/file_io.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/handoff_template.dart';
+import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
 
 const _workspace = '/workspace/my-app';
@@ -100,9 +101,17 @@ void main() {
       final io = _io();
       await closeSession(_workspace, _project, io: io);
       final archived = io.files.keys
-          .where((k) => k.startsWith(archiveDirFor(_workspace)))
+          .where((k) => k.startsWith(archiveDirFor(_workspace)) && k.endsWith('.md'))
           .toList();
       expect(archived, hasLength(1));
+    });
+
+    test('appends an index entry so `claudart archives` can list it', () async {
+      final io = _io();
+      await closeSession(_workspace, _project, io: io);
+      final entries = loadIndex(_workspace, io: io);
+      expect(entries, hasLength(1));
+      expect(entries.first.branch, equals('feat/fix'));
     });
 
     test('resets handoff to blank', () async {
@@ -122,7 +131,7 @@ void main() {
       await closeSession(_workspace, _project, io: io);
       // Archive written, handoff reset, symlink gone.
       final archived = io.files.keys
-          .where((k) => k.startsWith(archiveDirFor(_workspace)))
+          .where((k) => k.startsWith(archiveDirFor(_workspace)) && k.endsWith('.md'))
           .toList();
       expect(archived, hasLength(1));
       expect(io.read(handoffPathFor(_workspace)), equals(blankHandoff));
@@ -137,7 +146,7 @@ void main() {
       io.write(handoffPathFor(_workspace), '');
       await closeSession(_workspace, _project, io: io);
       final archived = io.files.keys
-          .where((k) => k.startsWith(archiveDirFor(_workspace)))
+          .where((k) => k.startsWith(archiveDirFor(_workspace)) && k.endsWith('.md'))
           .toList();
       expect(archived, hasLength(1));
       expect(archived.first, contains('unknown'));
@@ -156,9 +165,10 @@ void main() {
         throwsA(isA<SessionCloseException>()),
       );
       final archived = io.delegate.files.keys
-          .where((k) => k.startsWith(archiveDirFor(_workspace)))
+          .where((k) => k.startsWith(archiveDirFor(_workspace)) && k.endsWith('.md'))
           .toList();
       expect(archived, isEmpty);
+      expect(loadIndex(_workspace, io: io.delegate), isEmpty);
     });
 
     test('exception identifies the failed step', () async {
@@ -173,6 +183,36 @@ void main() {
       } on SessionCloseException catch (e) {
         expect(e.failedStep, equals('reset'));
       }
+    });
+  });
+
+  group('closeSession — rollback uses the archive name that was actually written', () {
+    test('rollback deletes the real archived file across a clock tick', () async {
+      // A clock that returns a later instant on every call reproduces the
+      // second-boundary race: two separate DateTime.now() calls (one to
+      // build the rollback path, one inside archiveHandoff) disagree on
+      // the archive filename.
+      var calls = 0;
+      DateTime tickingClock() =>
+          DateTime(2026, 3, 16, 12, 0, calls++, 0);
+
+      final io = _FailOnWriteIO(
+        failPath: handoffPathFor(_workspace),
+        failAfter: 0,
+        delegate: _io(),
+      );
+
+      await expectLater(
+        closeSession(_workspace, _project, io: io, clock: tickingClock),
+        throwsA(isA<SessionCloseException>()),
+      );
+
+      // No archive file should survive rollback — whatever name was
+      // actually written must be the one that gets deleted.
+      final archived = io.delegate.files.keys
+          .where((k) => k.startsWith(archiveDirFor(_workspace)) && k.endsWith('.md'))
+          .toList();
+      expect(archived, isEmpty);
     });
   });
 
@@ -193,9 +233,10 @@ void main() {
         throwsA(isA<SessionCloseException>()),
       );
       final archived = io.delegate.files.keys
-          .where((k) => k.startsWith(archiveDirFor(_workspace)))
+          .where((k) => k.startsWith(archiveDirFor(_workspace)) && k.endsWith('.md'))
           .toList();
       expect(archived, isEmpty);
+      expect(loadIndex(_workspace, io: io.delegate), isEmpty);
     });
 
     test('exception identifies the failed step', () async {

@@ -74,8 +74,8 @@ String firstSentence(String s) {
   return s.length > 72 ? '${s.substring(0, 72)}…' : s;
 }
 
-String archiveName(String branch) {
-  final date = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+String archiveName(String branch, {DateTime? now}) {
+  final date = (now ?? DateTime.now()).toIso8601String().replaceAll(':', '-').split('.').first;
   final safeBranch = branch.replaceAll('/', '_').replaceAll(' ', '_');
   return 'handoff_${safeBranch}_$date.md';
 }

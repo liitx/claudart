@@ -32,10 +32,12 @@ Future<void> runFlow({
   Never Function(int code)? exitFn,
   PipelineExecutor? executor,
   PlannerLog? plannerLog,
+  int Function(List<String> items)? pickFn,
 }) async {
   final fileIO = io   ?? const RealFileIO();
   final exit_  = exitFn ?? exit;
   final planner = plannerLog ?? PlannerLog();
+  final pick_  = pickFn ?? arrowMenu;
 
   // ── Locate project ─────────────────────────────────────────────────────────
 
@@ -76,7 +78,7 @@ Future<void> runFlow({
         print('');
       }
 
-      final resumeChoice = arrowMenu([
+      final resumeChoice = pick_([
         'approve saved plan',
         'refine  ${ansi.dim}(add feedback · re-plan)${ansi.reset}',
         'exit  ${ansi.dim}(keep checkpoint · resume later)${ansi.reset}',
@@ -87,10 +89,10 @@ Future<void> runFlow({
         exit_(0);
       }
 
-      checkpointFile.deleteSync();
-
       if (resumeChoice == 0) {
-        // Skip phases 1+2; go straight to construct with the saved plan
+        // Skip phases 1+2; go straight to construct with the saved plan.
+        // The checkpoint is the only copy of the plan, so it is deleted
+        // only after the handoff has actually been written.
         var ctx = savedCtx.withSlot(PipelineSlot.approved, 'true');
         ctx = await resolvedExec.runFuture(
           steps:        [FlowSteps.construct],
@@ -99,6 +101,7 @@ Future<void> runFlow({
           displayTotal: 3,
         );
         await _writeHandoff(ctx, workspace, fileIO, exit_);
+        checkpointFile.deleteSync();
         return;
       }
 
@@ -117,8 +120,12 @@ Future<void> runFlow({
         displayTotal: 3,
       );
       await _writeHandoff(ctx, workspace, fileIO, exit_);
+      checkpointFile.deleteSync();
       return;
     } on FormatException {
+      print('  ${ansi.dim}Checkpoint unreadable — starting fresh.${ansi.reset}\n');
+      checkpointFile.deleteSync();
+    } on TypeError {
       print('  ${ansi.dim}Checkpoint unreadable — starting fresh.${ansi.reset}\n');
       checkpointFile.deleteSync();
     }

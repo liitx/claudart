@@ -63,6 +63,17 @@ class ArchiveEntry {
 
 // ── Index helpers ─────────────────────────────────────────────────────────────
 
+/// Thrown when archive/index.json can't be parsed as a list of entries.
+/// Never swallowed to an empty list: a caller that did that would go on to
+/// overwrite the file with just the one entry it's appending.
+class CorruptArchiveIndexException implements Exception {
+  final String cause;
+  const CorruptArchiveIndexException(this.cause);
+
+  @override
+  String toString() => 'Archive index is corrupt: $cause';
+}
+
 List<ArchiveEntry> archiveEntriesFromJson(String raw) {
   if (raw.trim().isEmpty) return [];
   try {
@@ -71,8 +82,10 @@ List<ArchiveEntry> archiveEntriesFromJson(String raw) {
         .cast<Map<String, dynamic>>()
         .map(ArchiveEntry.fromJson)
         .toList();
-  } on FormatException {
-    return [];
+  } on FormatException catch (e) {
+    throw CorruptArchiveIndexException(e.message);
+  } on TypeError catch (e) {
+    throw CorruptArchiveIndexException(e.toString());
   }
 }
 
