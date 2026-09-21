@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/commands/flow.dart';
 import 'package:claudart/logging/planner_log.dart';
+import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
@@ -14,10 +17,9 @@ import '../helpers/mocks.dart';
 // nothing path. promptFn/pickFn are now injectable — previously hardcoded
 // stdin.readLineSync()/arrowMenu() calls.
 //
-// Not covered: the checkpoint-resume branch (reads a real File from disk
-// via File(checkpointPath).existsSync(), not FileIO — a separate,
-// pre-existing gap, not introduced by this pass) and the full plan-review
-// loop past a successful reader+plan step.
+// The checkpoint-resume branch reads a real File from disk (not FileIO), so
+// its tests use a temp directory as the workspace. Not covered: the full
+// plan-review loop past a successful reader+plan step.
 
 const _projectRoot = '/projects/my-app';
 const _workspace   = '/workspaces/my-app';
@@ -132,6 +134,87 @@ void main() {
         // expected — empty prompt aborts, print already happened before that
       }
       expect(output.join('\n'), contains('Project  : my-app'));
+    });
+  });
+
+  group('runFlow — saved checkpoint', () {
+    late Directory tempDir;
+
+    setUp(() {
+      tempDir = Directory.systemTemp.createTempSync('claudart_flow_test_');
+    });
+
+    tearDown(() {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    });
+
+    MemoryFileIO ioFor(String workspace) {
+      final registry = Registry.empty().add(RegistryEntry(
+        name: 'my-app',
+        projectRoot: _projectRoot,
+        workspacePath: workspace,
+        createdAt: '2026-01-01',
+        lastSession: '2026-01-01',
+      ));
+      final io = MemoryFileIO();
+      registry.save(io: io);
+      return io;
+    }
+
+    test('approve: checkpoint survives a failed construct step', () async {
+      final workspace = tempDir.path;
+      final io = ioFor(workspace);
+
+      final checkpointFile = File('$workspace/$flowCheckpointFileName');
+      checkpointFile.writeAsStringSync(jsonEncode({
+        'createdAt': '2026-01-01T00:00:00',
+        'slots': {'plan': 'Do the thing'},
+        'bug': 'Something broke',
+        'expected': '',
+        'projectRoot': _projectRoot,
+      }));
+
+      // The construct agent returns nothing, as a dead/unauthenticated
+      // `claude` CLI would.
+      await expectLater(
+        runFlow(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          plannerLog: _silentPlannerLog(),
+          executor: _executorWithNoOutput(),
+          pickFn: (_) => 0, // "approve saved plan"
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+
+      expect(
+        checkpointFile.existsSync(),
+        isTrue,
+        reason: 'the only copy of the plan must not be deleted before '
+            'construct has actually succeeded',
+      );
+    });
+
+    test('a checkpoint whose top level is not a map is treated as unreadable', () async {
+      final workspace = tempDir.path;
+      final io = ioFor(workspace);
+
+      // A JSON array: `as Map<String, dynamic>` throws a TypeError, not a
+      // FormatException.
+      File('$workspace/$flowCheckpointFileName')
+          .writeAsStringSync(jsonEncode([1, 2, 3]));
+
+      await expectLater(
+        runFlow(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          plannerLog: _silentPlannerLog(),
+          promptFn: (question, {optional = false}) => null,
+        ),
+        throwsA(isA<_ExitException>().having((e) => e.code, 'code', equals(0))),
+      );
     });
   });
 }
