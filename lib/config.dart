@@ -1,8 +1,3 @@
-import 'dart:convert';
-import 'package:path/path.dart' as p;
-import 'file_io.dart';
-import 'paths.dart';
-
 /// The two named scan-scope values with special meaning. `scanScope` itself
 /// stays a plain `String`, not an enum — `scanner.dart` also accepts an
 /// arbitrary subdirectory name (e.g. `--scope=test`) as a valid scope, so
@@ -78,24 +73,4 @@ class ProjectConfig {
       afterFixCommand: afterFixCommand ?? this.afterFixCommand,
     );
   }
-}
-
-String get configPath => p.join(claudeDir, 'config.json');
-
-ProjectConfig loadConfig({FileIO? io}) {
-  final fileIO = io ?? const RealFileIO();
-  final raw = fileIO.read(configPath);
-  if (raw.isEmpty) return const ProjectConfig();
-  try {
-    final json = jsonDecode(raw) as Map<String, dynamic>;
-    return ProjectConfig.fromJson(json);
-  } on FormatException {
-    return const ProjectConfig();
-  }
-}
-
-void saveConfig(ProjectConfig config, {FileIO? io}) {
-  final fileIO = io ?? const RealFileIO();
-  const encoder = JsonEncoder.withIndent('  ');
-  fileIO.write(configPath, encoder.convert(config.toJson()));
 }
