@@ -1,3 +1,5 @@
+import '../paths.dart';
+
 String debugCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Implement scoped fix from handoff — $projectName
@@ -31,12 +33,12 @@ The preflight for `debug` enforces:
 ## Step 1 — Read context files. This is not optional.
 
 Read all of the following before doing anything else:
-1. `$workspacePath/knowledge/generic/dart.md` — apply these practices to any fix
-2. `$workspacePath/knowledge/generic/testing.md`
+1. `$genericKnowledgeDir/dart.md` — apply these practices to any fix
+2. `$genericKnowledgeDir/testing.md`
 3. `$workspacePath/handoff.md` — this defines your entire scope
 
 Check the handoff for a `## Project` section and also read:
-- `$workspacePath/knowledge/projects/<project-name>.md`
+- `$projectsKnowledgeDir/<project-name>.md`
 
 - If status is **NOT** `ready-for-debug` or `debug-in-progress`: **stop**.
   > "The handoff is not ready. Run `/suggest` first, then `/save` to lock the root cause."
