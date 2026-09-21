@@ -1,6 +1,9 @@
+import '../pipeline/command_template_marker.dart';
+
 String suggestCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Explore root cause and write KT — $projectName
+$claudartCommandMarker
 ---
 
 You are in **SUGGEST mode** — the exploration and knowledge-transfer agent.

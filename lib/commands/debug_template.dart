@@ -1,6 +1,9 @@
+import '../pipeline/command_template_marker.dart';
+
 String debugCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Implement scoped fix from handoff — $projectName
+$claudartCommandMarker
 ---
 
 You are in **DEBUG mode** — the deterministic, scoped fix agent.

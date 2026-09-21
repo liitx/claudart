@@ -8,6 +8,7 @@
 // The user approves the plan before the construct step runs.
 
 import '../pipeline/agents/categorization.dart';
+import '../pipeline/command_template_marker.dart';
 
 /// Renders the variant list for one axis as `a | b | c`, sourced from
 /// the enum's `.values` so adding (or renaming) a variant updates the
@@ -19,6 +20,7 @@ String _axisList(Iterable<Enum> values) =>
 String flowCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Construct intent-driven session — $projectName
+$claudartCommandMarker
 ---
 
 You are **Agent — Flow** (intent-driven session constructor).

@@ -264,12 +264,30 @@ void main() {
       expect(io.dirExists(workspaceFor(_projectName)), isTrue);
     });
 
+    test('does not add .claude to .gitignore when it is a real directory', () async {
+      final io = _emptyIO();
+      io.createDir(p.join(_projectRoot, '.claude'));
+
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      final gitignore = io.read(p.join(_projectRoot, '.gitignore'));
+      expect(gitignore, isNot(contains('.claude')));
+    });
+
     test('syncs command templates into a real .claude/commands/ directory', () async {
       final io = _emptyIO();
       final realCmdsDir = p.join(_projectRoot, '.claude', 'commands');
-      // Pre-create .claude as a real directory with a stale legacy command file.
+      // Pre-create .claude as a real directory with a stale legacy command
+      // file — carries the marker, so it's a stale claudart template, not
+      // user content, and should still be synced.
       io.createDir(realCmdsDir);
-      io.write(p.join(realCmdsDir, 'debug.md'), 'stale content');
+      io.write(p.join(realCmdsDir, 'debug.md'), 'stale content\nclaudart: generated\n');
 
       await runLink(
         [_projectName],
@@ -282,11 +300,32 @@ void main() {
       // The legacy filename is kept (not deleted) but its content is synced —
       // not left stale.
       expect(io.fileExists(p.join(realCmdsDir, 'debug.md')), isTrue);
-      expect(io.read(p.join(realCmdsDir, 'debug.md')), isNot(equals('stale content')));
+      expect(io.read(p.join(realCmdsDir, 'debug.md')), isNot(equals('stale content\nclaudart: generated\n')));
 
       // The suffixed filename should now exist with identical content — 1:1.
       final suffixed = io.read(p.join(realCmdsDir, 'debug-$_projectName.md'));
       expect(suffixed, equals(io.read(p.join(realCmdsDir, 'debug.md'))));
+    });
+
+    test('does not clobber a user command with the same name', () async {
+      final io = _emptyIO();
+      final realCmdsDir = p.join(_projectRoot, '.claude', 'commands');
+      io.createDir(realCmdsDir);
+      // The user's own suggest.md — no claudart marker, must survive.
+      io.write(p.join(realCmdsDir, 'suggest.md'), '# My own suggest command\n');
+
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      expect(
+        io.read(p.join(realCmdsDir, 'suggest.md')),
+        equals('# My own suggest command\n'),
+      );
     });
   });
 
@@ -316,6 +355,34 @@ void main() {
       final gitignore = io.read(p.join(_projectRoot, '.gitignore'));
       expect(gitignore, contains('*.log'));
       expect(gitignore, contains('.claude'));
+    });
+
+    test('recognises .claude/ (trailing slash) as already present', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, '.gitignore'), '.claude/\n');
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final gitignore = io.read(p.join(_projectRoot, '.gitignore'));
+      expect('.claude'.allMatches(gitignore).length, equals(1));
+    });
+
+    test('recognises /.claude (leading slash) as already present', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, '.gitignore'), '/.claude\n');
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final gitignore = io.read(p.join(_projectRoot, '.gitignore'));
+      expect('.claude'.allMatches(gitignore).length, equals(1));
     });
   });
 }

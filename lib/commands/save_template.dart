@@ -1,6 +1,9 @@
+import '../pipeline/command_template_marker.dart';
+
 String saveCommandTemplate(String workspacePath, String projectName) =>
     '''---
 description: Checkpoint session — $projectName
+$claudartCommandMarker
 ---
 
 ''' +
