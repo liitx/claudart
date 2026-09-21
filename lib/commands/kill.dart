@@ -108,8 +108,7 @@ Future<void> runKill({
   sw.stop();
   print('\n✓ Session killed: ${entry.name}  (${sw.elapsedMilliseconds}ms)');
   print('  Handoff archived to ${p.join(workspace, 'archive')}');
-  print('  Handoff reset to blank.');
-  print('  Symlink removed.\n');
+  print('  Handoff reset to blank.\n');
   print('Run `claudart setup` to start a new session.\n');
 }
 

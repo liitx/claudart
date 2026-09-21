@@ -29,3 +29,9 @@ GitContext? detectGitContext() {
     return null;
   }
 }
+
+/// Resolves the project root the same way for every command: an explicit
+/// override wins, otherwise fall back to the git repository root. Never the
+/// process cwd — a command run from a subdirectory must still find it.
+String? resolveProjectRoot({String? override}) =>
+    override ?? detectGitContext()?.root;
