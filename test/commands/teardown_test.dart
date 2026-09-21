@@ -8,6 +8,8 @@ import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import 'package:claudart/session/run_mode.dart';
+import 'package:claudart/file_io.dart';
+import 'package:claudart/session/workspace_guard.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -208,6 +210,41 @@ String? Function(String, {bool optional}) _prompts(List<String?> queue) {
 /// optional `startIndex` for preselection); the stub ignores it.
 int Function(List<String>, {int startIndex}) _pick(TeardownCategory cat) =>
     (_, {int startIndex = 0}) => cat.index;
+
+/// Like [_pick], but answers the 2-item "archive / reminder" menu with
+/// [kind] (0 = archive, 1 = reminder) instead of always falling through to
+/// the category index — [_pick] can't reach the reminder branch because it
+/// answers every menu with the same category index.
+int Function(List<String>, {int startIndex}) _pickKind(
+  TeardownCategory cat, {
+  required int kind,
+}) =>
+    (items, {int startIndex = 0}) => items.length == 2 ? kind : cat.index;
+
+/// Delegates all ops to [delegate] but throws on write to [failPath].
+class _FailOnWriteIO implements FileIO {
+  final MemoryFileIO delegate;
+  final String failPath;
+  _FailOnWriteIO({required this.delegate, required this.failPath});
+
+  @override
+  void write(String path, String content) {
+    if (path == failPath) throw Exception('simulated write failure');
+    delegate.write(path, content);
+  }
+
+  @override String read(String path) => delegate.read(path);
+  @override void delete(String path) => delegate.delete(path);
+  @override bool fileExists(String path) => delegate.fileExists(path);
+  @override bool dirExists(String path) => delegate.dirExists(path);
+  @override void createDir(String path) => delegate.createDir(path);
+  @override List<String> listFiles(String d, {String? extension}) =>
+      delegate.listFiles(d, extension: extension);
+  @override bool linkExists(String path) => delegate.linkExists(path);
+  @override void deleteLink(String path) => delegate.deleteLink(path);
+  @override void createLink(String linkPath, String targetPath) =>
+      delegate.createLink(linkPath, targetPath);
+}
 
 // Category selection uses TeardownCategory constants (mirrors menu indices).
 
@@ -762,6 +799,58 @@ _None recorded yet._
           reason: '"unspecified" is display-only text for the headless '
               'summary — it must never be written into skills.md\'s Hot '
               'Paths section as if it were a real hot-path file');
+    });
+  });
+
+  group('teardown — reminder kind', () {
+    test('does not update skills.md ("no skills update" per ArchiveKind.reminder)', () async {
+      final io = _io(handoff: _richHandoff);
+      await runTeardown(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        promptFn: _prompts(_richAnswers),
+        pickFn: _pickKind(TeardownCategory.stateManagement, kind: 1),
+        exitFn: _throwExit,
+      );
+      expect(io.files.containsKey(skillsPathFor(_workspace)), isFalse);
+    });
+
+    test('still archives the handoff', () async {
+      final io = _io(handoff: _richHandoff);
+      await runTeardown(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        promptFn: _prompts(_richAnswers),
+        pickFn: _pickKind(TeardownCategory.stateManagement, kind: 1),
+        exitFn: _throwExit,
+      );
+      expect(_archives(io), hasLength(1));
+    });
+  });
+
+  group('teardown — guarded mutation', () {
+    test('a failed write leaves the workspace lock as an interrupted-state signal', () async {
+      final base = _io(handoff: _richHandoff);
+      final io = _FailOnWriteIO(delegate: base, failPath: skillsPathFor(_workspace));
+
+      Object? caught;
+      try {
+        await runTeardown(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          promptFn: _prompts(_richAnswers),
+          pickFn: _pickKind(TeardownCategory.stateManagement, kind: 0),
+          exitFn: _throwExit,
+        );
+      } on Exception catch (e) {
+        caught = e;
+      }
+
+      expect(caught, isNotNull);
+      expect(isLocked(_workspace, io: base), isTrue);
     });
   });
 }

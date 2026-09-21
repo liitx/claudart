@@ -6,6 +6,7 @@ import 'package:claudart/git_utils.dart';
 import 'package:claudart/templates/handoff_template.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/session/teardown_utils.dart';
+import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -409,6 +410,20 @@ void main() {
         buildFn: _buildOk,
       );
       expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
+    });
+
+    test('archived session is visible to `claudart archives` (index entry appended)', () async {
+      final io = _io();
+      await runRotate(
+        io: io,
+        projectRootOverride: _projectRoot,
+        exitFn: _noExit,
+        confirmFn: _confirmYes,
+        buildFn: _buildOk,
+      );
+      final entries = loadIndex(_workspace, io: io);
+      expect(entries, hasLength(1));
+      expect(entries.first.branch, equals('fix/pr-bugs'));
     });
 
     test('seeds new handoff with first pending issue as Bug', () async {
