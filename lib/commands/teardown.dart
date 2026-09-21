@@ -12,11 +12,12 @@ import '../pipeline/xml_tags.dart';
 import '../registry.dart';
 import '../session/archive_entry.dart';
 import '../session/run_mode.dart';
+import '../session/session_ops.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
+import '../session/workspace_guard.dart';
 import '../ui/menu.dart';
 import '../util/prompt_with_default.dart';
-import '../workspace/workspace_index.dart';
 import '../ui/render.dart' as render;
 import '../ui/ansi.dart' as ansi;
 
@@ -120,14 +121,13 @@ Future<void> runTeardown({
         print('  Description : ${_truncate(resolvedDescription)}');
         print(render.divider());
       }
-      _writeArchiveEntry(
-        fileIO:      fileIO,
+      writeArchiveEntry(
         workspace:   workspace,
-        kind:        ArchiveKind.reminder,
-        description: resolvedDescription,
         branch:      branch,
         handoff:     handoff,
-        skillsDelta: null,
+        kind:        ArchiveKind.reminder,
+        description: resolvedDescription,
+        io:          fileIO,
       );
       print('\n✓ Reminder saved. Run `claudart archives` to resume.\n');
     }
@@ -269,54 +269,64 @@ Future<void> runTeardown({
     print(render.divider());
   }
 
-  // Update skills.md.
-  _updateSkills(
-    fileIO: fileIO,
-    skillsFile: skillsPathFor(workspace),
-    branch: branch,
-    category: category,
-    hotFiles: hotFiles,
-    coldFiles: coldFiles,
-    pattern: pattern!,
-    fixPattern: fixPattern!,
-  );
+  // Update skills.md, archive the handoff, and reset it — guarded so an
+  // interrupted run leaves the workspace.lock signal instead of a half
+  // updated skills.md / archive, same as `kill`.
+  late final String archiveFile;
+  try {
+    await withGuard(workspace, 'teardown', () async {
+      // A reminder is a note for later, not a resolved fix — no skills
+      // update, matching ArchiveKind.reminder's documented "no skills update".
+      if (archiveKind != ArchiveKind.reminder) {
+        _updateSkills(
+          fileIO: fileIO,
+          skillsFile: skillsPathFor(workspace),
+          branch: branch,
+          category: category,
+          hotFiles: hotFiles,
+          coldFiles: coldFiles,
+          pattern: pattern!,
+          fixPattern: fixPattern!,
+        );
+      }
 
-  // A resolved, archived session's root cause is now promoted to Root
-  // Cause Patterns above — its Pending entry (written by /save) would
-  // otherwise sit there stale forever. A reminder is not a real
-  // resolution, so its Pending entry stays.
-  if (archiveKind == ArchiveKind.archive) {
-    final skillsFile = skillsPathFor(workspace);
-    final skills = fileIO.fileExists(skillsFile) ? fileIO.read(skillsFile) : '';
-    fileIO.write(skillsFile, removePendingEntry(skills, branch));
+      // A resolved, archived session's root cause is now promoted to Root
+      // Cause Patterns above — its Pending entry (written by /save) would
+      // otherwise sit there stale forever. A reminder is not a real
+      // resolution, so its Pending entry stays.
+      if (archiveKind == ArchiveKind.archive) {
+        final skillsFile = skillsPathFor(workspace);
+        final skills = fileIO.fileExists(skillsFile) ? fileIO.read(skillsFile) : '';
+        fileIO.write(skillsFile, removePendingEntry(skills, branch));
+      }
+
+      final entry = writeArchiveEntry(
+        workspace:   workspace,
+        branch:      branch,
+        handoff:     handoff,
+        kind:        archiveKind,
+        description: fixSummary ?? bug,
+        io:          fileIO,
+        skillsDelta: archiveKind == ArchiveKind.archive
+            ? '$category: $pattern → $fixPattern'
+            : null,
+      );
+      archiveFile = p.join(archiveDirFor(workspace), entry.handoffFile);
+
+      // Reset handoff.
+      fileIO.write(handoffFile, blankHandoff);
+    }, io: fileIO);
+  } on WorkspaceLockedException catch (e) {
+    print('\n✗ ${e.toString()}\n');
+    exit_(1);
   }
-
-  // Archive handoff + write index entry.
-  final archiveDirectory  = archiveDirFor(workspace);
-  final archiveFileName   = archiveName(branch);
-  final archiveFile       = p.join(archiveDirectory, archiveFileName);
-  fileIO.createDir(archiveDirectory);
-  fileIO.write(archiveFile, handoff);
-  _writeArchiveEntry(
-    fileIO:          fileIO,
-    workspace:       workspace,
-    kind:            archiveKind,
-    description:     fixSummary ?? bug,
-    branch:          branch,
-    handoff:         handoff,
-    handoffFileName: archiveFileName,
-    skillsDelta:     archiveKind == ArchiveKind.archive
-        ? '$category: $pattern → $fixPattern'
-        : null,
-  );
-
-  // Reset handoff.
-  fileIO.write(handoffFile, blankHandoff);
 
   // Suggest commit message.
   final commitMsg = buildCommitMessage(area, bug, rootCause, fixSummary!);
 
-  print('\n✓ Skills updated: ${skillsPathFor(workspace)}');
+  if (archiveKind != ArchiveKind.reminder) {
+    print('\n✓ Skills updated: ${skillsPathFor(workspace)}');
+  }
   print('✓ Handoff archived: $archiveFile');
   print('✓ Handoff reset.\n');
   print(render.divider());
@@ -456,32 +466,3 @@ _None recorded yet._
 _No sessions recorded yet._
 ''';
 
-void _writeArchiveEntry({
-  required FileIO      fileIO,
-  required String      workspace,
-  required ArchiveKind kind,
-  required String      description,
-  required String      branch,
-  required String      handoff,
-  String?              handoffFileName,
-  String?              skillsDelta,
-}) {
-  final ts       = DateTime.now();
-  final fileName = handoffFileName ?? archiveName(branch);
-  // Ensure the handoff file exists (reminder path may not have written it yet).
-  if (handoffFileName == null) {
-    final dir = archiveDirFor(workspace);
-    fileIO.createDir(dir);
-    fileIO.write('$dir/$fileName', handoff);
-  }
-  final entry = ArchiveEntry(
-    id:          '${branch}_${ts.millisecondsSinceEpoch}',
-    kind:        kind,
-    description: description,
-    branch:      branch,
-    createdAt:   ts,
-    handoffFile: fileName,
-    skillsDelta: skillsDelta,
-  );
-  appendToIndex(workspace, entry, io: fileIO);
-}

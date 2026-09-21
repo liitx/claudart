@@ -8,10 +8,8 @@ import '../file_io.dart';
 import '../paths.dart';
 import '../session/archive_entry.dart';
 
-const _indexFile = 'index.json';
-
 String _indexPath(String workspace) =>
-    p.join(archiveDirFor(workspace), _indexFile);
+    p.join(archiveDirFor(workspace), archiveIndexFileName);
 
 /// Returns all archive entries for [workspace], newest first.
 List<ArchiveEntry> loadIndex(String workspace, {FileIO? io}) {
@@ -39,3 +37,16 @@ void appendToIndex(String workspace, ArchiveEntry entry, {FileIO? io}) {
 /// Finds a single entry by [id], or null if not found.
 ArchiveEntry? findEntry(String workspace, String id, {FileIO? io}) =>
     loadIndex(workspace, io: io).where((e) => e.id == id).firstOrNull;
+
+/// Removes the entry with [id] from the index, if present. Used to roll
+/// back an [appendToIndex] call whose later step in the same operation
+/// failed, so a failed archive never leaves an orphan index entry.
+void removeFromIndex(String workspace, String id, {FileIO? io}) {
+  final fileIO = io ?? const RealFileIO();
+  final path   = _indexPath(workspace);
+  if (!fileIO.fileExists(path)) return;
+  final remaining = archiveEntriesFromJson(fileIO.read(path))
+      .where((e) => e.id != id)
+      .toList();
+  fileIO.write(path, archiveEntriesToJson(remaining));
+}
