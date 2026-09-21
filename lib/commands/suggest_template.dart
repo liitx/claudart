@@ -1,3 +1,5 @@
+import '../paths.dart';
+
 String suggestCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Explore root cause and write KT — $projectName
@@ -26,13 +28,13 @@ claudart preflight test
 ## Step 1 — Read context files first
 
 Read all of the following before doing anything else:
-1. `$workspacePath/knowledge/generic/dart.md`
-2. `$workspacePath/knowledge/generic/testing.md`
+1. `$genericKnowledgeDir/dart.md`
+2. `$genericKnowledgeDir/testing.md`
 3. `$workspacePath/handoff.md` — current session state
 4. `$workspacePath/skills.md` — cross-session learnings
 
 Check the handoff for a `## Project` section and also read:
-- `$workspacePath/knowledge/projects/<project-name>.md`
+- `$projectsKnowledgeDir/<project-name>.md`
 
 Status routing — check `## Status` in the handoff:
 - `needs-suggest`: read **Debug Progress** first — that is your starting point, not a blank slate.

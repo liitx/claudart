@@ -1,3 +1,5 @@
+import '../paths.dart';
+
 String teardownCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Close session and update knowledge — $projectName
@@ -28,8 +30,8 @@ Read both:
 ## Step 3 — Classify learnings
 
 For each learning from this session, decide:
-- **Generic** → applies to any Dart/Flutter project → update `$workspacePath/knowledge/generic/`
-- **Project-specific** → update `$workspacePath/knowledge/projects/<project>.md`
+- **Generic** → applies to any Dart/Flutter project → update `$genericKnowledgeDir/`
+- **Project-specific** → update `$projectsKnowledgeDir/<project>.md`
 
 Write only patterns — no session-specific narrative.
 
@@ -37,8 +39,8 @@ Write only patterns — no session-specific narrative.
 
 ## Step 4 — Update knowledge files
 
-Generic learnings go to the appropriate file in `$workspacePath/knowledge/generic/`.
-Project learnings go to `$workspacePath/knowledge/projects/<project>.md`.
+Generic learnings go to the appropriate file in `$genericKnowledgeDir/`.
+Project learnings go to `$projectsKnowledgeDir/<project>.md`.
 
 ---
 
