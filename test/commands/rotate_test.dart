@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/handoff_template.dart';
@@ -206,6 +207,38 @@ bool _confirmNo(String _) => false;
 Never _noExit(int code) => throw StateError('exit($code) called');
 
 void main() {
+  setUpAll(registerFallbacks);
+
+  group('runRotate — build gate working directory', () {
+    test('default build runs afterFixCommand with the project root as the working directory, via ProcessRunner', () async {
+      final io = _io();
+      final runner = MockProcessRunner();
+      when(() => runner.run(
+            any(),
+            any(),
+            workingDirectory: any(named: 'workingDirectory'),
+          )).thenAnswer((_) async => fakeResult(''));
+
+      final result = await runRotate(
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        exitFn: _noExit,
+        confirmFn: _confirmYes,
+      );
+
+      expect(result, RotateResult.rotated);
+      final captured = verify(() => runner.run(
+            captureAny(),
+            captureAny(),
+            workingDirectory: captureAny(named: 'workingDirectory'),
+          )).captured;
+      expect(captured[0], 'make');
+      expect(captured[1], ['rebuild']);
+      expect(captured[2], _projectRoot);
+    });
+  });
+
   group('runRotate — no handoff', () {
     test('returns noHandoff when file missing', () async {
       final io = MemoryFileIO(files: {
