@@ -457,7 +457,7 @@ Commands:
   flow                   [experimental] Agent-constructed session: classify intent, plan, approve, build handoff
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
   rotate                 Archive current session, run build gate, seed next handoff from Pending Issues
-  kill                   Abandon session: archive handoff, remove symlink (no skills update)
+  kill                   Abandon session: archive and reset handoff (no skills update)
   resume                 Pre-populate setup from the most recent archive entry
   confirm-pending --question <q> --on-confirm <cmd>
                          Set the pending confirmation for this workspace
