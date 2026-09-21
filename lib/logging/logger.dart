@@ -8,7 +8,6 @@ import '../sensitivity/detector.dart';
 
 const int _maxInteractions = 500;
 const int _maxErrors = 200;
-const int _maxPerformance = 50;
 
 /// Appends structured log entries to workspace log files.
 class SessionLogger {
@@ -29,7 +28,6 @@ class SessionLogger {
 
   String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
   String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-  String get _performancePath => p.join(_logsDir, 'performance.md');
 
   void logInteraction({
     required String command,
@@ -106,44 +104,6 @@ class SessionLogger {
     }
 
     _writeJsonl(_errorsPath, existing, _maxErrors);
-  }
-
-  void logPerformance({
-    required String command,
-    required String outcome,
-    int? filesScanned,
-    Duration? duration,
-    int? tokensNew,
-  }) {
-    final entry = StringBuffer();
-    entry.write('| ${DateTime.now().toUtc().toIso8601String()} '
-        '| $command '
-        '| ${filesScanned ?? '-'} '
-        '| ${duration?.inMilliseconds ?? '-'}ms '
-        '| ${tokensNew ?? '-'} '
-        '| $outcome |');
-
-    final current = _io.read(_performancePath);
-    final lines = current.isEmpty
-        ? <String>[]
-        : current.split('\n').where((l) => l.isNotEmpty).toList();
-
-    if (lines.isEmpty) {
-      lines.add(
-          '| timestamp | command | filesScanned | duration | tokensNew | outcome |');
-      lines.add('|-----------|---------|-------------|----------|-----------|--------|');
-    }
-
-    // Data lines start after the 2-line header
-    final header = lines.take(2).toList();
-    var data = lines.skip(2).toList();
-    data.add(entry.toString());
-
-    if (data.length > _maxPerformance) {
-      data = data.sublist(data.length - _maxPerformance);
-    }
-
-    _io.write(_performancePath, '${[...header, ...data].join('\n')}\n');
   }
 
   // ---- private helpers ----
