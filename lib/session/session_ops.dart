@@ -90,14 +90,12 @@ String? archiveCurrentHandoff({
 void resetHandoff(String workspace, {FileIO? io}) =>
     (io ?? const RealFileIO()).write(handoffPathFor(workspace), blankHandoff);
 
-/// Removes the .claude symlink from the project directory.
-void removeSessionLink(String projectRoot, {FileIO? io}) {
-  final fileIO = io ?? const RealFileIO();
-  final link = p.join(projectRoot, '.claude');
-  if (fileIO.linkExists(link)) fileIO.deleteLink(link);
-}
-
-/// Closes a session transactionally — archive → reset → remove symlink.
+/// Closes a session transactionally — archive → reset.
+///
+/// Does not touch the `.claude` symlink: kill closes a session, it does not
+/// deregister the project, and only `link` and `unlink` own the symlink's
+/// lifecycle. [projectRoot] is accepted for callers that still key off it,
+/// but is otherwise unused here.
 ///
 /// Each step rolls back prior steps on failure so the workspace is never
 /// left in partial state. Callers are responsible for wrapping this in
@@ -153,27 +151,11 @@ Future<void> closeSession(
     removeFromIndex(workspace, entry.id, io: fileIO);
     throw SessionCloseException('reset', cause: e);
   }
-
-  // Step 3: remove symlink — rollback: restore handoff + delete archive + index entry.
-  try {
-    removeSessionLink(projectRoot, io: fileIO);
-  } on Exception catch (e) {
-    _safeWrite(fileIO, handoffPath, originalHandoff);
-    _safeDelete(fileIO, archivePath);
-    removeFromIndex(workspace, entry.id, io: fileIO);
-    throw SessionCloseException('unlink', cause: e);
-  }
 }
 
 void _safeDelete(FileIO io, String path) {
   try {
     io.delete(path);
-  } on FileSystemException catch (_) {}
-}
-
-void _safeWrite(FileIO io, String path, String content) {
-  try {
-    io.write(path, content);
   } on FileSystemException catch (_) {}
 }
 
