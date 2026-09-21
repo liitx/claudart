@@ -26,7 +26,7 @@ class Abstractor {
   String deabstract(String text, TokenMap map) {
     // Build reverse: mapped token -> real name
     // Collect all tokens by scanning the text for token-shaped strings.
-    final tokenPattern = RegExp(r'[A-Za-z]+:[A-Z]{1,2}');
+    final tokenPattern = RegExp(r'[A-Za-z]+:[A-Z]+');
     var result = text;
     final seen = <String>{};
     for (final m in tokenPattern.allMatches(text)) {
