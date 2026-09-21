@@ -58,11 +58,15 @@ final class AgentCompleted extends PipelineEvent {
   const AgentCompleted({required this.stepId, required this.usage});
 }
 
-/// A pipeline step failed (runner returned null).
+/// A pipeline step failed (runner returned null, or a hard limit was hit).
 final class AgentFailed extends PipelineEvent {
   final String stepId;
 
-  const AgentFailed({required this.stepId});
+  /// Set when the failure has a specific cause to report, e.g. the
+  /// question-hop limit. Null keeps the generic "step failed" message.
+  final String? reason;
+
+  const AgentFailed({required this.stepId, this.reason});
 }
 
 // ── Escalation ────────────────────────────────────────────────────────────────
