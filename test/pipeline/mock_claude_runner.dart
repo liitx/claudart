@@ -34,6 +34,7 @@ class MockClaudeRunner {
         required String message,
         required String workingDir,
         StepMode mode = StepMode.project,
+        ToolGrant toolGrant = ToolGrant.readOnly,
       }) async {
         captured.add(CallRecord(
           model:        model,

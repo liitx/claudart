@@ -138,6 +138,7 @@ void main() {
         required String message,
         required String workingDir,
         StepMode mode = StepMode.project,
+        ToolGrant toolGrant = ToolGrant.readOnly,
       }) async {
         mock.captured.add(CallRecord(model: model, systemPrompt: systemPrompt, message: message));
         if (model == AgentModel.haiku) {
@@ -181,6 +182,7 @@ void main() {
         required String message,
         required String workingDir,
         StepMode mode = StepMode.project,
+        ToolGrant toolGrant = ToolGrant.readOnly,
       }) async {
         step++;
         final text = step == 1 ? _plannerXml : _applierXml;
@@ -265,6 +267,7 @@ void main() {
         required String message,
         required String workingDir,
         StepMode mode = StepMode.project,
+        ToolGrant toolGrant = ToolGrant.readOnly,
       }) async {
         callCount++;
         final text = callCount == 1 ? planXml : constructXml;

@@ -5,6 +5,7 @@ import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
+import 'package:claudart/pipeline/tool_grant.dart';
 import '../helpers/mocks.dart';
 
 // debug_test.dart — validation-path coverage for runDebug.
@@ -12,7 +13,8 @@ import '../helpers/mocks.dart';
 // Companion to suggest_test.dart. Covers: registration/handoff/scope
 // validation exits, the status-confirmation gate (now injectable via
 // confirmFn — previously hardcoded stdin.readLineSync()), and the
-// reader-step-produces-nothing path via an injected PipelineExecutor.
+// reader-step-produces-nothing path via an injected PipelineExecutor,
+// plus the resolveEditPath sandbox guard.
 //
 // Not covered: the review/apply menu past a successful implementer step
 // (pickFn is injectable now, but reaching that point needs a full fake
@@ -100,7 +102,7 @@ MemoryFileIO _io({String? handoff = _handoffReadyWithScope}) {
 }
 
 PipelineExecutor _executorWithNoOutput() =>
-    PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
+    PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project, ToolGrant toolGrant = ToolGrant.readOnly}) async => null);
 
 void main() {
   group('runDebug — validation', () {
@@ -244,6 +246,34 @@ void main() {
         // expected
       }
       expect(output.join('\n'), contains('Project  : my-app'));
+    });
+  });
+
+  // A model-supplied <EDIT_FILE path="..."> must resolve inside projectRoot.
+  // Absolute paths and `..` escapes are refused, never joined blindly.
+  group('resolveEditPath', () {
+    const root = '/home/user/project';
+
+    test('plain relative path resolves inside projectRoot', () {
+      final resolved = resolveEditPath(root, 'lib/example.dart');
+      expect(resolved, equals('/home/user/project/lib/example.dart'));
+    });
+
+    test('parent-escape is refused', () {
+      expect(resolveEditPath(root, '../x'), isNull);
+    });
+
+    test('absolute path is refused', () {
+      expect(resolveEditPath(root, '/home/user/.ssh/authorized_keys'), isNull);
+    });
+
+    test('escape then re-descend is still refused', () {
+      expect(resolveEditPath(root, 'a/../../x'), isNull);
+    });
+
+    test('internal .. that stays inside projectRoot resolves', () {
+      final resolved = resolveEditPath(root, 'a/../b.dart');
+      expect(resolved, equals('/home/user/project/b.dart'));
     });
   });
 }
