@@ -56,11 +56,17 @@ class PipelineExecutor {
   /// escalates to the user instead of silently falling through.
   final bool strict;
 
+  /// Max QUESTION hops (planner/plan asking, lookup/clarify answering) a run
+  /// tolerates before it stops rather than loop forever on a model that
+  /// never converges.
+  final int maxQuestionHops;
+
   PipelineExecutor({
     ClaudeRunner?     runner,
     UserPrompter?     prompter,
     ApprovalSelector? approvalSelector,
     this.strict = false,
+    this.maxQuestionHops = 8,
   })  : _runner           = runner           ?? defaultClaudeRunner,
         _prompter         = prompter         ?? _defaultPrompter,
         _approvalSelector = approvalSelector ?? _defaultApprovalSelector;
@@ -85,7 +91,8 @@ class PipelineExecutor {
     }
 
     final stepMap = {for (final s in steps) s.id: s};
-    var current   = steps.first;
+    var current      = steps.first;
+    var questionHops = 0;
 
     while (true) {
       // Local position within `steps` so the same `run` call advances
@@ -170,6 +177,15 @@ class PipelineExecutor {
           current = stepMap[stepId]!;
 
         case QuestionBranch(:final lookupStepId):
+          questionHops++;
+          if (questionHops >= maxQuestionHops) {
+            yield AgentFailed(
+              stepId: current.id,
+              reason: 'model asked $questionHops questions without converging',
+            );
+            yield PipelineCompleted(ctx: ctx);
+            return;
+          }
           final question = tagOrNull(result.text, matchedTag!.wireTag)!;
           ctx     = ctx.withSlot(PipelineSlot.question, question);
           current = stepMap[lookupStepId]!;
@@ -356,13 +372,80 @@ Future<T?> runWithSpinner<T>({
   return result;
 }
 
+// ── Process draining ───────────────────────────────────────────────────────
+
+/// Output captured from a drained [Process].
+class DrainedProcess {
+  final List<String> stdoutLines;
+  final String       stderr;
+  final int          exitCode;
+
+  /// True if [timeout] was hit and the process was killed rather than
+  /// exiting on its own.
+  final bool timedOut;
+
+  const DrainedProcess({
+    required this.stdoutLines,
+    required this.stderr,
+    required this.exitCode,
+    required this.timedOut,
+  });
+}
+
+/// Drains [process]'s stdout and stderr concurrently, so a child that fills
+/// the stderr pipe (OS buffer is ~64KiB) while stdout stays open cannot block
+/// on write and hang forever. Kills the process and returns [timedOut] = true
+/// if it outlives [timeout].
+Future<DrainedProcess> drainProcess(
+  Process process, {
+  required Duration timeout,
+  void Function(String line)? onStdoutLine,
+}) async {
+  final lines = <String>[];
+  var   errBuf = '';
+
+  final stdoutDone = process.stdout
+      .transform(const Utf8Decoder())
+      .transform(const LineSplitter())
+      .forEach((line) {
+        if (line.trim().isEmpty) return;
+        lines.add(line);
+        onStdoutLine?.call(line);
+      });
+  final stderrDone = process.stderr
+      .transform(const Utf8Decoder())
+      .join()
+      .then((s) => errBuf = s);
+
+  var timedOut = false;
+  try {
+    await Future.wait([stdoutDone, stderrDone]).timeout(timeout);
+  } on TimeoutException {
+    timedOut = true;
+    process.kill(ProcessSignal.sigkill);
+  }
+  final exitCode = await process.exitCode;
+
+  return DrainedProcess(
+    stdoutLines: lines,
+    stderr:      errBuf,
+    exitCode:    exitCode,
+    timedOut:    timedOut,
+  );
+}
+
 // ── Default ClaudeRunner ──────────────────────────────────────────────────────
+
+/// Kills the claude subprocess and surfaces a clear error if it runs longer
+/// than this with no result — a hung spinner is otherwise the only symptom.
+const Duration kDefaultClaudeTimeout = Duration(minutes: 10);
 
 Future<({String text, Usage usage})?> defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
   required String message,
   required String workingDir,
+  Duration timeout = kDefaultClaudeTimeout,
 }) async {
   // `StepDebugTrace.start()` resolves the log file via `debugLogFile()`.
   // When debug mode is off, every `trace.write*` below is a no-op.
@@ -398,25 +481,24 @@ Future<({String text, Usage usage})?> defaultClaudeRunner({
     process.stdin.writeln(message);
     await process.stdin.close();
 
-    final lines = <String>[];
-    await for (final line in process.stdout
-        .transform(const Utf8Decoder())
-        .transform(const LineSplitter())) {
-      if (line.trim().isEmpty) continue;
-      lines.add(line);
-      trace.writeStreamLine(line);
-    }
+    final drained = await drainProcess(
+      process,
+      timeout: timeout,
+      onStdoutLine: trace.writeStreamLine,
+    );
+    trace.writeExit(exitCode: drained.exitCode, stderrText: drained.stderr);
 
-    final err  = await process.stderr.transform(const Utf8Decoder()).join();
-    final code = await process.exitCode;
-    trace.writeExit(exitCode: code, stderrText: err);
-
-    if (code != 0) {
-      if (err.trim().isNotEmpty) stderr.writeln(err.trim());
+    if (drained.timedOut) {
+      stderr.writeln('claude call timed out after $timeout');
       return null;
     }
 
-    final resultLine = lines.lastWhere(
+    if (drained.exitCode != 0) {
+      if (drained.stderr.trim().isNotEmpty) stderr.writeln(drained.stderr.trim());
+      return null;
+    }
+
+    final resultLine = drained.stdoutLines.lastWhere(
       (l) => l.contains('"type":"result"'),
       orElse: () => '',
     );

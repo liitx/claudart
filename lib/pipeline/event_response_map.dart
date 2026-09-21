@@ -30,12 +30,12 @@ AgentResponse? toResponse(
         summary:      usage.format(),
       );
 
-    case AgentFailed(:final stepId):
+    case AgentFailed(:final stepId, :final reason):
       return Blocker(
         speaker:   speaker,
         workspace: workspace,
         step:      stepId,
-        errorType: 'step failed',
+        errorType: reason ?? 'step failed',
       );
 
     case AgentEscalating(:final question, :final unknownContext):
