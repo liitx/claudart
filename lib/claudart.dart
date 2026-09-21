@@ -15,6 +15,7 @@ export 'pipeline/agent_response.dart';
 export 'pipeline/state_hue.dart';
 export 'pipeline/agent_step.dart';
 export 'pipeline/step_mode.dart';
+export 'pipeline/tool_grant.dart';
 export 'pipeline/flows/suggest_steps.dart';
 export 'pipeline/flows/debug_steps.dart';
 export 'pipeline/flows/flow_steps.dart';
