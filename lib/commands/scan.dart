@@ -1,4 +1,3 @@
-import '../config.dart';
 import '../file_io.dart';
 import '../ignore_rules.dart';
 import '../paths.dart';
@@ -9,31 +8,30 @@ import '../logging/logger.dart';
 import '../ui/render.dart' as render;
 
 /// Runs an explicit on-demand scan of the project.
-/// [scope] overrides config.scanScope ('lib', 'full', or 'handoff').
+/// [scope] overrides the default scan scope ('lib', 'full', or 'handoff').
 /// [full] is a convenience flag that sets scope to 'full'.
-/// [projectRootOverride] bypasses the legacy config lookup — used when the
-/// caller already knows the project root (e.g. setup.dart via registry).
+/// [projectRootOverride] and [sensitivityModeOverride] come from the caller's
+/// registry lookup (bin/claudart.dart for `scan`, setup.dart for its own
+/// pre-handoff scan) — there is no config.json fallback.
 /// [workspacePath] routes token_map.json and logs to the per-project workspace.
 Future<void> runScan({
   String? scope,
   bool full = false,
   FileIO? io,
   String? projectRootOverride,
+  bool? sensitivityModeOverride,
   String? workspacePath,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final config = projectRootOverride != null
-      ? WorkspaceConfig(projectRoot: projectRootOverride)
-      : loadConfig(io: fileIO);
 
-  if (config.projectRoot == null) {
+  if (projectRootOverride == null) {
     print('\n✗ No project linked. Run `claudart link` first.\n');
     return;
   }
 
-  final effectiveScope =
-      full ? 'full' : (scope ?? config.scanScope);
-  final projectRoot = config.projectRoot!;
+  final effectiveScope = full ? 'full' : (scope ?? 'lib');
+  final projectRoot = projectRootOverride;
+  final sensitivityMode = sensitivityModeOverride ?? false;
 
   print(render.header('SENSITIVITY SCAN'));
   print('Scanning $projectRoot/$effectiveScope...');
@@ -48,7 +46,7 @@ Future<void> runScan({
 
   final logger = SessionLogger(
     io: fileIO,
-    sensitivityMode: config.sensitivityMode,
+    sensitivityMode: sensitivityMode,
     tokenMap: tokenMap,
     workspacePath: workspacePath,
   );

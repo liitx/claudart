@@ -10,6 +10,7 @@ import '../registry.dart';
 import '../session/session_state.dart';
 import '../teardown_utils.dart';
 import '../md_io.dart' show confirm;
+import '../process_runner.dart';
 import '../ui/render.dart' as render;
 
 enum RotateResult {
@@ -37,15 +38,16 @@ enum RotateResult {
 /// archive already written remains, but the live handoff is not overwritten.
 Future<RotateResult>  runRotate({
   FileIO? io,
+  ProcessRunner? runner,
   String? projectRootOverride,
   Never Function(int code)? exitFn,
   bool Function(String question)? confirmFn,
   Future<bool> Function(String command)? buildFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
+  final proc = runner ?? const RealProcessRunner();
   final exit_ = exitFn ?? exit;
   final confirm_ = confirmFn ?? confirm;
-  final build_ = buildFn ?? _defaultBuild;
 
   print(render.header('CLAUDART ROTATE'));
 
@@ -102,7 +104,10 @@ Future<RotateResult>  runRotate({
   fileIO.write(archiveFile, handoff);
 
   // 6 — Build gate: must pass before the next session can start.
+  // afterFixCommand has no registry-entry field yet, so it stays sourced
+  // from the workspace config.json, defaulting to 'make rebuild'.
   final config = _loadConfig(fileIO, workspace);
+  final build_ = buildFn ?? (command) => _defaultBuild(command, projectRoot, proc);
   print('\nRunning build gate: ${config.afterFixCommand}');
   final buildOk = await build_(config.afterFixCommand);
   if (!buildOk) {
@@ -154,12 +159,16 @@ WorkspaceConfig _loadConfig(FileIO fileIO, String workspace) {
   }
 }
 
-Future<bool> _defaultBuild(String command) async {
+Future<bool> _defaultBuild(
+  String command,
+  String workingDirectory,
+  ProcessRunner proc,
+) async {
   final parts = command.split(' ');
-  final result = await Process.run(
+  final result = await proc.run(
     parts.first,
     parts.skip(1).toList(),
-    runInShell: true,
+    workingDirectory: workingDirectory,
   );
   return result.exitCode == 0;
 }

@@ -139,10 +139,16 @@ Future<void> main(List<String> rawArgs) async {
         }
       }
       final scanRoot = detectGitContext()?.root;
-      final scanWorkspace = scanRoot != null
-          ? Registry.load().findByProjectRoot(scanRoot)?.workspacePath
+      final scanEntry = scanRoot != null
+          ? Registry.load().findByProjectRoot(scanRoot)
           : null;
-      await runScan(scope: scope, full: full, workspacePath: scanWorkspace);
+      await runScan(
+        scope: scope,
+        full: full,
+        projectRootOverride: scanEntry?.projectRoot,
+        sensitivityModeOverride: scanEntry?.sensitivityMode,
+        workspacePath: scanEntry?.workspacePath,
+      );
     case 'report':
       final fileIssue = rest.contains('--file-issue');
       final reportRoot = detectGitContext()?.root;

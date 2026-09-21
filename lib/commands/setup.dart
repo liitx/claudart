@@ -150,7 +150,12 @@ Future<void> runSetup({
 
   // Run sensitivity scan if enabled.
   if (entry.sensitivityMode) {
-    await runScan(scope: null, projectRootOverride: projectRoot, workspacePath: workspace);
+    await runScan(
+      scope: null,
+      projectRootOverride: projectRoot,
+      sensitivityModeOverride: entry.sensitivityMode,
+      workspacePath: workspace,
+    );
   }
 
   // Build handoff content.

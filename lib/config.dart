@@ -1,8 +1,3 @@
-import 'dart:convert';
-import 'package:path/path.dart' as p;
-import 'file_io.dart';
-import 'paths.dart';
-
 /// Project-level persistent config stored as config.json in the workspace.
 class WorkspaceConfig {
   final bool sensitivityMode;
@@ -68,24 +63,4 @@ class WorkspaceConfig {
       afterFixCommand: afterFixCommand ?? this.afterFixCommand,
     );
   }
-}
-
-String get configPath => p.join(claudeDir, 'config.json');
-
-WorkspaceConfig loadConfig({FileIO? io}) {
-  final fileIO = io ?? const RealFileIO();
-  final raw = fileIO.read(configPath);
-  if (raw.isEmpty) return const WorkspaceConfig();
-  try {
-    final json = jsonDecode(raw) as Map<String, dynamic>;
-    return WorkspaceConfig.fromJson(json);
-  } on FormatException {
-    return const WorkspaceConfig();
-  }
-}
-
-void saveConfig(WorkspaceConfig config, {FileIO? io}) {
-  final fileIO = io ?? const RealFileIO();
-  const encoder = JsonEncoder.withIndent('  ');
-  fileIO.write(configPath, encoder.convert(config.toJson()));
 }
