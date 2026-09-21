@@ -483,6 +483,31 @@ void main() {
       expect('## Root Cause Patterns'.allMatches(skills).length, equals(1));
       expect('## Session Index'.allMatches(skills).length, equals(1));
     });
+
+    test('clears the branch\'s Pending entries written by a prior save',
+        () async {
+      final io = _io(handoff: _richHandoff);
+      io.write(skillsPathFor(_workspace), '''# Accumulated Skills
+
+## Pending
+
+- `fix/null-ref` (2026-03-01): root cause — ConfigLoader splits path on spaces
+
+## Root Cause Patterns
+
+_No patterns recorded yet._
+''');
+      await runTeardown(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        promptFn: _prompts(_richAnswers),
+        pickFn: _pick(TeardownCategory.stateManagement),
+        exitFn: _throwExit,
+      );
+      final skills = io.read(skillsPathFor(_workspace));
+      expect(skills, isNot(contains('`fix/null-ref` (2026-03-01): root cause')));
+    });
   });
 
   // ── Pre-population ────────────────────────────────────────────────────────

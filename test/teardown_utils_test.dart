@@ -122,6 +122,47 @@ content
     });
   });
 
+  group('clearPendingForBranch', () {
+    const withTwoBranches = '''## Pending
+
+> Confirmed facts from in-progress sessions.
+
+- `fix/a` (2026-01-01): root cause — cause A
+- `fix/b` (2026-01-01): root cause — cause B
+
+## Other
+
+content
+''';
+
+    test('removes only the named branch entry', () {
+      final result = clearPendingForBranch(withTwoBranches, 'fix/a');
+      expect(result, isNot(contains('cause A')));
+      expect(result, contains('cause B'));
+      expect(result, contains('> Confirmed facts from in-progress sessions.'));
+    });
+
+    test('restores placeholder when the branch was the only entry', () {
+      const single = '''## Pending
+
+- `fix/a` (2026-01-01): root cause — cause A
+
+## Other
+
+content
+''';
+      final result = clearPendingForBranch(single, 'fix/a');
+      expect(result, contains('_Nothing yet._'));
+      expect(result, isNot(contains('cause A')));
+    });
+
+    test('leaves skills unchanged when branch has no pending entry', () {
+      final result = clearPendingForBranch(withTwoBranches, 'fix/c');
+      expect(result, contains('cause A'));
+      expect(result, contains('cause B'));
+    });
+  });
+
   group('incrementHotPath', () {
     const blankSkills = '''## Hot Paths
 
