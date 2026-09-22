@@ -36,15 +36,20 @@ String? archiveCurrentHandoff({
 
   final state = SessionState.parse(content);
   final branch = state.branch;
-  final fileName = archiveName(branch);
+  final baseName = archiveName(branch);
   final dir = archiveDirFor(workspace);
+  var fileName = baseName;
+  var suffix = 1;
+  while (fileIO.fileExists(p.join(dir, fileName))) {
+    fileName = '${p.basenameWithoutExtension(baseName)}_${suffix++}.md';
+  }
   fileIO.createDir(dir);
   fileIO.write(p.join(dir, fileName), content);
 
   appendToIndex(
     workspace,
     ArchiveEntry(
-      id:          '${branch}_${DateTime.now().millisecondsSinceEpoch}',
+      id:          p.basenameWithoutExtension(fileName),
       kind:        kind,
       description: state.bug.trim().isEmpty
           ? (description ?? 'session snapshot')

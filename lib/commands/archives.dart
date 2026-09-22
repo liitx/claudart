@@ -13,6 +13,7 @@ import '../git_utils.dart';
 import '../paths.dart';
 import '../registry.dart';
 import '../session/archive_entry.dart';
+import '../session/session_ops.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../workspace/workspace_index.dart';
@@ -108,7 +109,9 @@ bool _resume(FileIO fileIO, String workspace, ArchiveEntry e) {
     print('${ansi.red}✗${ansi.reset}  Snapshot file not found: $src');
     return false;
   }
-  fileIO.write(dest, fileIO.read(src));
+  final content = fileIO.read(src);
+  archiveCurrentHandoff(workspace: workspace, io: fileIO);
+  fileIO.write(dest, content);
   return true;
 }
 
