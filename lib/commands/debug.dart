@@ -66,9 +66,7 @@ Future<void> runDebug({
 
   // ── Parse handoff ───────────────────────────────────────────────────────────
 
-  final bug       = readSection(handoff, 'Bug');
   final expected  = readSection(handoff, 'Expected Behavior');
-  final rootCause = readSection(handoff, 'Root Cause');
   final scope     = readSection(handoff, 'Scope');
   final files     = parseScopeFiles(scope, projectRoot);
 
@@ -91,20 +89,11 @@ Future<void> runDebug({
     '  ${ansi.dim}[3] Write files${ansi.reset}\n',
   );
 
-  // ── Build context: prepend root cause + expected to bug ─────────────────────
-
-  final fullBug = [
-    if (bug.isNotEmpty) '## Bug\n$bug',
-    if (rootCause.isNotEmpty && rootCause != '_Not yet determined._')
-      '## Root Cause\n$rootCause',
-    if (expected.isNotEmpty) '## Expected Behavior\n$expected',
-  ].join('\n\n');
-
   // ── Phase 1: reader ─────────────────────────────────────────────────────────
 
   var ctx = PipelineContext(
     projectRoot: projectRoot,
-    bug:         fullBug,
+    bug:         handoff,
     expected:    expected,
     files:       files,
   );

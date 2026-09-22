@@ -25,6 +25,8 @@ abstract final class DebugSteps {
       '  - Execute the fix path defined in the handoff exactly.\n'
       '  - Minimal diff only. No refactoring of surrounding code.\n'
       '  - Do not touch files listed under Must not touch.\n'
+      '  - Honor the handoff constraints and existing debug progress.\n'
+      '  - Pending Issues are deferred work outside this fix.\n'
       '  - Only reference types, classes, and enums present in the file contents '
       'and known types list provided. Do not invent or assume types.\n'
       '  - Output ONLY the structured XML tags below. No prose outside tags.\n\n'
