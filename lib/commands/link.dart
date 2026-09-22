@@ -1,8 +1,8 @@
 import 'dart:io';
-import '../ui/line_editor.dart' as editor;
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../md_io.dart' show confirm;
 import '../paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
@@ -23,7 +23,7 @@ Future<void> runLink(
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final confirm_ = confirmFn ?? _defaultConfirm;
+  final confirm_ = confirmFn ?? confirm;
   final exit_ = exitFn ?? exit;
 
   print(render.header('CLAUDART LINK'));
@@ -182,12 +182,6 @@ void _ensureGitignore(String projectRoot, FileIO fileIO) {
 
   fileIO.write(path, current);
   print('  .gitignore: added ${missing.join(', ')}');
-}
-
-bool _defaultConfirm(String question) {
-  stdout.write('\n$question [y/n]\n');
-  final input = editor.readLine(optional: true);
-  return input?.toLowerCase() == 'y' || input?.toLowerCase() == 'yes';
 }
 
 String _detectProjectName(String projectRoot) {

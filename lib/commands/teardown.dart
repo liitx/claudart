@@ -329,6 +329,10 @@ void _updateSkills({
   var skills =
       fileIO.fileExists(skillsFile) ? fileIO.read(skillsFile) : _defaultSkillsTemplate();
 
+  if (branch != 'unknown') {
+    skills = clearPendingForBranch(skills, branch);
+  }
+
   final date = DateTime.now().toIso8601String().split('T').first;
 
   skills = appendToSection(

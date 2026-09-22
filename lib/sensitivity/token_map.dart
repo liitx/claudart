@@ -105,20 +105,23 @@ class TokenMap {
     return '$prefix:${_indexToLetters(idx)}';
   }
 
+  /// Excel-column style: A..Z, AA..AZ, BA..ZZ, AAA..., unbounded.
   static String _indexToLetters(int idx) {
-    // A-Z then AA, AB...
-    const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    if (idx < 26) return alpha[idx];
-    final high = (idx ~/ 26) - 1;
-    final low = idx % 26;
-    return '${alpha[high]}${alpha[low]}';
+    var n = idx + 1;
+    var result = '';
+    while (n > 0) {
+      n -= 1;
+      result = String.fromCharCode(65 + (n % 26)) + result;
+      n ~/= 26;
+    }
+    return result;
   }
 
   static int _letterIndex(String letters) {
-    const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    if (letters.length == 1) return alpha.indexOf(letters);
-    final high = alpha.indexOf(letters[0]);
-    final low = alpha.indexOf(letters[1]);
-    return (high + 1) * 26 + low;
+    var n = 0;
+    for (final code in letters.codeUnits) {
+      n = n * 26 + (code - 64);
+    }
+    return n - 1;
   }
 }

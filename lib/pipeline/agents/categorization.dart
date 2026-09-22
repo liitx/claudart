@@ -3,7 +3,7 @@
 // Three orthogonal axes form a Cartesian product:
 //
 //   T = AgentCategory × IntentClass × ComplexityTier
-//     = 5 × 4 × 3 = 60 cells
+//     = 6 × 5 × 3 = 90 cells
 //
 // Model routing function:
 //   τ : T → AgentModel  (total — exhaustive switch, Gap = ∅ by construction)
@@ -160,7 +160,7 @@ enum ComplexityTier {
 
 /// τ : AgentCategory × IntentClass × ComplexityTier → AgentModel
 ///
-/// Total function — exhaustive switch over all 60 cells.
+/// Total function — exhaustive switch over all 90 cells.
 /// Three-layer rationale:
 ///   Theory:  opus excels at broad discovery; sonnet at reasoning + generation;
 ///            haiku at fast structured lookup.
