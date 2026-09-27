@@ -7,35 +7,37 @@ import 'ui/line_editor.dart' as editor;
 /// Returns the trimmed content, or `_Not yet determined._` if not found.
 String readSection(String content, String header) {
   final pattern = RegExp(
-    r'## ' + RegExp.escape(header) + r'\n+([\s\S]*?)(?=\n## |\s*$)',
+    r'## ' + RegExp.escape(header) + r'(?:\r?\n)+([\s\S]*?)(?=\r?\n## |\s*$)',
   );
   final match = pattern.firstMatch(content);
   final raw = match?.group(1) ?? '_Not yet determined._';
-  return raw.replaceAll(RegExp(r'\n*-{3,}\n*$'), '').trim();
+  return raw.replaceAll(RegExp(r'(?:\r?\n)*-{3,}(?:\r?\n)*$'), '').trim();
 }
 
 /// Replaces the content of a section in markdown, preserving surrounding sections.
 String updateSection(String content, String header, String newContent) {
+  final newline = content.contains('\r\n') ? '\r\n' : '\n';
+  final replacement = newContent.replaceAll('\r\n', '\n').replaceAll('\n', newline);
   final pattern = RegExp(
-    r'(## ' + RegExp.escape(header) + r'\n+)([\s\S]*?)(?=\n## |\s*$)',
+    r'(## ' + RegExp.escape(header) + r'(?:\r?\n)+)([\s\S]*?)(?=\r?\n## |\s*$)',
   );
   if (pattern.hasMatch(content)) {
-    return content.replaceFirstMapped(pattern, (m) => '${m.group(1)}$newContent\n');
+    return content.replaceFirstMapped(pattern, (m) => '${m.group(1)}$replacement$newline');
   }
   // Section not found — append it
-  return '$content\n## $header\n\n$newContent\n';
+  return '$content$newline## $header$newline$newline$replacement$newline';
 }
 
 /// Reads the Status line value from the handoff.
 String readStatus(String content) {
-  final match = RegExp(r'## Status\n+(\S[^\n]*)').firstMatch(content);
+  final match = RegExp(r'## Status(?:\r?\n)+(\S[^\r\n]*)').firstMatch(content);
   return match?.group(1)?.trim() ?? 'unknown';
 }
 
 /// Updates the Status line in the handoff.
 String updateStatus(String content, String status) {
   return content.replaceFirstMapped(
-    RegExp(r'(## Status\n+)(\S[^\n]*)'),
+    RegExp(r'(## Status(?:\r?\n)+)(\S[^\r\n]*)'),
     (m) => '${m.group(1)}$status',
   );
 }

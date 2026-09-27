@@ -7,31 +7,33 @@ String extractBranch(String content) {
 
 String extractSection(String content, String header) {
   final match = RegExp(
-    r'## ' + RegExp.escape(header) + r'\n+([\s\S]*?)(?=\n## |\s*$)',
+    r'## ' + RegExp.escape(header) + r'(?:\r?\n)+([\s\S]*?)(?=\r?\n## |\s*$)',
   ).firstMatch(content);
   return match?.group(1)?.trim() ?? '';
 }
 
 String readSubSection(String section, String subheader) {
   final match = RegExp(
-    r'### ' + RegExp.escape(subheader) + r'\n+([\s\S]*?)(?=\n### |\s*$)',
+    r'### ' + RegExp.escape(subheader) + r'(?:\r?\n)+([\s\S]*?)(?=\r?\n### |\s*$)',
   ).firstMatch(section);
   return match?.group(1)?.trim() ?? '_Nothing yet._';
 }
 
 String appendToSection(String content, String header, String newEntry) {
+  final newline = content.contains('\r\n') ? '\r\n' : '\n';
+  final replacement = newEntry.replaceAll('\r\n', '\n').replaceAll('\n', newline);
   final pattern = RegExp(
-    r'(## ' + RegExp.escape(header) + r'\n+)([\s\S]*?)(?=\n## |\s*$)',
+    r'(## ' + RegExp.escape(header) + r'(?:\r?\n)+)([\s\S]*?)(?=\r?\n## |\s*$)',
   );
   final match = pattern.firstMatch(content);
-  if (match == null) return '$content\n## $header\n\n$newEntry\n';
+  if (match == null) return '$content$newline## $header$newline$newline$replacement$newline';
 
   final existing = match.group(2)!.trim();
 
   // Separate blockquote metadata lines (e.g. "> Description of section") from
   // actual content. Metadata lines must not be mistaken for real entries, and
   // must not prevent blank detection when they precede a placeholder.
-  final lines = existing.split('\n');
+  final lines = existing.split(RegExp(r'\r?\n'));
   final metaLines = lines.where((l) => l.trimLeft().startsWith('>')).toList();
   final contentOnly = lines
       .where((l) => !l.trimLeft().startsWith('>'))
@@ -42,9 +44,9 @@ String appendToSection(String content, String header, String newEntry) {
       contentOnly.startsWith('_No') ||
       contentOnly.startsWith('_None');
 
-  final meta = metaLines.isNotEmpty ? '${metaLines.join('\n')}\n\n' : '';
-  final updated = isBlank ? '$meta$newEntry' : '$existing\n$newEntry';
-  return content.replaceFirst(pattern, '${match.group(1)}$updated\n');
+  final meta = metaLines.isNotEmpty ? '${metaLines.join(newline)}$newline$newline' : '';
+  final updated = isBlank ? '$meta$replacement' : '$existing$newline$replacement';
+  return content.replaceFirst(pattern, '${match.group(1)}$updated$newline');
 }
 
 String incrementHotPath(String skills, String area, String file) {
