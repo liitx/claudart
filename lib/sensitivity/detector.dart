@@ -12,6 +12,10 @@ final _camelCase = RegExp(r'\b[a-z]+(?:[A-Z][a-z]+)+\b');
 /// Regex: snake_case .dart filename stems (without extension)
 final _snakeDart = RegExp(r'\b[a-z][a-z0-9]*(?:_[a-z][a-z0-9]+)+\b');
 
+/// Matches the tail of an already-abstracted token (e.g. `:A`, `:AB`),
+/// so a match ending right before one is a token alias, not a real name.
+final _aliasTail = RegExp(r'^:[A-Z]+\b');
+
 /// Safe passthrough identifiers that are never considered sensitive.
 const _safeList = {
   'String', 'int', 'double', 'bool', 'num', 'List', 'Map', 'Set',
@@ -48,18 +52,26 @@ class SensitivityDetector {
     final found = <String>{};
     for (final m in _pascalCase.allMatches(text)) {
       final tok = m.group(0)!;
+      if (_isAliasPrefix(text, m.end)) continue;
       if (isSensitive(tok)) found.add(tok);
     }
     for (final m in _camelCase.allMatches(text)) {
       final tok = m.group(0)!;
+      if (_isAliasPrefix(text, m.end)) continue;
       if (isSensitive(tok)) found.add(tok);
     }
     for (final m in _snakeDart.allMatches(text)) {
       final tok = m.group(0)!;
+      if (_isAliasPrefix(text, m.end)) continue;
       if (isSensitive(tok)) found.add(tok);
     }
     return found.toList();
   }
+
+  /// True when the match ending at [matchEnd] is the prefix part of an
+  /// already-abstracted token (`Prefix:A`), not a real identifier.
+  bool _isAliasPrefix(String text, int matchEnd) =>
+      _aliasTail.hasMatch(text.substring(matchEnd));
 }
 
 /// Default detector using the bundled corpus.

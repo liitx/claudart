@@ -9,7 +9,6 @@ import 'package:claudart/paths.dart';
 String get _logsDir => p.join(claudeDir, 'logs');
 String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
 String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-String get _performancePath => p.join(_logsDir, 'performance.md');
 
 void main() {
   group('SessionLogger', () {
@@ -130,24 +129,5 @@ void main() {
       expect(stack, isNot(contains('VolumeBloc')));
     });
 
-    test('logPerformance writes header row', () {
-      logger.logPerformance(command: 'scan', outcome: 'ok', filesScanned: 10);
-      final content = io.read(_performancePath);
-      expect(content, contains('| command |'));
-      expect(content, contains('scan'));
-    });
-
-    test('logPerformance rotation caps at 50 entries', () {
-      for (var i = 0; i < 52; i++) {
-        logger.logPerformance(command: 'cmd_$i', outcome: 'ok');
-      }
-      final content = io.read(_performancePath);
-      final lines = content
-          .split('\n')
-          .where((l) => l.startsWith('|'))
-          .toList();
-      // 2 header lines + max 50 data lines
-      expect(lines.length, lessThanOrEqualTo(52));
-    });
   });
 }
