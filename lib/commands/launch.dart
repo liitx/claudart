@@ -120,7 +120,7 @@ Future<void> runLauncher({
 
   if (locked) {
     action = pick_([
-      '${ansi.c(ansi.yellow, 'Kill')}   clear lock · archive · remove symlink',
+      '${ansi.c(ansi.yellow, 'Kill')}   clear lock · archive · reset handoff',
       'Back',
     ]);
     if (action == LockedMenu.kill) {

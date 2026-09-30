@@ -1,6 +1,9 @@
+import 'command_template_marker.dart';
+
 String setupCommandTemplate(String workspacePath, String projectName) =>
     '''---
 description: Compile workspace scaffold — $projectName
+$claudartCommandMarker
 ---
 
 ''' +

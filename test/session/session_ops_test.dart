@@ -82,19 +82,6 @@ void main() {
     });
   });
 
-  group('removeSessionLink', () {
-    test('removes .claude symlink from project root', () {
-      final io = _io();
-      removeSessionLink(_project, io: io);
-      expect(io.linkExists(_claudeLink), isFalse);
-    });
-
-    test('is safe when no symlink exists', () {
-      final io = _io(withLink: false);
-      expect(() => removeSessionLink(_project, io: io), returnsNormally);
-    });
-  });
-
   group('closeSession — success path', () {
     test('archives handoff', () async {
       final io = _io();
@@ -111,22 +98,22 @@ void main() {
       expect(io.read(handoffPathFor(_workspace)), equals(blankHandoff));
     });
 
-    test('removes .claude symlink', () async {
+    test('leaves the .claude symlink untouched', () async {
       final io = _io();
       await closeSession(_workspace, _project, io: io);
-      expect(io.linkExists(_claudeLink), isFalse);
+      expect(io.linkExists(_claudeLink), isTrue);
     });
 
     test('leaves no partial state after success', () async {
       final io = _io();
       await closeSession(_workspace, _project, io: io);
-      // Archive written, handoff reset, symlink gone.
+      // Archive written, handoff reset. Symlink lifecycle belongs to
+      // link/unlink, not to closing a session.
       final archived = io.files.keys
           .where((k) => k.startsWith(archiveDirFor(_workspace)))
           .toList();
       expect(archived, hasLength(1));
       expect(io.read(handoffPathFor(_workspace)), equals(blankHandoff));
-      expect(io.linkExists(_claudeLink), isFalse);
     });
   });
 
@@ -176,38 +163,6 @@ void main() {
     });
   });
 
-  group('closeSession — rollback on step 3 failure (unlink fails)', () {
-    test('handoff is restored when unlink throws', () async {
-      final io = _FailOnUnlinkIO(delegate: _io());
-      await expectLater(
-        closeSession(_workspace, _project, io: io),
-        throwsA(isA<SessionCloseException>()),
-      );
-      expect(io.delegate.read(handoffPathFor(_workspace)), equals(_activeHandoff));
-    });
-
-    test('archive is deleted when unlink throws', () async {
-      final io = _FailOnUnlinkIO(delegate: _io());
-      await expectLater(
-        closeSession(_workspace, _project, io: io),
-        throwsA(isA<SessionCloseException>()),
-      );
-      final archived = io.delegate.files.keys
-          .where((k) => k.startsWith(archiveDirFor(_workspace)))
-          .toList();
-      expect(archived, isEmpty);
-    });
-
-    test('exception identifies the failed step', () async {
-      final io = _FailOnUnlinkIO(delegate: _io());
-      try {
-        await closeSession(_workspace, _project, io: io);
-        fail('expected exception');
-      } on SessionCloseException catch (e) {
-        expect(e.failedStep, equals('unlink'));
-      }
-    });
-  });
 }
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -243,27 +198,6 @@ class _FailOnWriteIO implements FileIO {
       delegate.listFiles(d, extension: extension);
   @override bool linkExists(String path) => delegate.linkExists(path);
   @override void deleteLink(String path) => delegate.deleteLink(path);
-  @override void createLink(String linkPath, String targetPath) =>
-      delegate.createLink(linkPath, targetPath);
-}
-
-/// Delegates all ops to [delegate] but throws on deleteLink.
-class _FailOnUnlinkIO implements FileIO {
-  final MemoryFileIO delegate;
-  _FailOnUnlinkIO({required this.delegate});
-
-  @override
-  void deleteLink(String path) => throw Exception('simulated unlink failure');
-
-  @override String read(String path) => delegate.read(path);
-  @override void write(String path, String content) => delegate.write(path, content);
-  @override void delete(String path) => delegate.delete(path);
-  @override bool fileExists(String path) => delegate.fileExists(path);
-  @override bool dirExists(String path) => delegate.dirExists(path);
-  @override void createDir(String path) => delegate.createDir(path);
-  @override List<String> listFiles(String d, {String? extension}) =>
-      delegate.listFiles(d, extension: extension);
-  @override bool linkExists(String path) => delegate.linkExists(path);
   @override void createLink(String linkPath, String targetPath) =>
       delegate.createLink(linkPath, targetPath);
 }

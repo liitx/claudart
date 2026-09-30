@@ -77,7 +77,7 @@ Future<void> runKill({
   final handoff = fileIO.fileExists(handoffPath) ? fileIO.read(handoffPath) : '';
   if (handoff.isEmpty) {
     print('\n⚠  No handoff found in workspace: $workspace');
-    if (!confirm_('Nothing to archive. Remove symlink only?')) {
+    if (!confirm_('Nothing to archive. Reset the session anyway?')) {
       print('\nKill cancelled.\n');
       exit_(0);
     }
@@ -112,8 +112,7 @@ Future<void> runKill({
   sw.stop();
   print('\n✓ Session killed: ${entry.name}  (${sw.elapsedMilliseconds}ms)');
   print('  Handoff archived to ${p.join(workspace, 'archive')}');
-  print('  Handoff reset to blank.');
-  print('  Symlink removed.\n');
+  print('  Handoff reset to blank.\n');
   print('Run `claudart setup` to start a new session.\n');
 }
 
