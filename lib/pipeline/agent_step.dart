@@ -31,6 +31,7 @@ import 'pipeline_context.dart';
 import 'route_tag.dart';
 import 'step_mode.dart';
 import 'step_route.dart';
+import 'tool_grant.dart';
 
 /// Resolves a step's model from the current [PipelineContext]. Total
 /// — must return an [AgentModel]. Selectors that need a fallback for
@@ -91,6 +92,11 @@ class AgentStep {
   /// pipeline_executor_test.dart) do.
   final StepMode mode;
 
+  /// Tools the spawned process may use. Defaults to [ToolGrant.readOnly] —
+  /// every step's edits are parsed from its output and applied by the
+  /// caller, so no step needs write or execute tools yet.
+  final ToolGrant toolGrant;
+
   const AgentStep({
     required this.id,
     required this.label,
@@ -101,6 +107,7 @@ class AgentStep {
     this.routes = const {},
     this.postProcess,
     this.mode = StepMode.project,
+    this.toolGrant = ToolGrant.readOnly,
   });
 
   /// Resolves the model the executor should invoke for this step given

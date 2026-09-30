@@ -18,6 +18,7 @@ import '../md_io.dart' show readSection;
 import '../paths.dart';
 import '../pipeline/agent_model.dart';
 import '../pipeline/pipeline_executor.dart' show ClaudeRunner, defaultClaudeRunner;
+import '../pipeline/tool_grant.dart';
 import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
@@ -121,6 +122,7 @@ Future<void> runChatShell({
         systemPrompt: systemPrompt,
         message:      history.join('\n\n'),
         workingDir:   entry.projectRoot,
+        toolGrant:    ToolGrant.readOnly,
       );
       if (reply == null) {
         print(ansi.c(ansi.red, '  (no reply — is the claude CLI available?)'));

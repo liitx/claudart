@@ -16,6 +16,7 @@ import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/route_tag.dart';
 import 'package:claudart/pipeline/step_mode.dart';
+import 'package:claudart/pipeline/tool_grant.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/step_route.dart';
 import 'package:claudart/pipeline/usage.dart';
@@ -60,6 +61,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             StepResult(text: 'raw output', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
       );
@@ -104,6 +106,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             StepResult(text: 'no tags here', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
       );
@@ -139,6 +142,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             StepResult(text: 'unchanged', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
       );
@@ -172,6 +176,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             const StepResult(
               text: 'answer',
@@ -211,6 +216,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             const StepResult(
               text: 'answer',
@@ -248,6 +254,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             throw Exception('claude exited 1: boom'),
       );
@@ -269,6 +276,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             null,
       );
@@ -324,6 +332,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async {
           if (model == plan.model) {
             planCalls++;
@@ -376,6 +385,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async {
           capturedMode = mode;
           return StepResult(text: '', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0));
@@ -404,6 +414,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async {
           capturedMode = mode;
           return StepResult(text: '', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0));
@@ -432,6 +443,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async =>
             StepResult(text: text, usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0));
 

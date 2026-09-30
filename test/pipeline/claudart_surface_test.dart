@@ -24,6 +24,7 @@ import 'package:claudart/pipeline/claudart_surface.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
+import 'package:claudart/pipeline/tool_grant.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:test/test.dart';
@@ -88,6 +89,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async {
           calls++;
           return const StepResult(
@@ -145,6 +147,7 @@ void main() {
           required message,
           required workingDir,
           StepMode mode = StepMode.project,
+          ToolGrant toolGrant = ToolGrant.readOnly,
         }) async {
           calls++;
           return const StepResult(

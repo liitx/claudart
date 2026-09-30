@@ -5,6 +5,7 @@ import 'package:claudart/logging/planner_log.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
+import 'package:claudart/pipeline/tool_grant.dart';
 import '../helpers/mocks.dart';
 
 // flow_test.dart — validation-path coverage for runFlow (experimental).
@@ -46,7 +47,7 @@ MemoryFileIO _io() {
 PlannerLog _silentPlannerLog() => PlannerLog(path: '/tmp/ignored', appender: (_, __) {});
 
 PipelineExecutor _executorWithNoOutput() =>
-    PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
+    PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project, ToolGrant toolGrant = ToolGrant.readOnly}) async => null);
 
 void main() {
   group('runFlow — validation', () {
