@@ -66,6 +66,40 @@ now `debug-complete` — no active handoff queued. Next candidates: the
 cross-machine test above, or formalizing the backup/restore idea below
 into its own handoff.
 
+Also found via a direct "are you using best Dart practices?" self-audit,
+not caught by `custom_lint` (its `bare_string_for_enum` rule is inert —
+has to be checked by hand): `'HOME'` duplicated across 4 files, `'git'`/`'gh'`
+duplicated within `doctor.dart` itself, `'doctor'` spelled twice in one
+function. All extracted to shared consts, pushed as a follow-up commit
+on the same #51 branch.
+
+---
+
+## Shipped #3 — zedup PR [liitx/zedup#76](https://github.com/liitx/zedup/pull/76) (not yet merged)
+
+The claudart↔zedup↔dartrix trio was asked directly: "are all the
+packages 1:1?" Answer was no — zedup's own `pubspec.yaml` had the
+*identical* class of bug just fixed in claudart's (`dartrix`/`claudart`/
+`claudart_lints` were all local path deps, so a fresh clone of zedup
+alone couldn't `dart pub get` without also cloning both siblings first).
+Fixed the same way: all three switched to git dependencies
+(`claudart_lints` via git + `path:`, since it's a subdirectory of the
+claudart repo, not its own). Branch `fix/git-dependencies-not-path`,
+committed separately from other pre-existing uncommitted work already
+sitting in zedup's working tree (`context_router.dart`/
+`zedup_dashboard.dart` — untouched, left exactly as found).
+
+Verified: `dart pub get` resolves `dartrix`/`claudart` from GitHub's
+`main` (intentionally — #50/#51 aren't merged there yet, so zedup
+currently builds against pre-this-effort claudart), `dart analyze`
+matches the pre-existing 10-issue baseline, 2116 tests passing.
+
+**Still not 1:1 for zedup** — this fix only closes the fresh-clone
+`pub get` blocker. `ZedProfile`'s hardcoded identities, `zedup setup`
+rewriting its own committed source file, and the whole backup/restore
+story are all still backlog, tracked in `skills.md`'s Pending section
+(the parked architecture-shape research).
+
 ---
 
 ## Backlog — parked, not abandoned (full detail in `skills.md`'s `## Pending` section)
