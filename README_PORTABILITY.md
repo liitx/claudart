@@ -701,6 +701,8 @@ AgentProvider.bedrock.missingFrom(env);      // → ['AWS_PROFILE'], e.g.
 
 `AgentProvider` is **not** wired into `defaultClaudeRunner` yet, on purpose — that launch path is live and load-bearing, and forcing provider validation into it without the verification harness below to test the change end-to-end first was judged too risky for the handoff that built it. See [`docs/provider_setup.md`](docs/provider_setup.md) for the full current-state-vs-target writeup, including why `ProcessRunner` (`lib/process_runner.dart`) turned out to be the wrong seam — it's only used by `commands/report.dart` for git/gh subprocesses, not for `claude` itself.
 
+`AgentProvider.detect` does have one real consumer today: `claudart doctor` (`lib/commands/doctor.dart`), the fresh-machine verification harness. Run it on any machine to get a one-line `[OK]`/`[SKIP]`/`[FAIL]` per check — tools on PATH, git identity, `gh` auth, and provider env — without touching the live pipeline.
+
 ---
 
 ## Git identity across machines
@@ -715,12 +717,14 @@ AgentProvider.bedrock.missingFrom(env);      // → ['AWS_PROFILE'], e.g.
 
 The discrepancy ledger this fork exists to hold. Each item below was found while setting claudart up fresh on a new machine and is tracked here until it's closed, at which point it moves to the real `README.md` and this entry is deleted — this list is expected to shrink, not grow indefinitely.
 
-| Gap | What's missing | Tracked |
-|---|---|---|
-| Bedrock / OpenRouter provider wiring | `AgentProvider` exists (see [Providers](#providers)) but isn't consulted before a real `claude` launch | `docs/provider_setup.md` |
-| Zed-editor integration for `claudart link` | `lib/commands/link.dart` creates `.claude/commands` and `.cursor/commands` only — zero Zed-editor-specific scaffolding, despite one real machine depending on Zed's own `settings.json` for its entire Bedrock auth chain | tabled — no second real IDE target to generalize against yet; building for a hypothetical one would be premature abstraction |
-| zedup env/workspace resolution tied to Zed | `ZedProfile` (zedup) is **not** actually IDE coupling — confirmed by reading it directly, it's liitx-vs-toyota org identity (branch types, PR templates, GitHub owners). The one real Zed-editor seam is narrow: `ZedHelper.zedLauncher`, which launches the `zed` binary. Don't conflate the two when scoping this | tabled alongside the item above |
-| Fresh-machine verification harness | An idempotent, `[OK]`/`[SKIP]`/`[FAIL]`-logging script covering tools/SSH/gitconfig/`gh` auth/clones/git perf/Zed-settings-merge/provider-env/verification pass — scoped, not yet built. Depends on the two items above being settled first | planned next, dependency-ordered after Providers and the IDE-coupling gaps |
+Backed by [`PortabilityGap`](lib/portability_gap.dart) — one enum variant per row below, `PortabilityGapStatus` for the open/tabled/planned column, matrix-tested in `test/portability_gap_test.dart`. This table is the human-readable view of that enum; if the two drift, the enum is the source of truth.
+
+| Gap | What's missing | Status | Tracked |
+|---|---|---|---|
+| Bedrock / OpenRouter provider wiring | `AgentProvider` exists (see [Providers](#providers)) but isn't consulted before a real `claude` launch | open | `docs/provider_setup.md` |
+| Zed-editor integration for `claudart link` | `lib/commands/link.dart` creates `.claude/commands` and `.cursor/commands` only — zero Zed-editor-specific scaffolding, despite one real machine depending on Zed's own `settings.json` for its entire Bedrock auth chain | tabled | no second real IDE target to generalize against yet; building for a hypothetical one would be premature abstraction |
+| zedup env/workspace resolution tied to Zed | `ZedProfile` (zedup) is **not** actually IDE coupling — confirmed by reading it directly, it's liitx-vs-toyota org identity (branch types, PR templates, GitHub owners). The one real Zed-editor seam is narrow: `ZedHelper.zedLauncher`, which launches the `zed` binary. Don't conflate the two when scoping this | tabled | alongside the item above |
+| Fresh-machine verification harness | `claudart doctor` ships today — tools-on-PATH, git identity, `gh` auth, provider env, one `[OK]`/`[SKIP]`/`[FAIL]` line each. Still missing: clones, git-performance, and Zed-settings-merge checks — guessing at those risks encoding a wrong assumption as a passing check, so they wait on the original zip's Section 11 spec being re-verified | open | `lib/commands/doctor.dart`, `test/commands/doctor_test.dart` |
 
 ---
 

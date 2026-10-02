@@ -31,7 +31,8 @@ enum ClaudartCommand {
   report,
   map,
   experiment,
-  compile;
+  compile,
+  doctor;
 
   /// Wire-format name as typed on the command line.
   String get wireName => switch (this) {
@@ -58,6 +59,7 @@ enum ClaudartCommand {
         map            => 'map',
         experiment     => 'experiment',
         compile        => 'compile',
+        doctor         => 'doctor',
       };
 
   /// Resolves a [ClaudartCommand] from the first CLI argument. Returns null
@@ -87,6 +89,7 @@ enum ClaudartCommand {
         'map'            => map,
         'experiment'     => experiment,
         'compile'        => compile,
+        'doctor'         => doctor,
         _                => null,
       };
 }

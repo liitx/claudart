@@ -75,16 +75,20 @@ enum PortabilityGap {
 
   /// The Section 11 harness spec from the original machine-setup zip:
   /// idempotent, [OK]/[SKIP]/[FAIL]-logging checks across the whole
-  /// fresh-machine setup surface.
+  /// fresh-machine setup surface. `claudart doctor` ships tools/git-
+  /// identity/gh-auth/provider-env; clones/git-perf/Zed-settings-merge
+  /// still need the original zip's exact spec re-verified before they're
+  /// implemented for real.
   verificationHarness(
-    status: PortabilityGapStatus.planned,
+    status: PortabilityGapStatus.open,
     whatsMissing:
-        'An idempotent, [OK]/[SKIP]/[FAIL]-logging script covering '
-        'tools/SSH/gitconfig/gh auth/clones/git perf/Zed-settings-merge/'
-        'provider-env/verification pass — scoped, not yet built',
-    trackedIn:
-        'planned next, dependency-ordered after providerWiring and the '
-        'IDE-coupling gaps',
+        'claudart doctor (lib/commands/doctor.dart) covers tools-on-PATH, '
+        'git identity, gh auth, and provider env. Still missing: clones, '
+        'git-performance, and Zed-settings-merge checks — guessing at '
+        'those risks encoding a wrong assumption as a passing check, so '
+        "they're deferred until the original zip's Section 11 spec is "
+        're-verified',
+    trackedIn: 'lib/commands/doctor.dart, test/commands/doctor_test.dart',
   );
 
   const PortabilityGap({

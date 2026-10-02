@@ -8,6 +8,7 @@ import 'package:claudart/commands/archives.dart';
 import 'package:claudart/commands/chat_shell.dart';
 import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/confirm_pending.dart';
+import 'package:claudart/commands/doctor.dart';
 import 'package:claudart/commands/experiment.dart';
 import 'package:claudart/commands/init.dart';
 import 'package:claudart/commands/kill.dart';
@@ -63,6 +64,7 @@ Commands:
   map                    Generate token_map.md from token_map.json
   experiment <name> -- <cmd> [args]  Run a command and tee output to experiments/<name>_<ts>.ansi
   compile                Recompile the claudart binary and install it to ~/bin/claudart
+  doctor                 Fresh-machine verification: tools on PATH, git identity, gh auth, provider env
   version                Print the current claudart version
 
 Options:
@@ -188,6 +190,8 @@ Future<void> main(List<String> rawArgs) async {
       await runExperiment(rest);
     case ClaudartCommand.compile:
       exit(_compile());
+    case ClaudartCommand.doctor:
+      await runDoctor();
   }
 }
 

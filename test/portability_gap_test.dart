@@ -37,9 +37,9 @@ void main() {
   });
 
   group('PortabilityGap.verificationHarness', () {
-    test('is planned — depends on the other gaps settling first', () {
-      expect(PortabilityGap.verificationHarness.status, equals(PortabilityGapStatus.planned));
-      expect(PortabilityGap.verificationHarness.trackedIn, contains('providerWiring'));
+    test('is open — claudart doctor ships a partial check set', () {
+      expect(PortabilityGap.verificationHarness.status, equals(PortabilityGapStatus.open));
+      expect(PortabilityGap.verificationHarness.trackedIn, contains('doctor.dart'));
     });
   });
 
