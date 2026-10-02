@@ -259,7 +259,9 @@ HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
       ? (
           id: HarnessCheckId.registryHealth,
           result: HarnessCheckResult.ok,
-          detail: '${registry.entries.length} entries, all projectRoots exist',
+          detail: '${registry.entries.length} '
+              '${registry.entries.length == 1 ? 'entry' : 'entries'}, '
+              'all projectRoots exist',
         )
       : (
           id: HarnessCheckId.registryHealth,

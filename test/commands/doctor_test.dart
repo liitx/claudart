@@ -351,6 +351,9 @@ void main() {
       );
       final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
       expect(health.result, equals(HarnessCheckResult.ok));
+      // Singular "1 entry", not "1 entries" — caught during cross-machine
+      // testing of this PR.
+      expect(health.detail, contains('1 entry,'));
     });
 
     test('fails and names the stale entry when a projectRoot no longer exists', () async {
