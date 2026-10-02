@@ -34,23 +34,37 @@ detection gap found and closed.
 
 ---
 
-## Active handoff (this is what `/suggest-claudart` or `/debug-claudart` will pick up right now)
+## Shipped #2 — PR [liitx/claudart#51](https://github.com/liitx/claudart/pull/51) (stacked on #50, not yet merged)
 
-**`/Users/aksana.buster/dev/dev_tools/claude/claudart/handoff.md`** —
-status `ready-for-debug`. 5 concrete, already-root-caused fixes:
+Branch `fix/workspace-registry-onboarding`, built from #50's tip (not
+`main` — `main` was missing #50's 3 follow-up fixes). The handoff above
+this section was `ready-for-debug` with zero open questions, so
+implementation went straight through rather than waiting on a separate
+`/debug-claudart` invocation. All 5 items shipped:
 
-1. Split-brain workspace registry (`lib/paths.dart:30-38`'s top-level
-   `final` + `lib/logging/planner_log.dart:141`'s independent hardcode) —
-   **live bug on this machine right now**, two diverging registries.
-2. `pubspec.yaml`'s `dartrix` dependency → switch to a git dependency
-   (decided).
-3. `CLAUDE.md:67` (the one genuinely-hardcoded path — corrected finding,
-   lines 107/110/111 self-heal via `claudart link`).
-4. Wire `claudart doctor`'s output into `SessionLogger.logInteraction`/`logError`
-   (`lib/logging/logger.dart`) so runs are visible via `claudart report`
-   instead of hand-pasted into chat.
-5. Expand `doctor` with workspace-health checks (registry entries point
-   to real paths, `CLAUDART_WORKSPACE` actually set, `~/bin` on PATH).
+1. Split-brain workspace registry, fixed — `workspacesRoot`
+   (`lib/paths.dart`) final → getter; `planner_log.dart`'s independent
+   hardcode now resolves through the same path.
+2. `pubspec.yaml`'s `dartrix` → git dependency.
+3. `CLAUDE.md`'s `PARADIGMS.md` pointer no longer a fixed absolute path.
+4. `claudart doctor` now logs every run via `SessionLogger`, visible
+   through `claudart report`.
+5. 3 new `HarnessCheckId` checks: `workspaceRoot`, `registryHealth`,
+   `pathConfiguration`.
+
+Caught and fixed mid-session: `'CLAUDART_WORKSPACE'` had become a bare
+string duplicated across two files — extracted to a shared
+`claudartWorkspaceEnvVar` const before committing, per a direct "are you
+using best Dart practices?" check. `dart analyze` + `dart run
+custom_lint` both clean, 1253 tests passing, real smoke-tested on this
+machine (all 7 checks, confirmed logging into `claudart report`'s
+output). Cross-machine test on the Bedrock machine not yet run for this
+PR — requested in the PR body, same as #50's process.
+
+**`/Users/aksana.buster/dev/dev_tools/claude/claudart/handoff.md`** is
+now `debug-complete` — no active handoff queued. Next candidates: the
+cross-machine test above, or formalizing the backup/restore idea below
+into its own handoff.
 
 ---
 
