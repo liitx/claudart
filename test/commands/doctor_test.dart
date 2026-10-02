@@ -11,6 +11,8 @@ import 'package:claudart/harness/harness_check.dart';
 import 'package:claudart/process_runner.dart';
 import 'package:test/test.dart';
 
+import '../helpers/mocks.dart';
+
 /// Thrown by the injected exitFn so tests can assert exit-code behaviour
 /// without terminating the process.
 class _ExitException implements Exception {
@@ -80,6 +82,7 @@ void main() {
         runner: _FakeProcessRunner(_responses()),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final tools = outcomes.firstWhere((o) => o.id == HarnessCheckId.tools);
       expect(tools.result, equals(HarnessCheckResult.ok));
@@ -91,6 +94,7 @@ void main() {
         runner: _FakeProcessRunner(_responses(claudeOnPath: false)),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final tools = outcomes.firstWhere((o) => o.id == HarnessCheckId.tools);
       expect(tools.result, equals(HarnessCheckResult.fail));
@@ -104,6 +108,7 @@ void main() {
         runner: _FakeProcessRunner(_responses(), notFound: const {'gh'}),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final auth = outcomes.firstWhere((o) => o.id == HarnessCheckId.ghAuth);
       expect(auth.result, equals(HarnessCheckResult.fail));
@@ -114,6 +119,7 @@ void main() {
         runner: _FakeProcessRunner(_responses(), notFound: const {'git'}),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final identity = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitIdentity);
       expect(identity.result, equals(HarnessCheckResult.fail));
@@ -124,6 +130,7 @@ void main() {
         runner: _FakeProcessRunner(_responses(), notFound: const {'which'}),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final tools = outcomes.firstWhere((o) => o.id == HarnessCheckId.tools);
       expect(tools.result, equals(HarnessCheckResult.fail));
@@ -136,6 +143,7 @@ void main() {
         runner: _FakeProcessRunner(_responses()),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final identity = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitIdentity);
       expect(identity.result, equals(HarnessCheckResult.ok));
@@ -147,6 +155,7 @@ void main() {
         runner: _FakeProcessRunner(_responses(gitIdentitySet: false)),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final identity = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitIdentity);
       expect(identity.result, equals(HarnessCheckResult.fail));
@@ -159,6 +168,7 @@ void main() {
         runner: _FakeProcessRunner(_responses()),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final auth = outcomes.firstWhere((o) => o.id == HarnessCheckId.ghAuth);
       expect(auth.result, equals(HarnessCheckResult.ok));
@@ -169,6 +179,7 @@ void main() {
         runner: _FakeProcessRunner(_responses(ghAuthed: false)),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final auth = outcomes.firstWhere((o) => o.id == HarnessCheckId.ghAuth);
       expect(auth.result, equals(HarnessCheckResult.fail));
@@ -181,6 +192,7 @@ void main() {
         runner: _FakeProcessRunner(_responses()),
         env: const {'ANTHROPIC_API_KEY': 'sk-ant-test'},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final provider = outcomes.firstWhere((o) => o.id == HarnessCheckId.providerEnv);
       expect(provider.result, equals(HarnessCheckResult.ok));
@@ -192,9 +204,25 @@ void main() {
         runner: _FakeProcessRunner(_responses()),
         env: const {},
         projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
       );
       final provider = outcomes.firstWhere((o) => o.id == HarnessCheckId.providerEnv);
       expect(provider.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('ok when a provider is configured only in ~/.claude/settings.json, not process env', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: const {},
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {
+          '/fake/settings.json': '{"env": {"ANTHROPIC_API_KEY": "sk-ant-test"}}',
+        }),
+        claudeSettingsPath: '/fake/settings.json',
+      );
+      final provider = outcomes.firstWhere((o) => o.id == HarnessCheckId.providerEnv);
+      expect(provider.result, equals(HarnessCheckResult.ok));
+      expect(provider.detail, contains('apiKey'));
     });
   });
 
@@ -206,6 +234,7 @@ void main() {
           runner: _FakeProcessRunner(_responses()),
           env: const {},
           projectRootOverride: '/fake/repo',
+          io: MemoryFileIO(),
           exitFn: _throwExit,
         );
       } on _ExitException catch (e) {
@@ -222,6 +251,7 @@ void main() {
           runner: _FakeProcessRunner(_responses(ghAuthed: false)),
           env: const {},
           projectRootOverride: '/fake/repo',
+          io: MemoryFileIO(),
           exitFn: _throwExit,
         );
       } on _ExitException catch (e) {

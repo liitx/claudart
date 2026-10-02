@@ -6,6 +6,7 @@
 
 import 'dart:io';
 
+import '../file_io.dart';
 import '../harness/harness_check.dart';
 import '../process_runner.dart';
 import '../providers/agent_provider.dart';
@@ -39,16 +40,17 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
   ProcessRunner? runner,
   Map<String, String>? env,
   String? projectRoot,
+  FileIO? io,
+  String? claudeSettingsPath,
 }) async {
   final proc = runner ?? const RealProcessRunner();
-  final environment = env ?? Platform.environment;
   final root = projectRoot ?? Directory.current.path;
 
   return [
     await _checkTools(proc),
     await _checkGitIdentity(proc, root),
     await _checkGhAuth(proc),
-    _checkProviderEnv(environment),
+    _checkProviderEnv(env, io: io, settingsPath: claudeSettingsPath),
   ];
 }
 
@@ -110,8 +112,16 @@ Future<HarnessCheckOutcome> _checkGhAuth(ProcessRunner proc) async {
         );
 }
 
-HarnessCheckOutcome _checkProviderEnv(Map<String, String> env) {
-  final provider = AgentProvider.detect(env);
+HarnessCheckOutcome _checkProviderEnv(
+  Map<String, String>? processEnv, {
+  FileIO? io,
+  String? settingsPath,
+}) {
+  final provider = AgentProvider.detectEffective(
+    processEnv: processEnv,
+    io: io,
+    settingsPath: settingsPath,
+  );
   if (provider != null) {
     return (
       id: HarnessCheckId.providerEnv,
@@ -122,9 +132,8 @@ HarnessCheckOutcome _checkProviderEnv(Map<String, String> env) {
   return (
     id: HarnessCheckId.providerEnv,
     result: HarnessCheckResult.skip,
-    detail: 'no provider env vars in this process — fine for OAuth login; '
-        'NOT proof Bedrock is absent if ~/.claude/settings.json configures '
-        'it directly (claude reads that file itself, this check cannot see it)',
+    detail: 'no provider found in this process\'s environment or '
+        '~/.claude/settings.json — fine for OAuth login',
   );
 }
 
@@ -134,6 +143,8 @@ Future<void> runDoctor({
   ProcessRunner? runner,
   Map<String, String>? env,
   String? projectRootOverride,
+  FileIO? io,
+  String? claudeSettingsPath,
   Never Function(int code)? exitFn,
 }) async {
   final exit_ = exitFn ?? exit;
@@ -141,6 +152,8 @@ Future<void> runDoctor({
     runner: runner,
     env: env,
     projectRoot: projectRootOverride,
+    io: io,
+    claudeSettingsPath: claudeSettingsPath,
   );
   for (final outcome in outcomes) {
     print(formatHarnessOutcome(outcome));

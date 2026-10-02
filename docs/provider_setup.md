@@ -23,14 +23,18 @@ identical to claudart: it just launched `claude` and hoped.
   script for manual check/refresh. Zed editor's `settings.json` only
   **repeats** that same env block (because Zed launched from the Dock
   doesn't inherit the shell's PATH/env) — it does not own the chain, an
-  earlier draft of this doc overstated Zed's role here. **Important
-  detection gap:** `claude` reads `~/.claude/settings.json` directly,
-  independent of the parent process's environment — `AgentProvider.detect`
-  only ever sees `Platform.environment`. A terminal with no Bedrock vars
-  exported can still mean a fully-working `claude` session; see
-  `agent_provider.dart`'s own doc comment ("Detection scope") for the
-  exact boundary. `claudart doctor`'s `providerEnv` check states this
-  explicitly in its `[SKIP]` line rather than implying absence.
+  earlier draft of this doc overstated Zed's role here. **Detection gap,
+  now closed:** `claude` reads `~/.claude/settings.json` directly,
+  independent of the parent process's environment, so bare
+  `AgentProvider.detect(Platform.environment)` missed a Bedrock machine
+  configured only there — confirmed as a real false negative during
+  testing. [`AgentProvider.detectEffective`](../lib/providers/agent_provider.dart)
+  merges `Platform.environment` with
+  [`claude_settings_env.dart`](../lib/providers/claude_settings_env.dart)'s
+  read of that file's own `env` block before detecting (process env wins
+  on conflict), and `claudart doctor` uses it. Not exhaustive — settings.json's
+  own search path and project-local overrides aren't modeled — so a
+  `[SKIP]` is still not proof of absence, just a narrower gap than before.
 - **OpenRouter** — not used anywhere yet. `AgentProvider.openRouter`'s
   env var (`OPENROUTER_API_KEY`) is the obvious/documented one, but
   routing the real `claude` CLI through OpenRouter has **not been

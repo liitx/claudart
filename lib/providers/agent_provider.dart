@@ -18,16 +18,24 @@
 // treat this variant as scaffolding until that's confirmed, not a proven
 // path.
 //
-// Detection scope — known limitation, confirmed against a real Bedrock
-// machine: `detect()` only ever reads a `Map<String, String>` (in
-// practice `Platform.environment`). It does NOT read `~/.claude/settings.json`,
-// which `claude` itself consults directly regardless of shell state. A
-// machine where Bedrock is configured only in that file (e.g. Zed sets it
-// there without exporting to the parent shell) will correctly report
-// `null`/no-match here even though a real `claude` invocation would still
-// use Bedrock. Treat a `null`/unsatisfied result as "not detectable from
-// this process's environment," never as proof Bedrock isn't active —
-// this is exactly why `detect()` is not wired into gating any real launch.
+// Detection scope — `detect()` only ever reads a `Map<String, String>`
+// you hand it; it has no opinion on where that map came from. Confirmed
+// against a real Bedrock machine: Bedrock env vars can live ONLY in
+// `~/.claude/settings.json`'s own `env` block, never exported to the
+// parent shell at all — `claude` itself reads that file directly. Calling
+// `detect(Platform.environment)` alone would miss that case entirely.
+// Use [AgentProvider.detectEffective] instead wherever the answer needs
+// to reflect what `claude` would actually see, not just this process's
+// shell state — it merges `Platform.environment` with
+// `claude_settings_env.dart`'s read of that file before detecting. Even
+// `detectEffective` isn't exhaustive (settings.json's own search path,
+// project-local overrides, etc. aren't modeled) — this is exactly why
+// neither function is wired into gating any real launch.
+
+import 'dart:io' show Platform;
+
+import 'claude_settings_env.dart';
+import '../file_io.dart';
 
 enum AgentProvider {
   /// Direct Anthropic API — `ANTHROPIC_API_KEY` only.
@@ -88,5 +96,22 @@ enum AgentProvider {
       if (provider.isSatisfiedBy(env)) return provider;
     }
     return null;
+  }
+
+  /// Like [detect], but merges in `~/.claude/settings.json`'s own `env`
+  /// block first — the same source `claude` itself reads — so a provider
+  /// configured only there (never exported to the parent shell) is still
+  /// detected. [processEnv] values win over settings.json's on conflict.
+  /// [io]/[settingsPath] are injectable for tests; production defaults to
+  /// `Platform.environment` and `~/.claude/settings.json`.
+  static AgentProvider? detectEffective({
+    Map<String, String>? processEnv,
+    FileIO? io,
+    String? settingsPath,
+    AgentProvider? explicit,
+  }) {
+    final settingsEnv = readClaudeSettingsEnv(io: io, path: settingsPath);
+    final merged = {...settingsEnv, ...(processEnv ?? Platform.environment)};
+    return detect(merged, explicit: explicit);
   }
 }

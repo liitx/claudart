@@ -5,6 +5,8 @@
 import 'package:claudart/claudart.dart';
 import 'package:test/test.dart';
 
+import '../helpers/mocks.dart';
+
 const _bedrockFull = {
   'CLAUDE_CODE_USE_BEDROCK': '1',
   'AWS_PROFILE': 'ai-tooling-bedrock-access',
@@ -97,4 +99,47 @@ void main() {
       expect(result, equals(AgentProvider.apiKey));
     });
   });
+
+  group('AgentProvider.detectEffective', () {
+    test('finds a provider configured only in ~/.claude/settings.json, invisible to process env alone', () {
+      final io = MemoryFileIO(files: {
+        '/fake/settings.json': '{"env": ${_jsonEncode(_bedrockFull)}}',
+      });
+      final result = AgentProvider.detectEffective(
+        processEnv: const {},
+        io: io,
+        settingsPath: '/fake/settings.json',
+      );
+      expect(result, equals(AgentProvider.bedrock));
+      // The exact bug this closes: detect() alone sees nothing here.
+      expect(AgentProvider.detect(const {}), isNull);
+    });
+
+    test('process env wins over settings.json on conflicting keys', () {
+      final io = MemoryFileIO(files: {
+        '/fake/settings.json': '{"env": {"ANTHROPIC_API_KEY": "from-settings"}}',
+      });
+      final result = AgentProvider.detectEffective(
+        processEnv: const {'ANTHROPIC_API_KEY': ''},
+        io: io,
+        settingsPath: '/fake/settings.json',
+      );
+      // Process env's empty value should NOT be silently overridden —
+      // an explicit empty override in the live process wins.
+      expect(result, isNull);
+    });
+
+    test('falls back to process-env-only behavior when settings.json has nothing usable', () {
+      final io = MemoryFileIO();
+      final result = AgentProvider.detectEffective(
+        processEnv: const {'ANTHROPIC_API_KEY': 'sk-ant-test'},
+        io: io,
+        settingsPath: '/fake/missing.json',
+      );
+      expect(result, equals(AgentProvider.apiKey));
+    });
+  });
 }
+
+String _jsonEncode(Map<String, String> m) =>
+    '{${m.entries.map((e) => '"${e.key}": "${e.value}"').join(', ')}}';
