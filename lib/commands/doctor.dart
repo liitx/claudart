@@ -8,8 +8,11 @@ import 'dart:io';
 
 import '../file_io.dart';
 import '../harness/harness_check.dart';
+import '../logging/logger.dart';
+import '../paths.dart';
 import '../process_runner.dart';
 import '../providers/agent_provider.dart';
+import '../registry.dart';
 
 const _requiredTools = ['git', 'gh', 'claude'];
 
@@ -44,6 +47,8 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
   String? claudeSettingsPath,
 }) async {
   final proc = runner ?? const RealProcessRunner();
+  final fileIO = io ?? const RealFileIO();
+  final environment = env ?? Platform.environment;
   final root = projectRoot ?? Directory.current.path;
 
   return [
@@ -51,6 +56,9 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
     await _checkGitIdentity(proc, root),
     await _checkGhAuth(proc),
     _checkProviderEnv(env, io: io, settingsPath: claudeSettingsPath),
+    _checkWorkspaceRoot(environment),
+    _checkRegistryHealth(fileIO),
+    _checkPathConfiguration(environment),
   ];
 }
 
@@ -137,14 +145,86 @@ HarnessCheckOutcome _checkProviderEnv(
   );
 }
 
-/// CLI entry point: runs every check, prints each outcome, exits 1 if any
-/// failed (0 if clean or skip-only).
+/// `CLAUDART_WORKSPACE` being unset isn't itself wrong (the `~/.claudart`
+/// fallback is a valid, documented default) — but it's exactly the
+/// condition under which a process can silently diverge from whatever
+/// registry a shell-exported override points at elsewhere on the same
+/// machine. Surfaced as `skip`, not `fail`: flagging a deliberately
+/// supported configuration as broken would be worse than staying quiet.
+HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env) {
+  final value = env[claudartWorkspaceEnvVar];
+  if (value == null || value.isEmpty) {
+    return (
+      id: HarnessCheckId.workspaceRoot,
+      result: HarnessCheckResult.skip,
+      detail: 'CLAUDART_WORKSPACE not set in this process — using the '
+          '~/.claudart fallback. If a shell elsewhere on this machine '
+          'exports a different value, that is two diverging registries, '
+          'not one',
+    );
+  }
+  return (
+    id: HarnessCheckId.workspaceRoot,
+    result: HarnessCheckResult.ok,
+    detail: 'CLAUDART_WORKSPACE=$value',
+  );
+}
+
+HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
+  final registry = Registry.load(io: io);
+  if (registry.isEmpty) {
+    return (
+      id: HarnessCheckId.registryHealth,
+      result: HarnessCheckResult.skip,
+      detail: 'no registry entries yet at $workspacesRoot — nothing linked',
+    );
+  }
+  final stale = [
+    for (final entry in registry.entries)
+      if (!io.dirExists(entry.projectRoot)) entry.name,
+  ];
+  return stale.isEmpty
+      ? (
+          id: HarnessCheckId.registryHealth,
+          result: HarnessCheckResult.ok,
+          detail: '${registry.entries.length} entries, all projectRoots exist',
+        )
+      : (
+          id: HarnessCheckId.registryHealth,
+          result: HarnessCheckResult.fail,
+          detail: 'stale entries (projectRoot missing): ${stale.join(', ')}',
+        );
+}
+
+HarnessCheckOutcome _checkPathConfiguration(Map<String, String> env) {
+  final home = env['HOME'] ?? '';
+  final binDir = '$home/bin';
+  final path = env['PATH'] ?? '';
+  final onPath = path.split(':').contains(binDir);
+  return onPath
+      ? (
+          id: HarnessCheckId.pathConfiguration,
+          result: HarnessCheckResult.ok,
+          detail: '$binDir is on PATH',
+        )
+      : (
+          id: HarnessCheckId.pathConfiguration,
+          result: HarnessCheckResult.fail,
+          detail: '$binDir is not on PATH — claudart compile/zedup setup '
+              'install there; a freshly-built binary would be unreachable',
+        );
+}
+
+/// CLI entry point: runs every check, prints each outcome, logs the run
+/// (so it's visible later via `claudart report` instead of only whatever
+/// gets pasted into chat), exits 1 if any failed (0 if clean or skip-only).
 Future<void> runDoctor({
   ProcessRunner? runner,
   Map<String, String>? env,
   String? projectRootOverride,
   FileIO? io,
   String? claudeSettingsPath,
+  String? workspacePath,
   Never Function(int code)? exitFn,
 }) async {
   final exit_ = exitFn ?? exit;
@@ -158,6 +238,25 @@ Future<void> runDoctor({
   for (final outcome in outcomes) {
     print(formatHarnessOutcome(outcome));
   }
-  final hasFailure = outcomes.any((o) => o.result == HarnessCheckResult.fail);
-  exit_(hasFailure ? 1 : 0);
+
+  final failed = [
+    for (final o in outcomes)
+      if (o.result == HarnessCheckResult.fail) o,
+  ];
+  final logger = SessionLogger(io: io, workspacePath: workspacePath);
+  logger.logInteraction(
+    command: 'doctor',
+    outcome: failed.isEmpty ? 'ok' : 'failed',
+    platform: Platform.operatingSystem,
+  );
+  for (final outcome in failed) {
+    logger.logError(
+      command: 'doctor',
+      errorType: 'harness_check_failed',
+      fingerprint: 'doctor.${outcome.id.name}',
+      reason: outcome.detail,
+    );
+  }
+
+  exit_(failed.isEmpty ? 0 : 1);
 }

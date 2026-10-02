@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:claudart/commands/doctor.dart';
 import 'package:claudart/harness/harness_check.dart';
+import 'package:claudart/paths.dart';
 import 'package:claudart/process_runner.dart';
 import 'package:test/test.dart';
 
@@ -61,6 +62,11 @@ class _FakeProcessRunner implements ProcessRunner {
 ProcessResult _ok(String stdout) => ProcessResult(0, 0, stdout, '');
 ProcessResult _fail() => ProcessResult(0, 1, '', '');
 
+/// A baseline env with HOME/PATH set so `pathConfiguration` passes by
+/// default — individual tests override/add only the keys they care about,
+/// matching the pattern every other check already uses.
+const _cleanEnv = {'HOME': '/fake/home', 'PATH': '/fake/home/bin:/usr/bin'};
+
 Map<String, ProcessResult> _responses({
   bool claudeOnPath = true,
   bool gitIdentitySet = true,
@@ -80,7 +86,7 @@ void main() {
     test('ok when git, gh, and claude are all on PATH', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -92,7 +98,7 @@ void main() {
     test('fails and names the missing tool when claude is not on PATH', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses(claudeOnPath: false)),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -106,7 +112,7 @@ void main() {
     test('gh missing entirely: ghAuth fails instead of throwing ProcessException', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses(), notFound: const {'gh'}),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -117,7 +123,7 @@ void main() {
     test('git missing entirely: gitIdentity fails instead of throwing ProcessException', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses(), notFound: const {'git'}),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -128,7 +134,7 @@ void main() {
     test('which itself missing: tools fails instead of throwing ProcessException', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses(), notFound: const {'which'}),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -141,7 +147,7 @@ void main() {
     test('ok when user.name and user.email are both set', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -153,7 +159,7 @@ void main() {
     test('fails when git config has no identity set', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses(gitIdentitySet: false)),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -166,7 +172,7 @@ void main() {
     test('ok when gh auth status succeeds', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -177,7 +183,7 @@ void main() {
     test('fails when gh auth status exits non-zero', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses(ghAuthed: false)),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -190,7 +196,7 @@ void main() {
     test('ok and names the provider when one is configured', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
-        env: const {'ANTHROPIC_API_KEY': 'sk-ant-test'},
+        env: {..._cleanEnv, 'ANTHROPIC_API_KEY': 'sk-ant-test'},
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -202,7 +208,7 @@ void main() {
     test('skips — not a failure — when no provider env vars are set', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
       );
@@ -213,7 +219,7 @@ void main() {
     test('ok when a provider is configured only in ~/.claude/settings.json, not process env', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
-        env: const {},
+        env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(files: {
           '/fake/settings.json': '{"env": {"ANTHROPIC_API_KEY": "sk-ant-test"}}',
@@ -226,13 +232,117 @@ void main() {
     });
   });
 
+  group('runDoctorChecks — workspace root', () {
+    test('ok when CLAUDART_WORKSPACE is set in this process', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: {..._cleanEnv, 'CLAUDART_WORKSPACE': '/fake/workspace-root'},
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final root = outcomes.firstWhere((o) => o.id == HarnessCheckId.workspaceRoot);
+      expect(root.result, equals(HarnessCheckResult.ok));
+      expect(root.detail, contains('/fake/workspace-root'));
+    });
+
+    test('skips — not a failure — when CLAUDART_WORKSPACE is unset', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final root = outcomes.firstWhere((o) => o.id == HarnessCheckId.workspaceRoot);
+      expect(root.result, equals(HarnessCheckResult.skip));
+    });
+  });
+
+  group('runDoctorChecks — registry health', () {
+    test('skips when the registry has no entries yet', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
+      expect(health.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('ok when every registered projectRoot still exists on disk', () async {
+      // Registry.load() always resolves via the real registryPath getter
+      // (lib/paths.dart) — unaffected by the `env` map passed to
+      // runDoctorChecks — so the fixture has to live at that real,
+      // machine-dependent path, not an arbitrary fake one.
+      final io = MemoryFileIO(
+        dirs: {'/fake/projects/a'},
+        files: {
+          registryPath: '''
+{"workspaces": [{"name": "a", "projectRoot": "/fake/projects/a", "workspacePath": "/fake/workspace-root/a", "createdAt": "", "lastSession": ""}]}
+''',
+        },
+      );
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: io,
+      );
+      final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
+      expect(health.result, equals(HarnessCheckResult.ok));
+    });
+
+    test('fails and names the stale entry when a projectRoot no longer exists', () async {
+      final io = MemoryFileIO(
+        files: {
+          registryPath: '''
+{"workspaces": [{"name": "gone", "projectRoot": "/fake/projects/gone", "workspacePath": "/fake/workspace-root/gone", "createdAt": "", "lastSession": ""}]}
+''',
+        },
+      );
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: {..._cleanEnv, 'CLAUDART_WORKSPACE': '/fake/workspace-root'},
+        projectRoot: '/fake/repo',
+        io: io,
+      );
+      final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
+      expect(health.result, equals(HarnessCheckResult.fail));
+      expect(health.detail, contains('gone'));
+    });
+  });
+
+  group('runDoctorChecks — path configuration', () {
+    test('ok when ~/bin is on PATH', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final pathCheck = outcomes.firstWhere((o) => o.id == HarnessCheckId.pathConfiguration);
+      expect(pathCheck.result, equals(HarnessCheckResult.ok));
+    });
+
+    test('fails when ~/bin is not on PATH', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: const {'HOME': '/fake/home', 'PATH': '/usr/bin:/usr/local/bin'},
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final pathCheck = outcomes.firstWhere((o) => o.id == HarnessCheckId.pathConfiguration);
+      expect(pathCheck.result, equals(HarnessCheckResult.fail));
+    });
+  });
+
   group('runDoctor exit code', () {
     test('exits 0 when every check is ok or skip', () async {
       _ExitException? caught;
       try {
         await runDoctor(
           runner: _FakeProcessRunner(_responses()),
-          env: const {},
+          env: _cleanEnv,
           projectRootOverride: '/fake/repo',
           io: MemoryFileIO(),
           exitFn: _throwExit,
@@ -249,7 +359,7 @@ void main() {
       try {
         await runDoctor(
           runner: _FakeProcessRunner(_responses(ghAuthed: false)),
-          env: const {},
+          env: _cleanEnv,
           projectRootOverride: '/fake/repo',
           io: MemoryFileIO(),
           exitFn: _throwExit,

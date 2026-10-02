@@ -11,6 +11,12 @@ const String archiveIndexFileName     = 'index.json';
 const String flowCheckpointFileName   = 'flow_checkpoint.json';
 const String pendingConfirmationFileName = 'pending_confirmation.json';
 
+/// Single source of truth for the env var name itself — `workspacesRoot`
+/// below and `claudart doctor`'s workspace-root check both read it; a
+/// second bare-string copy is exactly the drift that let the two ever
+/// disagree about which var they meant.
+const String claudartWorkspaceEnvVar = 'CLAUDART_WORKSPACE';
+
 /// Extracts the workspace directory from `claudart status` output.
 /// Parses the `Handoff  : <path>/handoff.md` line and returns the parent dir.
 /// Returns null if the expected pattern is not found.
@@ -27,8 +33,16 @@ String? parseWorkspaceDirFromStatusOutput(String output) {
 
 /// Root directory containing all project workspaces.
 /// Resolved from CLAUDART_WORKSPACE env var, falls back to ~/.claudart/
-final String workspacesRoot = () {
-  final env = Platform.environment['CLAUDART_WORKSPACE'];
+///
+/// A `get`, not a top-level `final` — re-reads the env var on every call
+/// instead of caching whatever it was at process start. The two differ in
+/// a real way: a top-level `final` silently locks in whichever value was
+/// live when this isolate booted, so any long-lived or GUI-launched
+/// process that doesn't inherit a shell's exported `CLAUDART_WORKSPACE`
+/// (launchd, a GUI-launched Zed) would be stuck pointed at the fallback
+/// for its whole lifetime even if the env var were set moments later.
+String get workspacesRoot {
+  final env = Platform.environment[claudartWorkspaceEnvVar];
   if (env != null && env.isNotEmpty) {
     if (env.startsWith('~/')) {
       return p.join(Platform.environment['HOME']!, env.substring(2));
@@ -36,7 +50,7 @@ final String workspacesRoot = () {
     return env;
   }
   return p.join(Platform.environment['HOME']!, '.claudart');
-}();
+}
 
 /// Registry of all known project workspaces.
 String get registryPath => p.join(workspacesRoot, 'registry.json');

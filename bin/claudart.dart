@@ -191,7 +191,11 @@ Future<void> main(List<String> rawArgs) async {
     case ClaudartCommand.compile:
       exit(_compile());
     case ClaudartCommand.doctor:
-      await runDoctor();
+      final doctorRoot = detectGitContext()?.root;
+      final doctorEntry = doctorRoot != null
+          ? Registry.load().findByProjectRoot(doctorRoot)
+          : null;
+      await runDoctor(workspacePath: doctorEntry?.workspacePath);
   }
 }
 
