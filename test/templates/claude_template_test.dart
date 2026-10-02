@@ -54,6 +54,12 @@ void main() {
       expect(base, contains('Never push to remote'));
     });
 
+    test('git rules require verifying identity before commit or push', () {
+      expect(base, contains('Verify identity before any commit or push'));
+      expect(base, contains('git -C <repo> config user.email'));
+      expect(base, contains('gh auth status'));
+    });
+
     test('no environment section when constraints absent', () {
       expect(base, isNot(contains('## Environment')));
     });

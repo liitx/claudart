@@ -70,5 +70,20 @@ $genericSection### Project context
 
 - **Never push to remote** under any circumstances without explicit confirmation
 - Local commits only, and only when explicitly requested
+- **Verify identity before any commit or push, every time — never assume the
+  local config is right.** A repo cloned, transferred, or SSO-authorized
+  under a different account can carry a mismatched local identity even when
+  the active `gh` login has correct push permission — commits then land
+  authored as the wrong person while the push itself still succeeds.
+  Before the first commit- or push-producing action in a session:
+  ```
+  git -C <repo> config user.name
+  git -C <repo> config user.email
+  gh auth status
+  ```
+  Cross-check both against who actually owns this repo's remote (its
+  GitHub org/owner, not an assumption). If anything doesn't match — STOP
+  and surface the mismatch before proceeding. Don't fix it silently; the
+  owner decides whether to update the config.
 ''';
 }
