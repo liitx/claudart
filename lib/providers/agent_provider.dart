@@ -17,16 +17,41 @@
 // OpenRouter has not been verified end-to-end against the real tool —
 // treat this variant as scaffolding until that's confirmed, not a proven
 // path.
+//
+// Detection scope — known limitation, confirmed against a real Bedrock
+// machine: `detect()` only ever reads a `Map<String, String>` (in
+// practice `Platform.environment`). It does NOT read `~/.claude/settings.json`,
+// which `claude` itself consults directly regardless of shell state. A
+// machine where Bedrock is configured only in that file (e.g. Zed sets it
+// there without exporting to the parent shell) will correctly report
+// `null`/no-match here even though a real `claude` invocation would still
+// use Bedrock. Treat a `null`/unsatisfied result as "not detectable from
+// this process's environment," never as proof Bedrock isn't active —
+// this is exactly why `detect()` is not wired into gating any real launch.
 
 enum AgentProvider {
   /// Direct Anthropic API — `ANTHROPIC_API_KEY` only.
   apiKey(requiredEnvVars: ['ANTHROPIC_API_KEY']),
 
-  /// AWS Bedrock — `CLAUDE_CODE_USE_BEDROCK` flag plus an active AWS
-  /// profile/session. `AWS_PROFILE` is the one claudart can check for
-  /// directly; actual credential freshness (Britive/SSO session expiry)
-  /// is outside claudart's reach and must be handled upstream.
-  bedrock(requiredEnvVars: ['CLAUDE_CODE_USE_BEDROCK', 'AWS_PROFILE']),
+  /// AWS Bedrock — `CLAUDE_CODE_USE_BEDROCK`, `AWS_PROFILE`/`AWS_REGION`,
+  /// plus the three per-tier model vars Claude Code needs when the
+  /// account only has an application inference profile (not direct model
+  /// access) — confirmed against a real Bedrock machine: the narrower
+  /// two-var list this enum shipped with originally was "too optimistic"
+  /// and would under-report there. Exact `ANTHROPIC_DEFAULT_*_MODEL`
+  /// suffixes assumed to mirror claudart's own haiku/sonnet/opus tiers
+  /// (see `AgentModel`) — reconfirm the literal names against that
+  /// machine if this ever needs to be exact rather than best-effort.
+  /// Credential freshness (Britive/SSO session expiry via a
+  /// `bedrock-auth` helper) is outside claudart's reach regardless.
+  bedrock(requiredEnvVars: [
+    'CLAUDE_CODE_USE_BEDROCK',
+    'AWS_PROFILE',
+    'AWS_REGION',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  ]),
 
   /// OpenRouter — unverified against the real `claude` CLI (see file doc).
   openRouter(requiredEnvVars: ['OPENROUTER_API_KEY']);

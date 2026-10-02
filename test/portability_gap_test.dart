@@ -43,6 +43,27 @@ void main() {
     });
   });
 
+  group('PortabilityGap.dartrixSiblingDependency', () {
+    test('is open — fresh clones fail dart pub get without manual setup', () {
+      expect(PortabilityGap.dartrixSiblingDependency.status, equals(PortabilityGapStatus.open));
+      expect(PortabilityGap.dartrixSiblingDependency.trackedIn, equals('pubspec.yaml'));
+    });
+  });
+
+  group('PortabilityGap.hardcodedWorkspacePaths', () {
+    test('is open — CLAUDE.md hardcodes this machine\'s absolute paths', () {
+      expect(PortabilityGap.hardcodedWorkspacePaths.status, equals(PortabilityGapStatus.open));
+      expect(PortabilityGap.hardcodedWorkspacePaths.whatsMissing, contains('CLAUDE.md'));
+    });
+  });
+
+  group('PortabilityGap.customLintWarningsUnderPlainAnalyze', () {
+    test('is open — plain dart analyze surfaces unrecognized custom_lint rule names', () {
+      expect(PortabilityGap.customLintWarningsUnderPlainAnalyze.status, equals(PortabilityGapStatus.open));
+      expect(PortabilityGap.customLintWarningsUnderPlainAnalyze.trackedIn, equals('analysis_options.yaml'));
+    });
+  });
+
   group('PortabilityGapStatus.label', () {
     test('open', () => expect(PortabilityGapStatus.open.label, equals('open')));
     test('tabled', () => expect(PortabilityGapStatus.tabled.label, equals('tabled')));

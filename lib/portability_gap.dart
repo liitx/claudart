@@ -36,12 +36,18 @@ enum PortabilityGapStatus {
 enum PortabilityGap {
   /// `AgentProvider` (lib/providers/agent_provider.dart) exists but isn't
   /// consulted before `defaultClaudeRunner` spawns the real `claude`
-  /// subprocess.
+  /// subprocess. Confirmed against a real Bedrock machine: detection is
+  /// also fundamentally env-scoped — `claude` reads `~/.claude/settings.json`
+  /// directly, which `detect()` cannot see, so a `null`/unsatisfied result
+  /// is never proof a provider is absent.
   providerWiring(
     status: PortabilityGapStatus.open,
     whatsMissing:
         "AgentProvider exists (see docs/provider_setup.md) but isn't "
-        'consulted before a real claude launch',
+        'consulted before a real claude launch, and detect() cannot see '
+        '~/.claude/settings.json — confirmed this would have produced a '
+        'false negative gating a working Bedrock machine, which is part '
+        'of why gating was never wired in',
     trackedIn: 'docs/provider_setup.md',
   ),
 
@@ -89,6 +95,48 @@ enum PortabilityGap {
         "they're deferred until the original zip's Section 11 spec is "
         're-verified',
     trackedIn: 'lib/commands/doctor.dart, test/commands/doctor_test.dart',
+  ),
+
+  /// `pubspec.yaml`'s `dartrix` dependency is a relative path pointing at
+  /// a sibling folder — `dart pub get` fails on a fresh clone until
+  /// `liitx/dartrix` is cloned next to `claudart` manually. Confirmed by
+  /// the agent testing this very PR: this was the first command that
+  /// failed on their fresh checkout.
+  dartrixSiblingDependency(
+    status: PortabilityGapStatus.open,
+    whatsMissing:
+        'pubspec.yaml expects ../dartrix to already exist — dart pub get '
+        'fails on a fresh clone with no setup instruction telling you to '
+        'clone liitx/dartrix as a sibling first',
+    trackedIn: 'pubspec.yaml',
+  ),
+
+  /// This repo's own `CLAUDE.md` hardcodes absolute paths
+  /// (`/Users/aksana.buster/dev/apps/dartrix/...`,
+  /// `/Users/aksana.buster/dev/dev_tools/claude/claudart/...`) that only
+  /// resolve on the machine that wrote them.
+  hardcodedWorkspacePaths(
+    status: PortabilityGapStatus.open,
+    whatsMissing:
+        "CLAUDE.md's Paradigms pointer and Knowledge base section both "
+        'hardcode this machine\'s absolute home-directory paths — a '
+        'fresh clone on any other machine has to hand-edit CLAUDE.md '
+        'before those references resolve',
+    trackedIn: 'CLAUDE.md',
+  ),
+
+  /// Plain `dart analyze` (not `dart run custom_lint`) reports warnings
+  /// for custom_lint rule names in `analysis_options.yaml` it doesn't
+  /// recognize, because those rules are only registered when custom_lint
+  /// itself runs.
+  customLintWarningsUnderPlainAnalyze(
+    status: PortabilityGapStatus.open,
+    whatsMissing:
+        'dart analyze alone surfaces 3 warnings for unrecognized '
+        'custom_lint rule names in analysis_options.yaml — cosmetic '
+        'noise on a fresh machine that runs dart analyze before ever '
+        'running dart run custom_lint, easy to mistake for a real problem',
+    trackedIn: 'analysis_options.yaml',
   );
 
   const PortabilityGap({

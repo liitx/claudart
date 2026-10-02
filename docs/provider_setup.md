@@ -15,13 +15,22 @@ identical to claudart: it just launched `claude` and hoped.
   interactively; credentials live in `~/.claude`, read directly by the
   `claude` CLI itself. No env vars required, `AgentProvider.detect()`
   correctly returns `null` here — this is not an error case.
-- **Bedrock** — the one machine actually running this way today has
-  *zero* claudart- or zedup-side support. The entire auth chain
-  (`AWS_PROFILE` → `pybritive-aws-cred-process` → Britive session → IAM
-  role) is wired entirely in Zed editor's own `settings.json`
-  (`agent_servers.claude-acp.env`), repeated there because Zed launched
-  from the Dock doesn't inherit the shell's PATH/env at all. claudart has
-  no visibility into any of this.
+- **Bedrock** — confirmed directly against the real Bedrock machine (via
+  `claudart doctor`, run from the agent session with Bedrock env live):
+  the actual chain is `~/.claude/settings.json`'s own `env` block →
+  `~/.aws/config`'s `credential_process` (`pybritive`) → a Britive session
+  that renews silently → an assumed IAM role, plus a `bedrock-auth` helper
+  script for manual check/refresh. Zed editor's `settings.json` only
+  **repeats** that same env block (because Zed launched from the Dock
+  doesn't inherit the shell's PATH/env) — it does not own the chain, an
+  earlier draft of this doc overstated Zed's role here. **Important
+  detection gap:** `claude` reads `~/.claude/settings.json` directly,
+  independent of the parent process's environment — `AgentProvider.detect`
+  only ever sees `Platform.environment`. A terminal with no Bedrock vars
+  exported can still mean a fully-working `claude` session; see
+  `agent_provider.dart`'s own doc comment ("Detection scope") for the
+  exact boundary. `claudart doctor`'s `providerEnv` check states this
+  explicitly in its `[SKIP]` line rather than implying absence.
 - **OpenRouter** — not used anywhere yet. `AgentProvider.openRouter`'s
   env var (`OPENROUTER_API_KEY`) is the obvious/documented one, but
   routing the real `claude` CLI through OpenRouter has **not been
@@ -35,8 +44,18 @@ any) is configured, and what's missing if it isn't:
 
 ```dart
 AgentProvider.detect(Platform.environment); // → AgentProvider? 
-AgentProvider.bedrock.missingFrom(env);      // → ['AWS_PROFILE']
+AgentProvider.bedrock.missingFrom(env);      // → ['AWS_REGION', 'ANTHROPIC_DEFAULT_HAIKU_MODEL', ...]
 ```
+
+`bedrock`'s required vars were widened after testing against the real
+machine: `CLAUDE_CODE_USE_BEDROCK` + `AWS_PROFILE` alone under-reported —
+an account using an application inference profile (no direct model
+access) also needs `AWS_REGION` and the three
+`ANTHROPIC_DEFAULT_{HAIKU,SONNET,OPUS}_MODEL` vars before `claude` will
+actually work. The exact three model-var names are a best-effort guess
+from Claude Code's documented tier naming, not a literal echo from the
+test machine — reconfirm if this ever needs to be authoritative rather
+than best-effort.
 
 Detection order: an explicit override (e.g. a future `CLAUDE_PROVIDER`
 env var or CLI flag) always wins; otherwise the first variant whose

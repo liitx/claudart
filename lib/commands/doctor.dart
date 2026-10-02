@@ -12,6 +12,26 @@ import '../providers/agent_provider.dart';
 
 const _requiredTools = ['git', 'gh', 'claude'];
 
+/// `ProcessRunner.run` is backed by `Process.run`, which throws
+/// `ProcessException` synchronously when [executable] isn't found at all
+/// (not just a nonzero exit) — e.g. `gh` genuinely missing on a fresh
+/// machine. A harness whose whole purpose is surfacing exactly that case
+/// must not crash on it; this converts the exception into the same shape
+/// as a failed run (exit 127, the shell convention for "command not
+/// found"), so every check downstream only ever has to handle exit codes.
+Future<ProcessResult> _tryRun(
+  ProcessRunner proc,
+  String executable,
+  List<String> arguments, {
+  String? workingDirectory,
+}) async {
+  try {
+    return await proc.run(executable, arguments, workingDirectory: workingDirectory);
+  } on ProcessException catch (e) {
+    return ProcessResult(0, 127, '', e.message);
+  }
+}
+
 /// Runs every harness check and returns their outcomes, in declaration
 /// order. Injectable [runner]/[env]/[projectRoot] — no real subprocess or
 /// ambient-environment dependency in tests.
@@ -35,7 +55,7 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
 Future<HarnessCheckOutcome> _checkTools(ProcessRunner proc) async {
   final missing = <String>[];
   for (final tool in _requiredTools) {
-    final result = await proc.run('which', [tool]);
+    final result = await _tryRun(proc, 'which', [tool]);
     if (result.exitCode != 0) missing.add(tool);
   }
   return missing.isEmpty
@@ -69,14 +89,14 @@ Future<HarnessCheckOutcome> _checkGitIdentity(ProcessRunner proc, String root) a
 }
 
 Future<String?> _gitConfig(ProcessRunner proc, String root, String key) async {
-  final result = await proc.run('git', ['config', key], workingDirectory: root);
+  final result = await _tryRun(proc, 'git', ['config', key], workingDirectory: root);
   if (result.exitCode != 0) return null;
   final value = (result.stdout as String).trim();
   return value.isEmpty ? null : value;
 }
 
 Future<HarnessCheckOutcome> _checkGhAuth(ProcessRunner proc) async {
-  final result = await proc.run('gh', ['auth', 'status']);
+  final result = await _tryRun(proc, 'gh', ['auth', 'status']);
   return result.exitCode == 0
       ? (
           id: HarnessCheckId.ghAuth,
@@ -102,7 +122,9 @@ HarnessCheckOutcome _checkProviderEnv(Map<String, String> env) {
   return (
     id: HarnessCheckId.providerEnv,
     result: HarnessCheckResult.skip,
-    detail: 'no explicit provider env vars found — fine if using interactive OAuth login',
+    detail: 'no provider env vars in this process — fine for OAuth login; '
+        'NOT proof Bedrock is absent if ~/.claude/settings.json configures '
+        'it directly (claude reads that file itself, this check cannot see it)',
   );
 }
 

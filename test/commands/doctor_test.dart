@@ -21,13 +21,23 @@ class _ExitException implements Exception {
 Never _throwExit(int code) => throw _ExitException(code);
 
 class _FakeProcessRunner implements ProcessRunner {
-  _FakeProcessRunner(this.responses);
+  _FakeProcessRunner(this.responses, {this.notFound = const {}});
 
   final Map<String, ProcessResult> responses;
 
-  ProcessResult _resolve(String executable, List<String> arguments) =>
-      responses['$executable ${arguments.join(' ')}'] ??
-      ProcessResult(0, 127, '', 'command not found');
+  /// Executables that should behave like a real fresh machine where the
+  /// binary genuinely isn't installed: `Process.run` throws
+  /// `ProcessException` synchronously, rather than returning a nonzero
+  /// exit code.
+  final Set<String> notFound;
+
+  ProcessResult _resolve(String executable, List<String> arguments) {
+    if (notFound.contains(executable)) {
+      throw ProcessException(executable, arguments, 'No such file or directory');
+    }
+    return responses['$executable ${arguments.join(' ')}'] ??
+        ProcessResult(0, 127, '', 'command not found');
+  }
 
   @override
   Future<ProcessResult> run(
@@ -85,6 +95,38 @@ void main() {
       final tools = outcomes.firstWhere((o) => o.id == HarnessCheckId.tools);
       expect(tools.result, equals(HarnessCheckResult.fail));
       expect(tools.detail, contains('claude'));
+    });
+  });
+
+  group('runDoctorChecks — a genuinely missing tool does not crash the harness', () {
+    test('gh missing entirely: ghAuth fails instead of throwing ProcessException', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(), notFound: const {'gh'}),
+        env: const {},
+        projectRoot: '/fake/repo',
+      );
+      final auth = outcomes.firstWhere((o) => o.id == HarnessCheckId.ghAuth);
+      expect(auth.result, equals(HarnessCheckResult.fail));
+    });
+
+    test('git missing entirely: gitIdentity fails instead of throwing ProcessException', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(), notFound: const {'git'}),
+        env: const {},
+        projectRoot: '/fake/repo',
+      );
+      final identity = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitIdentity);
+      expect(identity.result, equals(HarnessCheckResult.fail));
+    });
+
+    test('which itself missing: tools fails instead of throwing ProcessException', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(), notFound: const {'which'}),
+        env: const {},
+        projectRoot: '/fake/repo',
+      );
+      final tools = outcomes.firstWhere((o) => o.id == HarnessCheckId.tools);
+      expect(tools.result, equals(HarnessCheckResult.fail));
     });
   });
 
