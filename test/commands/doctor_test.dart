@@ -233,12 +233,12 @@ void main() {
   });
 
   group('runDoctorChecks — workspace root', () {
-    test('ok when CLAUDART_WORKSPACE is set in this process', () async {
+    test('ok when CLAUDART_WORKSPACE is set, exists, and the fallback has no registry', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
         env: {..._cleanEnv, 'CLAUDART_WORKSPACE': '/fake/workspace-root'},
         projectRoot: '/fake/repo',
-        io: MemoryFileIO(),
+        io: MemoryFileIO(dirs: {'/fake/workspace-root'}),
       );
       final root = outcomes.firstWhere((o) => o.id == HarnessCheckId.workspaceRoot);
       expect(root.result, equals(HarnessCheckResult.ok));
@@ -255,10 +255,37 @@ void main() {
       final root = outcomes.firstWhere((o) => o.id == HarnessCheckId.workspaceRoot);
       expect(root.result, equals(HarnessCheckResult.skip));
     });
+
+    test('fails when CLAUDART_WORKSPACE points at a directory that does not exist', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: {..._cleanEnv, 'CLAUDART_WORKSPACE': '/fake/does-not-exist'},
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final root = outcomes.firstWhere((o) => o.id == HarnessCheckId.workspaceRoot);
+      expect(root.result, equals(HarnessCheckResult.fail));
+      expect(root.detail, contains('does not exist'));
+    });
+
+    test('fails — the real split-brain — when the override is valid but ~/.claudart also has a registry', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: {..._cleanEnv, 'CLAUDART_WORKSPACE': '/fake/workspace-root'},
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(
+          dirs: {'/fake/workspace-root'},
+          files: {'/fake/home/.claudart/registry.json': '{"workspaces": []}'},
+        ),
+      );
+      final root = outcomes.firstWhere((o) => o.id == HarnessCheckId.workspaceRoot);
+      expect(root.result, equals(HarnessCheckResult.fail));
+      expect(root.detail, contains('split-brain'));
+    });
   });
 
   group('runDoctorChecks — registry health', () {
-    test('skips when the registry has no entries yet', () async {
+    test('skips when the registry file does not exist yet', () async {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner(_responses()),
         env: _cleanEnv,
@@ -267,6 +294,40 @@ void main() {
       );
       final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
       expect(health.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('skips when the registry file exists but is empty', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {registryPath: ''}),
+      );
+      final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
+      expect(health.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('skips when the registry parses but has no entries', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {registryPath: '{"workspaces": []}'}),
+      );
+      final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
+      expect(health.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('fails — distinct from "nothing linked" — when the registry file is corrupt', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {registryPath: '{not valid json'}),
+      );
+      final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
+      expect(health.result, equals(HarnessCheckResult.fail));
+      expect(health.detail, contains('failed to parse'));
     });
 
     test('ok when every registered projectRoot still exists on disk', () async {

@@ -4,7 +4,10 @@
 // check, exits 1 if any check failed. Idempotent — safe to re-run after
 // fixing a failure, each check re-reads live state rather than caching.
 
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:path/path.dart' as p;
 
 import '../file_io.dart';
 import '../harness/harness_check.dart';
@@ -56,7 +59,7 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
     await _checkGitIdentity(proc, root),
     await _checkGhAuth(proc),
     _checkProviderEnv(env, io: io, settingsPath: claudeSettingsPath),
-    _checkWorkspaceRoot(environment),
+    _checkWorkspaceRoot(environment, fileIO),
     _checkRegistryHealth(fileIO),
     _checkPathConfiguration(environment),
   ];
@@ -151,8 +154,19 @@ HarnessCheckOutcome _checkProviderEnv(
 /// registry a shell-exported override points at elsewhere on the same
 /// machine. Surfaced as `skip`, not `fail`: flagging a deliberately
 /// supported configuration as broken would be worse than staying quiet.
-HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env) {
+///
+/// Confirmed against a real cross-machine test: echoing the variable
+/// alone isn't enough. Also checks (a) the resolved directory actually
+/// exists — a typo'd override is worse than no override, and (b) whether
+/// `~/.claudart` *also* holds a registry when the override points
+/// elsewhere — that second registry is exactly the split-brain condition
+/// this check exists for, invisible to any process that inherits the
+/// override correctly and never looks at the fallback at all.
+HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env, FileIO io) {
+  final home = env['HOME'] ?? '';
+  final fallbackRoot = p.join(home, '.claudart');
   final value = env[claudartWorkspaceEnvVar];
+
   if (value == null || value.isEmpty) {
     return (
       id: HarnessCheckId.workspaceRoot,
@@ -163,6 +177,30 @@ HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env) {
           'not one',
     );
   }
+
+  final resolvedRoot =
+      value.startsWith('~/') ? p.join(home, value.substring(2)) : value;
+
+  if (!io.dirExists(resolvedRoot)) {
+    return (
+      id: HarnessCheckId.workspaceRoot,
+      result: HarnessCheckResult.fail,
+      detail: 'CLAUDART_WORKSPACE=$value does not exist on disk',
+    );
+  }
+
+  final fallbackRegistry = p.join(fallbackRoot, 'registry.json');
+  if (resolvedRoot != fallbackRoot && io.fileExists(fallbackRegistry)) {
+    return (
+      id: HarnessCheckId.workspaceRoot,
+      result: HarnessCheckResult.fail,
+      detail: 'CLAUDART_WORKSPACE=$value is set, but $fallbackRegistry '
+          'also exists — any process that does not inherit this override '
+          'will silently use that one instead. This is the real '
+          'split-brain, not just the possibility of one',
+    );
+  }
+
   return (
     id: HarnessCheckId.workspaceRoot,
     result: HarnessCheckResult.ok,
@@ -170,13 +208,47 @@ HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env) {
   );
 }
 
+/// `Registry.load` (`lib/registry.dart`) silently swallows a JSON parse
+/// failure and returns an empty registry — correct for its own callers
+/// (a wizard flow failing shouldn't crash over a corrupt file), but it
+/// means a corrupt registry.json and a genuinely-fresh one were
+/// indistinguishable from doctor's output alone. This re-reads the raw
+/// file to tell those two apart before falling through to `Registry.load`.
 HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
+  if (!io.fileExists(registryPath)) {
+    return (
+      id: HarnessCheckId.registryHealth,
+      result: HarnessCheckResult.skip,
+      detail: 'no registry entries yet at $workspacesRoot — nothing linked',
+    );
+  }
+
+  final raw = io.read(registryPath);
+  if (raw.trim().isEmpty) {
+    return (
+      id: HarnessCheckId.registryHealth,
+      result: HarnessCheckResult.skip,
+      detail: 'registry.json exists but is empty at $workspacesRoot',
+    );
+  }
+
+  try {
+    jsonDecode(raw);
+  } on FormatException {
+    return (
+      id: HarnessCheckId.registryHealth,
+      result: HarnessCheckResult.fail,
+      detail: 'registry.json exists at $workspacesRoot but failed to '
+          'parse — back it up and investigate before linking anything new',
+    );
+  }
+
   final registry = Registry.load(io: io);
   if (registry.isEmpty) {
     return (
       id: HarnessCheckId.registryHealth,
       result: HarnessCheckResult.skip,
-      detail: 'no registry entries yet at $workspacesRoot — nothing linked',
+      detail: 'registry.json parses but has no entries yet',
     );
   }
   final stale = [
