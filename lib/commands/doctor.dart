@@ -17,7 +17,11 @@ import '../process_runner.dart';
 import '../providers/agent_provider.dart';
 import '../registry.dart';
 
-const _requiredTools = ['git', 'gh', 'claude'];
+const _gitExecutable = 'git';
+const _ghExecutable = 'gh';
+const _claudeExecutable = 'claude';
+const _requiredTools = [_gitExecutable, _ghExecutable, _claudeExecutable];
+const _doctorCommandName = 'doctor';
 
 /// `ProcessRunner.run` is backed by `Process.run`, which throws
 /// `ProcessException` synchronously when [executable] isn't found at all
@@ -102,14 +106,14 @@ Future<HarnessCheckOutcome> _checkGitIdentity(ProcessRunner proc, String root) a
 }
 
 Future<String?> _gitConfig(ProcessRunner proc, String root, String key) async {
-  final result = await _tryRun(proc, 'git', ['config', key], workingDirectory: root);
+  final result = await _tryRun(proc, _gitExecutable, ['config', key], workingDirectory: root);
   if (result.exitCode != 0) return null;
   final value = (result.stdout as String).trim();
   return value.isEmpty ? null : value;
 }
 
 Future<HarnessCheckOutcome> _checkGhAuth(ProcessRunner proc) async {
-  final result = await _tryRun(proc, 'gh', ['auth', 'status']);
+  final result = await _tryRun(proc, _ghExecutable, ['auth', 'status']);
   return result.exitCode == 0
       ? (
           id: HarnessCheckId.ghAuth,
@@ -163,7 +167,7 @@ HarnessCheckOutcome _checkProviderEnv(
 /// this check exists for, invisible to any process that inherits the
 /// override correctly and never looks at the fallback at all.
 HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env, FileIO io) {
-  final home = env['HOME'] ?? '';
+  final home = env[homeEnvVar] ?? '';
   final fallbackRoot = p.join(home, '.claudart');
   final value = env[claudartWorkspaceEnvVar];
 
@@ -271,7 +275,7 @@ HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
 }
 
 HarnessCheckOutcome _checkPathConfiguration(Map<String, String> env) {
-  final home = env['HOME'] ?? '';
+  final home = env[homeEnvVar] ?? '';
   final binDir = '$home/bin';
   final path = env['PATH'] ?? '';
   final onPath = path.split(':').contains(binDir);
@@ -319,13 +323,13 @@ Future<void> runDoctor({
   ];
   final logger = SessionLogger(io: io, workspacePath: workspacePath);
   logger.logInteraction(
-    command: 'doctor',
+    command: _doctorCommandName,
     outcome: failed.isEmpty ? 'ok' : 'failed',
     platform: Platform.operatingSystem,
   );
   for (final outcome in failed) {
     logger.logError(
-      command: 'doctor',
+      command: _doctorCommandName,
       errorType: 'harness_check_failed',
       fingerprint: 'doctor.${outcome.id.name}',
       reason: outcome.detail,

@@ -17,6 +17,11 @@ const String pendingConfirmationFileName = 'pending_confirmation.json';
 /// disagree about which var they meant.
 const String claudartWorkspaceEnvVar = 'CLAUDART_WORKSPACE';
 
+/// `Platform.environment['HOME']`'s key — read from several files
+/// (`doctor.dart`, `claude_settings_env.dart`, `add.dart`, here); named so
+/// none of them carry their own bare copy of it.
+const String homeEnvVar = 'HOME';
+
 /// Extracts the workspace directory from `claudart status` output.
 /// Parses the `Handoff  : <path>/handoff.md` line and returns the parent dir.
 /// Returns null if the expected pattern is not found.
@@ -45,11 +50,11 @@ String get workspacesRoot {
   final env = Platform.environment[claudartWorkspaceEnvVar];
   if (env != null && env.isNotEmpty) {
     if (env.startsWith('~/')) {
-      return p.join(Platform.environment['HOME']!, env.substring(2));
+      return p.join(Platform.environment[homeEnvVar]!, env.substring(2));
     }
     return env;
   }
-  return p.join(Platform.environment['HOME']!, '.claudart');
+  return p.join(Platform.environment[homeEnvVar]!, '.claudart');
 }
 
 /// Registry of all known project workspaces.
