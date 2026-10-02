@@ -159,7 +159,7 @@ Future<void> runAdd({
     workspacePath: workspace,
     projectName: answers.projectName,
     genericFiles: fileIO
-        .listFiles(genericKnowledgeDirFor(workspace), extension: '.md')
+        .listFiles(genericKnowledgeDir, extension: '.md')
         .map(p.basename)
         .toList()
       ..sort(),

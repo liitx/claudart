@@ -31,8 +31,8 @@ The preflight for `debug` enforces:
 ## Step 1 — Read context files. This is not optional.
 
 Read all of the following before doing anything else:
-1. `$workspacePath/knowledge/generic/dart.md` — apply these practices to any fix
-2. `$workspacePath/knowledge/generic/testing.md`
+1. `$workspacePath/../knowledge/generic/dart_flutter.md` — apply these practices to any fix
+2. `$workspacePath/../knowledge/generic/testing.md`
 3. `$workspacePath/handoff.md` — this defines your entire scope
 
 Check the handoff for a `## Project` section and also read:

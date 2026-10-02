@@ -28,8 +28,8 @@ claudart preflight test
 ## Step 1 — Read context files first
 
 Read all of the following before doing anything else:
-1. `$workspacePath/knowledge/generic/dart.md`
-2. `$workspacePath/knowledge/generic/testing.md`
+1. `$workspacePath/../knowledge/generic/dart_flutter.md`
+2. `$workspacePath/../knowledge/generic/testing.md`
 3. `$workspacePath/handoff.md` — current session state
 4. `$workspacePath/skills.md` — cross-session learnings
 
