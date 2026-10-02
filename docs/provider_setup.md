@@ -32,9 +32,25 @@ identical to claudart: it just launched `claude` and hoped.
   merges `Platform.environment` with
   [`claude_settings_env.dart`](../lib/providers/claude_settings_env.dart)'s
   read of that file's own `env` block before detecting (process env wins
-  on conflict), and `claudart doctor` uses it. Not exhaustive — settings.json's
-  own search path and project-local overrides aren't modeled — so a
-  `[SKIP]` is still not proof of absence, just a narrower gap than before.
+  on conflict), and `claudart doctor` uses it. **Confirmed end-to-end**:
+  both the Bedrock shell (env live) and a clean new Terminal tab (nothing
+  exported, proven by printing the shell's own vars first) now correctly
+  report `[OK] provider env: bedrock configured`, reading the same
+  `~/.claude/settings.json` `env` object `claude` itself reads. Three
+  known, non-blocking limitations surfaced during that confirmation:
+  1. **Precedence is an assumption, not a verified fact.** `detectEffective`
+     has process env win over settings.json on a conflicting key — but
+     whether the real `claude` CLI resolves the two the same way when both
+     set the same variable differently is unverified. Only matters if they
+     ever actually disagree.
+  2. **"Configured" isn't "working."** This reports whether the right env
+     vars are present, not whether the underlying Britive/AWS session
+     behind them is still valid — a real credential-freshness check would
+     be something like `aws sts get-caller-identity --profile <profile>`.
+     Out of scope here; worth a later harness check if expired sessions
+     turn out to be a frequent real failure mode.
+  3. Project-local `.claude/settings.json` overrides still aren't read —
+     unchanged limitation, not new.
 - **OpenRouter** — not used anywhere yet. `AgentProvider.openRouter`'s
   env var (`OPENROUTER_API_KEY`) is the obvious/documented one, but
   routing the real `claude` CLI through OpenRouter has **not been

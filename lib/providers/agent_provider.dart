@@ -101,7 +101,16 @@ enum AgentProvider {
   /// Like [detect], but merges in `~/.claude/settings.json`'s own `env`
   /// block first — the same source `claude` itself reads — so a provider
   /// configured only there (never exported to the parent shell) is still
-  /// detected. [processEnv] values win over settings.json's on conflict.
+  /// detected. Confirmed end-to-end against a real Bedrock machine, both
+  /// with the env live and from a clean shell with nothing exported.
+  ///
+  /// [processEnv] values win over settings.json's on conflict — this is
+  /// an assumption, not verified against how `claude` itself resolves the
+  /// same conflict, and only matters if the two ever actually disagree.
+  /// Also note this reports a provider as *configured*, not *working* —
+  /// it checks for the right env vars, not whether the credentials behind
+  /// them (e.g. a Britive/AWS session) are still valid.
+  ///
   /// [io]/[settingsPath] are injectable for tests; production defaults to
   /// `Platform.environment` and `~/.claude/settings.json`.
   static AgentProvider? detectEffective({
