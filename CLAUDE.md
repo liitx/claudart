@@ -74,6 +74,17 @@ writing or reviewing any code, so violations (bare strings, ungrouped identical
 switch cases, etc.) don't get written in the first place — `dart run custom_lint`
 is the backstop for what slips through, not the first line of defense.
 
+**Mandatory, unprompted self-check before calling any `lib/` change done.**
+`custom_lint`'s `bare_string_for_enum` rule is inert (confirmed by direct testing, not
+a hypothetical) — a clean `custom_lint` run does **not** prove bare-string compliance.
+Before presenting any change as complete, as part of the Workflow protocol's Test step
+below, not after being asked: `grep` every touched file for string/numeric literals
+used more than once (same file or across files) and extract repeats to a named const
+or enum getter. Also re-check switch arms for ungrouped identical right-hand sides and
+tests for an enum-values loop inside a single `test()` body (this one *is* a real,
+enforced `custom_lint` rule — trust a clean run for this specific violation, just not
+for bare strings). Do this on every session's own work, not only when told to audit.
+
 ---
 
 ## Additional git rules (project-specific, not template-generated)
@@ -91,7 +102,7 @@ is the backstop for what slips through, not the first line of defense.
 Always follow this order — no exceptions:
 1. **Verify** — read the relevant files, understand current state
 2. **Plan** — state what you intend to do before writing code. If multiple approaches exist, surface them. If uncertain, ask.
-3. **Test** — run safely
+3. **Test** — run safely, including the mandatory paradigm self-check (see Paradigms section above) — not only `dart analyze`/`dart test`
 4. **Confirm** — present result, wait for user confirmation
 5. **Commit** — only after confirmed
 
