@@ -4,6 +4,7 @@
 // Import with: import 'package:claudart/claudart.dart';
 
 export 'paths.dart' show handoffFileName, skillsFileName, archivesDirName, archiveIndexFileName, flowCheckpointFileName, parseWorkspaceDirFromStatusOutput, handoffPathFor;
+export 'portability_gap.dart';
 export 'providers/agent_provider.dart';
 export 'registry.dart' show Registry, RegistryEntry;
 export 'md_io.dart' show readSection, readStatus, updateSection, updateStatus, parseScopeFiles;
