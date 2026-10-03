@@ -40,6 +40,24 @@ None of the three are merged yet — deliberately, per the user's own
 choice this session ("keep testing on branches a bit longer" over
 merging now).
 
+**Action item for whenever claudart's PRs do merge** (confirmed by the
+second agent's combined dry-run test): zedup's `claudart` dependency is
+an unpinned git dependency (no `ref:`), so `pubspec.lock` just freezes
+whatever commit was resolved at the time `dart pub get` last ran.
+Merging claudart's PRs to `main` does **not** automatically update
+zedup — it'll keep silently building against the old pre-merge claudart
+commit until someone runs `dart pub upgrade claudart` in zedup and
+commits the new lock file. Do this as an explicit step right after
+merging, not assume it happens on its own.
+
+**Test result discrepancy, unresolved:** the second agent reported 7
+failures in `test/features/dashboard/zedup_dashboard_grid_test.dart` on
+zedup PR #76 (`07a762b`), claiming they're deterministic/pre-existing on
+`main` too. Checked directly on this machine at the identical commit:
+all 52 tests in that file pass, zero failures. Not yet reconciled —
+possibly environment-specific on their end (sandbox/terminal-size/timing)
+despite their "deterministic" claim, but not confirmed either way.
+
 ---
 
 ## Shipped directly to `main` (not PRs — small, well-scoped, done headlessly)
