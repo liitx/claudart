@@ -189,7 +189,7 @@ Judgement calls made while implementing, for the maintainer to confirm:
 - The pinned separator is an em dash, matching the flow prompt and the `setup`
   writer. The parser accepts a hyphen too.
 - Headless `kill` answers yes to "no active session, kill anyway?" and "nothing to
-  archive, remove the link only?". Both only archive or unlink, and both are
+  archive, reset the session anyway?". Both only archive or reset, and both are
   reversible. The lock prompt is the one it refuses. Confirm or tighten.
 - `link` now rejects an unknown `--option` instead of treating it as the project
   name (`rotate` never took a name, so it is unchanged there).
@@ -216,7 +216,7 @@ Judgement calls made while implementing, for the maintainer to confirm:
 - `link`: both flags, the flag-is-not-a-project-name case, unknown option, and
   end of input at both questions when re-linking.
 - `kill`: empty stdin stops with exit 1 and keeps the session; `--headless`
-  archives, resets the handoff, removes the link and exits 0; `--headless` with a
+  archives, resets the handoff, keeps the link and exits 0; `--headless` with a
   workspace lock exits 1 and leaves the lock, handoff and link in place; a piped
   `y` still kills. Run as a real subprocess, the way zedup runs it.
 

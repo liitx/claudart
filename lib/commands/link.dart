@@ -7,6 +7,7 @@ import '../paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
 import '../templates/claude_template.dart';
+import '../templates/command_template_marker.dart';
 import '../templates/readme_template.dart';
 import '../ui/render.dart' as render;
 
@@ -87,7 +88,7 @@ Future<void> runLink(
   print(render.header('CLAUDART LINK'));
 
   // 1 — Detect project root.
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
+  final projectRoot = resolveProjectRoot(override: projectRootOverride);
   if (projectRoot == null) {
     print('\n✗ Not inside a git repository. Cannot detect project root.\n');
     exit_(1);
@@ -251,7 +252,7 @@ typedef ProjectLinks = ({
 /// Creates the workspace's `.claude/commands` dir, the `<projectRoot>/.claude`
 /// symlink (or syncs a real directory if one already exists there), writes
 /// every agent command template, symlinks `.cursor/commands`, and adds both
-/// to `.gitignore`. Shared by `runLink` (existing project) and `runAdd` (new
+/// to `.gitignore` when it created the `.claude` symlink. Shared by `runLink` (existing project) and `runAdd` (new
 /// project) — same mechanism, no duplicated logic. Does not touch CLAUDE.md;
 /// callers that want the tail-regeneration step (`runLink`'s step 9) do that
 /// separately, since a caller like `runAdd` writes CLAUDE.md from scratch
@@ -306,8 +307,10 @@ ProjectLinks createProjectLinks({
     fileIO.createDir(realCmdsDir);
     for (final flow in AgentFlow.values.where((f) => f.hasCommandFile)) {
       final template = flow.commandTemplate(workspace, effectiveName);
-      fileIO.write(p.join(realCmdsDir, flow.legacyFileName), template);
-      fileIO.write(p.join(realCmdsDir, flow.fileName(effectiveName)), template);
+      _writeCommandFile(
+          fileIO, p.join(realCmdsDir, flow.legacyFileName), template);
+      _writeCommandFile(
+          fileIO, p.join(realCmdsDir, flow.fileName(effectiveName)), template);
     }
   }
 
@@ -321,8 +324,13 @@ ProjectLinks createProjectLinks({
     fileIO.createLink(cursorCmdsLink, workspaceCmdsDir);
   }
 
-  // Auto-add .claude and .cursor/ to .gitignore.
-  _ensureGitignore(projectRoot, fileIO);
+  // Auto-add .claude and .cursor/ to .gitignore, but only when claudart
+  // actually created the .claude symlink. When .claude/ is a real directory
+  // (symlinkSkipped) it holds the user's own tracked files, and git-ignoring
+  // it would silently hide anything new written there.
+  if (!symlinkSkipped) {
+    _ensureGitignore(projectRoot, fileIO);
+  }
 
   // If the project ships a tracked .githooks/ dir (this repo's own
   // pre-push paradigm gate, for one), point git at it. .git/hooks/ is
@@ -342,14 +350,21 @@ ProjectLinks createProjectLinks({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/// True when [lines] already ignores [entry], accepting `.claude`, `.claude/`
+/// and `/.claude` as the same thing so a re-link never appends a duplicate.
+bool _gitignoreHas(List<String> lines, String entry) {
+  final bare = entry.replaceAll('/', '');
+  return lines.any((l) => l.trim().replaceAll('/', '') == bare);
+}
+
 void _ensureGitignore(String projectRoot, FileIO fileIO) {
   final path = p.join(projectRoot, '.gitignore');
   var current = fileIO.read(path);
   final lines = current.split('\n');
 
   final missing = <String>[
-    if (!lines.any((l) => l.trim() == '.claude')) '.claude',
-    if (!lines.any((l) => l.trim() == '.cursor/')) '.cursor/',
+    if (!_gitignoreHas(lines, '.claude')) '.claude',
+    if (!_gitignoreHas(lines, '.cursor/')) '.cursor/',
   ];
 
   if (missing.isEmpty) return;
@@ -394,6 +409,18 @@ void _ensureHooksPath(String projectRoot, FileIO fileIO) {
   } on Exception catch (_) {
     // Not a git repo, or git itself unavailable — nothing to configure.
   }
+}
+
+/// Writes a command template file, but never over a file that already
+/// exists and was not written by claudart — that would clobber a user's
+/// own command of the same name.
+void _writeCommandFile(FileIO fileIO, String path, String content) {
+  if (fileIO.fileExists(path) &&
+      !isClaudartGeneratedCommand(fileIO.read(path))) {
+    print('  ⚠  Skipped $path — not a claudart-generated file.');
+    return;
+  }
+  fileIO.write(path, content);
 }
 
 String _detectProjectName(String projectRoot) {

@@ -172,7 +172,9 @@ void main() {
       expect(handoff, isNot(contains('Something is broken')));
     });
 
-    test('removes symlink', () async {
+    test('leaves the .claude symlink in place — kill closes a session, '
+        'it does not deregister the project; unlink removes the link',
+        () async {
       final io = _io();
       await runKill(
         io: io,
@@ -180,7 +182,7 @@ void main() {
         confirmFn: (_) => true,
         exitFn: (code) => throw _ExitException(code),
       );
-      expect(io.linkExists(_claudeLink), isFalse);
+      expect(io.linkExists(_claudeLink), isTrue);
     });
 
     test('updates registry lastSession', () async {
@@ -321,10 +323,10 @@ void main() {
 
   group('kill — error handling', () {
     test('exits with code 1 when closeSession fails', () async {
-      // Simulate unlink failure so closeSession throws SessionCloseException.
+      // Simulate a reset failure so closeSession throws SessionCloseException.
       // Rollback mechanics (handoff restored, archive deleted) are verified in
       // session_ops_test.dart. This test only verifies kill's error response.
-      final io = _FailOnUnlinkIO(delegate: _io());
+      final io = _FailOnResetIO(delegate: _io());
       _ExitException? caught;
       try {
         await runKill(
@@ -341,7 +343,7 @@ void main() {
     });
 
     test('clears the lock after a successful rollback — nothing is actually interrupted', () async {
-      final io = _FailOnUnlinkIO(delegate: _io());
+      final io = _FailOnResetIO(delegate: _io());
       try {
         await runKill(
           io: io,
@@ -396,12 +398,12 @@ void main() {
     });
 
     group('--headless', () {
-      test('kills without asking: archives, resets the handoff, removes the link', () async {
+      test('kills without asking: archives, resets the handoff, keeps the link', () async {
         final io = _io();
         await kill(io, askFn: neverAsked, mode: RunMode.headless);
         expect(archives(io), hasLength(1));
         expect(io.read(handoffPathFor(_workspace)), isNot(contains('Something is broken')));
-        expect(io.linkExists(_claudeLink), isFalse);
+        expect(io.linkExists(_claudeLink), isTrue, reason: 'kill keeps the registration');
       });
 
       test('never prompts, even if an injected confirm would say no', () async {
@@ -426,10 +428,10 @@ void main() {
         expect(archives(io), hasLength(1));
       });
 
-      test('with an empty handoff it just removes the link', () async {
+      test('with an empty handoff it just resets the session and keeps the link', () async {
         final io = _io(withHandoff: false);
         await kill(io, askFn: neverAsked, mode: RunMode.headless);
-        expect(io.linkExists(_claudeLink), isFalse);
+        expect(io.linkExists(_claudeLink), isTrue);
       });
     });
   });
@@ -442,18 +444,22 @@ class _ExitException implements Exception {
   const _ExitException(this.code);
 }
 
-/// Delegates all ops to [delegate] but throws on deleteLink.
-class _FailOnUnlinkIO implements FileIO {
+/// Delegates all ops to [delegate] but throws on the first write to the
+/// handoff path — simulates the reset step failing.
+class _FailOnResetIO implements FileIO {
   final MemoryFileIO delegate;
-  _FailOnUnlinkIO({required this.delegate});
+  _FailOnResetIO({required this.delegate});
 
   @override
-  void deleteLink(String path) => throw Exception('simulated unlink failure');
+  void write(String path, String content) {
+    if (path == handoffPathFor(_workspace)) {
+      throw Exception('simulated reset failure');
+    }
+    delegate.write(path, content);
+  }
 
   @override
   String read(String path) => delegate.read(path);
-  @override
-  void write(String path, String content) => delegate.write(path, content);
   @override
   void delete(String path) => delegate.delete(path);
   @override
@@ -467,6 +473,8 @@ class _FailOnUnlinkIO implements FileIO {
       delegate.listFiles(d, extension: extension);
   @override
   bool linkExists(String path) => delegate.linkExists(path);
+  @override
+  void deleteLink(String path) => delegate.deleteLink(path);
   @override
   void createLink(String linkPath, String targetPath) =>
       delegate.createLink(linkPath, targetPath);

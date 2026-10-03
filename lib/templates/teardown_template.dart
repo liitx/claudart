@@ -1,8 +1,10 @@
 import '../pipeline/agents/confirmation.dart';
+import 'command_template_marker.dart';
 
 String teardownCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Close session and update knowledge — $projectName
+$claudartCommandMarker
 ---
 
 You are running **SESSION TEARDOWN**.
