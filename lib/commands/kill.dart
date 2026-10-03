@@ -2,9 +2,10 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
-import '../md_io.dart' show confirm;
+import '../md_io.dart' show confirmOrEof;
 import '../paths.dart';
 import '../registry.dart';
+import '../session/run_mode.dart';
 import '../session/session_ops.dart';
 import '../session/session_state.dart';
 import '../session/workspace_guard.dart';
@@ -15,16 +16,43 @@ import '../ui/render.dart' as render;
 /// Unlike `teardown`, kill does not update skills.md or suggest a commit.
 /// It is for cases where the session needs to be discarded cleanly —
 /// archive is still written so the work is not lost.
+///
+/// Consent: it asks. If there is nobody to answer (stdin closed) it stops
+/// without changing anything, instead of reporting a "cancelled" that nobody
+/// chose. A caller that means "kill, don't ask" (zedup's `/kill`, a script)
+/// passes [RunMode.headless] (`claudart kill --headless`). Headless answers the
+/// final confirmation and the two benign, reversible ones (no active session,
+/// nothing to archive) with yes, since the handoff is archived either way, but
+/// it never clears a workspace lock: that means another operation may be
+/// running, and only a person can judge that.
 Future<void> runKill({
   FileIO? io,
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
+  bool? Function(String question)? askFn,
+  RunMode mode = RunMode.interactive,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final confirm_ = confirmFn ?? confirm;
+  final headless = mode == RunMode.headless;
+  // A caller-supplied confirm always answers; the default reports null at end
+  // of input. [askFn] lets a test simulate "nobody to answer".
+  final bool? Function(String question) ask =
+      askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
   final exit_ = exitFn ?? exit;
   final sw = Stopwatch()..start();
+
+  /// One decision point. Headless never prompts: it uses [headlessAnswer].
+  bool decide(String question, {required bool headlessAnswer}) {
+    if (headless) return headlessAnswer;
+    final answer = ask(question);
+    if (answer == null) {
+      print('\n✗ No input available to answer "$question", so nothing was changed.');
+      print('  Re-run in a terminal, or pass --headless to kill without asking.\n');
+      exit_(1);
+    }
+    return answer;
+  }
 
   print(render.header('CLAUDART SESSION KILL'));
 
@@ -53,9 +81,11 @@ Future<void> runKill({
     final op = interruptedOperation(workspace, io: fileIO) ?? 'unknown';
     print('\n⚠  Workspace is locked (interrupted during: $op).');
     print('   Another operation may still be running, or a previous run crashed.');
-    if (!confirm_('Clear the lock and force kill?')) {
-      print('\nKill cancelled. Resolve the interrupted state before retrying.\n');
-      exit_(0);
+    if (!decide('Clear the lock and force kill?', headlessAnswer: false)) {
+      print('\nKill cancelled. Resolve the interrupted state before retrying.');
+      if (headless) print('  (--headless never clears a workspace lock; re-run in a terminal.)');
+      print('');
+      exit_(headless ? 1 : 0);
     }
     clearLock(workspace, io: fileIO);
   }
@@ -66,7 +96,7 @@ Future<void> runKill({
   final claudePath = p.join(projectRoot, '.claude');
   if (!fileIO.linkExists(claudePath) && !fileIO.dirExists(claudePath)) {
     print('\n⚠  No active session found for ${entry.name}.');
-    if (!confirm_('Kill anyway and archive the handoff?')) {
+    if (!decide('Kill anyway and archive the handoff?', headlessAnswer: true)) {
       print('\nKill cancelled.\n');
       exit_(0);
     }
@@ -77,7 +107,7 @@ Future<void> runKill({
   final handoff = fileIO.fileExists(handoffPath) ? fileIO.read(handoffPath) : '';
   if (handoff.isEmpty) {
     print('\n⚠  No handoff found in workspace: $workspace');
-    if (!confirm_('Nothing to archive. Remove symlink only?')) {
+    if (!decide('Nothing to archive. Remove symlink only?', headlessAnswer: true)) {
       print('\nKill cancelled.\n');
       exit_(0);
     }
@@ -87,7 +117,9 @@ Future<void> runKill({
   }
 
   // 6 — Final confirmation.
-  if (!confirm_('Kill this session? (archive will be saved, skills.md will NOT be updated)')) {
+  if (headless) print('\n(headless — killing without confirmation)');
+  if (!decide('Kill this session? (archive will be saved, skills.md will NOT be updated)',
+      headlessAnswer: true)) {
     print('\nKill cancelled.\n');
     exit_(0);
   }

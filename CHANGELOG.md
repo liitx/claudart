@@ -32,6 +32,11 @@ agreed decisions.
   ignored with a warning naming the path and where to allow it. New
   `allowedScopeRoots` list in the workspace `config.json` (empty by default) is
   the explicit opt-in. **Behaviour change** for handoffs that listed `..` paths.
+- **Added:** `kill --headless`, for callers with no terminal (zedup's `/kill`
+  could never kill without it). It answers the final confirmation and the two
+  benign, reversible ones with yes, and **never clears a workspace lock** (exits
+  1). **Behaviour change:** `kill` with no answer available now stops with exit 1
+  and says why, instead of printing "Kill cancelled" and exiting 0.
 - **Changed:** the suggest prompt now pins the scope-bullet shape to
   ``- `relative/path` — what to change`` (the tolerant parser stays as backup).
 - **Fixed:** typing the same file twice in `setup` no longer writes duplicate

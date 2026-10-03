@@ -6,6 +6,7 @@ import 'package:claudart/file_io.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/workspace_guard.dart';
 import '../helpers/mocks.dart';
 
@@ -322,6 +323,84 @@ void main() {
       }
       expect(caught, isNotNull);
       expect(caught!.code, equals(1));
+    });
+  });
+
+  group('kill — consent is never inferred from missing input', () {
+    Future<void> kill(MemoryFileIO io,
+            {bool? Function(String)? askFn, bool Function(String)? confirmFn, RunMode mode = RunMode.interactive}) =>
+        runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          askFn: askFn,
+          confirmFn: confirmFn,
+          mode: mode,
+          exitFn: (code) => throw _ExitException(code),
+        );
+
+    bool? neverAsked(String q) => throw StateError('should not have been asked: $q');
+    Matcher exitsWith(int code) => throwsA(isA<_ExitException>().having((e) => e.code, 'code', code));
+    List<String> archives(MemoryFileIO io) =>
+        io.files.keys.where((k) => k.startsWith(p.join(_workspace, 'archive'))).toList();
+
+    test('end of input at the final question stops with exit 1 and changes nothing', () async {
+      final io = _io();
+      await expectLater(kill(io, askFn: (_) => null), exitsWith(1));
+      expect(io.read(handoffPathFor(_workspace)), contains('Something is broken'));
+      expect(io.linkExists(_claudeLink), isTrue);
+      expect(archives(io), isEmpty);
+    });
+
+    test('end of input at the lock question also stops with exit 1 and keeps the lock', () async {
+      final io = _io();
+      io.write(p.join(_workspace, 'workspace.lock'), 'setup');
+      await expectLater(kill(io, askFn: (_) => null), exitsWith(1));
+      expect(isLocked(_workspace, io: io), isTrue);
+    });
+
+    test('an explicit answer still decides (yes kills, no cancels with exit 0)', () async {
+      final yes = _io();
+      await kill(yes, askFn: (_) => true);
+      expect(archives(yes), hasLength(1));
+      await expectLater(kill(_io(), askFn: (_) => false), exitsWith(0));
+    });
+
+    group('--headless', () {
+      test('kills without asking: archives, resets the handoff, removes the link', () async {
+        final io = _io();
+        await kill(io, askFn: neverAsked, mode: RunMode.headless);
+        expect(archives(io), hasLength(1));
+        expect(io.read(handoffPathFor(_workspace)), isNot(contains('Something is broken')));
+        expect(io.linkExists(_claudeLink), isFalse);
+      });
+
+      test('never prompts, even if an injected confirm would say no', () async {
+        final io = _io();
+        await kill(io, confirmFn: (_) => false, mode: RunMode.headless);
+        expect(archives(io), hasLength(1));
+      });
+
+      test('never clears a workspace lock: exits 1 and leaves everything in place', () async {
+        final io = _io();
+        io.write(p.join(_workspace, 'workspace.lock'), 'setup');
+        await expectLater(kill(io, askFn: neverAsked, mode: RunMode.headless), exitsWith(1));
+        expect(isLocked(_workspace, io: io), isTrue);
+        expect(io.read(handoffPathFor(_workspace)), contains('Something is broken'));
+        expect(io.linkExists(_claudeLink), isTrue);
+        expect(archives(io), isEmpty);
+      });
+
+      test('with no active session it still archives the handoff (benign, reversible)', () async {
+        final io = _io(withLink: false);
+        await kill(io, askFn: neverAsked, mode: RunMode.headless);
+        expect(archives(io), hasLength(1));
+      });
+
+      test('with an empty handoff it just removes the link', () async {
+        final io = _io(withHandoff: false);
+        await kill(io, askFn: neverAsked, mode: RunMode.headless);
+        expect(io.linkExists(_claudeLink), isFalse);
+      });
     });
   });
 }
