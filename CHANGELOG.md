@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+Workflow gap fixes; see `docs/workflow_gaps.md` for the full audit and the
+open questions.
+
+- **Fixed:** `/dev/null` was treated as a terminal on macOS, so `init`, `link`,
+  `setup`, `kill`, `flow`, the launcher and `suggest` crashed with an unhandled
+  `StdinException` (errno 19) when stdin was closed, leaving the terminal cursor
+  hidden. New
+  `canUseRawTerminal()` falls back to line-based input.
+- **Fixed (safety):** end of input at a numbered menu used to select the first
+  option, which in the debug/suggest review menus means "apply (write all files
+  to disk)". It now aborts with a message and exit code 1. **Behaviour change:**
+  any menu reached with closed stdin now exits 1 instead of taking option 1.
+- **Fixed:** `debug` rejected the scope list `suggest` had just written
+  ("No files listed in Scope") whenever the model did not backtick a relative
+  path. `parseScopeFiles` now accepts the common bullet shapes and absolute
+  paths inside the project (including through a symlinked root); absolute
+  paths outside the project are dropped.
+
 ## 2.0.0
 
 **Breaking:** `ClaudeRunner` (exported via `pipeline_executor.dart`) gained a
