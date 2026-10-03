@@ -282,6 +282,8 @@ String _resolveFilePaths(String raw, String projectRoot, FileFinderFn finder) {
       .map((t) => t.trim())
       .where((t) => t.isNotEmpty);
 
+  // A Set keeps first-seen order and drops repeats, so typing the same file
+  // twice (`calc.dart, lib/calc.dart` both resolve to one path) yields one bullet.
   return tokens.expand((token) {
     return switch (_resolveToken(token, projectRoot, finder)) {
       _Resolved(:final relativePaths) =>
@@ -289,5 +291,5 @@ String _resolveFilePaths(String raw, String projectRoot, FileFinderFn finder) {
       _NotFound(:final token) =>
         ['- `$token` — (not found — verify path)'],
     };
-  }).join('\n');
+  }).toSet().join('\n');
 }
