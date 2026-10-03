@@ -18,7 +18,13 @@ test-file:
 
 ## Run tests with coverage. One-time fresh-machine setup:
 ##   dart pub global activate coverage
+## Checked up front with a clear message — the bare `dart pub global run`
+## failure ("No active package coverage") doesn't say what to run,
+## confirmed confusing on a fresh machine by a second agent's cross-machine
+## test.
 test-coverage:
+	@dart pub global list | grep -q '^coverage ' || \
+		{ echo "coverage package not activated. Run: dart pub global activate coverage" >&2; exit 2; }
 	$(DART) test --coverage=coverage && dart pub global run coverage:format_coverage \
 		--lcov --in=coverage --out=coverage/lcov.info --report-on=lib
 
