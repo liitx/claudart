@@ -15,13 +15,6 @@ void main() {
     }
   });
 
-  group('PortabilityGap.providerWiring', () {
-    test('is open — the primitive exists but is not wired in yet', () {
-      expect(PortabilityGap.providerWiring.status, equals(PortabilityGapStatus.open));
-      expect(PortabilityGap.providerWiring.trackedIn, contains('docs/provider_setup.md'));
-    });
-  });
-
   group('PortabilityGap.zedEditorIntegration', () {
     test('is tabled — no second IDE target to generalize against', () {
       expect(PortabilityGap.zedEditorIntegration.status, equals(PortabilityGapStatus.tabled));

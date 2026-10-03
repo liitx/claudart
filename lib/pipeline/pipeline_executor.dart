@@ -19,6 +19,7 @@ import 'dart:io';
 
 import '../config.dart' show defaultStepTimeout;
 import '../process_runner.dart' show killProcessTree;
+import '../providers/agent_provider.dart' show AgentProvider;
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'debug_mode.dart';
@@ -617,7 +618,18 @@ Future<StepResult?> defaultClaudeRunner({
   Duration? timeout = defaultStepTimeout,
   String executable = 'claude',
   StepDebugTrace? traceOverride,
+  AgentProvider? Function() providerDetector = AgentProvider.detectEffective,
 }) async {
+  // Fails fast with a clear message instead of letting an unconfigured
+  // environment reach a mid-pipeline 401 from the `claude` subprocess
+  // itself — see portability_gap.dart's providerWiring entry this closes.
+  if (providerDetector() == null) {
+    throw Exception(
+      'No agent provider configured (checked ANTHROPIC_API_KEY, Bedrock '
+      'env vars, and ~/.claude/settings.json). Run `claudart doctor` to diagnose.',
+    );
+  }
+
   // `StepDebugTrace.start()` resolves the log file via `debugLogFile()`.
   // When debug mode is off, every `trace.write*` below is a no-op.
   // When on, writes are best-effort — IOException swallows so an

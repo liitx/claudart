@@ -9,6 +9,7 @@ import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_result.dart';
+import 'package:claudart/providers/agent_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -40,6 +41,10 @@ void main() {
         timeout: timeout,
         executable: executable,
         traceOverride: trace,
+        // Process-tree-kill behavior, not provider auth — bypass the real
+        // ambient-machine detection so this test doesn't depend on whatever
+        // provider happens to be configured on whichever machine runs it.
+        providerDetector: () => AgentProvider.apiKey,
       );
 
   bool alive(String pidFile) {
