@@ -277,7 +277,7 @@ void main() {
   });
 
   group('runRotate — build gate working directory', () {
-    test('default build runs afterFixCommand with the project root as the working directory, via ProcessRunner', () async {
+    test('default build runs afterFixCommand through a real shell (sh -c), in the project root', () async {
       final io = _io();
       final runner = MockProcessRunner();
       when(() => runner.run(
@@ -300,8 +300,11 @@ void main() {
             captureAny(),
             workingDirectory: captureAny(named: 'workingDirectory'),
           )).captured;
-      expect(captured[0], 'make');
-      expect(captured[1], ['rebuild']);
+      // The whole, unsplit command goes to `sh -c` — confirmed by direct
+      // testing that a pre-split arg list + runInShell does NOT make shell
+      // operators (&&, ||, |, >, globs) work; only this does.
+      expect(captured[0], 'sh');
+      expect(captured[1], ['-c', 'make rebuild']);
       expect(captured[2], _projectRoot);
     });
   });

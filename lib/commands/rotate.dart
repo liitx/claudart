@@ -14,6 +14,9 @@ import '../md_io.dart' show confirmOrEof;
 import '../process_runner.dart';
 import '../ui/render.dart' as render;
 
+const _shellExecutable = 'sh';
+const _shellCommandFlag = '-c';
+
 enum RotateResult {
   /// Current session archived, next issue seeded into fresh handoff.
   rotated,
@@ -191,15 +194,26 @@ ProjectConfig _loadConfig(FileIO fileIO, String workspace) {
   }
 }
 
+/// afterFixCommand is free-form user config, not untrusted input — shell
+/// operators (&&, ||, |, >, globs) are expected to work, same as typing the
+/// command directly in a terminal.
+///
+/// `runInShell: true` on a pre-split argument list does NOT do this —
+/// confirmed by direct testing: Dart quotes each split argument
+/// individually before handing them to the shell, so `&&`/`||` inside the
+/// (already-split) argument list arrive as inert literal text, not
+/// operators. Passing the whole, unsplit [command] string as `sh`'s `-c`
+/// argument is what actually works — the shell parses operators, quoting,
+/// and globs itself, the same as this project's own `.githooks/pre-push`
+/// already relies on.
 Future<bool> _defaultBuild(
   String command,
   String workingDirectory,
   ProcessRunner proc,
 ) async {
-  final parts = command.split(' ');
   final result = await proc.run(
-    parts.first,
-    parts.skip(1).toList(),
+    _shellExecutable,
+    [_shellCommandFlag, command],
     workingDirectory: workingDirectory,
   );
   return result.exitCode == 0;
