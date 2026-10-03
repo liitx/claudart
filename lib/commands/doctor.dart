@@ -4,6 +4,7 @@
 // check, exits 1 if any check failed. Idempotent — safe to re-run after
 // fixing a failure, each check re-reads live state rather than caching.
 
+import 'dart:async' show TimeoutException;
 import 'dart:convert';
 import 'dart:io';
 
@@ -20,8 +21,12 @@ import '../registry.dart';
 const _gitExecutable = 'git';
 const _ghExecutable = 'gh';
 const _claudeExecutable = 'claude';
+const _awsExecutable = 'aws';
 const _requiredTools = [_gitExecutable, _ghExecutable, _claudeExecutable];
 const _doctorCommandName = 'doctor';
+const _ec2MetadataDisabledVar = 'AWS_EC2_METADATA_DISABLED';
+const _notUsingBedrockDetail = 'not using Bedrock';
+const _defaultBedrockPreflightTimeout = Duration(seconds: 10);
 
 /// `ProcessRunner.run` is backed by `Process.run`, which throws
 /// `ProcessException` synchronously when [executable] isn't found at all
@@ -52,11 +57,14 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
   String? projectRoot,
   FileIO? io,
   String? claudeSettingsPath,
+  Duration? bedrockPreflightTimeout,
 }) async {
   final proc = runner ?? const RealProcessRunner();
   final fileIO = io ?? const RealFileIO();
   final environment = env ?? Platform.environment;
   final root = projectRoot ?? Directory.current.path;
+
+  final activeProvider = await _detectActiveProvider(proc, environment, io: io, settingsPath: claudeSettingsPath);
 
   return [
     await _checkTools(proc),
@@ -66,7 +74,33 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
     _checkWorkspaceRoot(environment, fileIO),
     _checkRegistryHealth(fileIO),
     _checkPathConfiguration(environment),
+    _checkBedrockMetadataDisabled(activeProvider, environment),
+    await _checkBedrockCredentialsPreflight(
+      activeProvider,
+      proc,
+      timeout: bedrockPreflightTimeout ?? _defaultBedrockPreflightTimeout,
+    ),
   ];
+}
+
+/// Ground truth for "is Bedrock actually active right now" — prefers the
+/// real `claude auth status` JSON (see
+/// [AgentProvider.detectFromAuthStatusJson]) over env-var inference, since
+/// the two gate-checks below only make sense when Bedrock is genuinely the
+/// resolved provider, not merely "some Bedrock-shaped env vars exist".
+/// Falls back to [AgentProvider.detectEffective] when `claude auth status`
+/// itself isn't available or doesn't parse (e.g. `claude` genuinely
+/// missing — already surfaced separately by [_checkTools]).
+Future<AgentProvider?> _detectActiveProvider(
+  ProcessRunner proc,
+  Map<String, String> env, {
+  FileIO? io,
+  String? settingsPath,
+}) async {
+  final result = await _tryRun(proc, _claudeExecutable, ['auth', 'status']);
+  final fromAuthStatus = AgentProvider.detectFromAuthStatusJson(result.stdout as String? ?? '');
+  return fromAuthStatus ??
+      AgentProvider.detectEffective(processEnv: env, io: io, settingsPath: settingsPath);
 }
 
 Future<HarnessCheckOutcome> _checkTools(ProcessRunner proc) async {
@@ -274,6 +308,35 @@ HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
         );
 }
 
+HarnessCheckOutcome _checkBedrockMetadataDisabled(
+  AgentProvider? activeProvider,
+  Map<String, String> env,
+) {
+  if (activeProvider != AgentProvider.bedrock) {
+    return (
+      id: HarnessCheckId.bedrockMetadataDisabled,
+      result: HarnessCheckResult.skip,
+      detail: _notUsingBedrockDetail,
+    );
+  }
+  final disabled = (env[_ec2MetadataDisabledVar] ?? '').toLowerCase() == 'true';
+  return disabled
+      ? (
+          id: HarnessCheckId.bedrockMetadataDisabled,
+          result: HarnessCheckResult.ok,
+          detail: '$_ec2MetadataDisabledVar=true',
+        )
+      : (
+          id: HarnessCheckId.bedrockMetadataDisabled,
+          result: HarnessCheckResult.fail,
+          detail: '$_ec2MetadataDisabledVar is not set to true — a broken '
+              'Bedrock profile on a non-EC2 host does not fail fast, it '
+              'stalls probing the EC2 instance metadata service (measured: '
+              '740s) before erroring. Set $_ec2MetadataDisabledVar=true '
+              'unless this machine is a real EC2 instance',
+        );
+}
+
 HarnessCheckOutcome _checkPathConfiguration(Map<String, String> env) {
   final home = env[homeEnvVar] ?? '';
   final binDir = '$home/bin';
@@ -291,6 +354,61 @@ HarnessCheckOutcome _checkPathConfiguration(Map<String, String> env) {
           detail: '$binDir is not on PATH — claudart compile/zedup setup '
               'install there; a freshly-built binary would be unreachable',
         );
+}
+
+/// "Bedrock is configured" (the right env vars are present) is not the
+/// same fact as "Bedrock will work" — this confirms credentials actually
+/// resolve with a real, bounded call before anything spawns `claude`
+/// against them. Bounded deliberately: without
+/// [HarnessCheckId.bedrockMetadataDisabled] already failing this *and*
+/// something still invoking `aws` directly, a hung preflight would itself
+/// become exactly the multi-minute stall this harness exists to catch.
+/// Never prints the resolved identity (account ID/ARN) — only whether it
+/// resolved.
+Future<HarnessCheckOutcome> _checkBedrockCredentialsPreflight(
+  AgentProvider? activeProvider,
+  ProcessRunner proc, {
+  required Duration timeout,
+}) async {
+  if (activeProvider != AgentProvider.bedrock) {
+    return (
+      id: HarnessCheckId.bedrockCredentialsPreflight,
+      result: HarnessCheckResult.skip,
+      detail: _notUsingBedrockDetail,
+    );
+  }
+  final which = await _tryRun(proc, 'which', [_awsExecutable]);
+  if (which.exitCode != 0) {
+    return (
+      id: HarnessCheckId.bedrockCredentialsPreflight,
+      result: HarnessCheckResult.skip,
+      detail: 'aws CLI not found — cannot preflight credentials',
+    );
+  }
+  try {
+    final result = await proc
+        .run(_awsExecutable, ['sts', 'get-caller-identity'])
+        .timeout(timeout);
+    return result.exitCode == 0
+        ? (
+            id: HarnessCheckId.bedrockCredentialsPreflight,
+            result: HarnessCheckResult.ok,
+            detail: 'AWS credentials resolve correctly',
+          )
+        : (
+            id: HarnessCheckId.bedrockCredentialsPreflight,
+            result: HarnessCheckResult.fail,
+            detail: 'aws sts get-caller-identity failed — check '
+                'AWS_PROFILE and that the session is still valid',
+          );
+  } on TimeoutException {
+    return (
+      id: HarnessCheckId.bedrockCredentialsPreflight,
+      result: HarnessCheckResult.fail,
+      detail: 'aws sts get-caller-identity did not respond within '
+          '${timeout.inSeconds}s — credentials cannot be verified',
+    );
+  }
 }
 
 /// CLI entry point: runs every check, prints each outcome, logs the run

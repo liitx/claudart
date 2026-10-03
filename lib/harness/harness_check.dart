@@ -43,16 +43,33 @@ enum HarnessCheckId {
   /// is actually on PATH — otherwise a freshly-compiled binary is
   /// unreachable without the user noticing why `claudart`/`zedup` isn't
   /// found.
-  pathConfiguration;
+  pathConfiguration,
+
+  /// When Bedrock is the active provider, `AWS_EC2_METADATA_DISABLED` must
+  /// be `true` unless this machine is a real EC2 host. Measured directly
+  /// (`OAUTH-BEDROCK-FINAL-REPORT.md`): without it, a Bedrock profile that
+  /// cannot supply credentials doesn't fail fast — the AWS SDK falls
+  /// through to probing the EC2 instance metadata service and stalls for
+  /// minutes (740s measured) before erroring, which looks exactly like a
+  /// hang to anyone watching.
+  bedrockMetadataDisabled,
+
+  /// When Bedrock is the active provider, a bounded `aws sts
+  /// get-caller-identity` call confirms credentials actually resolve
+  /// before anything spawns `claude` against them — "Bedrock configured"
+  /// (env vars present) is not the same fact as "Bedrock will work".
+  bedrockCredentialsPreflight;
 
   String get label => switch (this) {
-        HarnessCheckId.tools             => 'tools',
-        HarnessCheckId.gitIdentity       => 'git identity',
-        HarnessCheckId.ghAuth            => 'gh auth',
-        HarnessCheckId.providerEnv       => 'provider env',
-        HarnessCheckId.workspaceRoot     => 'workspace root',
-        HarnessCheckId.registryHealth    => 'registry health',
-        HarnessCheckId.pathConfiguration => 'path configuration',
+        HarnessCheckId.tools                      => 'tools',
+        HarnessCheckId.gitIdentity                => 'git identity',
+        HarnessCheckId.ghAuth                      => 'gh auth',
+        HarnessCheckId.providerEnv                 => 'provider env',
+        HarnessCheckId.workspaceRoot               => 'workspace root',
+        HarnessCheckId.registryHealth              => 'registry health',
+        HarnessCheckId.pathConfiguration           => 'path configuration',
+        HarnessCheckId.bedrockMetadataDisabled     => 'bedrock metadata guard',
+        HarnessCheckId.bedrockCredentialsPreflight => 'bedrock credentials',
       };
 }
 

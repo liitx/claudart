@@ -43,14 +43,58 @@ identical to claudart: it just launched `claude` and hoped.
      whether the real `claude` CLI resolves the two the same way when both
      set the same variable differently is unverified. Only matters if they
      ever actually disagree.
-  2. **"Configured" isn't "working."** This reports whether the right env
-     vars are present, not whether the underlying Britive/AWS session
-     behind them is still valid — a real credential-freshness check would
-     be something like `aws sts get-caller-identity --profile <profile>`.
-     Out of scope here; worth a later harness check if expired sessions
-     turn out to be a frequent real failure mode.
+  2. **"Configured" isn't "working" — now partially closed.** `claudart
+     doctor` originally only reported whether the right env vars were
+     present, not whether the underlying Britive/AWS session behind them
+     was still valid. `HarnessCheckId.bedrockCredentialsPreflight` now
+     runs a real, bounded (`AWS_EC2_METADATA_DISABLED`-independent,
+     10s-timeout) `aws sts get-caller-identity` when Bedrock is the active
+     provider, confirming credentials actually resolve — never prints the
+     resolved account ID/ARN, only ok/fail. Still doesn't catch every
+     failure mode (e.g. a session valid for `sts` but lacking Bedrock
+     model-invoke permission specifically).
   3. Project-local `.claude/settings.json` overrides still aren't read —
      unchanged limitation, not new.
+
+## OAuth/Bedrock coexistence — measured, not assumed
+
+Direct cross-machine testing (`OAUTH-BEDROCK-FINAL-REPORT.md`, two
+machines — one genuinely `claude.ai`-OAuth-logged-in, one Bedrock-only
+behind a corporate VPN that blocks `claude.ai` outright) replaced several
+assumptions in this doc with measured facts:
+
+- **Storage.** OAuth credentials live in the macOS **Keychain**
+  (`Claude Code-credentials`, plus a hash-suffixed variant per distinct
+  `CLAUDE_CONFIG_DIR`), not a `.credentials.json` file — that path is
+  Linux-only. `~/.claude.json`'s `oauthAccount` key holds account/org
+  metadata only (uuid, email, org, billing, seat tier, etc.), never the
+  token itself.
+- **Precedence, confirmed both directions.** Setting
+  `CLAUDE_CODE_USE_BEDROCK=1` while genuinely OAuth-logged-in instantly
+  flips `claude auth status` to `third_party`/`bedrock`; removing it
+  reverts to `claude.ai` immediately, with **no re-login required**. The
+  two auth paths coexist independently — neither clobbers the other's
+  stored state.
+- **The real failure mode for a broken Bedrock profile is a stall, not an
+  error — this is the bug `bedrockMetadataDisabled` exists to catch.**
+  When no valid AWS credentials are found, the AWS SDK falls through to
+  probing the EC2 instance metadata service
+  (`169.254.169.254`) as a last resort. On a non-EC2 host that's not a
+  fast refusal — measured at **740 seconds (~12.3 minutes)** before the
+  same `Could not load AWS credentials` error that `AWS_EC2_METADATA_DISABLED=true`
+  produces in under 2 seconds. A misconfigured Bedrock profile without
+  this flag doesn't look like an error to someone watching, it looks
+  exactly like a hang.
+- **`claude auth status` is the authoritative, ground-truth detector** —
+  more reliable than inferring the active provider from which env vars
+  happen to be set, since it reflects what `claude` itself actually
+  resolved. It prints JSON (`loggedIn`, `authMethod`, `apiProvider`) even
+  when it exits 1 (nothing configured) — stdout must be read regardless
+  of exit code. [`AgentProvider.detectFromAuthStatusJson`](../lib/providers/agent_provider.dart)
+  parses it; `claudart doctor` prefers this over env-based
+  `detectEffective` when gating the two Bedrock-specific checks above,
+  falling back to env inference only if `claude auth status` itself is
+  unavailable or unparseable.
 - **OpenRouter** — not used anywhere yet. `AgentProvider.openRouter`'s
   env var (`OPENROUTER_API_KEY`) is the obvious/documented one, but
   routing the real `claude` CLI through OpenRouter has **not been
