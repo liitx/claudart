@@ -1,18 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'terminal_support.dart';
+
 const _prompt = '> ';
 
 /// Reads a line of user input with full cursor movement support:
 /// left/right arrows, home/end, backspace, delete, Ctrl+A/E/U.
 ///
-/// When stdin is not a TTY (CI, pipe) falls back to [stdin.readLineSync]
-/// so behaviour is always well-defined.
+/// When stdin is not a usable TTY (CI, pipe, `/dev/null`) falls back to
+/// [stdin.readLineSync] so behaviour is always well-defined.
 ///
 /// Returns null when [optional] is true and the user submits empty input.
 String? readLine({bool optional = false}) {
   stdout.write(_prompt);
-  if (!stdin.hasTerminal) {
+  if (!canUseRawTerminal()) {
     final raw = stdin.readLineSync()?.trim();
     if (raw == null) return null;   // EOF — stdin closed, don't recurse
     if (raw.isEmpty) return optional ? null : readLine(optional: optional);
