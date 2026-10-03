@@ -12,6 +12,13 @@ abstract final class ScanScope {
   static const full = 'full';
 }
 
+/// How long one `claude` pipeline step may run before it is killed (whole
+/// process tree) and reported as failed. A generous backstop against a step
+/// that never returns (for example a credential helper that hangs), not a
+/// performance budget. Override per workspace with `stepTimeoutMinutes` in
+/// `config.json`; `0` turns it off.
+const Duration defaultStepTimeout = Duration(minutes: 15);
+
 /// Project-level persistent config stored as config.json in the workspace.
 class ProjectConfig {
   final bool sensitivityMode;
@@ -32,6 +39,19 @@ class ProjectConfig {
   /// a scope path that leaves the project is ignored unless listed here.
   final List<String> allowedScopeRoots;
 
+  /// Per-step timeout in minutes. `null` (key absent) means "use the default"
+  /// ([defaultStepTimeout]); an explicit `0` means "no timeout". They are
+  /// different states on purpose. See [stepTimeout].
+  final int? stepTimeoutMinutes;
+
+  /// The effective per-step timeout: the configured minutes, [defaultStepTimeout]
+  /// when unset, or `null` (no limit) when explicitly set to 0.
+  Duration? get stepTimeout => switch (stepTimeoutMinutes) {
+        null => defaultStepTimeout,
+        0 => null,
+        final minutes => Duration(minutes: minutes),
+      };
+
   const ProjectConfig({
     this.sensitivityMode = false,
     this.scanScope = ScanScope.lib,
@@ -41,6 +61,7 @@ class ProjectConfig {
     this.projectRoot,
     this.afterFixCommand = 'make rebuild',
     this.allowedScopeRoots = const [],
+    this.stepTimeoutMinutes,
   });
 
   factory ProjectConfig.fromJson(Map<String, dynamic> json) {
@@ -56,6 +77,12 @@ class ProjectConfig {
         for (final r in (json['allowedScopeRoots'] as List<dynamic>? ?? const []))
           if (r is String && r.trim().isNotEmpty) r.trim(),
       ],
+      // Only a non-negative integer counts; anything else (a string, a
+      // negative number) is treated as unset rather than guessed at.
+      stepTimeoutMinutes: switch (json['stepTimeoutMinutes']) {
+        final int minutes when minutes >= 0 => minutes,
+        _ => null,
+      },
     );
   }
 
@@ -68,6 +95,7 @@ class ProjectConfig {
         if (projectRoot != null) 'projectRoot': projectRoot,
         'afterFixCommand': afterFixCommand,
         if (allowedScopeRoots.isNotEmpty) 'allowedScopeRoots': allowedScopeRoots,
+        if (stepTimeoutMinutes != null) 'stepTimeoutMinutes': stepTimeoutMinutes,
       };
 
   ProjectConfig copyWith({
@@ -79,6 +107,7 @@ class ProjectConfig {
     String? projectRoot,
     String? afterFixCommand,
     List<String>? allowedScopeRoots,
+    int? stepTimeoutMinutes,
   }) {
     return ProjectConfig(
       sensitivityMode: sensitivityMode ?? this.sensitivityMode,
@@ -89,6 +118,7 @@ class ProjectConfig {
       projectRoot: projectRoot ?? this.projectRoot,
       afterFixCommand: afterFixCommand ?? this.afterFixCommand,
       allowedScopeRoots: allowedScopeRoots ?? this.allowedScopeRoots,
+      stepTimeoutMinutes: stepTimeoutMinutes ?? this.stepTimeoutMinutes,
     );
   }
 }

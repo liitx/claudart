@@ -10,6 +10,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../logging/planner_log.dart';
@@ -65,7 +66,11 @@ Future<void> runFlow({
   // verbose defaults to false (no CLI flag plumbs an opt-in/out yet) — an
   // unconditional true here would put pipeline-internal trace lines in
   // every user's stdout with no way to silence them.
-  final resolvedExec = executor ?? PipelineExecutor(strict: strictMode);
+  final resolvedExec = executor ??
+      PipelineExecutor(
+        strict: strictMode,
+        stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
+      );
 
   // ── Check for saved checkpoint ─────────────────────────────────────────────
 

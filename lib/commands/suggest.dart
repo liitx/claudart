@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../md_io.dart';
@@ -50,7 +51,11 @@ Future<void> runSuggest({
   final workspace    = entry.workspacePath;
   final wsConfig     = WorkspaceConfig.load(workspace, io: fileIO);
   final strictMode   = wsConfig?.owner.strict ?? false;
-  final exec         = executor ?? PipelineExecutor(strict: strictMode);
+  final exec         = executor ??
+      PipelineExecutor(
+        strict: strictMode,
+        stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
+      );
   final handoffFile  = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
