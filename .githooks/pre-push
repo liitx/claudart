@@ -21,6 +21,20 @@ GREEN="\033[0;32m"
 YELLOW="\033[0;33m"
 RESET="\033[0m"
 
+# A pure branch-deletion push (`git push origin --delete <branch>`) reports
+# an all-zero local oid for every ref — nothing new is being pushed, so the
+# full gate is pure waste. Confirmed real: deleting 5 merged branches ran
+# the complete suite 5 times over, for zero new code.
+ZERO_OID="0000000000000000000000000000000000000000"
+ALL_DELETES=true
+while read -r _local_ref local_oid _remote_ref _remote_oid; do
+  [[ "$local_oid" == "$ZERO_OID" ]] || ALL_DELETES=false
+done
+if [[ "$ALL_DELETES" == true ]]; then
+  echo "Deleting a remote ref only — skipping the gate."
+  exit 0
+fi
+
 # Not `[ -t 0 ] && ...` — git always pipes stdin to a pre-push hook (the
 # ref-update lines), so stdin is never a terminal even when the invoking
 # shell has a real one. That made this confirmation dead code, confirmed
