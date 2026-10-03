@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# pre-push — paradigm + correctness gate before pushing to a shared remote.
+#
+# Tracked in the repo (.githooks/, not .git/hooks/) so it travels with a
+# fresh clone — .git/hooks/ is local-only and never committed, which is
+# exactly why this protection didn't exist here before. Activate once per
+# clone with: git config core.hooksPath .githooks
+#
+# Mirrors zedup's own pre-push pattern (confirm, then gate), extended with
+# analyze/custom_lint/the duplicate-literal check — commits stay fast and
+# ungated; this is where the expensive, full checks belong instead.
+
+set -uo pipefail
+
+REPO="$(git rev-parse --show-toplevel)"
+cd "$REPO"
+
+BOLD="\033[1m"
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+RESET="\033[0m"
+
+if [ -t 0 ] && exec 3</dev/tty 2>/dev/null; then
+  read -p "Push to remote? [y/N]: " confirm <&3
+  exec 3>&-
+  [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Push cancelled."; exit 1; }
+fi
+
+FAILED=0
+
+echo ""
+echo -e "${BOLD}dart analyze${RESET}"
+# dart analyze's own exit code goes nonzero on info-level hints too (19
+# pre-existing here, none of them real problems) and on this repo's own
+# three documented, intentionally-kept warnings (unrecognized_error_code —
+# load-bearing for custom_lint's severity, not dead config; see
+# MIGRATION_STATUS.md). Gate on real "error" lines only, not the raw exit
+# code, so pre-existing debt doesn't block every future push.
+ANALYZE_OUT="$(dart analyze 2>&1)"
+echo "$ANALYZE_OUT"
+echo "$ANALYZE_OUT" | grep -qE '^\s*error ' && FAILED=1
+
+echo ""
+echo -e "${BOLD}dart run custom_lint${RESET}"
+dart run custom_lint || FAILED=1
+
+echo ""
+echo -e "${BOLD}dart test${RESET}"
+dart test --test-randomize-ordering-seed=random || FAILED=1
+
+echo ""
+if [[ $FAILED -ne 0 ]]; then
+  echo -e "${RED}${BOLD}Push aborted${RESET} — fix the above before pushing."
+  exit 1
+fi
+
+# Advisory, not a gate: a newly-added check, scoped to lib/ only (see the
+# script's own header). False positives here must never block a push —
+# only analyze/custom_lint/test do that.
+echo -e "${BOLD}Duplicate-literal check (advisory)${RESET}"
+find lib -name '*.dart' -print0 | while IFS= read -r -d '' f; do
+  dart run tool/check_duplicate_literals.dart "$f"
+done
+
+echo ""
+echo -e "${GREEN}${BOLD}All checks passed.${RESET} Pushing..."
+echo ""

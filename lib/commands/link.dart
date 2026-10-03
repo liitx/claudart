@@ -287,6 +287,13 @@ ProjectLinks createProjectLinks({
   // Auto-add .claude and .cursor/ to .gitignore.
   _ensureGitignore(projectRoot, fileIO);
 
+  // If the project ships a tracked .githooks/ dir (this repo's own
+  // pre-push paradigm gate, for one), point git at it. .git/hooks/ is
+  // never committed — a fresh clone has nothing there until this runs,
+  // which is exactly the gap that let a prior pre-push protection exist
+  // on only one machine. A no-op for projects without that convention.
+  _ensureHooksPath(projectRoot, fileIO);
+
   return (
     symlinkPath: symlinkPath,
     symlinkTarget: symlinkTarget,
@@ -316,6 +323,33 @@ void _ensureGitignore(String projectRoot, FileIO fileIO) {
 
   fileIO.write(path, current);
   print('  .gitignore: added ${missing.join(', ')}');
+}
+
+const _githooksDirName = '.githooks';
+const _hooksPathConfigKey = 'core.hooksPath';
+const _gitExecutable = 'git';
+const _gitConfigArg = 'config';
+
+void _ensureHooksPath(String projectRoot, FileIO fileIO) {
+  if (!fileIO.dirExists(p.join(projectRoot, _githooksDirName))) return;
+  try {
+    final current = Process.runSync(
+      _gitExecutable,
+      [_gitConfigArg, _hooksPathConfigKey],
+      workingDirectory: projectRoot,
+    );
+    if (current.exitCode == 0 && (current.stdout as String).trim() == _githooksDirName) {
+      return;
+    }
+    Process.runSync(
+      _gitExecutable,
+      [_gitConfigArg, _hooksPathConfigKey, _githooksDirName],
+      workingDirectory: projectRoot,
+    );
+    print('  git hooks: $_hooksPathConfigKey → $_githooksDirName');
+  } on Exception catch (_) {
+    // Not a git repo, or git itself unavailable — nothing to configure.
+  }
 }
 
 String _detectProjectName(String projectRoot) {

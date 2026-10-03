@@ -58,7 +58,15 @@ enum HarnessCheckId {
   /// get-caller-identity` call confirms credentials actually resolve
   /// before anything spawns `claude` against them — "Bedrock configured"
   /// (env vars present) is not the same fact as "Bedrock will work".
-  bedrockCredentialsPreflight;
+  bedrockCredentialsPreflight,
+
+  /// `core.hooksPath` points at this project's tracked `.githooks/` when
+  /// one exists — `.git/hooks/` is never committed, so a project with a
+  /// real pre-push paradigm gate still ships it to nobody on a fresh
+  /// clone unless this is configured. `claudart link` sets it
+  /// automatically; this check catches a project linked before that, or
+  /// linked by a non-claudart tool.
+  gitHooksConfigured;
 
   String get label => switch (this) {
         HarnessCheckId.tools                      => 'tools',
@@ -70,6 +78,7 @@ enum HarnessCheckId {
         HarnessCheckId.pathConfiguration           => 'path configuration',
         HarnessCheckId.bedrockMetadataDisabled     => 'bedrock metadata guard',
         HarnessCheckId.bedrockCredentialsPreflight => 'bedrock credentials',
+        HarnessCheckId.gitHooksConfigured          => 'git hooks',
       };
 }
 

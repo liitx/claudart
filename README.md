@@ -495,7 +495,7 @@ Options:
 
 </details>
 
-**`claudart doctor` checks the machine, not the session.** It runs nine checks, prints one `[OK]`/`[SKIP]`/`[FAIL]` line each, and exits 1 if any failed — skip-only is exit 0. Every check re-reads live state, so it is safe to re-run after fixing something. Check identity and outcome are both enums, [`HarnessCheckId`](lib/harness/harness_check.dart#L15) and [`HarnessCheckResult`](lib/harness/harness_check.dart#L60); the checks themselves live in [`lib/commands/doctor.dart`](lib/commands/doctor.dart). Real output from this machine, user identity and home path elided:
+**`claudart doctor` checks the machine, not the session.** It runs ten checks, prints one `[OK]`/`[SKIP]`/`[FAIL]` line each, and exits 1 if any failed — skip-only is exit 0. Every check re-reads live state, so it is safe to re-run after fixing something. Check identity and outcome are both enums, [`HarnessCheckId`](lib/harness/harness_check.dart#L15) and [`HarnessCheckResult`](lib/harness/harness_check.dart#L60); the checks themselves live in [`lib/commands/doctor.dart`](lib/commands/doctor.dart). Real output from this machine, user identity and home path elided:
 
 ```
 $ claudart doctor
@@ -508,6 +508,7 @@ $ claudart doctor
 [OK] path configuration: /…/bin is on PATH
 [SKIP] bedrock metadata guard: not using Bedrock
 [SKIP] bedrock credentials: not using Bedrock
+[OK] git hooks: core.hooksPath=.githooks
 ```
 
 | Check | `[OK]` | `[SKIP]` | `[FAIL]` |
@@ -521,8 +522,11 @@ $ claudart doctor
 | `path configuration` | `~/bin` is on PATH | — | `~/bin` missing, so a binary from `claudart compile` is unreachable |
 | `bedrock metadata guard` | Bedrock active and `AWS_EC2_METADATA_DISABLED=true` | Bedrock is not the active provider | Bedrock active, flag unset — see [below](#authentication) for why this matters |
 | `bedrock credentials` | Bedrock active and a bounded `aws sts get-caller-identity` resolves | Bedrock not active, or `aws` CLI not installed | call fails or exceeds its 10s timeout |
+| `git hooks` | project has `.githooks/` and `core.hooksPath` points at it | no `.githooks/` in this project | `.githooks/` exists but `core.hooksPath` isn't set to it |
 
-The last two checks are gated on which provider `claude auth status` itself reports as active ([`AgentProvider.detectFromAuthStatusJson`](lib/providers/agent_provider.dart)) — ground truth from the real CLI, not an inference from which env vars happen to be set. **Measured, not assumed:** a Bedrock profile that can't supply credentials doesn't fail fast on a non-EC2 host — the AWS SDK falls through to probing the EC2 instance metadata service and stalls, measured at **740 seconds (~12.3 minutes)** before erroring, versus under 2 seconds with `AWS_EC2_METADATA_DISABLED=true` set. That's indistinguishable from a hang to anyone watching; `bedrock metadata guard` exists specifically to catch its absence before it bites. The credentials preflight never prints the resolved account ID/ARN, only whether it resolved.
+The bedrock checks are gated on which provider `claude auth status` itself reports as active ([`AgentProvider.detectFromAuthStatusJson`](lib/providers/agent_provider.dart)) — ground truth from the real CLI, not an inference from which env vars happen to be set. **Measured, not assumed:** a Bedrock profile that can't supply credentials doesn't fail fast on a non-EC2 host — the AWS SDK falls through to probing the EC2 instance metadata service and stalls, measured at **740 seconds (~12.3 minutes)** before erroring, versus under 2 seconds with `AWS_EC2_METADATA_DISABLED=true` set. That's indistinguishable from a hang to anyone watching; `bedrock metadata guard` exists specifically to catch its absence before it bites. The credentials preflight never prints the resolved account ID/ARN, only whether it resolved.
+
+`git hooks` exists because `.git/hooks/` is never committed — a real pre-push check (like this repo's own, see [Lint enforcement](#lint-enforcement)) only protects the machine that wrote it unless something points git at a tracked directory instead. `claudart link` sets `core.hooksPath` automatically; this check catches a project linked before that existed, or linked by something other than claudart.
 
 `workspace root` and `registry health` catch different failures. The first asks *which* registry this process reads, and whether a second one exists that other processes would read instead — see [Workspace on disk](#workspace-on-disk). The second asks whether the registry it reads is intact. `Registry.load` deliberately swallows a JSON parse error and returns an empty registry, so doctor re-reads the raw file first; a corrupt registry fails loudly instead of looking like a fresh one. Pointing the override at a directory holding a truncated `registry.json`:
 
@@ -574,6 +578,8 @@ Each rule is narrower than its name suggests, deliberately. `bare_string_for_enu
 `dart run custom_lint` is currently clean on this repo (see [Verify it yourself](#verify-it-yourself)). It has caught real violations during development, including one in a stream-event parser being written for this tool in the same session, at `lib/pipeline/pipeline_executor.dart` — fixed by introducing a typed event enum instead of switching on raw JSON strings.
 
 **The sync is a process, not a dependency.** There is no compile-time signal when `PARADIGMS.md` gains a paradigm this file lacks. The loop is: propose the rule as a PR against dartrix, then hand-port the `DartLintRule` here, then register it. The lint package depends only on `analyzer` and `custom_lint_builder`, and that stays true.
+
+**A second layer catches what the lint rules don't yet.** [`.githooks/pre-push`](.githooks/pre-push) runs `dart analyze` (gated on real `error`-severity lines, not the raw exit code — pre-existing `info` hints and this repo's own intentionally-kept warnings shouldn't block every future push), `dart run custom_lint`, the full test suite, and an advisory duplicate-literal scan ([`tool/check_duplicate_literals.dart`](tool/check_duplicate_literals.dart)) over `lib/`. It's tracked in the repo, not `.git/hooks/` — hooks there are never committed, so a protection living only in one person's local `.git/hooks/` protects nobody else's push. `claudart link` points a project at it automatically (`core.hooksPath=.githooks`); [`doctor`](#cli-surface)'s `git hooks` check catches a project that was linked before that existed. Commits stay ungated — this only runs on the less-frequent, higher-stakes action.
 
 ---
 
