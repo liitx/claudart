@@ -17,6 +17,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../config.dart' show defaultStepTimeout;
+import '../process_runner.dart' show killProcessTree;
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'debug_mode.dart';
@@ -73,7 +75,8 @@ class PipelineExecutor {
     ApprovalSelector? approvalSelector,
     this.strict  = false,
     this.verbose = false,
-  })  : _runner           = runner           ?? defaultClaudeRunner,
+    Duration? stepTimeout = defaultStepTimeout,
+  })  : _runner           = runner           ?? _runnerWithTimeout(stepTimeout),
         _prompter         = prompter         ?? _defaultPrompter,
         _approvalSelector = approvalSelector ?? _defaultApprovalSelector;
 
@@ -570,18 +573,56 @@ StepResult parseClaudeResultLine(
   );
 }
 
+/// The default runner bound to a per-step [timeout] (`null` = no limit). A
+/// closure, so the public [ClaudeRunner] typedef stays exactly as it was.
+ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
+      required AgentModel model,
+      required String systemPrompt,
+      required String message,
+      required String workingDir,
+      StepMode mode = StepMode.project,
+    }) =>
+        defaultClaudeRunner(
+          model: model,
+          systemPrompt: systemPrompt,
+          message: message,
+          workingDir: workingDir,
+          mode: mode,
+          timeout: timeout,
+        );
+
+String _describeDuration(Duration d) {
+  if (d.inMinutes >= 1 && d.inSeconds % 60 == 0) {
+    final m = d.inMinutes;
+    return m == 1 ? '1 minute' : '$m minutes';
+  }
+  final s = d.inSeconds;
+  return s == 1 ? '1 second' : '$s seconds';
+}
+
+/// Runs one `claude` step.
+///
+/// [timeout] is a per-step backstop (default [defaultStepTimeout], `null` = no
+/// limit): if the subprocess has not finished by then, its whole process tree
+/// is killed and the step fails with an [Exception], the same type as the
+/// non-zero-exit failure below, so every caller's error handling applies
+/// unchanged. The step id is attached by the executor's `AgentFailed` event.
+/// [executable] and [traceOverride] are seams for tests.
 Future<StepResult?> defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
   required String message,
   required String workingDir,
   StepMode mode = StepMode.project,
+  Duration? timeout = defaultStepTimeout,
+  String executable = 'claude',
+  StepDebugTrace? traceOverride,
 }) async {
   // `StepDebugTrace.start()` resolves the log file via `debugLogFile()`.
   // When debug mode is off, every `trace.write*` below is a no-op.
   // When on, writes are best-effort — IOException swallows so an
   // unwritable log path never aborts a real pipeline run.
-  final trace = StepDebugTrace.start();
+  final trace = traceOverride ?? StepDebugTrace.start();
   trace.writeStepHeader(
     modelAlias: model.alias,
     workingDir: workingDir,
@@ -595,7 +636,7 @@ Future<StepResult?> defaultClaudeRunner({
     // keeping the live shared ~/.claude auth (config-dir isolation 401s — the OAuth
     // token rotates and a copied credential goes stale).
     final process = await Process.start(
-      'claude',
+      executable,
       [
         '--print',
         '--verbose',
@@ -616,16 +657,47 @@ Future<StepResult?> defaultClaudeRunner({
     // stream events, not on the final result line — only the final
     // answer text is repeated there. Accumulated here as the stream is
     // consumed rather than re-parsed afterward.
-    final streamResult = await consumeClaudeStream(
-      process.stdout.transform(const Utf8Decoder()).transform(const LineSplitter()),
-      trace,
-    );
-    final lines = streamResult.lines;
-    final thinkingBuffer = streamResult.thinking;
-    final thinkingTokens = streamResult.thinkingTokens;
+    //
+    // Everything from here to the exit code is one span, so a hung step is
+    // bounded by [timeout] as a whole.
+    Future<({ClaudeStreamResult stream, String err, int code})> consume() async {
+      final stream = await consumeClaudeStream(
+        process.stdout.transform(const Utf8Decoder()).transform(const LineSplitter()),
+        trace,
+      );
+      final err  = await process.stderr.transform(const Utf8Decoder()).join();
+      final code = await process.exitCode;
+      return (stream: stream, err: err, code: code);
+    }
 
-    final err  = await process.stderr.transform(const Utf8Decoder()).join();
-    final code = await process.exitCode;
+    final ({ClaudeStreamResult stream, String err, int code}) outcome;
+    try {
+      outcome = timeout == null ? await consume() : await consume().timeout(timeout);
+    } on TimeoutException {
+      // The whole tree, not just the direct child: `claude` can be waiting on
+      // a helper (for example a credential process) that would otherwise be
+      // orphaned and keep running.
+      await killProcessTree(process.pid);
+      process.kill(ProcessSignal.sigkill);
+      final killedCode = await process.exitCode.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => -1,
+      );
+      final after = _describeDuration(timeout!);
+      trace.writeExit(
+        exitCode: killedCode,
+        stderrText: 'TIMED OUT after $after (stepTimeoutMinutes); killed the whole process tree',
+      );
+      throw Exception(
+        'claude step timed out after $after and was killed. '
+        'Raise or disable (0) "stepTimeoutMinutes" in the workspace config.json.',
+      );
+    }
+    final lines = outcome.stream.lines;
+    final thinkingBuffer = outcome.stream.thinking;
+    final thinkingTokens = outcome.stream.thinkingTokens;
+    final err  = outcome.err;
+    final code = outcome.code;
     trace.writeExit(exitCode: code, stderrText: err);
 
     if (code != 0) {

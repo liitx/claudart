@@ -89,7 +89,7 @@ class RealProcessRunner implements ProcessRunner {
       // as an orphan — `process.kill()` only ever reaches the direct
       // child, never its descendants. Walk and kill the whole subtree
       // first, and await it, so nothing outlives this call returning.
-      await _killProcessTree(process.pid);
+      await killProcessTree(process.pid);
       process.kill(ProcessSignal.sigkill);
       throw TimeoutException(
         '$executable ${arguments.join(' ')} did not respond within ${timeout.inSeconds}s',
@@ -107,9 +107,9 @@ class RealProcessRunner implements ProcessRunner {
 /// a `pgrep`/`kill` failure (process already gone, tool missing) is
 /// swallowed rather than thrown, since this always runs alongside a kill
 /// of the direct child that must not be blocked by it.
-Future<void> _killProcessTree(int pid) async {
+Future<void> killProcessTree(int pid) async {
   for (final child in await _childPids(pid)) {
-    await _killProcessTree(child);
+    await killProcessTree(child);
     try {
       await Process.run('kill', ['-9', '$child']);
     } on ProcessException {
