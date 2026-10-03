@@ -125,26 +125,35 @@ run separately with scripted answers:
   so no existing test depended on the old default.
 - `debug` and `suggest` now work on scope lists the old parser rejected.
 
-## Observed, not changed (questions, not fixes)
-
-These look intentional or are judgement calls, so they are listed for the
-author instead of being changed here. See the "Open questions" below.
+## Observed, not changed here
 
 1. `rotate` with no terminal prints "proceeding without confirmation" and runs
    its build gate (`afterFixCommand`, default `make rebuild`). A comment calls
-   this deliberate.
+   this deliberate. **Decided:** require an explicit `--headless` (see
+   "Decisions" below).
 2. `confirm()` answers "no" at end of input, so `link` with closed stdin
-   silently leaves sensitivity mode OFF.
-3. `setup` stores the "files already in mind" answer as free text, and
-   `parseScopeFiles` reads only bullet lines, so that text alone never satisfies
-   `debug`. The old e2e fixture even writes `lib/md_io.dart, lib/ui/line_editor.dart`
-   as one line.
-4. A backticked relative path containing `..` is accepted and later read.
-5. The default `make rebuild` gate fails for any project without that Makefile
-   target; the message does not mention `afterFixCommand`.
-6. `claudart --debug` (or `CLAUDART_DEBUG=1`) writes per-step traces to
+   silently leaves sensitivity mode OFF. **Decided:** `--sensitive` /
+   `--no-sensitive`, otherwise abort.
+3. A backticked relative path containing `..` is accepted and acted on.
+   **Verified on `main`:** a `..` entry in `### Files in play` made the model
+   step read a file outside the project root, and that file's contents appear
+   in the request/response trace. **Decided:** containment on by default, with
+   an explicit `allowedScopeRoots` allowlist.
+4. The default `make rebuild` gate fails for any project without that Makefile
+   target, and the failure message does not mention `afterFixCommand`.
+5. `claudart --debug` (or `CLAUDART_DEBUG=1`) writes per-step traces to
    `$CLAUDART_DEBUG_PATH` (default `/tmp/claudart_debug.log`): worth knowing it
-   exists and that it records prompts, which may include project content.
+   exists and that it records prompts and file contents.
+6. Small writer nit: typing the same file twice in `setup` (for example
+   `calc.dart, lib/calc.dart`) produces two identical bullets.
+
+**Withdrawn claim.** An earlier draft of this document (and the PR
+description) said `setup` stores the "files already in mind" answer as free
+text that `parseScopeFiles` never reads. That was wrong: it came from a
+hand-written fixture in `test/e2e_smoke_test.dart`, not from the real writer.
+`setup` already writes ``- `path` - (user-provided)`` bullets (resolving bare
+file names through a file finder), and `debug` accepts them. Verified by
+running the real binary.
 
 ## Not exercised
 
@@ -154,24 +163,18 @@ author instead of being changed here. See the "Open questions" below.
 - `flow` and `chat` with real model turns, and a successful `rotate` build gate.
 - Linux. The `/dev/null` behaviour was observed on macOS only.
 
-## Open questions
+## Decisions (agreed 2026-10-03)
 
-Each is a place where this PR had to choose or where the behaviour might be
-intended. Answers are needed before anyone changes them.
+Agreed by the audit author and the claudart maintainer's agent. The names were
+confirmed by the maintainer's side. None of these are implemented in this PR;
+items 1 to 4 go in a follow-up PR stacked on this one, item 6 after the
+process-tree kill (PR #53) merges.
 
-1. **EOF default.** Should a non-interactive run ever default an answer? Today
-   `confirm()` means "no" and menus (after this PR) abort. Is "sensitivity mode
-   OFF when there is no input" acceptable for `link`, or should `link` require a
-   flag or abort?
-2. **Prompt format.** Should the suggest prompt pin the bullet shape (for
-   example ``- `relative/path` - what to change``)? The parser now tolerates
-   the common shapes, but pinning it would make the output consistent. Its
-   effect has not been measured across Haiku, Sonnet and Opus.
-3. **`..` in scope paths.** Is reading outside the project root intentional (for
-   monorepos), or should containment also apply to backticked relative paths?
-4. **`rotate` without a terminal.** Keep "proceed without confirmation"? If so,
-   should the gate command be shown before it runs?
-5. **Free-text file lists from `setup`.** Should `parseScopeFiles` also read
-   comma-separated or plain lines, or should `setup` write bullets?
-6. **A spawn timeout for `claude` steps.** A run that never returns is currently
-   possible. What is the longest legitimate step, so a timeout can be chosen?
+| # | Decision | Names / notes |
+|---|---|---|
+| 1 | Non-interactive `link` requires an explicit flag, otherwise aborts. End of input never silently picks the less-protected outcome. | `--sensitive` / `--no-sensitive` (a negatable pair, matching the existing bare-flag style) |
+| 2 | Pin the suggest prompt's scope-bullet shape; keep the tolerant parser as defence in depth. | ``- `relative/path` - what to change``; measure the shapes before and after |
+| 3 | Containment on by default; crossing the project root is an explicit opt-in. | `allowedScopeRoots: List<String>` in `config.json`, empty by default |
+| 4 | `rotate` with no terminal must not proceed silently. | reuse `--headless` (`RunMode.headless`), no new `--yes` |
+| 5 | ~~Fix the `setup` writer.~~ Not needed: it already writes bullets (see the withdrawn claim). Only the duplicate-bullet nit remains. | - |
+| 6 | A generous per-step backstop for `claude` spawns, hard error, no retry in the first cut. Harness-first, because `defaultClaudeRunner` is the live launch path. | `stepTimeoutMinutes`, default about 15; depends on `ProcessRunner.runKillable` from PR #53 |
