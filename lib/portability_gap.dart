@@ -34,22 +34,6 @@ enum PortabilityGapStatus {
 }
 
 enum PortabilityGap {
-  /// `AgentProvider` (lib/providers/agent_provider.dart) exists but isn't
-  /// consulted before `defaultClaudeRunner` spawns the real `claude`
-  /// subprocess. The settings.json detection blind spot this gap
-  /// originally also tracked is closed — `detectEffective()` now reads
-  /// `~/.claude/settings.json`'s own env block too, confirmed against the
-  /// real Bedrock machine (process env still wins on conflict).
-  providerWiring(
-    status: PortabilityGapStatus.open,
-    whatsMissing:
-        "AgentProvider exists (see docs/provider_setup.md) but isn't "
-        'consulted before a real claude launch — the launch-gating half '
-        'of this gap, not the detection half (see claude_settings_env.dart, '
-        'which closed the settings.json blind spot)',
-    trackedIn: 'docs/provider_setup.md',
-  ),
-
   /// `lib/commands/link.dart` creates `.claude/commands` and
   /// `.cursor/commands` only — zero Zed-editor-specific scaffolding.
   zedEditorIntegration(
