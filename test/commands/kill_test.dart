@@ -398,12 +398,12 @@ void main() {
     });
 
     group('--headless', () {
-      test('kills without asking: archives, resets the handoff, removes the link', () async {
+      test('kills without asking: archives, resets the handoff, keeps the link', () async {
         final io = _io();
         await kill(io, askFn: neverAsked, mode: RunMode.headless);
         expect(archives(io), hasLength(1));
         expect(io.read(handoffPathFor(_workspace)), isNot(contains('Something is broken')));
-        expect(io.linkExists(_claudeLink), isFalse);
+        expect(io.linkExists(_claudeLink), isTrue, reason: 'kill keeps the registration');
       });
 
       test('never prompts, even if an injected confirm would say no', () async {
@@ -428,10 +428,10 @@ void main() {
         expect(archives(io), hasLength(1));
       });
 
-      test('with an empty handoff it just removes the link', () async {
+      test('with an empty handoff it just resets the session and keeps the link', () async {
         final io = _io(withHandoff: false);
         await kill(io, askFn: neverAsked, mode: RunMode.headless);
-        expect(io.linkExists(_claudeLink), isFalse);
+        expect(io.linkExists(_claudeLink), isTrue);
       });
     });
   });

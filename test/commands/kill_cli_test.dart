@@ -25,7 +25,7 @@ void main() {
     expect(await status(s), isNot(contains('No active handoff')));
   }, timeout: const Timeout(Duration(minutes: 3)));
 
-  test('kill --headless kills: archive written, link removed, exit 0', () async {
+  test('kill --headless kills: archive written, link kept, exit 0', () async {
     final s = await CliSession.create();
     final r = await s.run(['kill', '--headless']);
 
@@ -33,7 +33,8 @@ void main() {
     expect(r.out, contains('headless'), reason: r.out);
     expect(r.out, contains('Session killed'), reason: r.out);
     expect(Directory(p.join(s.ws.path, 'proj', 'archive')).listSync(), isNotEmpty);
-    expect(Link(p.join(s.proj.path, '.claude')).existsSync(), isFalse);
+    // The registration (the .claude link) survives a kill; only unlink removes it.
+    expect(Link(p.join(s.proj.path, '.claude')).existsSync(), isTrue);
   }, timeout: const Timeout(Duration(minutes: 3)));
 
   test('a piped yes still kills', () async {
