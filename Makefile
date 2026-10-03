@@ -16,7 +16,8 @@ test:
 test-file:
 	$(DART) test $(FILE) --test-randomize-ordering-seed=random
 
-## Run tests with coverage (requires dart_test coverage support)
+## Run tests with coverage. One-time fresh-machine setup:
+##   dart pub global activate coverage
 test-coverage:
 	$(DART) test --coverage=coverage && dart pub global run coverage:format_coverage \
 		--lcov --in=coverage --out=coverage/lcov.info --report-on=lib
