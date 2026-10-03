@@ -46,7 +46,23 @@ String readFile(String path) {
 }
 
 /// Parses `### Files in play` bullet lines from a scope section.
-/// Line format: `- \`relative/path\` — description`
+///
+/// The suggest prompt only asks for "one bullet per file — path and what
+/// needs to change" without pinning a shape, so model output varies. All of
+/// these are accepted (`-` or `*` bullets):
+///
+///     - `rel/path.dart` — description          (original format)
+///     - `rel/path.dart`: description
+///     - rel/path.dart: description             (also — – - separators)
+///     - rel/path.dart
+///     - /abs/path/inside/project.dart: description
+///
+/// Unbackticked paths must end in a file extension, so prose bullets such as
+/// "No changes needed" or "N/A" are not mistaken for files (extensionless
+/// files need backticks). Absolute paths are accepted only when they are
+/// inside [projectRoot] — also matched against its symlink-resolved form, since
+/// a subprocess reports `/private/tmp/x` where the user typed `/tmp/x` — and
+/// are returned relative; absolute paths outside the project are dropped.
 /// Returns a list of [ScopeFile] with absolute paths resolved via [projectRoot].
 List<ScopeFile> parseScopeFiles(String scopeSection, String projectRoot) {
   final result  = <ScopeFile>[];
@@ -55,13 +71,53 @@ List<ScopeFile> parseScopeFiles(String scopeSection, String projectRoot) {
     if (line.startsWith('### Files in play')) { inFiles = true; continue; }
     if (inFiles && line.startsWith('###')) break;
     if (!inFiles) continue;
-    final match = RegExp(r'^-\s+`([^`]+)`').firstMatch(line.trim());
-    if (match != null) {
-      final rel = match.group(1)!;
+    final rel = _scopeRelativePath(line.trim(), projectRoot);
+    if (rel != null) {
       result.add((relative: rel, absolute: p.join(projectRoot, rel)));
     }
   }
   return result;
+}
+
+final _backtickedBullet = RegExp(r'^[-*]\s+`([^`]+)`');
+final _plainBullet      = RegExp(r'^[-*]\s+(\S+?)(?::(?=\s|$)|\s|$)');
+final _hasFileExtension = RegExp(r'\.[A-Za-z0-9]{1,8}$');
+
+String? _scopeRelativePath(String line, String projectRoot) {
+  final backticked = _backtickedBullet.firstMatch(line);
+  if (backticked != null) return _insideProject(backticked.group(1)!, projectRoot);
+
+  final plain = _plainBullet.firstMatch(line);
+  if (plain == null) return null;
+  final token = plain.group(1)!.replaceAll(RegExp(r'[,;]+$'), '');
+  if (!_hasFileExtension.hasMatch(token)) return null;
+  return _insideProject(token, projectRoot);
+}
+
+/// Relative paths are returned unchanged (original behaviour). Absolute paths
+/// become project-relative when inside the project, else null.
+String? _insideProject(String path, String projectRoot) {
+  if (!p.isAbsolute(path)) return path;
+  final roots = {projectRoot, _resolved(projectRoot)};
+  final paths = {path, _resolved(path)};
+  for (final root in roots) {
+    for (final candidate in paths) {
+      if (p.isWithin(root, candidate)) return p.relative(candidate, from: root);
+    }
+  }
+  return null;
+}
+
+String _resolved(String path) {
+  try {
+    return FileSystemEntity.typeSync(path) == FileSystemEntityType.notFound
+        ? path
+        : (Directory(path).existsSync()
+            ? Directory(path).resolveSymbolicLinksSync()
+            : File(path).resolveSymbolicLinksSync());
+  } on FileSystemException {
+    return path;
+  }
 }
 
 void writeFile(String path, String content) {
