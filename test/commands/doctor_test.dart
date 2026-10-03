@@ -24,6 +24,12 @@ class _ExitException implements Exception {
 
 Never _throwExit(int code) => throw _ExitException(code);
 
+typedef _RecordedCall = ({
+  String executable,
+  List<String> arguments,
+  Map<String, String>? environment,
+});
+
 class _FakeProcessRunner implements ProcessRunner {
   _FakeProcessRunner(this.responses, {this.notFound = const {}});
 
@@ -35,7 +41,17 @@ class _FakeProcessRunner implements ProcessRunner {
   /// exit code.
   final Set<String> notFound;
 
-  ProcessResult _resolve(String executable, List<String> arguments) {
+  /// Every call this runner received, in order — lets a test assert
+  /// *what* was passed to a specific subprocess (e.g. the `environment`
+  /// an `aws` call actually received), not just the response it got back.
+  final List<_RecordedCall> calls = [];
+
+  ProcessResult _resolve(
+    String executable,
+    List<String> arguments,
+    Map<String, String>? environment,
+  ) {
+    calls.add((executable: executable, arguments: arguments, environment: environment));
     if (notFound.contains(executable)) {
       throw ProcessException(executable, arguments, 'No such file or directory');
     }
@@ -48,16 +64,28 @@ class _FakeProcessRunner implements ProcessRunner {
     String executable,
     List<String> arguments, {
     String? workingDirectory,
+    Map<String, String>? environment,
   }) async =>
-      _resolve(executable, arguments);
+      _resolve(executable, arguments, environment);
 
   @override
   ProcessResult runSync(
     String executable,
     List<String> arguments, {
     String? workingDirectory,
+    Map<String, String>? environment,
   }) =>
-      _resolve(executable, arguments);
+      _resolve(executable, arguments, environment);
+
+  @override
+  Future<ProcessResult> runKillable(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    required Duration timeout,
+  }) async =>
+      _resolve(executable, arguments, environment);
 }
 
 ProcessResult _ok(String stdout) => ProcessResult(0, 0, stdout, '');
@@ -91,9 +119,12 @@ Map<String, ProcessResult> _responses({
       if (awsStsResult != null) 'aws sts get-caller-identity': awsStsResult,
     };
 
-/// A [ProcessRunner] whose `run` never completes — isolates the
-/// `bedrockCredentialsPreflight` check's `.timeout()` path without
-/// actually waiting out a real timeout in the test suite.
+/// A [ProcessRunner] whose `runKillable` genuinely honors [timeout] by
+/// waiting it out and then throwing — isolates the
+/// `bedrockCredentialsPreflight` check's timeout path realistically (as
+/// `RealProcessRunner.runKillable` would behave against a hung `aws`
+/// process) without ever hanging the test suite itself, since tests pass
+/// a tiny [timeout].
 class _HangingProcessRunner implements ProcessRunner {
   const _HangingProcessRunner(this._fallback);
   final ProcessRunner _fallback;
@@ -103,18 +134,39 @@ class _HangingProcessRunner implements ProcessRunner {
     String executable,
     List<String> arguments, {
     String? workingDirectory,
-  }) {
-    if (executable == 'aws' && arguments.first == 'sts') return Completer<ProcessResult>().future;
-    return _fallback.run(executable, arguments, workingDirectory: workingDirectory);
-  }
+    Map<String, String>? environment,
+  }) =>
+      _fallback.run(executable, arguments, workingDirectory: workingDirectory, environment: environment);
 
   @override
   ProcessResult runSync(
     String executable,
     List<String> arguments, {
     String? workingDirectory,
+    Map<String, String>? environment,
   }) =>
-      _fallback.runSync(executable, arguments, workingDirectory: workingDirectory);
+      _fallback.runSync(executable, arguments, workingDirectory: workingDirectory, environment: environment);
+
+  @override
+  Future<ProcessResult> runKillable(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    required Duration timeout,
+  }) async {
+    if (executable == 'aws' && arguments.first == 'sts') {
+      await Future<void>.delayed(timeout);
+      throw TimeoutException('$executable ${arguments.join(' ')} hung', timeout);
+    }
+    return _fallback.runKillable(
+      executable,
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      timeout: timeout,
+    );
+  }
 }
 
 void main() {
@@ -534,6 +586,51 @@ void main() {
       final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
       expect(preflight.result, equals(HarnessCheckResult.fail));
       expect(preflight.detail, contains('did not respond within'));
+    });
+  });
+
+  group('runDoctorChecks — bedrock checks read settings.json env, not just process env', () {
+    // Confirmed on a real Bedrock-only machine: the flag and AWS_PROFILE
+    // can live ONLY in ~/.claude/settings.json's own `env` block, the same
+    // place `claude` itself reads Bedrock config from — a plain Terminal
+    // with nothing exported false-[FAIL]ed both checks before this fix,
+    // the same blind spot `providerEnv` already had before `detectEffective`.
+    const settingsPath = '/fake/settings.json';
+    const settingsJson = '{"env": {'
+        '"CLAUDE_CODE_USE_BEDROCK": "1", '
+        '"AWS_PROFILE": "ai-tooling-bedrock-access", '
+        '"AWS_EC2_METADATA_DISABLED": "true"'
+        '}}';
+
+    test('bedrockMetadataDisabled is ok when the flag lives only in settings.json', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus)),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {settingsPath: settingsJson}),
+        claudeSettingsPath: settingsPath,
+      );
+      final guard = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockMetadataDisabled);
+      expect(guard.result, equals(HarnessCheckResult.ok));
+    });
+
+    test('bedrockCredentialsPreflight passes AWS_PROFILE from settings.json to the aws subprocess', () async {
+      final runner = _FakeProcessRunner(_responses(
+        authStatusStdout: _bedrockAuthStatus,
+        awsStsResult: _ok('{}'),
+      ));
+      await runDoctorChecks(
+        runner: runner,
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {settingsPath: settingsJson}),
+        claudeSettingsPath: settingsPath,
+      );
+      final awsCall = runner.calls.firstWhere(
+        (c) => c.executable == 'aws' && c.arguments.contains('sts'),
+      );
+      expect(awsCall.environment, isNotNull);
+      expect(awsCall.environment!['AWS_PROFILE'], equals('ai-tooling-bedrock-access'));
     });
   });
 

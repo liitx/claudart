@@ -16,6 +16,7 @@ import '../logging/logger.dart';
 import '../paths.dart';
 import '../process_runner.dart';
 import '../providers/agent_provider.dart';
+import '../providers/claude_settings_env.dart';
 import '../registry.dart';
 
 const _gitExecutable = 'git';
@@ -66,6 +67,16 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
 
   final activeProvider = await _detectActiveProvider(proc, environment, io: io, settingsPath: claudeSettingsPath);
 
+  // `claude` itself reads Bedrock config from either the shell or
+  // ~/.claude/settings.json's own `env` block — confirmed on a real
+  // Bedrock-only machine where the flag lives *only* in settings.json.
+  // Checking process env alone false-[FAIL]s on exactly that machine, the
+  // same blind spot `providerEnv` already had before `detectEffective`.
+  final mergedEnv = {
+    ...readClaudeSettingsEnv(io: fileIO, path: claudeSettingsPath),
+    ...environment,
+  };
+
   return [
     await _checkTools(proc),
     await _checkGitIdentity(proc, root),
@@ -74,10 +85,11 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
     _checkWorkspaceRoot(environment, fileIO),
     _checkRegistryHealth(fileIO),
     _checkPathConfiguration(environment),
-    _checkBedrockMetadataDisabled(activeProvider, environment),
+    _checkBedrockMetadataDisabled(activeProvider, mergedEnv),
     await _checkBedrockCredentialsPreflight(
       activeProvider,
       proc,
+      env: mergedEnv,
       timeout: bedrockPreflightTimeout ?? _defaultBedrockPreflightTimeout,
     ),
   ];
@@ -368,6 +380,7 @@ HarnessCheckOutcome _checkPathConfiguration(Map<String, String> env) {
 Future<HarnessCheckOutcome> _checkBedrockCredentialsPreflight(
   AgentProvider? activeProvider,
   ProcessRunner proc, {
+  required Map<String, String> env,
   required Duration timeout,
 }) async {
   if (activeProvider != AgentProvider.bedrock) {
@@ -386,9 +399,16 @@ Future<HarnessCheckOutcome> _checkBedrockCredentialsPreflight(
     );
   }
   try {
-    final result = await proc
-        .run(_awsExecutable, ['sts', 'get-caller-identity'])
-        .timeout(timeout);
+    // [env] (process env merged with settings.json's own block) is passed
+    // explicitly — AWS_PROFILE/AWS_REGION can live in settings.json only,
+    // same as the Bedrock flag itself; a bare inherited-env subprocess
+    // call missed that on a real Bedrock-only machine.
+    final result = await proc.runKillable(
+      _awsExecutable,
+      ['sts', 'get-caller-identity'],
+      environment: env,
+      timeout: timeout,
+    );
     return result.exitCode == 0
         ? (
             id: HarnessCheckId.bedrockCredentialsPreflight,
