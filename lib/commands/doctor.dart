@@ -28,6 +28,8 @@ const _doctorCommandName = 'doctor';
 const _ec2MetadataDisabledVar = 'AWS_EC2_METADATA_DISABLED';
 const _notUsingBedrockDetail = 'not using Bedrock';
 const _defaultBedrockPreflightTimeout = Duration(seconds: 10);
+const _whichExecutable = 'which';
+const _authStatusArgs = ['auth', 'status'];
 
 /// `ProcessRunner.run` is backed by `Process.run`, which throws
 /// `ProcessException` synchronously when [executable] isn't found at all
@@ -109,7 +111,7 @@ Future<AgentProvider?> _detectActiveProvider(
   FileIO? io,
   String? settingsPath,
 }) async {
-  final result = await _tryRun(proc, _claudeExecutable, ['auth', 'status']);
+  final result = await _tryRun(proc, _claudeExecutable, _authStatusArgs);
   final fromAuthStatus = AgentProvider.detectFromAuthStatusJson(result.stdout as String? ?? '');
   return fromAuthStatus ??
       AgentProvider.detectEffective(processEnv: env, io: io, settingsPath: settingsPath);
@@ -118,7 +120,7 @@ Future<AgentProvider?> _detectActiveProvider(
 Future<HarnessCheckOutcome> _checkTools(ProcessRunner proc) async {
   final missing = <String>[];
   for (final tool in _requiredTools) {
-    final result = await _tryRun(proc, 'which', [tool]);
+    final result = await _tryRun(proc, _whichExecutable, [tool]);
     if (result.exitCode != 0) missing.add(tool);
   }
   return missing.isEmpty
@@ -159,7 +161,7 @@ Future<String?> _gitConfig(ProcessRunner proc, String root, String key) async {
 }
 
 Future<HarnessCheckOutcome> _checkGhAuth(ProcessRunner proc) async {
-  final result = await _tryRun(proc, _ghExecutable, ['auth', 'status']);
+  final result = await _tryRun(proc, _ghExecutable, _authStatusArgs);
   return result.exitCode == 0
       ? (
           id: HarnessCheckId.ghAuth,
@@ -390,7 +392,7 @@ Future<HarnessCheckOutcome> _checkBedrockCredentialsPreflight(
       detail: _notUsingBedrockDetail,
     );
   }
-  final which = await _tryRun(proc, 'which', [_awsExecutable]);
+  final which = await _tryRun(proc, _whichExecutable, [_awsExecutable]);
   if (which.exitCode != 0) {
     return (
       id: HarnessCheckId.bedrockCredentialsPreflight,
