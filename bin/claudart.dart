@@ -53,7 +53,7 @@ Commands:
   flow                   [experimental] Agent-constructed session: classify intent, plan, approve, build handoff
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
   rotate [--headless]    Archive current session, run build gate, seed next handoff from Pending Issues; --headless skips the confirmation (needed when there is no terminal to ask on)
-  kill                   Abandon session: archive handoff, remove symlink (no skills update)
+  kill [--headless]      Abandon session: archive handoff, remove symlink (no skills update); --headless skips the confirmation but never clears a workspace lock
   resume                 Pre-populate setup from the most recent archive entry
   confirm-pending --question <q> --on-confirm <cmd>
                          Set the pending confirmation for this workspace
@@ -152,7 +152,9 @@ Future<void> main(List<String> rawArgs) async {
       // A failed build gate must be visible to scripts (zedup, CI): exit 1.
       if (rotated == RotateResult.buildFailed) exit(1);
     case ClaudartCommand.kill:
-      await runKill();
+      await runKill(
+        mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
+      );
     case ClaudartCommand.resume:
       await runResume();
     case ClaudartCommand.confirmPending:
