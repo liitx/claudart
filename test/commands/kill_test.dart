@@ -8,6 +8,7 @@ import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/workspace_guard.dart';
+import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -124,7 +125,7 @@ void main() {
         exitFn: (code) => throw _ExitException(code),
       );
       final archived = io.files.keys
-          .where((k) => k.startsWith(p.join(_workspace, 'archive')))
+          .where((k) => k.startsWith(p.join(_workspace, 'archive')) && k.endsWith('.md'))
           .toList();
       expect(archived, hasLength(1));
     });
@@ -144,6 +145,19 @@ void main() {
         ),
       );
       expect(output.join('\n'), contains('Project  : my-app'));
+    });
+
+    test('archived session is visible to `claudart archives` (index entry appended)', () async {
+      final io = _io();
+      await runKill(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        exitFn: (code) => throw _ExitException(code),
+      );
+      final entries = loadIndex(_workspace, io: io);
+      expect(entries, hasLength(1));
+      expect(entries.first.branch, equals('feat/fix'));
     });
 
     test('resets handoff to blank', () async {
@@ -207,6 +221,7 @@ void main() {
       // the same as killing a symlinked one.
       final archived = io.files.keys
           .where((k) => k.startsWith(p.join(_workspace, 'archive')))
+          .where((k) => k.endsWith('.md'))
           .toList();
       expect(archived, hasLength(1));
     });
@@ -324,6 +339,19 @@ void main() {
       expect(caught, isNotNull);
       expect(caught!.code, equals(1));
     });
+
+    test('clears the lock after a successful rollback — nothing is actually interrupted', () async {
+      final io = _FailOnUnlinkIO(delegate: _io());
+      try {
+        await runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          exitFn: (code) => throw _ExitException(code),
+        );
+      } on _ExitException catch (_) {}
+      expect(isLocked(_workspace, io: io.delegate), isFalse);
+    });
   });
 
   group('kill — consent is never inferred from missing input', () {
@@ -340,8 +368,10 @@ void main() {
 
     bool? neverAsked(String q) => throw StateError('should not have been asked: $q');
     Matcher exitsWith(int code) => throwsA(isA<_ExitException>().having((e) => e.code, 'code', code));
-    List<String> archives(MemoryFileIO io) =>
-        io.files.keys.where((k) => k.startsWith(p.join(_workspace, 'archive'))).toList();
+    // Snapshot files only: the archive writer also keeps an index.json there.
+    List<String> archives(MemoryFileIO io) => io.files.keys
+        .where((k) => k.startsWith(p.join(_workspace, 'archive')) && p.basename(k) != archiveIndexFileName)
+        .toList();
 
     test('end of input at the final question stops with exit 1 and changes nothing', () async {
       final io = _io();
