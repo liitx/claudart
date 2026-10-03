@@ -117,4 +117,67 @@ void main() {
       expect(parseScopeFiles('', root), isEmpty);
     });
   });
+
+  group('parseScopeFiles — containment (allowedScopeRoots)', () {
+    test('a path that leaves the project is dropped by default and reported', () {
+      final r = parseScopeFilesChecked(_scope(['- `../outside.txt` — x', '- `lib/a.dart` — y']), root);
+      expect(r.accepted.map((f) => f.relative), ['lib/a.dart']);
+      expect(r.rejected, ['../outside.txt']);
+    });
+
+    test('a traversal hidden inside a normal-looking path is dropped', () {
+      final r = parseScopeFilesChecked(_scope(['- `lib/../../etc/passwd.conf` — x']), root);
+      expect(r.accepted, isEmpty);
+      expect(r.rejected, ['lib/../../etc/passwd.conf']);
+    });
+
+    test('dot segments that stay inside the project are normalized and accepted', () {
+      expect(_rel(_scope(['- `lib/../lib/a.dart` — x', '- `./lib/b.dart` — y']), root), ['lib/a.dart', 'lib/b.dart']);
+    });
+
+    test('an allowed relative root admits a sibling package, and only that', () {
+      const scope = '### Files in play\n- `../shared/x.dart` — ok\n- `../other/y.dart` — no\n';
+      final r = parseScopeFilesChecked(scope, root, allowedRoots: const ['../shared']);
+      expect(r.accepted.map((f) => f.relative), ['../shared/x.dart']);
+      expect(r.accepted.single.absolute, '/shared/x.dart');
+      expect(r.rejected, ['../other/y.dart']);
+    });
+
+    test('an allowed absolute root admits absolute entries under it', () {
+      final r = parseScopeFilesChecked(_scope(['- /shared/lib/x.dart: ok', '- /elsewhere/y.dart: no']), root,
+          allowedRoots: const ['/shared']);
+      expect(r.accepted.map((f) => f.absolute), ['/shared/lib/x.dart']);
+      expect(r.rejected, ['/elsewhere/y.dart']);
+    });
+
+    test('an allowed root does not admit a sibling that merely shares its prefix', () {
+      final r = parseScopeFilesChecked(_scope(['- `../shared-evil/x.dart` — no']), root,
+          allowedRoots: const ['../shared']);
+      expect(r.accepted, isEmpty);
+    });
+
+    test('a symlink inside the project that points outside is dropped unless that target is allowed', () {
+      final base = Directory.systemTemp.createTempSync('scope_escape_');
+      addTearDown(() => base.deleteSync(recursive: true));
+      final project = Directory('${base.path}/proj')..createSync();
+      final outside = Directory('${base.path}/outside')..createSync();
+      File('${outside.path}/secret.txt').writeAsStringSync('secret');
+      Link('${project.path}/link').createSync(outside.path);
+
+      final scope = _scope(['- `link/secret.txt` — looks inside the project']);
+      final blocked = parseScopeFilesChecked(scope, project.path);
+      expect(blocked.accepted, isEmpty);
+      expect(blocked.rejected, ['link/secret.txt']);
+
+      final allowed = parseScopeFilesChecked(scope, project.path, allowedRoots: [outside.path]);
+      expect(allowed.accepted.map((f) => f.relative), ['link/secret.txt']);
+    });
+
+    test('rejected paths keep their order and only cover file bullets', () {
+      final r = parseScopeFilesChecked(
+          _scope(['- `../a.dart` — x', '- No changes needed', '- /abs/b.dart: y', '- `lib/ok.dart` — z']), root);
+      expect(r.rejected, ['../a.dart', '/abs/b.dart']);
+      expect(r.accepted.map((f) => f.relative), ['lib/ok.dart']);
+    });
+  });
 }
