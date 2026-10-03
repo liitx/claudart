@@ -138,18 +138,71 @@ just for a narrower, correctly-understood reason now.
 
 ---
 
-## Backlog — parked, not abandoned (full detail in `skills.md`'s `## Pending` section)
+## Backlog — parked, not abandoned
 
-1. **Big architecture-shape research.** Four candidate shapes for
-   per-workspace tool config + shared/isolated knowledge (layered
-   inheritance / named pools / explicit link edges / committed-manifest-
-   plus-overlay). Required deliverables once picked back up: `ZedProfile`'s
-   identity data AND its `configDir`→`tasks.json` mapping moving to
-   user-addable config without losing compile-time exhaustiveness; easy
-   custom-script integration via zedup's TUI settings; a global
-   searchable settings UI; workspace-to-workspace tool/task sharing.
+> Note: `skills.md`/`handoff.md` (referenced below as "full detail") live
+> in `~/dev/dev_tools/claude/claudart/`, which is **not a git repo** — it's
+> local, this-machine-only session state, not visible to any other machine
+> that only has this repo cloned. Item 1's full detail is reproduced here
+> for that reason; item 2 genuinely has no further detail anywhere.
+
+1. **Big architecture-shape decision.** Per-workspace tool config +
+   shared/isolated knowledge across claudart/zedup/dartrix. Four candidate
+   shapes, all coexistable with today's registry, none chosen yet:
+   - (a) **layered inheritance** (Cargo/Turborepo-style) — root defaults,
+     workspace opts into overriding fields.
+   - (b) **named pools** (VS Code profiles / git `includeIf`-style) — a
+     workspace joins a shared pool or stays isolated.
+   - (c) **explicit link edges** (direnv `source_env`-style) — read-only
+     imports from named sibling workspaces.
+   - (d) **committed manifest + machine-local trust-gated overlay**
+     (devcontainer.json / Claude Code settings.json-style) — the one shape
+     that makes a fresh clone describe its own config.
+
+   User's explicit standard: optimize for performance and native fit to
+   claudart's existing dartrix-enum paradigm, not for adopting a named
+   tool's mechanism wholesale — no new external dependency. Required
+   deliverables for whichever shape wins (confirmed by the user, not
+   negotiable):
+   - `ZedProfile`'s hardcoded identity data
+     (`zedup/lib/src/enums/zed_profile.dart:22-46`) AND its
+     `configDir`→`tasks.json` mapping (`zedup_router.dart:456-473`'s
+     `_defaultLauncher`) move to user-addable config without losing
+     compile-time exhaustiveness.
+   - Users can add their own custom scripts via zedup's TUI settings page
+     (IDE-local vs. project-local scope explicitly decided as part of the
+     recommendation).
+   - A global searchable settings UI in zedup's TUI (fuzzy/text search
+     across all settings, not a static scrollable page).
+   - Workspace-to-workspace tool/task sharing, using the same mechanism as
+     knowledge sharing, not a separate one.
+
+   The other agent (Bedrock-backed, second machine) already gave an
+   independent opinion when asked directly, unprompted to dig deep:
+   1. Move `ZedProfile` to data — profile files under
+      `~/.config/zedup/profiles/`, enum invariants enforced on load, not
+      compiled constants.
+   2. Don't duplicate git identity in that data — point each profile at a
+      folder or a `git config include` instead of reimplementing
+      credential logic.
+   3. `githubOwners` must be data too — and flagged a real, concrete bug
+      while reviewing it: Toyota's set is missing `arene-cockpit-sdk`
+      (**unverified, org/identity data that needs confirming before
+      applying**).
+   4. Keep `AgentProvider` as its own setting, never derived from the
+      profile — a direct endorsement of how it was already built,
+      decoupled from `ZedProfile`.
+   5. Knowledge sharing isolated by default, profile as the hard boundary,
+      sharing only inside one profile — a vote for shape (b) over the
+      others, with the profile itself as the pool.
+   6. A global → profile → workspace config cascade, plus a
+      `zedup config show --origin` command showing where each resolved
+      value actually came from — combines shape (a) with shape (b), plus
+      a debuggability feature none of the four shapes specified.
+
 2. **Backup/restore + version-aware binary safety** — `claudart link
-   --backup`, not yet a handoff. Full detail in `skills.md`.
+   --backup`. Not yet scoped past the name; no handoff, no design notes
+   exist anywhere for this one yet.
 3. **Golden/snapshot testing for zedup — mostly resolved, not actually a
    gap.** Research confirmed: nocterm (zedup's TUI framework) already
    ships a real snapshot-testing primitive —
