@@ -37,6 +37,16 @@ agreed decisions.
   benign, reversible ones with yes, and **never clears a workspace lock** (exits
   1). **Behaviour change:** `kill` with no answer available now stops with exit 1
   and says why, instead of printing "Kill cancelled" and exiting 0.
+- **Added:** a per-step timeout for `claude` pipeline steps. New
+  `stepTimeoutMinutes` in the workspace `config.json`: **absent means the
+  default, 15 minutes; an explicit `0` means no timeout** (different states on
+  purpose). A step that has not finished by then has its whole process tree
+  killed (not just the direct child) and fails with the same kind of error as a
+  non-zero exit, naming the key; the step itself is named by the failure event.
+  `--debug` traces still record the step and the exit, marked `TIMED OUT`.
+  **Behaviour change:** a step that never returned used to hang the command
+  indefinitely; it now fails at 15 minutes. `killProcessTree` in
+  `process_runner.dart` is now public so the runner can reuse it.
 - **Changed:** the suggest prompt now pins the scope-bullet shape to
   ``- `relative/path` — what to change`` (the tolerant parser stays as backup).
 - **Fixed:** typing the same file twice in `setup` no longer writes duplicate

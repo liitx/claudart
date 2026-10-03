@@ -178,7 +178,7 @@ running the real binary.
 | 4 | `rotate` without a terminal must not proceed silently | reuse `--headless` (`RunMode.headless`) | **Implemented.** Also: a failed build gate now exits 1 (it exited 0), and the failure message names the gate and `afterFixCommand`. |
 | 5 | Fix the `setup` writer | - | Not needed (see the withdrawn claim). The one real nit, duplicate bullets when a file is typed twice, is fixed. |
 | 7 | `kill --headless` (added at the maintainer's direction, same vocabulary) | `--headless` | **Implemented.** Headless answers the final confirmation and the two benign, reversible ones (no active session, nothing to archive) with yes, since the handoff is archived either way. It **never clears a workspace lock** (exits 1): a lock means another operation may be running. With no flag and no answer, `kill` now stops with exit 1 and says so, instead of a "Kill cancelled" nobody chose. |
-| 6 | Generous per-step spawn backstop, hard error, no retry yet | `stepTimeoutMinutes`, about 15 | **Not implemented.** Harness first (`defaultClaudeRunner` is the live launch path) and it needs `ProcessRunner.runKillable` from PR #53. |
+| 6 | Generous per-step spawn backstop, hard error, no retry yet | `stepTimeoutMinutes` (absent = default 15; explicit `0` = none) | **Implemented** (after #53 merged). Wraps only the span from after `stdin.close()` through the exit code in `defaultClaudeRunner`; kills the whole process tree on timeout; throws the same `Exception` type as the non-zero-exit branch; the `--session-id` isolation, the flag list, the stdin ordering and the trace calls are untouched. The step is named by the executor's failure event. |
 
 Judgement calls made while implementing, for the maintainer to confirm:
 
@@ -219,3 +219,9 @@ Judgement calls made while implementing, for the maintainer to confirm:
   archives, resets the handoff, removes the link and exits 0; `--headless` with a
   workspace lock exits 1 and leaves the lock, handoff and link in place; a piped
   `y` still kills. Run as a real subprocess, the way zedup runs it.
+
+## Per-step timeout: what was verified, and one thing to know
+- Harness with a fake `claude` that leaves a sleeping grandchild: the step fails at the limit with a plain `Exception` naming `stepTimeoutMinutes`; both the direct child and the grandchild are gone; the trace still records the step, the exit (`TIMED OUT`) and the exception. Removing the tree kill makes the orphan test fail, so the test detects the bug.
+- Through the real CLI with a hung fake `claude` and `stepTimeoutMinutes: 1`: the config is read (it failed at 1 minute, not 15), the failure names the step (`calc / categorize`), exit 1, nothing left running.
+- **Worth knowing:** that run took two minutes, not one. After the `categorize` step timed out, the command went on to the next stage (`reader`), which hung and timed out too. A persistently hung `claude` therefore costs the timeout times the number of stages attempted (up to about 30 minutes at the default). That is existing behaviour (a failed classification is not fatal); it is reported here, not changed.
+- Not exercised: a real `claude` step hanging, and the default 15 minutes elapsing (only short limits were waited out).
