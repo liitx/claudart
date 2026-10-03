@@ -24,9 +24,17 @@ final _singleQuoted = RegExp(r"'([^']{3,})'");
 final _doubleQuoted = RegExp(r'"([^"]{3,})"');
 final _directiveLine = RegExp(r'^\s*(import|export|part)\s');
 
+// Accepts one or more file paths in a single invocation — the pre-push gate
+// scans all of lib/ (110+ files), and a fresh `dart run` per file cost ~40s
+// of a ~50s push (measured, confirmed by a second machine). One process,
+// looping internally, pays the JIT-startup cost once instead of per file.
 void main(List<String> args) {
-  if (args.isEmpty) return;
-  final path = args.first;
+  for (final path in args) {
+    _checkFile(path);
+  }
+}
+
+void _checkFile(String path) {
   // Test fixtures legitimately repeat literal values constantly (env var
   // names, sample paths) across unrelated cases — that's expected data,
   // not a paradigm violation. Scoped to lib/ only, matching this repo's

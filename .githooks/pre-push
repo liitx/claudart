@@ -21,7 +21,12 @@ GREEN="\033[0;32m"
 YELLOW="\033[0;33m"
 RESET="\033[0m"
 
-if [ -t 0 ] && exec 3</dev/tty 2>/dev/null; then
+# Not `[ -t 0 ] && ...` — git always pipes stdin to a pre-push hook (the
+# ref-update lines), so stdin is never a terminal even when the invoking
+# shell has a real one. That made this confirmation dead code, confirmed
+# under a pseudo-terminal: the prompt never appeared. Open /dev/tty
+# directly instead and let its own success/failure be the only signal.
+if exec 3</dev/tty 2>/dev/null; then
   read -p "Push to remote? [y/N]: " confirm <&3
   exec 3>&-
   [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Push cancelled."; exit 1; }
@@ -59,9 +64,10 @@ fi
 # script's own header). False positives here must never block a push —
 # only analyze/custom_lint/test do that.
 echo -e "${BOLD}Duplicate-literal check (advisory)${RESET}"
-find lib -name '*.dart' -print0 | while IFS= read -r -d '' f; do
-  dart run tool/check_duplicate_literals.dart "$f"
-done
+# One `dart run` for every file in the scan, not one per file — a fresh
+# dart run per file cost ~40s of a ~50s push over lib/'s 110+ files
+# (measured). The script itself now loops internally over all given paths.
+find lib -name '*.dart' -print0 | xargs -0 dart run tool/check_duplicate_literals.dart
 
 echo ""
 echo -e "${GREEN}${BOLD}All checks passed.${RESET} Pushing..."

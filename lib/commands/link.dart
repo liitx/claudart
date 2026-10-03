@@ -338,15 +338,22 @@ void _ensureHooksPath(String projectRoot, FileIO fileIO) {
       [_gitConfigArg, _hooksPathConfigKey],
       workingDirectory: projectRoot,
     );
-    if (current.exitCode == 0 && (current.stdout as String).trim() == _githooksDirName) {
-      return;
-    }
+    final previous = current.exitCode == 0 ? (current.stdout as String).trim() : '';
+    if (previous == _githooksDirName) return;
+
     Process.runSync(
       _gitExecutable,
       [_gitConfigArg, _hooksPathConfigKey, _githooksDirName],
       workingDirectory: projectRoot,
     );
-    print('  git hooks: $_hooksPathConfigKey → $_githooksDirName');
+    // A non-empty previous value means something else (husky, lefthook, a
+    // hand-set path) already owned this — say what was replaced instead of
+    // silently clobbering it, so a project with its own hooks convention
+    // notices immediately rather than finding out when those hooks stop
+    // firing.
+    print(previous.isEmpty
+        ? '  git hooks: $_hooksPathConfigKey → $_githooksDirName'
+        : '  git hooks: $_hooksPathConfigKey $previous → $_githooksDirName (replaced)');
   } on Exception catch (_) {
     // Not a git repo, or git itself unavailable — nothing to configure.
   }
