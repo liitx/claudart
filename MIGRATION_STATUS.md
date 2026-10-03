@@ -186,19 +186,43 @@ just for a narrower, correctly-understood reason now.
       folder or a `git config include` instead of reimplementing
       credential logic.
    3. `githubOwners` must be data too — and flagged a real, concrete bug
-      while reviewing it: Toyota's set is missing `arene-cockpit-sdk`
-      (**unverified, org/identity data that needs confirming before
-      applying**).
-   4. Keep `AgentProvider` as its own setting, never derived from the
-      profile — a direct endorsement of how it was already built,
-      decoupled from `ZedProfile`.
+      while reviewing it: Toyota's set was missing `arene-cockpit-sdk`.
+      **Verified and fixed** — the Toyota account is a member of both
+      `digital-cockpit` and `arene-cockpit-sdk`; zedup `main` now lists all
+      three owners for Toyota (`aksana-buster-2_stargate`,
+      `digital-cockpit`, `arene-cockpit-sdk`).
+   4. Keep `AgentProvider` as its own setting, not strictly derived from
+      the profile, though it can default per profile — the agent's own
+      evidence: work-provided Bedrock access gets used from folders under
+      the personal-default identity, so provider and identity aren't 1:1.
    5. Knowledge sharing isolated by default, profile as the hard boundary,
-      sharing only inside one profile — a vote for shape (b) over the
-      others, with the profile itself as the pool.
+      sharing only inside one profile.
    6. A global → profile → workspace config cascade, plus a
       `zedup config show --origin` command showing where each resolved
-      value actually came from — combines shape (a) with shape (b), plus
-      a debuggability feature none of the four shapes specified.
+      value actually came from — a debuggability feature none of the four
+      shapes specified.
+
+   (Note: the shape-(a)/(b) labels on points 5–6 above in an earlier
+   version of this doc were this writer's own reading, not something the
+   agent said — the agent gave this opinion before seeing the four
+   named shapes. Corrected per the agent's own review.)
+
+   The same agent also gave this quick lean on the four shapes, not a
+   full evaluation:
+   - Keep exhaustiveness by making the schema itself the enum — settings
+     keys (type, default, scope, description) become the enum; profile
+     and workspace instances become data maps keyed by it. Keeps
+     compile-time exhaustiveness and gets the searchable settings UI and
+     `config show --origin` almost for free.
+   - Combine shapes: a cascade (a) for resolving values, profile as the
+     sharing boundary (b), explicit link edges (c) for workspace-to-
+     workspace tool sharing limited to within one profile.
+   - Shape (d) directly addresses the problem this round's `skills.md`
+     mixup just surfaced — state living outside the repo, invisible on
+     another machine. The committed layer should hold only non-sensitive
+     config; identity (emails, keys, accounts) stays in a machine-local
+     overlay; committed scripts should be trust-gated before they run.
+   - No new dependency needed — `dart:convert` covers the file format.
 
 2. **Backup/restore + version-aware binary safety** — `claudart link
    --backup`. Not yet scoped past the name; no handoff, no design notes
