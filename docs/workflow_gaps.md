@@ -177,6 +177,7 @@ running the real binary.
 | 3 | Containment on by default; crossing the root is an opt-in | `allowedScopeRoots: List<String>` in `config.json`, empty by default | **Implemented.** Checked lexically and after resolving symlinks. Live: the outside file's contents reached the model 0 times by default (4 times on `main`), and 5 times with the root explicitly allowed. The user is told which paths were ignored and where to allow them. |
 | 4 | `rotate` without a terminal must not proceed silently | reuse `--headless` (`RunMode.headless`) | **Implemented.** Also: a failed build gate now exits 1 (it exited 0), and the failure message names the gate and `afterFixCommand`. |
 | 5 | Fix the `setup` writer | - | Not needed (see the withdrawn claim). The one real nit, duplicate bullets when a file is typed twice, is fixed. |
+| 7 | `kill --headless` (added at the maintainer's direction, same vocabulary) | `--headless` | **Implemented.** Headless answers the final confirmation and the two benign, reversible ones (no active session, nothing to archive) with yes, since the handoff is archived either way. It **never clears a workspace lock** (exits 1): a lock means another operation may be running. With no flag and no answer, `kill` now stops with exit 1 and says so, instead of a "Kill cancelled" nobody chose. |
 | 6 | Generous per-step spawn backstop, hard error, no retry yet | `stepTimeoutMinutes`, about 15 | **Not implemented.** Harness first (`defaultClaudeRunner` is the live launch path) and it needs `ProcessRunner.runKillable` from PR #53. |
 
 Judgement calls made while implementing, for the maintainer to confirm:
@@ -187,6 +188,9 @@ Judgement calls made while implementing, for the maintainer to confirm:
   flag), say so.
 - The pinned separator is an em dash, matching the flow prompt and the `setup`
   writer. The parser accepts a hyphen too.
+- Headless `kill` answers yes to "no active session, kill anyway?" and "nothing to
+  archive, remove the link only?". Both only archive or unlink, and both are
+  reversible. The lock prompt is the one it refuses. Confirm or tighten.
 - `link` now rejects an unknown `--option` instead of treating it as the project
   name (`rotate` never took a name, so it is unchanged there).
 
@@ -197,9 +201,10 @@ Judgement calls made while implementing, for the maintainer to confirm:
   bypass, so it needs to pass `--headless`. That is a one-line change on the
   zedup side; older claudart builds ignore the extra argument, so it can merge
   first with no window where `/rotate` is broken.
-- **zedup's `/kill`** runs `claudart kill` the same way and always ends in
-  "Kill cancelled" (its confirmation gets no answer). This is unchanged by this
-  work; it probably wants the same treatment as `rotate`.
+- **zedup's `/kill`** runs `claudart kill` the same way and used to end in
+  "Kill cancelled" every time (its confirmation got no answer), so it could never
+  kill. Fixed on both sides: `claudart kill --headless`, and zedup passing it
+  (same compatibility story as `/rotate`: older builds ignore the flag).
 - **zedup's `/archives`** has its own screen rather than the CLI menu, so the
   end-of-input abort does not affect it.
 
@@ -210,3 +215,7 @@ Judgement calls made while implementing, for the maintainer to confirm:
   `afterFixCommand`; a piped `y` still proceeds.
 - `link`: both flags, the flag-is-not-a-project-name case, unknown option, and
   end of input at both questions when re-linking.
+- `kill`: empty stdin stops with exit 1 and keeps the session; `--headless`
+  archives, resets the handoff, removes the link and exits 0; `--headless` with a
+  workspace lock exits 1 and leaves the lock, handoff and link in place; a piped
+  `y` still kills. Run as a real subprocess, the way zedup runs it.
