@@ -28,7 +28,7 @@
 - [Lint enforcement](#lint-enforcement) — paradigm rules as compiled checks, not prose
 
 **Where you touch it**
-- [CLI surface](#cli-surface) — every command, verified against real `--help` output
+- [CLI surface](#cli-surface) — every command, verified against real `--help` output, plus what `claudart doctor` checks
 - [Workspace on disk](#workspace-on-disk) — the one file startup reads, and everything it points to
 - [TUI vs CLI](#tui-vs-cli) — the same typed state, rendered two ways
 - [Authentication](#authentication) — how a pipeline step stays logged in as you
@@ -98,6 +98,17 @@ Next step:
 ```
 
 1181 tests across 81 files. The count includes this page: the README-sync group registers one test per distinct `claudart` subcommand the prose names. `custom_lint` runs this repo's three hand-written paradigm rules over `lib/`, `bin/`, and `test/`. `claudart status` is read-only — safe to run anywhere inside a linked project.
+
+Line coverage has its own gate. `make test-coverage` runs the suite with `--coverage` and formats the result to `coverage/lcov.info` (one-time setup on a fresh machine: `dart pub global activate coverage`). `make check-coverage` depends on it, then hands the tracefile to [`tool/check_coverage.dart`](tool/check_coverage.dart), which sums its `LF:`/`LH:` totals and exits 1 below the floor — no `lcov` system package, no extra pub dependency. Captured 2026-10-02:
+
+```
+$ make check-coverage
+…
+dart run tool/check_coverage.dart 74.0
+Line coverage 76.3% meets the 74.0% floor (3131/4101 lines).
+```
+
+The floor is a measured baseline with headroom, not a target. 74.0 sits roughly two points under what this repo actually measures on more than one machine; a floor one rounding error below the real number fails on the next machine for reasons that are not regressions. It exists to catch coverage sliding backwards, and moves up only when measured coverage does.
 
 ---
 
@@ -393,39 +404,41 @@ claudart suggest        # classify, read scope, reason, lock root cause
 claudart save           # checkpoint, deposit confirmed facts to skills
 claudart debug          # read scope, implement fix, write files
 claudart teardown       # archive, promote skills, suggest commit
+claudart doctor         # check this machine: tools, auth, provider, workspace, registry
 ```
 
-[`ClaudartCommand`](lib/commands/claudart_command.dart#L11) has 23 variants and is the single source of truth for dispatch. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable. That makes 24 reachable entry points.
+[`ClaudartCommand`](lib/commands/claudart_command.dart#L11) has 24 variants and is the single source of truth for dispatch. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable. That makes 25 reachable entry points.
 
 <details>
 <summary><strong>Full command table, one row per dispatch arm</strong></summary>
 
 | Command | Role | Dispatch |
 |---|---|---|
-| `chat` | interactive chat shell, the agentflow front door | [bin/claudart.dart:116](bin/claudart.dart#L116) |
-| `archives` | list session archives, resume or view a snapshot | [bin/claudart.dart:118](bin/claudart.dart#L118) |
-| `add` | scaffold a brand-new project: PLAN.md, CLAUDE.md, registry entry, symlink | [bin/claudart.dart:120](bin/claudart.dart#L120) |
-| `init` | initialize the workspace with starter knowledge | [bin/claudart.dart:122](bin/claudart.dart#L122) |
-| `link` | symlink workspace into a project, register it, regenerate doc tails | [bin/claudart.dart:124](bin/claudart.dart#L124) |
-| `unlink` | remove workspace symlinks cleanly | [bin/claudart.dart:126](bin/claudart.dart#L126) |
-| `setup` | start a session, write handoff.md | [bin/claudart.dart:128](bin/claudart.dart#L128) |
-| `status` | session state; `--prompt` emits a compact string for RPROMPT/PS1 | [bin/claudart.dart:132](bin/claudart.dart#L132) |
-| `teardown` | archive, promote skills, suggest a commit; `--headless` decides everything itself | [bin/claudart.dart:134](bin/claudart.dart#L134) |
-| `suggest` | run the suggest pipeline | [bin/claudart.dart:138](bin/claudart.dart#L138) |
-| `debug` | run the debug pipeline | [bin/claudart.dart:140](bin/claudart.dart#L140) |
-| `flow` | experimental agent-constructed session | [bin/claudart.dart:142](bin/claudart.dart#L142) |
-| `save` | checkpoint the session, deposit confirmed facts | [bin/claudart.dart:144](bin/claudart.dart#L144) |
-| `rotate` | archive, run the build gate, seed the next handoff from Pending Issues | [bin/claudart.dart:146](bin/claudart.dart#L146) |
-| `kill` | abandon the session, no skills update | [bin/claudart.dart:148](bin/claudart.dart#L148) |
-| `resume` | pre-populate setup from the most recent archive entry | [bin/claudart.dart:150](bin/claudart.dart#L150) |
-| `confirm-pending` | set or clear the workspace's pending confirmation | [bin/claudart.dart:152](bin/claudart.dart#L152) |
-| `preflight` | sync check before `debug`, `save`, or `test` | [bin/claudart.dart:154](bin/claudart.dart#L154) |
-| `scan` | re-scan the project for sensitive tokens | [bin/claudart.dart:157](bin/claudart.dart#L157) |
-| `report` | diagnostic report; `--file-issue` files GitHub issues | [bin/claudart.dart:172](bin/claudart.dart#L172) |
-| `map` | generate token_map.md from token_map.json | [bin/claudart.dart:180](bin/claudart.dart#L180) |
-| `experiment` | run a command and tee its output to `experiments/` | [bin/claudart.dart:187](bin/claudart.dart#L187) |
-| `compile` | rebuild the binary and install it to `~/bin/claudart` | [bin/claudart.dart:189](bin/claudart.dart#L189) |
-| `version` | print the version, before dispatch | [bin/claudart.dart:95](bin/claudart.dart#L95) |
+| `chat` | interactive chat shell, the agentflow front door | [bin/claudart.dart:118](bin/claudart.dart#L118) |
+| `archives` | list session archives, resume or view a snapshot | [bin/claudart.dart:120](bin/claudart.dart#L120) |
+| `add` | scaffold a brand-new project: PLAN.md, CLAUDE.md, registry entry, symlink | [bin/claudart.dart:122](bin/claudart.dart#L122) |
+| `init` | initialize the workspace with starter knowledge | [bin/claudart.dart:124](bin/claudart.dart#L124) |
+| `link` | symlink workspace into a project, register it, regenerate doc tails | [bin/claudart.dart:126](bin/claudart.dart#L126) |
+| `unlink` | remove workspace symlinks cleanly | [bin/claudart.dart:128](bin/claudart.dart#L128) |
+| `setup` | start a session, write handoff.md | [bin/claudart.dart:130](bin/claudart.dart#L130) |
+| `status` | session state; `--prompt` emits a compact string for RPROMPT/PS1 | [bin/claudart.dart:134](bin/claudart.dart#L134) |
+| `teardown` | archive, promote skills, suggest a commit; `--headless` decides everything itself | [bin/claudart.dart:136](bin/claudart.dart#L136) |
+| `suggest` | run the suggest pipeline | [bin/claudart.dart:140](bin/claudart.dart#L140) |
+| `debug` | run the debug pipeline | [bin/claudart.dart:142](bin/claudart.dart#L142) |
+| `flow` | experimental agent-constructed session | [bin/claudart.dart:144](bin/claudart.dart#L144) |
+| `save` | checkpoint the session, deposit confirmed facts | [bin/claudart.dart:146](bin/claudart.dart#L146) |
+| `rotate` | archive, run the build gate, seed the next handoff from Pending Issues | [bin/claudart.dart:148](bin/claudart.dart#L148) |
+| `kill` | abandon the session, no skills update | [bin/claudart.dart:150](bin/claudart.dart#L150) |
+| `resume` | pre-populate setup from the most recent archive entry | [bin/claudart.dart:152](bin/claudart.dart#L152) |
+| `confirm-pending` | set or clear the workspace's pending confirmation | [bin/claudart.dart:154](bin/claudart.dart#L154) |
+| `preflight` | sync check before `debug`, `save`, or `test` | [bin/claudart.dart:156](bin/claudart.dart#L156) |
+| `scan` | re-scan the project for sensitive tokens | [bin/claudart.dart:159](bin/claudart.dart#L159) |
+| `report` | diagnostic report; `--file-issue` files GitHub issues | [bin/claudart.dart:174](bin/claudart.dart#L174) |
+| `map` | generate token_map.md from token_map.json | [bin/claudart.dart:182](bin/claudart.dart#L182) |
+| `experiment` | run a command and tee its output to `experiments/` | [bin/claudart.dart:189](bin/claudart.dart#L189) |
+| `compile` | rebuild the binary and install it to `~/bin/claudart` | [bin/claudart.dart:191](bin/claudart.dart#L191) |
+| `doctor` | fresh-machine check: tools, git identity, `gh` auth, provider env, workspace root, registry, PATH | [bin/claudart.dart:193](bin/claudart.dart#L193) |
+| `version` | print the version, before dispatch | [bin/claudart.dart:97](bin/claudart.dart#L97) |
 
 </details>
 
@@ -468,6 +481,7 @@ Commands:
   map                    Generate token_map.md from token_map.json
   experiment <name> -- <cmd> [args]  Run a command and tee output to experiments/<name>_<ts>.ansi
   compile                Recompile the claudart binary and install it to ~/bin/claudart
+  doctor                 Fresh-machine verification: tools on PATH, git identity, gh auth, provider env
   version                Print the current claudart version
 
 Options:
@@ -480,6 +494,43 @@ Options:
 ```
 
 </details>
+
+**`claudart doctor` checks the machine, not the session.** It runs seven checks, prints one `[OK]`/`[SKIP]`/`[FAIL]` line each, and exits 1 if any failed — skip-only is exit 0. Every check re-reads live state, so it is safe to re-run after fixing something. Check identity and outcome are both enums, [`HarnessCheckId`](lib/harness/harness_check.dart#L15) and [`HarnessCheckResult`](lib/harness/harness_check.dart#L60); the checks themselves live in [`lib/commands/doctor.dart`](lib/commands/doctor.dart). Real output from this machine, user identity and home path elided:
+
+```
+$ claudart doctor
+[OK] tools: git, gh, claude all on PATH
+[OK] git identity: … <…>
+[OK] gh auth: active login found
+[SKIP] provider env: no provider found in this process's environment or ~/.claude/settings.json — fine for OAuth login
+[OK] workspace root: CLAUDART_WORKSPACE=/…/dev_tools/claude
+[OK] registry health: 7 entries, all projectRoots exist
+[OK] path configuration: /…/bin is on PATH
+```
+
+| Check | `[OK]` | `[SKIP]` | `[FAIL]` |
+|---|---|---|---|
+| `tools` | `git`, `gh`, `claude` all resolve on PATH | — | names whichever are missing |
+| `git identity` | `user.name` and `user.email` set, as seen from the current directory | — | either is unset |
+| `gh auth` | `gh auth status` exits 0 | — | no active login |
+| `provider env` | an [`AgentProvider`](#authentication) is configured | none found — normal for OAuth login | — |
+| `workspace root` | `CLAUDART_WORKSPACE` set, exists, and no second registry at `~/.claudart` | override unset; the `~/.claudart` fallback is in use | override path missing, or override set **and** `~/.claudart/registry.json` also exists |
+| `registry health` | registry parses and every `projectRoot` still exists | no registry, empty file, or no entries yet | unparsable JSON, or stale entries (named) |
+| `path configuration` | `~/bin` is on PATH | — | `~/bin` missing, so a binary from `claudart compile` is unreachable |
+
+`workspace root` and `registry health` catch different failures. The first asks *which* registry this process reads, and whether a second one exists that other processes would read instead — see [Workspace on disk](#workspace-on-disk). The second asks whether the registry it reads is intact. `Registry.load` deliberately swallows a JSON parse error and returns an empty registry, so doctor re-reads the raw file first; a corrupt registry fails loudly instead of looking like a fresh one. Pointing the override at a directory holding a truncated `registry.json`:
+
+```
+$ CLAUDART_WORKSPACE=/tmp/doctor_demo_ws claudart doctor
+…
+[OK] workspace root: CLAUDART_WORKSPACE=/tmp/doctor_demo_ws
+[FAIL] registry health: registry.json exists at /tmp/doctor_demo_ws but failed to parse — back it up and investigate before linking anything new
+…
+$ echo $?
+1
+```
+
+Each run is logged through `SessionLogger` — one `interactions.jsonl` line per run, plus one `errors.jsonl` entry per failed check, fingerprinted `doctor.<check>` — into the current project's workspace when run inside a linked project, so `claudart report` shows past runs rather than only whatever got pasted into chat.
 
 ---
 
@@ -522,7 +573,7 @@ Each rule is narrower than its name suggests, deliberately. `bare_string_for_enu
 
 ## Workspace on disk
 
-Startup reads exactly one file: `~/.claudart/registry.json`. Everything else is reached through the workspace path it names. Real layout, `find` output from this machine:
+Startup reads exactly one file: `registry.json` at the workspace root, `~/.claudart/` by default. Everything else is reached through the workspace path it names. Real layout, `find` output from this machine:
 
 ```
 $ cat ~/.claudart/registry.json
@@ -574,7 +625,27 @@ Path construction is centralized in [`lib/paths.dart`](lib/paths.dart) — one f
 }
 ```
 
-`CLAUDART_WORKSPACE` overrides the root, which is how the test suite runs against a throwaway directory.
+`CLAUDART_WORKSPACE` overrides the root, which is how the test suite runs against a throwaway directory. Resolution end to end:
+
+```mermaid
+flowchart LR
+  Env{CLAUDART_WORKSPACE<br/>set in this process?}:::fn -->|yes| Over[that path<br/>~/ expanded]:::state
+  Env -->|no| Fall[~/.claudart]:::state
+  Over --> Root{{workspacesRoot}}:::fn
+  Fall --> Root
+  Root --> Reg[(registry.json)]:::state
+  Git[git root of cwd]:::cmd --> Find{{findByProjectRoot}}:::fn
+  Reg --> Find
+  Find --> WS[(project workspace<br/>handoff · skills · logs)]:::state
+  Root --> Gen[(knowledge/generic/<br/>shared by every project)]:::state
+  classDef state fill:#dcfce7,color:#064e3b,stroke:#16a34a
+  classDef cmd fill:#e0f2fe,color:#0c4a6e,stroke:#0284c7
+  classDef fn fill:#fef3c7,color:#78350f,stroke:#d97706
+```
+
+`workspacesRoot` is a getter, not a cached top-level value — it re-reads `CLAUDART_WORKSPACE` on every call, so the answer is whatever *this* process's environment says right now. That has one sharp edge: if your shell exports the override but a process launched outside that shell (a GUI-launched editor, launchd) does not inherit it, that process resolves `~/.claudart` instead, and the two can each grow a registry that silently diverges. `claudart doctor`'s `workspace root` check fails on exactly that condition — override set, and `~/.claudart/registry.json` exists too. It can only see it from a process that has the override; one without it gets `[SKIP]`, the reminder that a second root may exist.
+
+Generic knowledge lives once, at `<root>/knowledge/generic/`, not per project. `claudart link` and `claudart add` list its files into each project's generated `CLAUDE.md` tail, so adding a file there reaches every linked project on its next `link`.
 
 ---
 
@@ -660,6 +731,29 @@ Pipeline steps spawn the real `claude` CLI and rely on whatever session you are 
 
 No built-in step uses `bare`. `--bare` never reads OAuth or keychain credentials, by design — a normal OAuth session gets `Not logged in` under it, verified directly against the live CLI. Naming the variant makes that a documented case instead of a hidden trap.
 
+OAuth is not the only way `claude` authenticates, and a spawned step inherits whichever one the environment holds. [`AgentProvider`](lib/providers/agent_provider.dart#L40) names the three non-OAuth shapes by the env vars each needs, all present and non-empty:
+
+| Variant | Required env vars |
+|---|---|
+| `apiKey` | `ANTHROPIC_API_KEY` |
+| `bedrock` | `CLAUDE_CODE_USE_BEDROCK`, `AWS_PROFILE`, `AWS_REGION`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL` |
+| `openRouter` | `OPENROUTER_API_KEY` — not yet verified end to end against the real `claude` CLI |
+| *(none)* | nothing matches — the ambient `claude login` OAuth session is used |
+
+```mermaid
+flowchart LR
+  Settings[(~/.claude/settings.json<br/>env block)]:::state --> Merge{{merge<br/>process env wins}}:::fn
+  Proc[process env]:::state --> Merge
+  Merge --> Detect{{first variant satisfied<br/>apiKey → bedrock → openRouter}}:::fn
+  Detect -->|match| Prov[AgentProvider]:::cmd
+  Detect -->|none| OAuth[OAuth login · SKIP]:::cmd
+  classDef state fill:#dcfce7,color:#064e3b,stroke:#16a34a
+  classDef cmd fill:#e0f2fe,color:#0c4a6e,stroke:#0284c7
+  classDef fn fill:#fef3c7,color:#78350f,stroke:#d97706
+```
+
+`AgentProvider.detectEffective` reads the `env` block of `~/.claude/settings.json` first — the same file `claude` itself reads — then overlays this process's environment, then takes the first variant in declaration order whose vars are all present. Reading settings.json matters in practice: a Bedrock setup can live only in that file and never be exported to the shell, and process-env detection alone reports nothing there. [`lib/providers/claude_settings_env.dart`](lib/providers/claude_settings_env.dart) treats a missing or malformed settings file as an empty map, never an error. Three limits, stated plainly: process env winning a conflict is an assumption, not verified against how `claude` resolves the same conflict; a match means *configured*, not *working* — expired AWS or SSO credentials still pass; and today the only consumer is `claudart doctor`'s `provider env` check. Pipeline steps do not gate on it — they spawn `claude` with the inherited environment exactly as before.
+
 ---
 
 ## Full architecture
@@ -667,9 +761,15 @@ No built-in step uses `bare`. `--bare` never reads OAuth or keychain credentials
 ```mermaid
 flowchart TB
   subgraph Setup["once per project"]
+    Root{{workspacesRoot<br/>CLAUDART_WORKSPACE or ~/.claudart}}:::fn --> Registry
     Link[claudart link]:::cmd --> Registry[(registry.json<br/>project → workspace)]:::state
     Link --> Docs[CLAUDE.md tail<br/>README Roadmap block]:::state
   end
+
+  Doctor[claudart doctor]:::cmd -.->|workspace root| Root
+  Doctor -.->|registry health| Registry
+  Doctor -.->|provider env| Prov{{AgentProvider<br/>process env + settings.json}}:::fn
+  Prov -.->|same env| CLI
 
   subgraph Session["per bug or feature"]
     S1[claudart setup]:::cmd --> H[(handoff.md<br/>typed Status)]:::state
@@ -704,6 +804,8 @@ flowchart TB
 ```
 
 Three layers, each independently testable. The registry maps a git project to its workspace once, at `link` time. The session layer is the state machine — `handoff.md`'s typed status decides which command may run next. The engine layer is shared: `suggest` and `debug` are two lists of `AgentStep`s handed to one `PipelineExecutor`. Classification (the three axes: category, intent, complexity) drives model routing before the engine runs. `claudart save` is an optional checkpoint anywhere in that loop, not a precondition of `debug` — `debug` gates only on `handoff.md`'s status (see [The session state machine](#the-session-state-machine)).
+
+`claudart doctor` sits outside all three layers and reads their inputs rather than any session: which root this process resolves, whether that root's registry is intact, and which provider the environment a spawned `claude` would inherit is configured for. It changes nothing on disk except its own log line.
 
 Colour classes used throughout: green for state persisted on disk, blue for a claudart command or user action, amber for a pure typed function, indigo for anything outside claudart's process. Red marks unabstracted sensitive input. Not every diagram uses every class.
 
@@ -746,7 +848,7 @@ flowchart LR
   classDef ext fill:#dbeafe,color:#1e3a8a,stroke:#3b82f6
 ```
 
-claudart runs standalone. It has zero runtime dependency on dartrix — verified by grepping every import in `lib/`. dartrix sits in `dev_dependencies` only, for test-time matrix coverage. Paradigm enforcement lives in claudart's own `custom_lint` rules, which re-derive dartrix's prose by hand. zedup consumes claudart's slash commands and dispatches through it; claudart does not depend on zedup either.
+claudart runs standalone. It has zero runtime dependency on dartrix — verified by grepping every import in `lib/`. dartrix sits in `dev_dependencies` only, for test-time matrix coverage, as a git dependency — a fresh clone resolves it through `dart pub get` with no sibling `../dartrix` checkout. Paradigm enforcement lives in claudart's own `custom_lint` rules, which re-derive dartrix's prose by hand. zedup consumes claudart's slash commands and dispatches through it; claudart does not depend on zedup either.
 
 ---
 
