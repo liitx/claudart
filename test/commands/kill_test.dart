@@ -368,8 +368,10 @@ void main() {
 
     bool? neverAsked(String q) => throw StateError('should not have been asked: $q');
     Matcher exitsWith(int code) => throwsA(isA<_ExitException>().having((e) => e.code, 'code', code));
-    List<String> archives(MemoryFileIO io) =>
-        io.files.keys.where((k) => k.startsWith(p.join(_workspace, 'archive'))).toList();
+    // Snapshot files only: the archive writer also keeps an index.json there.
+    List<String> archives(MemoryFileIO io) => io.files.keys
+        .where((k) => k.startsWith(p.join(_workspace, 'archive')) && p.basename(k) != archiveIndexFileName)
+        .toList();
 
     test('end of input at the final question stops with exit 1 and changes nothing', () async {
       final io = _io();
