@@ -11,7 +11,34 @@
 
 ---
 
-## Shipped (merged-ready, not yet merged to `main`)
+## Closed out (2026-10-03) — migration effort complete
+
+All three PRs below merged to `main` in all three repos. A final cold-cache,
+fresh-clone, end-to-end pass (fresh `git clone` of all three repos, not a
+warm existing checkout) by the second agent confirmed: `pub get` cold,
+`analyze`, `test`, `custom_lint`, coverage floors, and native binary
+compilation for both claudart and zedup all pass clean.
+
+That first "fresh clone" pass surfaced 3 small, non-blocking issues, all
+fixed directly to `main` and re-verified on a second genuine cold-cache
+pass:
+1. `zedup --version`/`--help` didn't work as standard flags — fixed in
+   `zedup_router.dart` (claudart `f94f561`, zedup `f2f2add`).
+2. `make check-coverage`'s error before `dart pub global activate coverage`
+   was unhelpful (Dart's own bare "No active package coverage.") — both
+   Makefiles now pre-check and fail fast (exit 2, under a second, no test
+   suite run) with an actionable message.
+3. zedup's `pubspec.lock` had a stale `claudart_lints` git ref (`3b827d0`)
+   — refreshed to current (`5f340df`); confirmed cosmetic (lint package
+   content was identical between the two revisions) before and after.
+
+Final state verified cross-machine: claudart `f94f561` (1267 tests,
+76.4%/74.0% floor), zedup `f2f2add` (2119 tests, 68.3%/66.0% floor),
+dartrix `14cbc3e` (93 tests). No known gaps remain on either machine.
+
+---
+
+## Shipped (merged to `main`)
 
 **PR [liitx/claudart#50](https://github.com/liitx/claudart/pull/50)** —
 branch `feat/agent-provider-portability-harness`, 6 commits. Round-trip
@@ -33,22 +60,12 @@ all fixed and re-confirmed. 1258 tests passing.
 
 **zedup PR [liitx/zedup#76](https://github.com/liitx/zedup/pull/76)** —
 same git-dependency fix (`dartrix`/`claudart`/`claudart_lints`, the last
-via git+`path:` since it's a claudart subdirectory). Not yet tested by
-the second agent.
+via git+`path:` since it's a claudart subdirectory).
 
-None of the three are merged yet — deliberately, per the user's own
-choice this session ("keep testing on branches a bit longer" over
-merging now).
-
-**Action item for whenever claudart's PRs do merge** (confirmed by the
-second agent's combined dry-run test): zedup's `claudart` dependency is
-an unpinned git dependency (no `ref:`), so `pubspec.lock` just freezes
-whatever commit was resolved at the time `dart pub get` last ran.
-Merging claudart's PRs to `main` does **not** automatically update
-zedup — it'll keep silently building against the old pre-merge claudart
-commit until someone runs `dart pub upgrade claudart` in zedup and
-commits the new lock file. Do this as an explicit step right after
-merging, not assume it happens on its own.
+All three merged. zedup's `pubspec.lock` was upgraded (`dart pub upgrade
+claudart dartrix`) and committed immediately after merging, per the action
+item below — confirmed necessary since zedup's `claudart`/`dartrix` deps
+are unpinned git dependencies that don't auto-update on merge.
 
 **Test result discrepancy — resolved, real root cause, fixed.** The
 second agent's 7 failures in `test/features/dashboard/zedup_dashboard_grid_test.dart`
@@ -152,12 +169,9 @@ just for a narrower, correctly-understood reason now.
 
 ## What the other agent (Bedrock-backed, second machine) can do next
 
-Not yet sent as of this writing — queued:
-1. Test zedup PR #76 (git dependencies) — not yet tested, only claudart's
-   #50/#51 have been.
-2. A combined dry run: check out claudart's `fix/workspace-registry-
-   onboarding` and zedup's `fix/git-dependencies-not-path` together, as a
-   dress rehearsal for what merging both will actually produce.
-3. Their independent take on the architecture-shape decision (item 1 in
-   Backlog above) — they've been a sharp, thorough independent reviewer
+The migration/portability effort itself is closed — no outstanding test or
+verification work queued for it. Open-ended, whenever picked back up:
+1. Their independent take on the architecture-shape decision (Backlog
+   item 1 above) — they've been a sharp, thorough independent reviewer
    all session.
+2. Backup/restore design (Backlog item 2).
