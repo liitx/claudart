@@ -27,6 +27,12 @@ class ProjectConfig {
   /// Defaults to `make rebuild` for self-hosted projects.
   final String afterFixCommand;
 
+  /// Extra directories a `### Files in play` entry may point into besides the
+  /// project root itself (for example a sibling package in a monorepo).
+  /// Relative entries resolve against the project root. Empty by default, so
+  /// a scope path that leaves the project is ignored unless listed here.
+  final List<String> allowedScopeRoots;
+
   const ProjectConfig({
     this.sensitivityMode = false,
     this.scanScope = ScanScope.lib,
@@ -35,6 +41,7 @@ class ProjectConfig {
     this.lastScan,
     this.projectRoot,
     this.afterFixCommand = 'make rebuild',
+    this.allowedScopeRoots = const [],
   });
 
   factory ProjectConfig.fromJson(Map<String, dynamic> json) {
@@ -46,6 +53,10 @@ class ProjectConfig {
       lastScan: json['lastScan'] as String?,
       projectRoot: json['projectRoot'] as String?,
       afterFixCommand: json['afterFixCommand'] as String? ?? 'make rebuild',
+      allowedScopeRoots: [
+        for (final r in (json['allowedScopeRoots'] as List<dynamic>? ?? const []))
+          if (r is String && r.trim().isNotEmpty) r.trim(),
+      ],
     );
   }
 
@@ -57,6 +68,7 @@ class ProjectConfig {
         if (lastScan != null) 'lastScan': lastScan,
         if (projectRoot != null) 'projectRoot': projectRoot,
         'afterFixCommand': afterFixCommand,
+        if (allowedScopeRoots.isNotEmpty) 'allowedScopeRoots': allowedScopeRoots,
       };
 
   ProjectConfig copyWith({
@@ -67,6 +79,7 @@ class ProjectConfig {
     String? lastScan,
     String? projectRoot,
     String? afterFixCommand,
+    List<String>? allowedScopeRoots,
   }) {
     return ProjectConfig(
       sensitivityMode: sensitivityMode ?? this.sensitivityMode,
@@ -76,7 +89,20 @@ class ProjectConfig {
       lastScan: lastScan ?? this.lastScan,
       projectRoot: projectRoot ?? this.projectRoot,
       afterFixCommand: afterFixCommand ?? this.afterFixCommand,
+      allowedScopeRoots: allowedScopeRoots ?? this.allowedScopeRoots,
     );
+  }
+}
+
+/// Loads the per-workspace `config.json` (defaults when missing or unreadable).
+ProjectConfig loadWorkspaceConfig(String workspace, {FileIO? io}) {
+  final fileIO = io ?? const RealFileIO();
+  final raw = fileIO.read(configPathFor(workspace));
+  if (raw.isEmpty) return const ProjectConfig();
+  try {
+    return ProjectConfig.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+  } on FormatException {
+    return const ProjectConfig();
   }
 }
 

@@ -49,6 +49,9 @@ launcher with nothing to read) are identical on both binaries.
 | `doctor` | exit 1 | exit 1 | exit 1 | exit 1 |
 | `(launcher)` | **CRASH** | exit 1 | exit 1 | exit 1 |
 
+(Measured at PR #54. In the stacked follow-up, `link` and `rotate` now exit 1 at
+end of input on purpose: see "Decisions" below.)
+
 On `main`, **six commands crash with closed stdin** (`init`, `link`, `setup`,
 `kill`, `flow`, and the launcher), and `suggest` crashes at its review menu.
 This PR removes every crash in both modes. The two model-calling commands were
@@ -160,21 +163,50 @@ running the real binary.
 - Any run on a real interactive terminal (the harness has none), so the
   arrow-key menu and the cursor-editing prompt were not tested by hand.
 - `report --file-issue` (it files GitHub issues).
-- `flow` and `chat` with real model turns, and a successful `rotate` build gate.
+- `flow` and `chat` with real model turns.
 - Linux. The `/dev/null` behaviour was observed on macOS only.
 
-## Decisions (agreed 2026-10-03)
+(A passing `rotate` build gate was exercised in the follow-up; see below.)
 
-Agreed by the audit author and the claudart maintainer's agent. The names were
-confirmed by the maintainer's side. None of these are implemented in this PR;
-items 1 to 4 go in a follow-up PR stacked on this one, item 6 after the
-process-tree kill (PR #53) merges.
+## Decisions (agreed 2026-10-03) and where they landed
 
-| # | Decision | Names / notes |
-|---|---|---|
-| 1 | Non-interactive `link` requires an explicit flag, otherwise aborts. End of input never silently picks the less-protected outcome. | `--sensitive` / `--no-sensitive` (a negatable pair, matching the existing bare-flag style) |
-| 2 | Pin the suggest prompt's scope-bullet shape; keep the tolerant parser as defence in depth. | ``- `relative/path` - what to change``; measure the shapes before and after |
-| 3 | Containment on by default; crossing the project root is an explicit opt-in. | `allowedScopeRoots: List<String>` in `config.json`, empty by default |
-| 4 | `rotate` with no terminal must not proceed silently. | reuse `--headless` (`RunMode.headless`), no new `--yes` |
-| 5 | ~~Fix the `setup` writer.~~ Not needed: it already writes bullets (see the withdrawn claim). Only the duplicate-bullet nit remains. | - |
-| 6 | A generous per-step backstop for `claude` spawns, hard error, no retry in the first cut. Harness-first, because `defaultClaudeRunner` is the live launch path. | `stepTimeoutMinutes`, default about 15; depends on `ProcessRunner.runKillable` from PR #53 |
+| # | Decision | Names | Status |
+|---|---|---|---|
+| 1 | Non-interactive `link` needs an explicit flag, otherwise aborts | `--sensitive` / `--no-sensitive` | **Implemented.** End of input aborts before anything is written; an explicit piped answer still counts. |
+| 2 | Pin the suggest prompt's scope-bullet shape; keep the tolerant parser | ``- `relative/path` — what to change`` | **Implemented**, worded like the flow prompt. 3 of 3 live runs wrote exactly that shape and `debug` accepted them. Small sample: one project, default model routing. |
+| 3 | Containment on by default; crossing the root is an opt-in | `allowedScopeRoots: List<String>` in `config.json`, empty by default | **Implemented.** Checked lexically and after resolving symlinks. Live: the outside file's contents reached the model 0 times by default (4 times on `main`), and 5 times with the root explicitly allowed. The user is told which paths were ignored and where to allow them. |
+| 4 | `rotate` without a terminal must not proceed silently | reuse `--headless` (`RunMode.headless`) | **Implemented.** Also: a failed build gate now exits 1 (it exited 0), and the failure message names the gate and `afterFixCommand`. |
+| 5 | Fix the `setup` writer | - | Not needed (see the withdrawn claim). The one real nit, duplicate bullets when a file is typed twice, is fixed. |
+| 6 | Generous per-step spawn backstop, hard error, no retry yet | `stepTimeoutMinutes`, about 15 | **Not implemented.** Harness first (`defaultClaudeRunner` is the live launch path) and it needs `ProcessRunner.runKillable` from PR #53. |
+
+Judgement calls made while implementing, for the maintainer to confirm:
+
+- "Non-interactive" is read as "no answer is available" (end of input), not
+  "no terminal". So `printf 'y\n' | claudart link` still works; only a missing
+  answer stops. If you want the stricter reading (any non-terminal must pass the
+  flag), say so.
+- The pinned separator is an em dash, matching the flow prompt and the `setup`
+  writer. The parser accepts a hyphen too.
+- `link` now rejects an unknown `--option` instead of treating it as the project
+  name (`rotate` never took a name, so it is unchanged there).
+
+## Cross-repo impact
+
+- **zedup's `/rotate`** runs `claudart rotate` through `Process.runSync`, where
+  the child has no terminal. It relied on the old "no terminal, so proceed"
+  bypass, so it needs to pass `--headless`. That is a one-line change on the
+  zedup side; older claudart builds ignore the extra argument, so it can merge
+  first with no window where `/rotate` is broken.
+- **zedup's `/kill`** runs `claudart kill` the same way and always ends in
+  "Kill cancelled" (its confirmation gets no answer). This is unchanged by this
+  work; it probably wants the same treatment as `rotate`.
+- **zedup's `/archives`** has its own screen rather than the CLI menu, so the
+  end-of-input abort does not affect it.
+
+## Verified in the follow-up
+
+- `rotate`: empty stdin stops with exit 1 and changes nothing; `--headless` with
+  a passing gate archives and exits 0; with a failing gate it exits 1 and names
+  `afterFixCommand`; a piped `y` still proceeds.
+- `link`: both flags, the flag-is-not-a-project-name case, unknown option, and
+  end of input at both questions when re-linking.

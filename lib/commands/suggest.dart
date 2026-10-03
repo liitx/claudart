@@ -2,6 +2,7 @@ import 'dart:io';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../md_io.dart';
+import 'scope_files.dart';
 import '../paths.dart';
 import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/flows/suggest_steps.dart';
@@ -75,7 +76,7 @@ Future<void> runSuggest({
   final bug      = readSection(handoff, 'Bug');
   final expected = readSection(handoff, 'Expected Behavior');
   final scope    = readSection(handoff, 'Scope');
-  final files    = parseScopeFiles(scope, projectRoot);
+  final files    = readScopeFiles(scope: scope, projectRoot: projectRoot, workspace: workspace, io: fileIO);
 
   if (files.isEmpty) {
     print(

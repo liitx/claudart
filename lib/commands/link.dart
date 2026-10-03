@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
-import '../md_io.dart' show confirm;
+import '../md_io.dart' show confirmOrEof;
 import '../paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
@@ -39,6 +39,9 @@ final RegExp roadmapMarker = RegExp(
     multiLine: true,
     dotAll: true);
 
+const _sensitiveFlag = '--sensitive';
+const _noSensitiveFlag = '--no-sensitive';
+
 /// Registers the current project with claudart and creates the `.claude` symlink.
 ///
 /// On first run: creates a per-project workspace, writes the registry entry,
@@ -46,16 +49,40 @@ final RegExp roadmapMarker = RegExp(
 ///
 /// On re-run for an already-registered project: updates sensitivity mode and
 /// recreates the symlink if missing.
+///
+/// Sensitivity mode is a protective setting, so it is never defaulted for
+/// you: pass `--sensitive` or `--no-sensitive` to set it without a prompt,
+/// otherwise the question is asked, and if there is nobody to answer (stdin
+/// closed) the command stops before writing anything.
 Future<void> runLink(
   List<String> args, {
   FileIO? io,
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
+  bool? Function(String question)? askFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final confirm_ = confirmFn ?? confirm;
+  // A caller-supplied confirm always answers; the default reports null at end
+  // of input so a missing answer is never mistaken for "no". [askFn] lets a
+  // test simulate "nobody to answer".
+  final bool? Function(String question) ask =
+      askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
   final exit_ = exitFn ?? exit;
+
+  final unknownFlags = args.where((a) => a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag);
+  if (unknownFlags.isNotEmpty) {
+    print('\n✗ Unknown option: ${unknownFlags.first}');
+    print('  Usage: claudart link [project-name] [$_sensitiveFlag | $_noSensitiveFlag]\n');
+    exit_(1);
+  }
+  final wantsSensitive = args.contains(_sensitiveFlag);
+  final wantsNoSensitive = args.contains(_noSensitiveFlag);
+  if (wantsSensitive && wantsNoSensitive) {
+    print('\n✗ Pass only one of $_sensitiveFlag / $_noSensitiveFlag.\n');
+    exit_(1);
+  }
+  final positional = args.where((a) => !a.startsWith('--')).toList();
 
   print(render.header('CLAUDART LINK'));
 
@@ -67,8 +94,8 @@ Future<void> runLink(
   }
 
   // 2 — Resolve project name: arg > git remote > directory name.
-  final projectName = args.isNotEmpty
-      ? args.first
+  final projectName = positional.isNotEmpty
+      ? positional.first
       : (projectRootOverride != null
           ? p.basename(projectRootOverride)
           : _detectProjectName(projectRoot));
@@ -90,19 +117,29 @@ Future<void> runLink(
 
   // 5 — Sensitivity mode.
   final currentSensitivity = existing?.sensitivityMode ?? false;
-  bool sensitivityMode;
+  bool? decided = wantsSensitive ? true : (wantsNoSensitive ? false : null);
 
-  if (existing != null) {
+  if (decided != null) {
+    print('\n  Sensitivity mode: ${decided ? 'ON' : 'OFF'} '
+        '(${wantsSensitive ? _sensitiveFlag : _noSensitiveFlag})');
+  } else if (existing != null) {
     print('\n  Sensitivity mode is currently: '
         '${currentSensitivity ? 'ON' : 'OFF'}');
-    if (confirm_('Change sensitivity mode?')) {
-      sensitivityMode = confirm_('Enable sensitivity mode?');
-    } else {
-      sensitivityMode = currentSensitivity;
-    }
+    final change = ask('Change sensitivity mode?');
+    decided = change == null
+        ? null
+        : (change ? ask('Enable sensitivity mode?') : currentSensitivity);
   } else {
-    sensitivityMode = confirm_('Enable sensitivity mode?');
+    decided = ask('Enable sensitivity mode?');
   }
+
+  if (decided == null) {
+    print('\n✗ No input available to answer the sensitivity-mode question, '
+        'so nothing was changed.');
+    print('  Re-run in a terminal, or pass $_sensitiveFlag or $_noSensitiveFlag.\n');
+    exit_(1);
+  }
+  final sensitivityMode = decided;
 
   // 6 — Write or update registry entry.
   final today = DateTime.now().toIso8601String().split('T').first;

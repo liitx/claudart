@@ -7,9 +7,10 @@ import '../git_utils.dart';
 import '../templates/handoff_template.dart';
 import '../paths.dart';
 import '../registry.dart';
+import '../session/run_mode.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
-import '../md_io.dart' show confirm;
+import '../md_io.dart' show confirmOrEof;
 import '../ui/render.dart' as render;
 
 enum RotateResult {
@@ -32,6 +33,12 @@ enum RotateResult {
 /// Archives the current session and seeds the next handoff from the first
 /// unchecked item in `## Pending Issues`.
 ///
+/// Consent: rotating archives the live handoff and runs the configured build
+/// gate (`afterFixCommand`, an arbitrary shell command), so it never proceeds
+/// on the mere absence of a terminal. It asks; if there is nobody to answer
+/// (stdin closed) it stops without changing anything. A caller that really
+/// means "don't ask" passes [RunMode.headless] (`claudart rotate --headless`).
+///
 /// Gate: runs [buildFn] (defaults to the workspace `afterFixCommand`) between
 /// archiving and seeding. If the build fails the rotation is aborted — the
 /// archive already written remains, but the live handoff is not overwritten.
@@ -40,14 +47,17 @@ Future<RotateResult>  runRotate({
   String? projectRootOverride,
   Never Function(int code)? exitFn,
   bool Function(String question)? confirmFn,
+  bool? Function(String question)? askFn,
   Future<bool> Function(String command)? buildFn,
-  bool Function()? hasTerminalFn,
+  RunMode mode = RunMode.interactive,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
-  final confirm_ = confirmFn ?? confirm;
+  // A caller-supplied confirm always answers; the default reports null at end
+  // of input. [askFn] lets a test simulate "nobody to answer".
+  final bool? Function(String question) ask =
+      askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
   final build_ = buildFn ?? _defaultBuild;
-  final hasTerminal_ = hasTerminalFn ?? () => stdin.hasTerminal;
 
   print(render.header('CLAUDART ROTATE'));
 
@@ -92,21 +102,25 @@ Future<RotateResult>  runRotate({
 
   // 3 — Confirm before any destructive action.
   //
-  // A non-interactive caller with the real default confirm (no TTY on
-  // stdin — e.g. zedup's chat pane shelling out via Process.runSync) can
-  // never actually answer this prompt: confirm's readLine gets EOF
-  // immediately, which used to read as a silent "no" — the archive/rotate
-  // never ran, but nothing told the caller why. Typing /rotate is itself
-  // the deliberate confirmation in that context, so skip the gate and say
-  // so, rather than fail silently. Gated on confirmFn == null so an
-  // injected test double (which always runs with no TTY too) still gets
-  // to answer for real — this bypass is about the *default* confirm's
-  // stdin being unusable, not about TTY presence in general.
-  if (confirmFn == null && !hasTerminal_()) {
-    print('\n(no terminal attached — proceeding without confirmation)\n');
-  } else if (!confirm_('Archive this session and rotate to the next issue?')) {
-    print('\nRotate cancelled.\n');
-    return RotateResult.cancelled;
+  // Consent is never inferred from the absence of a terminal: a caller with
+  // no stdin (for example a chat pane shelling out via Process.runSync) used
+  // to be waved through with "proceeding without confirmation", which ran
+  // the build gate, an arbitrary configured command, unasked. Now
+  // `--headless` is the explicit way to say "don't ask", and plain end of
+  // input stops here. A piped answer still counts as an answer.
+  if (mode == RunMode.headless) {
+    print('(headless — proceeding without confirmation)\n');
+  } else {
+    final answer = ask('Archive this session and rotate to the next issue?');
+    if (answer == null) {
+      print('\n✗ No input available to confirm the rotation, so nothing was changed.');
+      print('  Re-run in a terminal, or pass --headless to proceed without asking.\n');
+      exit_(1);
+    }
+    if (!answer) {
+      print('\nRotate cancelled.\n');
+      return RotateResult.cancelled;
+    }
   }
 
   // 4 — Extract pending issues before overwriting anything.
@@ -123,7 +137,8 @@ Future<RotateResult>  runRotate({
   print('\nRunning build gate: ${config.afterFixCommand}');
   final buildOk = await build_(config.afterFixCommand);
   if (!buildOk) {
-    print('✗ Build failed. Fix the build before rotating.\n');
+    print('✗ Build failed. Fix the build before rotating.');
+    print('  (gate: `${config.afterFixCommand}` — change it with "afterFixCommand" in ${configPathFor(workspace)})\n');
     return RotateResult.buildFailed;
   }
   print('✓ Build passed.\n');

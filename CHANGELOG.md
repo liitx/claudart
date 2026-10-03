@@ -3,13 +3,12 @@
 ## Unreleased
 
 Workflow gap fixes; see `docs/workflow_gaps.md` for the full audit and the
-open questions.
+agreed decisions.
 
 - **Fixed:** `/dev/null` was treated as a terminal on macOS, so `init`, `link`,
   `setup`, `kill`, `flow`, the launcher and `suggest` crashed with an unhandled
   `StdinException` (errno 19) when stdin was closed, leaving the terminal cursor
-  hidden. New
-  `canUseRawTerminal()` falls back to line-based input.
+  hidden. New `canUseRawTerminal()` falls back to line-based input.
 - **Fixed (safety):** end of input at a numbered menu used to select the first
   option, which in the debug/suggest review menus means "apply (write all files
   to disk)". It now aborts with a message and exit code 1. **Behaviour change:**
@@ -19,6 +18,25 @@ open questions.
   path. `parseScopeFiles` now accepts the common bullet shapes and absolute
   paths inside the project (including through a symlinked root); absolute
   paths outside the project are dropped.
+- **Added:** `link --sensitive` / `--no-sensitive` set sensitivity mode without
+  a prompt. **Behaviour change:** `link` no longer answers the sensitivity
+  question for you when input has ended; it stops before writing anything and
+  says which flag to pass. Interactive use and piped answers are unchanged.
+- **Added:** `rotate --headless` (the same `RunMode.headless` as `teardown`).
+  **Behaviour change:** `rotate` with no answer available used to print
+  "proceeding without confirmation" and run its build gate unasked; it now stops
+  unless given `--headless`. A failed build gate now **exits 1** (it exited 0)
+  and the message names the gate command and `afterFixCommand`.
+- **Added:** scope paths are contained to the project. A `### Files in play`
+  entry that resolves outside the project root (including through a symlink) is
+  ignored with a warning naming the path and where to allow it. New
+  `allowedScopeRoots` list in the workspace `config.json` (empty by default) is
+  the explicit opt-in. **Behaviour change** for handoffs that listed `..` paths.
+- **Changed:** the suggest prompt now pins the scope-bullet shape to
+  ``- `relative/path` — what to change`` (the tolerant parser stays as backup).
+- **Fixed:** typing the same file twice in `setup` no longer writes duplicate
+  bullets. `link` now rejects an unknown `--option` instead of using it as the
+  project name.
 
 ## 2.0.0
 

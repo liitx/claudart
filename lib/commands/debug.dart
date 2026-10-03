@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../md_io.dart';
+import 'scope_files.dart';
 import '../paths.dart';
 import '../pipeline/flows/debug_steps.dart';
 import '../pipeline/flows/flow_steps.dart';
@@ -72,7 +73,7 @@ Future<void> runDebug({
   final expected  = readSection(handoff, 'Expected Behavior');
   final rootCause = readSection(handoff, 'Root Cause');
   final scope     = readSection(handoff, 'Scope');
-  final files     = parseScopeFiles(scope, projectRoot);
+  final files     = readScopeFiles(scope: scope, projectRoot: projectRoot, workspace: workspace, io: fileIO);
 
   if (files.isEmpty) {
     print(

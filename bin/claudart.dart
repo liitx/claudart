@@ -43,7 +43,7 @@ Commands:
   add                    Scaffold a brand-new project: PLAN.md, CLAUDE.md, registry entry, .claude symlink, Claude Code memory registration
   init                   Initialize the workspace with generic starter knowledge
   init --project <name>  Add a project knowledge file to the workspace
-  link [project-name]    Symlink workspace into current project (detects name from git if omitted)
+  link [project-name]    Symlink workspace into current project (detects name from git if omitted); --sensitive / --no-sensitive set sensitivity mode without asking
   unlink                 Remove workspace symlinks from current project
   setup [path]           Start a new session (path defaults to current directory)
   status [--prompt]      Show current session state; --prompt outputs a compact colored string for shell RPROMPT/PS1
@@ -52,7 +52,7 @@ Commands:
   debug                  Run debug pipeline: haiku reads scope files, routed model emits EDIT_FILE edits written to disk
   flow                   [experimental] Agent-constructed session: classify intent, plan, approve, build handoff
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
-  rotate                 Archive current session, run build gate, seed next handoff from Pending Issues
+  rotate [--headless]    Archive current session, run build gate, seed next handoff from Pending Issues; --headless skips the confirmation (needed when there is no terminal to ask on)
   kill                   Abandon session: archive handoff, remove symlink (no skills update)
   resume                 Pre-populate setup from the most recent archive entry
   confirm-pending --question <q> --on-confirm <cmd>
@@ -146,7 +146,11 @@ Future<void> main(List<String> rawArgs) async {
     case ClaudartCommand.save:
       await runSave();
     case ClaudartCommand.rotate:
-      await runRotate();
+      final rotated = await runRotate(
+        mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
+      );
+      // A failed build gate must be visible to scripts (zedup, CI): exit 1.
+      if (rotated == RotateResult.buildFailed) exit(1);
     case ClaudartCommand.kill:
       await runKill();
     case ClaudartCommand.resume:

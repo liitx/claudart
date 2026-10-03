@@ -12,15 +12,22 @@ const _prompt = '> ';
 /// [stdin.readLineSync] so behaviour is always well-defined.
 ///
 /// Returns null when [optional] is true and the user submits empty input.
-String? readLine({bool optional = false}) {
+///
+/// With [distinguishEof] an empty line comes back as `''` and null means ONLY
+/// that input has ended (closed stdin), so a caller can tell "the user
+/// answered nothing" apart from "there is nobody to answer".
+String? readLine({bool optional = false, bool distinguishEof = false}) {
   stdout.write(_prompt);
   if (!canUseRawTerminal()) {
     final raw = stdin.readLineSync()?.trim();
     if (raw == null) return null;   // EOF — stdin closed, don't recurse
-    if (raw.isEmpty) return optional ? null : readLine(optional: optional);
+    if (raw.isEmpty) {
+      if (distinguishEof) return '';
+      return optional ? null : readLine(optional: optional);
+    }
     return raw;
   }
-  return _editLine(optional: optional);
+  return _editLine(optional: optional && !distinguishEof);
 }
 
 // ── Editor loop ───────────────────────────────────────────────────────────────

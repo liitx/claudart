@@ -555,6 +555,17 @@ void main() {
       expect(handoff, contains('- `lib/foo.dart` — (user-provided)'));
       expect(handoff, contains('- `bar.dart` — (not found — verify path)'));
     });
+
+    test('the same file typed twice (by name and by path) yields one bullet', () async {
+      final finder = _fakeFinder({
+        'calc.dart': [p.join(_projectRoot, 'lib', 'calc.dart')],
+        'lib/calc.dart': [p.join(_projectRoot, 'lib', 'calc.dart')],
+        'missing.dart': [],
+      });
+      final handoff = await _setupWithFiles('calc.dart, lib/calc.dart, missing.dart, missing.dart', finder);
+      expect('- `lib/calc.dart` — (user-provided)'.allMatches(handoff), hasLength(1));
+      expect('- `missing.dart` — (not found — verify path)'.allMatches(handoff), hasLength(1));
+    });
   });
 
   // ── Cancelled ────────────────────────────────────────────────────────────────

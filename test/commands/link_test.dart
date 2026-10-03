@@ -469,4 +469,103 @@ old content
       expect(io.read(readmePath), contains('old content'));
     });
   });
+
+  group('link — sensitivity flags and end of input', () {
+    Future<void> link(MemoryFileIO io, List<String> args, {bool? Function(String)? askFn}) => runLink(
+          args,
+          io: io,
+          projectRootOverride: _projectRoot,
+          askFn: askFn,
+          exitFn: _throwExit,
+        );
+
+    bool? neverAsked(String q) => throw StateError('should not have been asked: $q');
+
+    Matcher exitsWith(int code) =>
+        throwsA(isA<_ExitException>().having((e) => e.code, 'code', code));
+
+    test('--sensitive turns it ON without asking', () async {
+      final io = _emptyIO();
+      await link(io, [_projectName, '--sensitive'], askFn: neverAsked);
+      expect(Registry.load(io: io).findByName(_projectName)!.sensitivityMode, isTrue);
+    });
+
+    test('--no-sensitive turns it OFF without asking', () async {
+      final io = _emptyIO();
+      await link(io, ['--no-sensitive', _projectName], askFn: neverAsked);
+      expect(Registry.load(io: io).findByName(_projectName)!.sensitivityMode, isFalse);
+    });
+
+    test('a flag is never taken as the project name', () async {
+      final io = _emptyIO();
+      await link(io, ['--sensitive'], askFn: neverAsked);
+      final names = Registry.load(io: io).entries.map((e) => e.name).toList();
+      expect(names, isNot(contains('--sensitive')));
+      expect(names, hasLength(1));
+    });
+
+    test('both flags together is an error and registers nothing', () async {
+      final io = _emptyIO();
+      await expectLater(link(io, [_projectName, '--sensitive', '--no-sensitive'], askFn: neverAsked), exitsWith(1));
+      expect(Registry.load(io: io).isEmpty, isTrue);
+    });
+
+    test('an unknown option is an error and registers nothing', () async {
+      final io = _emptyIO();
+      await expectLater(link(io, [_projectName, '--bogus'], askFn: neverAsked), exitsWith(1));
+      expect(Registry.load(io: io).isEmpty, isTrue);
+    });
+
+    test('answering yes and no at the prompt behaves as before', () async {
+      final yes = _emptyIO();
+      await link(yes, [_projectName], askFn: (_) => true);
+      expect(Registry.load(io: yes).findByName(_projectName)!.sensitivityMode, isTrue);
+      final no = _emptyIO();
+      await link(no, [_projectName], askFn: (_) => false);
+      expect(Registry.load(io: no).findByName(_projectName)!.sensitivityMode, isFalse);
+    });
+
+    test('end of input on a new project aborts with exit 1 and writes nothing', () async {
+      final io = _emptyIO();
+      await expectLater(link(io, [_projectName], askFn: (_) => null), exitsWith(1));
+      expect(Registry.load(io: io).isEmpty, isTrue);
+      expect(io.files, isEmpty);
+    });
+
+    group('re-linking an existing project', () {
+      Future<MemoryFileIO> linkedWith({required bool sensitive}) async {
+        final io = _emptyIO();
+        await link(io, [_projectName], askFn: (_) => sensitive);
+        return io;
+      }
+
+      test('end of input at "Change sensitivity mode?" aborts and keeps the setting', () async {
+        final io = await linkedWith(sensitive: true);
+        await expectLater(link(io, [_projectName], askFn: (_) => null), exitsWith(1));
+        expect(Registry.load(io: io).findByName(_projectName)!.sensitivityMode, isTrue);
+      });
+
+      test('end of input at "Enable sensitivity mode?" aborts and keeps the setting', () async {
+        final io = await linkedWith(sensitive: true);
+        var calls = 0;
+        await expectLater(
+          link(io, [_projectName], askFn: (_) => ++calls == 1 ? true : null),
+          exitsWith(1),
+        );
+        expect(Registry.load(io: io).findByName(_projectName)!.sensitivityMode, isTrue);
+      });
+
+      test('--no-sensitive flips an ON project to OFF without asking', () async {
+        final io = await linkedWith(sensitive: true);
+        await link(io, [_projectName, '--no-sensitive'], askFn: neverAsked);
+        expect(Registry.load(io: io).findByName(_projectName)!.sensitivityMode, isFalse);
+      });
+
+      test('declining to change keeps the current setting', () async {
+        final io = await linkedWith(sensitive: true);
+        await link(io, [_projectName], askFn: (_) => false);
+        expect(Registry.load(io: io).findByName(_projectName)!.sensitivityMode, isTrue);
+      });
+    });
+  });
 }

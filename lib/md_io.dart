@@ -47,11 +47,10 @@ String readFile(String path) {
 
 /// Parses `### Files in play` bullet lines from a scope section.
 ///
-/// The suggest prompt only asks for "one bullet per file — path and what
-/// needs to change" without pinning a shape, so model output varies. All of
-/// these are accepted (`-` or `*` bullets):
+/// The suggest prompt asks for ``- `relative/path` — what to change``, but
+/// model output varies, so all of these are accepted (`-` or `*` bullets):
 ///
-///     - `rel/path.dart` — description          (original format)
+///     - `rel/path.dart` — description          (the pinned format)
 ///     - `rel/path.dart`: description
 ///     - rel/path.dart: description             (also — – - separators)
 ///     - rel/path.dart
@@ -59,53 +58,90 @@ String readFile(String path) {
 ///
 /// Unbackticked paths must end in a file extension, so prose bullets such as
 /// "No changes needed" or "N/A" are not mistaken for files (extensionless
-/// files need backticks). Absolute paths are accepted only when they are
-/// inside [projectRoot] — also matched against its symlink-resolved form, since
-/// a subprocess reports `/private/tmp/x` where the user typed `/tmp/x` — and
-/// are returned relative; absolute paths outside the project are dropped.
+/// files need backticks).
+///
+/// **Containment.** The handoff is model-written and the files it lists are
+/// read by the model, so an entry may only point inside [projectRoot] or
+/// inside one of [allowedRoots] (relative entries resolve against the project
+/// root). Both the written path and, when the file exists, its symlink-resolved
+/// path must be inside — a symlink inside the project cannot be used to leave
+/// it. Anything else is dropped; use [parseScopeFilesChecked] to also learn
+/// which paths were dropped. The project root is also matched in its
+/// symlink-resolved form, since a subprocess reports `/private/tmp/x` where the
+/// user typed `/tmp/x`.
+///
 /// Returns a list of [ScopeFile] with absolute paths resolved via [projectRoot].
-List<ScopeFile> parseScopeFiles(String scopeSection, String projectRoot) {
-  final result  = <ScopeFile>[];
-  var   inFiles = false;
+List<ScopeFile> parseScopeFiles(
+  String scopeSection,
+  String projectRoot, {
+  List<String> allowedRoots = const [],
+}) =>
+    parseScopeFilesChecked(scopeSection, projectRoot, allowedRoots: allowedRoots).accepted;
+
+/// Result of [parseScopeFilesChecked]: the usable entries, and the raw paths
+/// that were dropped because they resolve outside the project and every
+/// allowed root.
+typedef ScopeParse = ({List<ScopeFile> accepted, List<String> rejected});
+
+/// Like [parseScopeFiles], but also reports the paths it dropped so the caller
+/// can tell the user instead of ignoring them silently.
+ScopeParse parseScopeFilesChecked(
+  String scopeSection,
+  String projectRoot, {
+  List<String> allowedRoots = const [],
+}) {
+  final accepted = <ScopeFile>[];
+  final rejected = <String>[];
+  var inFiles = false;
   for (final line in scopeSection.split('\n')) {
     if (line.startsWith('### Files in play')) { inFiles = true; continue; }
     if (inFiles && line.startsWith('###')) break;
     if (!inFiles) continue;
-    final rel = _scopeRelativePath(line.trim(), projectRoot);
-    if (rel != null) {
-      result.add((relative: rel, absolute: p.join(projectRoot, rel)));
+    final raw = _scopeCandidate(line.trim());
+    if (raw == null) continue;
+    final file = _contained(raw, projectRoot, allowedRoots);
+    if (file == null) {
+      rejected.add(raw);
+    } else {
+      accepted.add(file);
     }
   }
-  return result;
+  return (accepted: accepted, rejected: rejected);
 }
 
 final _backtickedBullet = RegExp(r'^[-*]\s+`([^`]+)`');
 final _plainBullet      = RegExp(r'^[-*]\s+(\S+?)(?::(?=\s|$)|\s|$)');
 final _hasFileExtension = RegExp(r'\.[A-Za-z0-9]{1,8}$');
 
-String? _scopeRelativePath(String line, String projectRoot) {
+/// The path a bullet names, or null when the line is not a file bullet.
+String? _scopeCandidate(String line) {
   final backticked = _backtickedBullet.firstMatch(line);
-  if (backticked != null) return _insideProject(backticked.group(1)!, projectRoot);
+  if (backticked != null) return backticked.group(1)!;
 
   final plain = _plainBullet.firstMatch(line);
   if (plain == null) return null;
   final token = plain.group(1)!.replaceAll(RegExp(r'[,;]+$'), '');
-  if (!_hasFileExtension.hasMatch(token)) return null;
-  return _insideProject(token, projectRoot);
+  return _hasFileExtension.hasMatch(token) ? token : null;
 }
 
-/// Relative paths are returned unchanged (original behaviour). Absolute paths
-/// become project-relative when inside the project, else null.
-String? _insideProject(String path, String projectRoot) {
-  if (!p.isAbsolute(path)) return path;
-  final roots = {projectRoot, _resolved(projectRoot)};
-  final paths = {path, _resolved(path)};
-  for (final root in roots) {
-    for (final candidate in paths) {
-      if (p.isWithin(root, candidate)) return p.relative(candidate, from: root);
-    }
+ScopeFile? _contained(String raw, String projectRoot, List<String> allowedRoots) {
+  final root = p.normalize(projectRoot);
+  final candidate = p.normalize(p.isAbsolute(raw) ? raw : p.join(root, raw));
+
+  final roots = <String>{root, _resolved(root)};
+  for (final extra in allowedRoots) {
+    final abs = p.normalize(p.isAbsolute(extra) ? extra : p.join(root, extra));
+    roots..add(abs)..add(_resolved(abs));
   }
-  return null;
+  bool inside(String path) => roots.any((r) => p.isWithin(r, path));
+  if (!inside(candidate) || !inside(_resolved(candidate))) return null;
+
+  final within = [root, _resolved(root)].where((r) => p.isWithin(r, candidate));
+  final relative = within.isNotEmpty
+      ? p.relative(candidate, from: within.first)
+      : p.relative(candidate, from: root);
+  final absolute = relative.startsWith('..') ? candidate : p.join(projectRoot, relative);
+  return (relative: relative, absolute: absolute);
 }
 
 String _resolved(String path) {
@@ -147,4 +183,16 @@ bool confirm(String question) {
   stdout.write('\n$question [y/n]\n');
   final input = editor.readLine(optional: true);
   return input?.toLowerCase() == 'y' || input?.toLowerCase() == 'yes';
+}
+
+/// Prompts yes/no like [confirm], but returns null when input has ended
+/// (closed stdin) instead of silently answering "no". For questions where "no
+/// answer" must never become a default, such as a protective setting.
+/// An empty line (just Enter) is still "no".
+bool? confirmOrEof(String question) {
+  stdout.write('\n$question [y/n]\n');
+  final input = editor.readLine(distinguishEof: true);
+  if (input == null) return null;
+  final answer = input.toLowerCase();
+  return answer == 'y' || answer == 'yes';
 }

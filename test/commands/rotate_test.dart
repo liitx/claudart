@@ -5,6 +5,7 @@ import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/templates/handoff_template.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/teardown_utils.dart';
 import '../helpers/mocks.dart';
 
@@ -324,43 +325,117 @@ void main() {
     });
   });
 
-  group('runRotate — no terminal, default confirm', () {
-    test('proceeds without asking when no confirmFn is injected', () async {
-      // No confirmFn passed — runRotate falls back to the real default
-      // confirm(), which a non-interactive caller (no TTY on stdin — e.g.
-      // zedup's chat pane shelling out via Process.runSync) can never
-      // actually answer. This must archive for real, not silently cancel.
+  group('runRotate — consent is never inferred from a missing terminal', () {
+    test('end of input stops with exit 1 and changes nothing', () async {
+      // The old behaviour was to wave a caller with no stdin through
+      // ("proceeding without confirmation") and run the build gate unasked.
       final io = _io();
+      final handoffFile = handoffPathFor(_workspace);
+      final original = io.files[handoffFile];
+      var built = false;
+
+      await expectLater(
+        runRotate(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _noExit,
+          askFn: (_) => null,
+          buildFn: (_) async => built = true,
+        ),
+        throwsA(isA<StateError>().having((e) => e.message, 'message', 'exit(1) called')),
+      );
+
+      expect(built, isFalse, reason: 'the build gate must not run');
+      expect(io.files[handoffFile], original);
+      expect(io.files.keys.where((k) => k.contains('/archive/')), isEmpty);
+    });
+
+    test('--headless proceeds without asking', () async {
+      final io = _io();
+      var asked = false;
 
       final result = await runRotate(
         io: io,
         projectRootOverride: _projectRoot,
         exitFn: _noExit,
+        askFn: (_) {
+          asked = true;
+          return null;
+        },
         buildFn: _buildOk,
-        hasTerminalFn: () => false,
+        mode: RunMode.headless,
       );
 
+      expect(asked, isFalse);
       expect(result, isNot(RotateResult.cancelled));
       expect(io.files.keys.where((k) => k.contains('/archive/')), isNotEmpty);
     });
 
-    test('an injected confirmFn still gets asked even with no terminal',
-        () async {
-      // A test double (or a future caller that really does have its own
-      // way to ask) should never be silently bypassed — the bypass is
-      // specifically about the *default* confirm's stdin being unusable.
+    test('--headless ignores an injected confirm that would say no (headless never prompts)', () async {
       final io = _io();
-
       final result = await runRotate(
         io: io,
         projectRootOverride: _projectRoot,
         exitFn: _noExit,
+        confirmFn: _confirmNo,
+        buildFn: _buildOk,
+        mode: RunMode.headless,
+      );
+      expect(result, isNot(RotateResult.cancelled));
+    });
+
+    test('an explicit answer still decides, including a piped one', () async {
+      final yes = await runRotate(
+        io: _io(),
+        projectRootOverride: _projectRoot,
+        exitFn: _noExit,
+        askFn: (_) => true,
+        buildFn: _buildOk,
+      );
+      expect(yes, isNot(RotateResult.cancelled));
+
+      final no = await runRotate(
+        io: _io(),
+        projectRootOverride: _projectRoot,
+        exitFn: _noExit,
+        askFn: (_) => false,
+        buildFn: _buildOk,
+      );
+      expect(no, RotateResult.cancelled);
+    });
+
+    test('an injected confirmFn is asked, as before', () async {
+      final result = await runRotate(
+        io: _io(),
+        projectRootOverride: _projectRoot,
+        exitFn: _noExit,
         buildFn: _buildOk,
         confirmFn: _confirmNo,
-        hasTerminalFn: () => false,
       );
-
       expect(result, RotateResult.cancelled);
+    });
+  });
+
+  group('runRotate — gate failure message', () {
+    test('names the gate command and where to change it', () async {
+      final printed = <String>[];
+      late RotateResult result;
+      await Zone.current
+          .fork(specification: ZoneSpecification(print: (self, parent, zone, line) => printed.add(line)))
+          .run(() async {
+        result = await runRotate(
+          io: _io(),
+          projectRootOverride: _projectRoot,
+          exitFn: _noExit,
+          confirmFn: _confirmYes,
+          buildFn: _buildFail,
+        );
+      });
+      expect(result, RotateResult.buildFailed);
+      final text = printed.join('\n');
+      expect(text, contains('make rebuild'));
+      expect(text, contains('afterFixCommand'));
+      expect(text, contains(configPathFor(_workspace)));
     });
   });
 

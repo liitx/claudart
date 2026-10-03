@@ -164,7 +164,8 @@ What is missing or broken, referencing exact files.
 </ROOT_CAUSE>
 
 <SCOPE_FILES>
-One bullet per file — path and what specifically needs to change.
+One bullet per file, in exactly this form (path relative to the project root, in backticks, then an em dash):
+- `relative/path/to/file.dart` — what specifically needs to change
 </SCOPE_FILES>
 
 <SCOPE_ENTRIES>
