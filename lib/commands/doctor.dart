@@ -30,6 +30,7 @@ const _notUsingBedrockDetail = 'not using Bedrock';
 const _defaultBedrockPreflightTimeout = Duration(seconds: 10);
 const _whichExecutable = 'which';
 const _authStatusArgs = ['auth', 'status'];
+const _githooksDirName = '.githooks';
 
 /// `ProcessRunner.run` is backed by `Process.run`, which throws
 /// `ProcessException` synchronously when [executable] isn't found at all
@@ -94,6 +95,7 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
       env: mergedEnv,
       timeout: bedrockPreflightTimeout ?? _defaultBedrockPreflightTimeout,
     ),
+    await _checkGitHooksConfigured(proc, root, fileIO),
   ];
 }
 
@@ -431,6 +433,39 @@ Future<HarnessCheckOutcome> _checkBedrockCredentialsPreflight(
           '${timeout.inSeconds}s — credentials cannot be verified',
     );
   }
+}
+
+/// Mirrors `link.dart`'s own `_ensureHooksPath` check: a project without a
+/// tracked `.githooks/` dir has nothing to configure (skip, not fail — most
+/// projects don't use this convention yet). One that has it but isn't
+/// pointed at it is the exact gap that let a real pre-push protection
+/// (zedup's own) exist on only one machine, invisible to every fresh clone.
+Future<HarnessCheckOutcome> _checkGitHooksConfigured(
+  ProcessRunner proc,
+  String root,
+  FileIO io,
+) async {
+  if (!io.dirExists(p.join(root, _githooksDirName))) {
+    return (
+      id: HarnessCheckId.gitHooksConfigured,
+      result: HarnessCheckResult.skip,
+      detail: 'no .githooks/ in this project',
+    );
+  }
+  final configured = await _gitConfig(proc, root, 'core.hooksPath');
+  return configured == _githooksDirName
+      ? (
+          id: HarnessCheckId.gitHooksConfigured,
+          result: HarnessCheckResult.ok,
+          detail: 'core.hooksPath=.githooks',
+        )
+      : (
+          id: HarnessCheckId.gitHooksConfigured,
+          result: HarnessCheckResult.fail,
+          detail: '.githooks/ exists but core.hooksPath is not set to it — '
+              'run `git config core.hooksPath .githooks`, or re-run '
+              '`claudart link`',
+        );
 }
 
 /// CLI entry point: runs every check, prints each outcome, logs the run

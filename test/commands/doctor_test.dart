@@ -634,6 +634,47 @@ void main() {
     });
   });
 
+  group('runDoctorChecks — git hooks configured', () {
+    test('skips — not a failure — when the project has no .githooks/', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final hooks = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitHooksConfigured);
+      expect(hooks.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('ok when .githooks/ exists and core.hooksPath points at it', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner({
+          ..._responses(),
+          'git config core.hooksPath': _ok('.githooks'),
+        }),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(dirs: {'/fake/repo/.githooks'}),
+      );
+      final hooks = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitHooksConfigured);
+      expect(hooks.result, equals(HarnessCheckResult.ok));
+    });
+
+    test('fails when .githooks/ exists but core.hooksPath is not set to it', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner({
+          ..._responses(),
+          'git config core.hooksPath': _fail(),
+        }),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(dirs: {'/fake/repo/.githooks'}),
+      );
+      final hooks = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitHooksConfigured);
+      expect(hooks.result, equals(HarnessCheckResult.fail));
+    });
+  });
+
   group('runDoctor exit code', () {
     test('exits 0 when every check is ok or skip', () async {
       _ExitException? caught;
