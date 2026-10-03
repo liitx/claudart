@@ -24,13 +24,35 @@ enum HarnessCheckId {
 
   /// `AgentProvider.detect` finds a configured provider, or none is
   /// required (ambient OAuth login is a valid, unconfigured state).
-  providerEnv;
+  providerEnv,
+
+  /// `CLAUDART_WORKSPACE` is set in this process's own environment —
+  /// surfaces the split-brain-registry failure mode directly (a process
+  /// that doesn't inherit a shell's exported override silently falls
+  /// back to `~/.claudart`, which can diverge from the real one) instead
+  /// of requiring someone to notice two registries by hand.
+  workspaceRoot,
+
+  /// Every entry in the active registry still points at a `projectRoot`
+  /// that exists on disk — a stale entry (deleted/moved project) is
+  /// exactly the kind of drift a fresh-machine migration needs surfaced,
+  /// not silently carried forward.
+  registryHealth,
+
+  /// `~/bin` (where both `claudart compile` and `zedup setup` install to)
+  /// is actually on PATH — otherwise a freshly-compiled binary is
+  /// unreachable without the user noticing why `claudart`/`zedup` isn't
+  /// found.
+  pathConfiguration;
 
   String get label => switch (this) {
-        HarnessCheckId.tools       => 'tools',
-        HarnessCheckId.gitIdentity => 'git identity',
-        HarnessCheckId.ghAuth      => 'gh auth',
-        HarnessCheckId.providerEnv => 'provider env',
+        HarnessCheckId.tools             => 'tools',
+        HarnessCheckId.gitIdentity       => 'git identity',
+        HarnessCheckId.ghAuth            => 'gh auth',
+        HarnessCheckId.providerEnv       => 'provider env',
+        HarnessCheckId.workspaceRoot     => 'workspace root',
+        HarnessCheckId.registryHealth    => 'registry health',
+        HarnessCheckId.pathConfiguration => 'path configuration',
       };
 }
 

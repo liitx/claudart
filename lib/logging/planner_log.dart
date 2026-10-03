@@ -7,7 +7,9 @@
 
 import 'dart:convert';
 import 'dart:io' as io;
+import 'package:path/path.dart' as p;
 
+import '../paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../pipeline/agent_model.dart';
 import '../pipeline/agents/categorization.dart';
@@ -136,10 +138,12 @@ class PlannerLog {
   final String _path;
   final void Function(String path, String line) appender;
 
-  static String _defaultPath() {
-    final home = io.Platform.environment['HOME'] ?? '.';
-    return '$home/.claudart/planner.jsonl';
-  }
+  /// Resolves through the same `workspacesRoot` every other workspace path
+  /// does (`CLAUDART_WORKSPACE`, falling back to `~/.claudart`) — this
+  /// used to hardcode `~/.claudart` directly, ignoring that env var
+  /// entirely, so planner records landed in a different directory than
+  /// the rest of a session's state on any machine using the override.
+  static String _defaultPath() => p.join(workspacesRoot, 'planner.jsonl');
 
   static void _defaultAppend(String path, String line) {
     final file = io.File(path);

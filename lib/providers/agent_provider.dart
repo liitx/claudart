@@ -17,16 +17,49 @@
 // OpenRouter has not been verified end-to-end against the real tool —
 // treat this variant as scaffolding until that's confirmed, not a proven
 // path.
+//
+// Detection scope — `detect()` only ever reads a `Map<String, String>`
+// you hand it; it has no opinion on where that map came from. Confirmed
+// against a real Bedrock machine: Bedrock env vars can live ONLY in
+// `~/.claude/settings.json`'s own `env` block, never exported to the
+// parent shell at all — `claude` itself reads that file directly. Calling
+// `detect(Platform.environment)` alone would miss that case entirely.
+// Use [AgentProvider.detectEffective] instead wherever the answer needs
+// to reflect what `claude` would actually see, not just this process's
+// shell state — it merges `Platform.environment` with
+// `claude_settings_env.dart`'s read of that file before detecting. Even
+// `detectEffective` isn't exhaustive (settings.json's own search path,
+// project-local overrides, etc. aren't modeled) — this is exactly why
+// neither function is wired into gating any real launch.
+
+import 'dart:io' show Platform;
+
+import 'claude_settings_env.dart';
+import '../file_io.dart';
 
 enum AgentProvider {
   /// Direct Anthropic API — `ANTHROPIC_API_KEY` only.
   apiKey(requiredEnvVars: ['ANTHROPIC_API_KEY']),
 
-  /// AWS Bedrock — `CLAUDE_CODE_USE_BEDROCK` flag plus an active AWS
-  /// profile/session. `AWS_PROFILE` is the one claudart can check for
-  /// directly; actual credential freshness (Britive/SSO session expiry)
-  /// is outside claudart's reach and must be handled upstream.
-  bedrock(requiredEnvVars: ['CLAUDE_CODE_USE_BEDROCK', 'AWS_PROFILE']),
+  /// AWS Bedrock — `CLAUDE_CODE_USE_BEDROCK`, `AWS_PROFILE`/`AWS_REGION`,
+  /// plus the three per-tier model vars Claude Code needs when the
+  /// account only has an application inference profile (not direct model
+  /// access) — confirmed against a real Bedrock machine: the narrower
+  /// two-var list this enum shipped with originally was "too optimistic"
+  /// and would under-report there. Exact `ANTHROPIC_DEFAULT_*_MODEL`
+  /// suffixes assumed to mirror claudart's own haiku/sonnet/opus tiers
+  /// (see `AgentModel`) — reconfirm the literal names against that
+  /// machine if this ever needs to be exact rather than best-effort.
+  /// Credential freshness (Britive/SSO session expiry via a
+  /// `bedrock-auth` helper) is outside claudart's reach regardless.
+  bedrock(requiredEnvVars: [
+    'CLAUDE_CODE_USE_BEDROCK',
+    'AWS_PROFILE',
+    'AWS_REGION',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  ]),
 
   /// OpenRouter — unverified against the real `claude` CLI (see file doc).
   openRouter(requiredEnvVars: ['OPENROUTER_API_KEY']);
@@ -63,5 +96,31 @@ enum AgentProvider {
       if (provider.isSatisfiedBy(env)) return provider;
     }
     return null;
+  }
+
+  /// Like [detect], but merges in `~/.claude/settings.json`'s own `env`
+  /// block first — the same source `claude` itself reads — so a provider
+  /// configured only there (never exported to the parent shell) is still
+  /// detected. Confirmed end-to-end against a real Bedrock machine, both
+  /// with the env live and from a clean shell with nothing exported.
+  ///
+  /// [processEnv] values win over settings.json's on conflict — this is
+  /// an assumption, not verified against how `claude` itself resolves the
+  /// same conflict, and only matters if the two ever actually disagree.
+  /// Also note this reports a provider as *configured*, not *working* —
+  /// it checks for the right env vars, not whether the credentials behind
+  /// them (e.g. a Britive/AWS session) are still valid.
+  ///
+  /// [io]/[settingsPath] are injectable for tests; production defaults to
+  /// `Platform.environment` and `~/.claude/settings.json`.
+  static AgentProvider? detectEffective({
+    Map<String, String>? processEnv,
+    FileIO? io,
+    String? settingsPath,
+    AgentProvider? explicit,
+  }) {
+    final settingsEnv = readClaudeSettingsEnv(io: io, path: settingsPath);
+    final merged = {...settingsEnv, ...(processEnv ?? Platform.environment)};
+    return detect(merged, explicit: explicit);
   }
 }

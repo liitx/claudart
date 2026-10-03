@@ -64,7 +64,13 @@ Do not suggest APIs or syntax unavailable within these constraints.
 ---
 
 ## Paradigms — dartrix owns this, claudart applies it
-- /Users/aksana.buster/dev/apps/dartrix/PARADIGMS.md
+- `dartrix`'s `PARADIGMS.md` — as of this repo's `dartrix` dev-dependency
+  switching to a git dependency, there's no fixed local path to hardcode
+  here (pub resolves it to a hash-suffixed `~/.pub-cache/git/dartrix-*`
+  that changes per revision). Find the live location via
+  `.dart_tool/package_config.json`'s `dartrix` entry's `rootUri`, or read
+  it straight from https://github.com/liitx/dartrix/blob/main/PARADIGMS.md
+  if no local resolution exists yet (e.g. before the first `dart pub get`).
 
 dartrix's law, not claudart's. This is a pointer, not a copy — do not restate or
 duplicate its rules here; if a rule doesn't exist yet, it's proposed as a PR against
