@@ -10,6 +10,8 @@ const String archivesDirName          = 'archive';
 const String archiveIndexFileName     = 'index.json';
 const String flowCheckpointFileName   = 'flow_checkpoint.json';
 const String pendingConfirmationFileName = 'pending_confirmation.json';
+const String knowledgeDirName         = 'knowledge';
+const String claudeMdFileName         = 'CLAUDE.md';
 
 /// Single source of truth for the env var name itself — `workspacesRoot`
 /// below and `claudart doctor`'s workspace-root check both read it; a
@@ -66,15 +68,15 @@ String workspaceFor(String projectName) => p.join(workspacesRoot, projectName);
 // ── Per-workspace path functions (new API) ─────────────────────────────────
 // All take a resolved workspace path. Use with workspaceFor(name).
 
-String handoffPathFor(String ws) => p.join(ws, 'handoff.md');
-String skillsPathFor(String ws) => p.join(ws, 'skills.md');
+String handoffPathFor(String ws) => p.join(ws, handoffFileName);
+String skillsPathFor(String ws) => p.join(ws, skillsFileName);
 String pendingConfirmationPathFor(String ws) =>
     p.join(ws, pendingConfirmationFileName);
-String archiveDirFor(String ws) => p.join(ws, 'archive');
+String archiveDirFor(String ws) => p.join(ws, archivesDirName);
 String configPathFor(String ws) => p.join(ws, 'config.json');
-String knowledgeDirFor(String ws) => p.join(ws, 'knowledge');
-String genericKnowledgeDirFor(String ws) => p.join(ws, 'knowledge', 'generic');
-String projectsKnowledgeDirFor(String ws) => p.join(ws, 'knowledge', 'projects');
+String knowledgeDirFor(String ws) => p.join(ws, knowledgeDirName);
+String genericKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'generic');
+String projectsKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'projects');
 String claudeCommandsDirFor(String ws) => p.join(ws, '.claude', 'commands');
 String tokenMapPathFor(String ws) => p.join(ws, 'token_map.json');
 String logsDirFor(String ws) => p.join(ws, 'logs');
@@ -87,7 +89,7 @@ String experimentsDirFor(String ws) => p.join(ws, 'experiments');
 
 /// [projectRoot]/CLAUDE.md — not to be confused with the deprecated,
 /// legacy-global-workspace `claudeMdPath` getter below.
-String claudeMdPathFor(String projectRoot) => p.join(projectRoot, 'CLAUDE.md');
+String claudeMdPathFor(String projectRoot) => p.join(projectRoot, claudeMdFileName);
 
 // ── Legacy single-workspace paths ──────────────────────────────────────────
 // Kept for backward compatibility while commands migrate to workspaceFor().
@@ -103,4 +105,4 @@ String get knowledgeDir          => knowledgeDirFor(workspacesRoot);
 String get genericKnowledgeDir   => genericKnowledgeDirFor(workspacesRoot);
 String get projectsKnowledgeDir  => projectsKnowledgeDirFor(workspacesRoot);
 String get claudeCommandsDir     => claudeCommandsDirFor(workspacesRoot);
-String get claudeMdPath          => p.join(workspacesRoot, 'CLAUDE.md');
+String get claudeMdPath          => p.join(workspacesRoot, claudeMdFileName);
