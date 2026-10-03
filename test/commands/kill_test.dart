@@ -343,7 +343,7 @@ void main() {
     });
 
     test('clears the lock after a successful rollback — nothing is actually interrupted', () async {
-      final io = _FailOnUnlinkIO(delegate: _io());
+      final io = _FailOnResetIO(delegate: _io());
       try {
         await runKill(
           io: io,
