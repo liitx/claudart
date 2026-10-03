@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:test/test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/git_utils.dart';
@@ -209,6 +210,8 @@ bool _confirmNo(String _) => false;
 Never _noExit(int code) => throw StateError('exit($code) called');
 
 void main() {
+  setUpAll(registerFallbacks);
+
   group('runRotate — branch display', () {
     test('prefers live git branch over stale handoff branch', () async {
       final realGit = detectGitContext();
@@ -270,6 +273,39 @@ void main() {
         ),
       );
       expect(output.join('\n'), contains('Project  : my-app'));
+    });
+  });
+
+  group('runRotate — build gate working directory', () {
+    test('default build runs afterFixCommand through a real shell (sh -c), in the project root', () async {
+      final io = _io();
+      final runner = MockProcessRunner();
+      when(() => runner.run(
+            any(),
+            any(),
+            workingDirectory: any(named: 'workingDirectory'),
+          )).thenAnswer((_) async => fakeResult(''));
+
+      final result = await runRotate(
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        exitFn: _noExit,
+        confirmFn: _confirmYes,
+      );
+
+      expect(result, RotateResult.rotated);
+      final captured = verify(() => runner.run(
+            captureAny(),
+            captureAny(),
+            workingDirectory: captureAny(named: 'workingDirectory'),
+          )).captured;
+      // The whole, unsplit command goes to `sh -c` — confirmed by direct
+      // testing that a pre-split arg list + runInShell does NOT make shell
+      // operators (&&, ||, |, >, globs) work; only this does.
+      expect(captured[0], 'sh');
+      expect(captured[1], ['-c', 'make rebuild']);
+      expect(captured[2], _projectRoot);
     });
   });
 

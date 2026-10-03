@@ -11,7 +11,11 @@ import '../session/run_mode.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
 import '../md_io.dart' show confirmOrEof;
+import '../process_runner.dart';
 import '../ui/render.dart' as render;
+
+const _shellExecutable = 'sh';
+const _shellCommandFlag = '-c';
 
 enum RotateResult {
   /// Current session archived, next issue seeded into fresh handoff.
@@ -44,6 +48,7 @@ enum RotateResult {
 /// archive already written remains, but the live handoff is not overwritten.
 Future<RotateResult>  runRotate({
   FileIO? io,
+  ProcessRunner? runner,
   String? projectRootOverride,
   Never Function(int code)? exitFn,
   bool Function(String question)? confirmFn,
@@ -52,12 +57,12 @@ Future<RotateResult>  runRotate({
   RunMode mode = RunMode.interactive,
 }) async {
   final fileIO = io ?? const RealFileIO();
+  final proc = runner ?? const RealProcessRunner();
   final exit_ = exitFn ?? exit;
   // A caller-supplied confirm always answers; the default reports null at end
   // of input. [askFn] lets a test simulate "nobody to answer".
   final bool? Function(String question) ask =
       askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
-  final build_ = buildFn ?? _defaultBuild;
 
   print(render.header('CLAUDART ROTATE'));
 
@@ -133,7 +138,10 @@ Future<RotateResult>  runRotate({
   fileIO.write(archiveFile, handoff);
 
   // 6 — Build gate: must pass before the next session can start.
+  // afterFixCommand has no registry-entry field yet, so it stays sourced
+  // from the workspace config.json, defaulting to 'make rebuild'.
   final config = _loadConfig(fileIO, workspace);
+  final build_ = buildFn ?? (command) => _defaultBuild(command, projectRoot, proc);
   print('\nRunning build gate: ${config.afterFixCommand}');
   final buildOk = await build_(config.afterFixCommand);
   if (!buildOk) {
@@ -186,12 +194,27 @@ ProjectConfig _loadConfig(FileIO fileIO, String workspace) {
   }
 }
 
-Future<bool> _defaultBuild(String command) async {
-  final parts = command.split(' ');
-  final result = await Process.run(
-    parts.first,
-    parts.skip(1).toList(),
-    runInShell: true,
+/// afterFixCommand is free-form user config, not untrusted input — shell
+/// operators (&&, ||, |, >, globs) are expected to work, same as typing the
+/// command directly in a terminal.
+///
+/// `runInShell: true` on a pre-split argument list does NOT do this —
+/// confirmed by direct testing: Dart quotes each split argument
+/// individually before handing them to the shell, so `&&`/`||` inside the
+/// (already-split) argument list arrive as inert literal text, not
+/// operators. Passing the whole, unsplit [command] string as `sh`'s `-c`
+/// argument is what actually works — the shell parses operators, quoting,
+/// and globs itself, the same as this project's own `.githooks/pre-push`
+/// already relies on.
+Future<bool> _defaultBuild(
+  String command,
+  String workingDirectory,
+  ProcessRunner proc,
+) async {
+  final result = await proc.run(
+    _shellExecutable,
+    [_shellCommandFlag, command],
+    workingDirectory: workingDirectory,
   );
   return result.exitCode == 0;
 }
