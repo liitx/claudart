@@ -495,7 +495,7 @@ Options:
 
 </details>
 
-**`claudart doctor` checks the machine, not the session.** It runs seven checks, prints one `[OK]`/`[SKIP]`/`[FAIL]` line each, and exits 1 if any failed — skip-only is exit 0. Every check re-reads live state, so it is safe to re-run after fixing something. Check identity and outcome are both enums, [`HarnessCheckId`](lib/harness/harness_check.dart#L15) and [`HarnessCheckResult`](lib/harness/harness_check.dart#L60); the checks themselves live in [`lib/commands/doctor.dart`](lib/commands/doctor.dart). Real output from this machine, user identity and home path elided:
+**`claudart doctor` checks the machine, not the session.** It runs nine checks, prints one `[OK]`/`[SKIP]`/`[FAIL]` line each, and exits 1 if any failed — skip-only is exit 0. Every check re-reads live state, so it is safe to re-run after fixing something. Check identity and outcome are both enums, [`HarnessCheckId`](lib/harness/harness_check.dart#L15) and [`HarnessCheckResult`](lib/harness/harness_check.dart#L60); the checks themselves live in [`lib/commands/doctor.dart`](lib/commands/doctor.dart). Real output from this machine, user identity and home path elided:
 
 ```
 $ claudart doctor
@@ -506,6 +506,8 @@ $ claudart doctor
 [OK] workspace root: CLAUDART_WORKSPACE=/…/dev_tools/claude
 [OK] registry health: 7 entries, all projectRoots exist
 [OK] path configuration: /…/bin is on PATH
+[SKIP] bedrock metadata guard: not using Bedrock
+[SKIP] bedrock credentials: not using Bedrock
 ```
 
 | Check | `[OK]` | `[SKIP]` | `[FAIL]` |
@@ -517,6 +519,10 @@ $ claudart doctor
 | `workspace root` | `CLAUDART_WORKSPACE` set, exists, and no second registry at `~/.claudart` | override unset; the `~/.claudart` fallback is in use | override path missing, or override set **and** `~/.claudart/registry.json` also exists |
 | `registry health` | registry parses and every `projectRoot` still exists | no registry, empty file, or no entries yet | unparsable JSON, or stale entries (named) |
 | `path configuration` | `~/bin` is on PATH | — | `~/bin` missing, so a binary from `claudart compile` is unreachable |
+| `bedrock metadata guard` | Bedrock active and `AWS_EC2_METADATA_DISABLED=true` | Bedrock is not the active provider | Bedrock active, flag unset — see [below](#authentication) for why this matters |
+| `bedrock credentials` | Bedrock active and a bounded `aws sts get-caller-identity` resolves | Bedrock not active, or `aws` CLI not installed | call fails or exceeds its 10s timeout |
+
+The last two checks are gated on which provider `claude auth status` itself reports as active ([`AgentProvider.detectFromAuthStatusJson`](lib/providers/agent_provider.dart)) — ground truth from the real CLI, not an inference from which env vars happen to be set. **Measured, not assumed:** a Bedrock profile that can't supply credentials doesn't fail fast on a non-EC2 host — the AWS SDK falls through to probing the EC2 instance metadata service and stalls, measured at **740 seconds (~12.3 minutes)** before erroring, versus under 2 seconds with `AWS_EC2_METADATA_DISABLED=true` set. That's indistinguishable from a hang to anyone watching; `bedrock metadata guard` exists specifically to catch its absence before it bites. The credentials preflight never prints the resolved account ID/ARN, only whether it resolved.
 
 `workspace root` and `registry health` catch different failures. The first asks *which* registry this process reads, and whether a second one exists that other processes would read instead — see [Workspace on disk](#workspace-on-disk). The second asks whether the registry it reads is intact. `Registry.load` deliberately swallows a JSON parse error and returns an empty registry, so doctor re-reads the raw file first; a corrupt registry fails loudly instead of looking like a fresh one. Pointing the override at a directory holding a truncated `registry.json`:
 
@@ -752,7 +758,7 @@ flowchart LR
   classDef fn fill:#fef3c7,color:#78350f,stroke:#d97706
 ```
 
-`AgentProvider.detectEffective` reads the `env` block of `~/.claude/settings.json` first — the same file `claude` itself reads — then overlays this process's environment, then takes the first variant in declaration order whose vars are all present. Reading settings.json matters in practice: a Bedrock setup can live only in that file and never be exported to the shell, and process-env detection alone reports nothing there. [`lib/providers/claude_settings_env.dart`](lib/providers/claude_settings_env.dart) treats a missing or malformed settings file as an empty map, never an error. Three limits, stated plainly: process env winning a conflict is an assumption, not verified against how `claude` resolves the same conflict; a match means *configured*, not *working* — expired AWS or SSO credentials still pass; and today the only consumer is `claudart doctor`'s `provider env` check. Pipeline steps do not gate on it — they spawn `claude` with the inherited environment exactly as before.
+`AgentProvider.detectEffective` reads the `env` block of `~/.claude/settings.json` first — the same file `claude` itself reads — then overlays this process's environment, then takes the first variant in declaration order whose vars are all present. Reading settings.json matters in practice: a Bedrock setup can live only in that file and never be exported to the shell, and process-env detection alone reports nothing there. [`lib/providers/claude_settings_env.dart`](lib/providers/claude_settings_env.dart) treats a missing or malformed settings file as an empty map, never an error. Two limits, stated plainly: process env winning a conflict is an assumption, not verified against how `claude` resolves the same conflict; and today the only consumer is `claudart doctor`'s `provider env` check — pipeline steps do not gate on it, they spawn `claude` with the inherited environment exactly as before. A third limit — a match meaning *configured*, not *working*, with expired AWS/SSO credentials still passing — is now partially closed for Bedrock specifically by the `bedrock credentials` preflight check above, which runs a real `aws sts get-caller-identity` rather than just checking env var presence.
 
 ---
 

@@ -139,6 +139,43 @@ void main() {
       expect(result, equals(AgentProvider.apiKey));
     });
   });
+
+  group('AgentProvider.detectFromAuthStatusJson — exact fixtures from OAUTH-BEDROCK-FINAL-REPORT.md', () {
+    test('nothing configured (none/firstParty, exits 1) -> null', () {
+      const stdout = '{"loggedIn": false, "authMethod": "none", "apiProvider": "firstParty"}';
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), isNull);
+    });
+
+    test('Bedrock active (third_party/bedrock) -> bedrock', () {
+      const stdout = '{"loggedIn": true, "authMethod": "third_party", "apiProvider": "bedrock"}';
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), equals(AgentProvider.bedrock));
+    });
+
+    test('ANTHROPIC_API_KEY set (api_key/firstParty) -> apiKey', () {
+      const stdout = '{"loggedIn": true, "authMethod": "api_key", "apiProvider": "firstParty"}';
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), equals(AgentProvider.apiKey));
+    });
+
+    test('CLAUDE_CODE_OAUTH_TOKEN set (oauth_token/firstParty) -> null, not modeled as a configured provider', () {
+      const stdout = '{"loggedIn": true, "authMethod": "oauth_token", "apiProvider": "firstParty"}';
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), isNull);
+    });
+
+    test('claude.ai OAuth login (claude.ai/firstParty) -> null, fine as unconfigured', () {
+      const stdout = '{"loggedIn": true, "authMethod": "claude.ai", "apiProvider": "firstParty"}';
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), isNull);
+    });
+
+    test('Bedrock + API key both set -> bedrock wins, matching measured precedence', () {
+      const stdout = '{"loggedIn": true, "authMethod": "third_party", "apiProvider": "bedrock", "apiKeySource": "ANTHROPIC_API_KEY"}';
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), equals(AgentProvider.bedrock));
+    });
+
+    test('malformed JSON -> null, not a thrown exception', () {
+      expect(AgentProvider.detectFromAuthStatusJson('not json'), isNull);
+      expect(AgentProvider.detectFromAuthStatusJson(''), isNull);
+    });
+  });
 }
 
 String _jsonEncode(Map<String, String> m) =>

@@ -1,9 +1,10 @@
-// doctor_test.dart — runDoctorChecks' four checks, one scenario per test()
+// doctor_test.dart — runDoctorChecks' checks, one scenario per test()
 // per dartrix's testing paradigm. Uses a fake ProcessRunner keyed by
 // "<executable> <args>" rather than mocktail, since optional named params
 // (workingDirectory) make mocktail's exact-call matching fragile for a
 // first-time consumer of MockProcessRunner.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:claudart/commands/doctor.dart';
@@ -23,6 +24,12 @@ class _ExitException implements Exception {
 
 Never _throwExit(int code) => throw _ExitException(code);
 
+typedef _RecordedCall = ({
+  String executable,
+  List<String> arguments,
+  Map<String, String>? environment,
+});
+
 class _FakeProcessRunner implements ProcessRunner {
   _FakeProcessRunner(this.responses, {this.notFound = const {}});
 
@@ -34,7 +41,17 @@ class _FakeProcessRunner implements ProcessRunner {
   /// exit code.
   final Set<String> notFound;
 
-  ProcessResult _resolve(String executable, List<String> arguments) {
+  /// Every call this runner received, in order — lets a test assert
+  /// *what* was passed to a specific subprocess (e.g. the `environment`
+  /// an `aws` call actually received), not just the response it got back.
+  final List<_RecordedCall> calls = [];
+
+  ProcessResult _resolve(
+    String executable,
+    List<String> arguments,
+    Map<String, String>? environment,
+  ) {
+    calls.add((executable: executable, arguments: arguments, environment: environment));
     if (notFound.contains(executable)) {
       throw ProcessException(executable, arguments, 'No such file or directory');
     }
@@ -47,16 +64,28 @@ class _FakeProcessRunner implements ProcessRunner {
     String executable,
     List<String> arguments, {
     String? workingDirectory,
+    Map<String, String>? environment,
   }) async =>
-      _resolve(executable, arguments);
+      _resolve(executable, arguments, environment);
 
   @override
   ProcessResult runSync(
     String executable,
     List<String> arguments, {
     String? workingDirectory,
+    Map<String, String>? environment,
   }) =>
-      _resolve(executable, arguments);
+      _resolve(executable, arguments, environment);
+
+  @override
+  Future<ProcessResult> runKillable(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    required Duration timeout,
+  }) async =>
+      _resolve(executable, arguments, environment);
 }
 
 ProcessResult _ok(String stdout) => ProcessResult(0, 0, stdout, '');
@@ -67,19 +96,78 @@ ProcessResult _fail() => ProcessResult(0, 1, '', '');
 /// matching the pattern every other check already uses.
 const _cleanEnv = {'HOME': '/fake/home', 'PATH': '/fake/home/bin:/usr/bin'};
 
+const _bedrockAuthStatus =
+    '{"loggedIn": true, "authMethod": "third_party", "apiProvider": "bedrock"}';
+
 Map<String, ProcessResult> _responses({
   bool claudeOnPath = true,
   bool gitIdentitySet = true,
   bool ghAuthed = true,
+  String authStatusStdout = '',
+  bool awsOnPath = true,
+  ProcessResult? awsStsResult,
 }) =>
     {
       'which git': _ok(''),
       'which gh': _ok(''),
       'which claude': claudeOnPath ? _ok('') : _fail(),
+      'which aws': awsOnPath ? _ok('') : _fail(),
       'git config user.name': gitIdentitySet ? _ok('Aksana Buster') : _fail(),
       'git config user.email': gitIdentitySet ? _ok('ab@liitx.com') : _fail(),
       'gh auth status': ghAuthed ? _ok('') : _fail(),
+      'claude auth status': _ok(authStatusStdout),
+      if (awsStsResult != null) 'aws sts get-caller-identity': awsStsResult,
     };
+
+/// A [ProcessRunner] whose `runKillable` genuinely honors [timeout] by
+/// waiting it out and then throwing — isolates the
+/// `bedrockCredentialsPreflight` check's timeout path realistically (as
+/// `RealProcessRunner.runKillable` would behave against a hung `aws`
+/// process) without ever hanging the test suite itself, since tests pass
+/// a tiny [timeout].
+class _HangingProcessRunner implements ProcessRunner {
+  const _HangingProcessRunner(this._fallback);
+  final ProcessRunner _fallback;
+
+  @override
+  Future<ProcessResult> run(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+  }) =>
+      _fallback.run(executable, arguments, workingDirectory: workingDirectory, environment: environment);
+
+  @override
+  ProcessResult runSync(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+  }) =>
+      _fallback.runSync(executable, arguments, workingDirectory: workingDirectory, environment: environment);
+
+  @override
+  Future<ProcessResult> runKillable(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    required Duration timeout,
+  }) async {
+    if (executable == 'aws' && arguments.first == 'sts') {
+      await Future<void>.delayed(timeout);
+      throw TimeoutException('$executable ${arguments.join(' ')} hung', timeout);
+    }
+    return _fallback.runKillable(
+      executable,
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      timeout: timeout,
+    );
+  }
+}
 
 void main() {
   group('runDoctorChecks — tools', () {
@@ -397,6 +485,152 @@ void main() {
       );
       final pathCheck = outcomes.firstWhere((o) => o.id == HarnessCheckId.pathConfiguration);
       expect(pathCheck.result, equals(HarnessCheckResult.fail));
+    });
+  });
+
+  group('runDoctorChecks — bedrock metadata guard', () {
+    test('skips — not a failure — when Bedrock is not the active provider', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final guard = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockMetadataDisabled);
+      expect(guard.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('fails when Bedrock is active and AWS_EC2_METADATA_DISABLED is not set', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus)),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final guard = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockMetadataDisabled);
+      expect(guard.result, equals(HarnessCheckResult.fail));
+      expect(guard.detail, contains('AWS_EC2_METADATA_DISABLED'));
+    });
+
+    test('ok when Bedrock is active and AWS_EC2_METADATA_DISABLED=true', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus)),
+        env: {..._cleanEnv, 'AWS_EC2_METADATA_DISABLED': 'true'},
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final guard = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockMetadataDisabled);
+      expect(guard.result, equals(HarnessCheckResult.ok));
+    });
+  });
+
+  group('runDoctorChecks — bedrock credentials preflight', () {
+    test('skips — not a failure — when Bedrock is not the active provider', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
+      expect(preflight.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('skips when Bedrock is active but the aws CLI is not installed', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus, awsOnPath: false)),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
+      expect(preflight.result, equals(HarnessCheckResult.skip));
+      expect(preflight.detail, contains('aws CLI not found'));
+    });
+
+    test('ok when aws sts get-caller-identity succeeds — never prints the resolved identity', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(
+          authStatusStdout: _bedrockAuthStatus,
+          awsStsResult: _ok('{"Account": "123456789012", "Arn": "arn:aws:iam::123456789012:user/test"}'),
+        )),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
+      expect(preflight.result, equals(HarnessCheckResult.ok));
+      expect(preflight.detail, isNot(contains('arn:aws')));
+      expect(preflight.detail, isNot(contains('123456789012')));
+    });
+
+    test('fails when aws sts get-caller-identity exits non-zero', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus, awsStsResult: _fail())),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
+      expect(preflight.result, equals(HarnessCheckResult.fail));
+    });
+
+    test('fails — does not hang the suite — when the call exceeds the bounded timeout', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _HangingProcessRunner(_FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus))),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+        bedrockPreflightTimeout: const Duration(milliseconds: 20),
+      );
+      final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
+      expect(preflight.result, equals(HarnessCheckResult.fail));
+      expect(preflight.detail, contains('did not respond within'));
+    });
+  });
+
+  group('runDoctorChecks — bedrock checks read settings.json env, not just process env', () {
+    // Confirmed on a real Bedrock-only machine: the flag and AWS_PROFILE
+    // can live ONLY in ~/.claude/settings.json's own `env` block, the same
+    // place `claude` itself reads Bedrock config from — a plain Terminal
+    // with nothing exported false-[FAIL]ed both checks before this fix,
+    // the same blind spot `providerEnv` already had before `detectEffective`.
+    const settingsPath = '/fake/settings.json';
+    const settingsJson = '{"env": {'
+        '"CLAUDE_CODE_USE_BEDROCK": "1", '
+        '"AWS_PROFILE": "ai-tooling-bedrock-access", '
+        '"AWS_EC2_METADATA_DISABLED": "true"'
+        '}}';
+
+    test('bedrockMetadataDisabled is ok when the flag lives only in settings.json', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus)),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {settingsPath: settingsJson}),
+        claudeSettingsPath: settingsPath,
+      );
+      final guard = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockMetadataDisabled);
+      expect(guard.result, equals(HarnessCheckResult.ok));
+    });
+
+    test('bedrockCredentialsPreflight passes AWS_PROFILE from settings.json to the aws subprocess', () async {
+      final runner = _FakeProcessRunner(_responses(
+        authStatusStdout: _bedrockAuthStatus,
+        awsStsResult: _ok('{}'),
+      ));
+      await runDoctorChecks(
+        runner: runner,
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(files: {settingsPath: settingsJson}),
+        claudeSettingsPath: settingsPath,
+      );
+      final awsCall = runner.calls.firstWhere(
+        (c) => c.executable == 'aws' && c.arguments.contains('sts'),
+      );
+      expect(awsCall.environment, isNotNull);
+      expect(awsCall.environment!['AWS_PROFILE'], equals('ai-tooling-bedrock-access'));
     });
   });
 

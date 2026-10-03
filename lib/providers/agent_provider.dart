@@ -32,6 +32,7 @@
 // project-local overrides, etc. aren't modeled) — this is exactly why
 // neither function is wired into gating any real launch.
 
+import 'dart:convert' show jsonDecode;
 import 'dart:io' show Platform;
 
 import 'claude_settings_env.dart';
@@ -122,5 +123,35 @@ enum AgentProvider {
     final settingsEnv = readClaudeSettingsEnv(io: io, path: settingsPath);
     final merged = {...settingsEnv, ...(processEnv ?? Platform.environment)};
     return detect(merged, explicit: explicit);
+  }
+
+  /// Resolves which provider the real `claude auth status` itself reports
+  /// as active — ground truth from the CLI's own resolution, not an
+  /// inference from which env vars happen to be present (which [detect]'s
+  /// precedence assumes but has never verified against the real tool).
+  ///
+  /// Measured directly (`OAUTH-BEDROCK-FINAL-REPORT.md`): `claude auth
+  /// status` prints this JSON on stdout even when it exits 1 (nothing
+  /// configured) — [rawStdout] must be read regardless of exit code.
+  ///
+  /// Returns `null` for every state this enum doesn't model as a
+  /// *configured* provider: nothing set up, or a plain first-party
+  /// `claude.ai`/`oauth_token` login — both legitimate, unconfigured
+  /// states, same as [detect] returning `null` for "fine, OAuth login".
+  /// Malformed JSON also returns `null` rather than throwing, since a
+  /// caller's fallback (e.g. env-based [detectEffective]) is always safe
+  /// to use instead.
+  static AgentProvider? detectFromAuthStatusJson(String rawStdout) {
+    final Map<String, dynamic> status;
+    try {
+      status = jsonDecode(rawStdout) as Map<String, dynamic>;
+    } on FormatException {
+      return null;
+    }
+    final apiProvider = status['apiProvider'] as String?;
+    final authMethod = status['authMethod'] as String?;
+    if (apiProvider == 'bedrock') return AgentProvider.bedrock;
+    if (authMethod == 'api_key') return AgentProvider.apiKey;
+    return null;
   }
 }

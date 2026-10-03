@@ -242,6 +242,21 @@ just for a narrower, correctly-understood reason now.
    reviewable artifact (nocterm only does pass/fail string equality per
    case) — optional nice-to-have, not foundational, not currently planned.
 
+4. **Hard timeout on any `claude` spawn under Bedrock — not yet done,
+   deliberately out of scope for the doctor-check PR.** Measured root
+   cause (`OAUTH-BEDROCK-FINAL-REPORT.md`, confirmed independently on two
+   machines): a Bedrock profile that can't supply credentials doesn't
+   fail fast, it stalls ~740s probing the EC2 instance metadata service
+   before erroring. `claudart doctor`'s `bedrock metadata guard` and
+   `bedrock credentials preflight` checks (shipped, see below) catch this
+   *before* a real session starts, but `defaultClaudeRunner`
+   (`lib/pipeline/pipeline_executor.dart`) itself still has no timeout on
+   the actual `claude` spawn — that launch path is live and load-bearing,
+   so wrapping it was explicitly excluded from the doctor-check work
+   rather than risk regressing a working pipeline. Revisit once there's a
+   harness to verify the change end-to-end first, same caution already
+   applied to not wiring `AgentProvider` into it.
+
 ---
 
 ## What the other agent (Bedrock-backed, second machine) can do next
