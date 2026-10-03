@@ -9,6 +9,9 @@ typedef GitContext = ({String root, String branch});
 /// has neither, and this must not throw for that case.
 typedef GitAuthor = ({String? name, String? email});
 
+const _gitExecutable = 'git';
+const _detachedHeadMarker = 'HEAD';
+
 /// Detects the git project root and current branch in one process spawn.
 ///
 /// Uses `git rev-parse --show-toplevel --abbrev-ref HEAD` so both values
@@ -18,8 +21,8 @@ typedef GitAuthor = ({String? name, String? email});
 GitContext? detectGitContext() {
   try {
     final result = Process.runSync(
-      'git',
-      ['rev-parse', '--show-toplevel', '--abbrev-ref', 'HEAD'],
+      _gitExecutable,
+      ['rev-parse', '--show-toplevel', '--abbrev-ref', _detachedHeadMarker],
       workingDirectory: Directory.current.path,
     );
     if (result.exitCode != 0) return null;
@@ -28,7 +31,7 @@ GitContext? detectGitContext() {
     final root = lines[0].trim();
     final branch = lines[1].trim();
     // Detached HEAD returns literal "HEAD" — treat as no branch.
-    if (root.isEmpty || branch.isEmpty || branch == 'HEAD') return null;
+    if (root.isEmpty || branch.isEmpty || branch == _detachedHeadMarker) return null;
     return (root: root, branch: branch);
   } on ProcessException catch (_) {
     return null;
@@ -42,7 +45,7 @@ GitAuthor readGitAuthor(String projectRoot) {
   String? read(String key) {
     try {
       final result = Process.runSync(
-        'git',
+        _gitExecutable,
         ['config', key],
         workingDirectory: projectRoot,
       );
