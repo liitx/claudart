@@ -29,7 +29,7 @@ Read `<workspace_dir>/workspace.json`. This is your source of truth. Extract:
 
 ## Step 1 — Load generic knowledge
 
-Read each file listed in `session.knowledge` from `<workspace_dir>/../../knowledge/generic/<name>.md`.
+Read each file listed in `session.knowledge` from `<workspace_dir>/../knowledge/generic/<name>.md`.
 
 Do not read files outside this list. The list is the declared scope — if it is not in `workspace.json`, it is not in scope for this workspace.
 

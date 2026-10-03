@@ -136,7 +136,7 @@ Future<void> runLink(
   final existingClaudeMd =
       fileIO.fileExists(claudeMdPath) ? fileIO.read(claudeMdPath) : '';
   final genericFiles = fileIO
-      .listFiles(genericKnowledgeDirFor(workspace), extension: '.md')
+      .listFiles(genericKnowledgeDir, extension: '.md')
       .map(p.basename)
       .toList()
     ..sort();

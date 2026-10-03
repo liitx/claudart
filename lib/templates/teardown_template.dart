@@ -35,7 +35,7 @@ Read both:
 ## Step 3 — Classify learnings
 
 For each learning from this session, decide:
-- **Generic** → applies to any Dart/Flutter project → update `$workspacePath/knowledge/generic/`
+- **Generic** → applies to any Dart/Flutter project → update `$workspacePath/../knowledge/generic/`
 - **Project-specific** → update `$workspacePath/knowledge/projects/<project>.md`
 
 Write only patterns — no session-specific narrative.
@@ -44,7 +44,7 @@ Write only patterns — no session-specific narrative.
 
 ## Step 4 — Update knowledge files
 
-Generic learnings go to the appropriate file in `$workspacePath/knowledge/generic/`.
+Generic learnings go to the appropriate file in `$workspacePath/../knowledge/generic/`.
 Project learnings go to `$workspacePath/knowledge/projects/<project>.md`.
 
 ---

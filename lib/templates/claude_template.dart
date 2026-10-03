@@ -20,7 +20,7 @@ String claudeTemplate({
   final genericSection = genericFiles.isEmpty
       ? ''
       : '''### Generic practices
-${genericFiles.map((f) => '- $workspacePath/knowledge/generic/$f').join('\n')}
+${genericFiles.map((f) => '- $workspacePath/../knowledge/generic/$f').join('\n')}
 
 ''';
 

@@ -18,8 +18,8 @@ void main() {
     });
 
     test('lists generic knowledge files with absolute paths', () {
-      expect(base, contains('/workspace/knowledge/generic/dart.md'));
-      expect(base, contains('/workspace/knowledge/generic/testing.md'));
+      expect(base, contains('/workspace/../knowledge/generic/dart.md'));
+      expect(base, contains('/workspace/../knowledge/generic/testing.md'));
     });
 
     test('omits the Generic practices heading entirely when no files given', () {
