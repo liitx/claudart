@@ -50,13 +50,21 @@ commit until someone runs `dart pub upgrade claudart` in zedup and
 commits the new lock file. Do this as an explicit step right after
 merging, not assume it happens on its own.
 
-**Test result discrepancy, unresolved:** the second agent reported 7
-failures in `test/features/dashboard/zedup_dashboard_grid_test.dart` on
-zedup PR #76 (`07a762b`), claiming they're deterministic/pre-existing on
-`main` too. Checked directly on this machine at the identical commit:
-all 52 tests in that file pass, zero failures. Not yet reconciled —
-possibly environment-specific on their end (sandbox/terminal-size/timing)
-despite their "deterministic" claim, but not confirmed either way.
+**Test result discrepancy — resolved, real root cause, fixed.** The
+second agent's 7 failures in `test/features/dashboard/zedup_dashboard_grid_test.dart`
+were real and reproducible on a genuinely fresh clone — the discrepancy
+with this machine's 52/52 pass was explained, not a flake. Root cause:
+none of the file's 6 `AgentDispatcher(...)` constructions injected a
+`versionGuard:` fake, so `AgentDispatcher`'s
+`_versionGuard = versionGuard ?? ClaudartVersionGuard()` fell through to
+a real `Process.runSync('claudart', ['--version'])` against whatever
+happens to be on PATH. This machine has `claudart` compiled and
+installed, so it accidentally passed; a machine without one (or CI)
+reproducibly fails. Fixed by injecting the same `passingGuard()` fake
+`agent_dispatcher_test.dart` already used correctly, at all 6 sites.
+Verified the fix is genuinely hermetic, not coincidentally working: ran
+the file with `claudart` stripped from `PATH` entirely — still 52/52.
+zedup `main` at `0f3c434`.
 
 ---
 
