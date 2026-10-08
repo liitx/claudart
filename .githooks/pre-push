@@ -12,6 +12,14 @@
 
 set -uo pipefail
 
+# A push from a linked worktree arrives with GIT_DIR/GIT_WORK_TREE/
+# GIT_INDEX_FILE set by git itself, pointed at that worktree's own
+# .git/worktrees/<name> — confirmed real: left set, every `git` call this
+# hook or the test suite's own subprocesses make (test/helpers/cli_session.dart
+# included) can silently redirect into the real repo instead of a fresh temp
+# one. Unset before anything else runs.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+
 REPO="$(git rev-parse --show-toplevel)"
 cd "$REPO"
 
