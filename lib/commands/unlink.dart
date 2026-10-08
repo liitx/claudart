@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../paths.dart';
 import '../ui/render.dart' as render;
 
 /// Removes the symlinks `link` creates — `.claude` and `.cursor/commands` —
@@ -23,7 +24,11 @@ void runUnlink({FileIO? io, String? projectRootOverride}) {
 
   var removed = 0;
 
-  for (final rel in ['.claude', p.join('.cursor', 'commands'), 'CLAUDE.md']) {
+  for (final rel in [
+    IdeIntegration.claudeCode.dirName,
+    p.join(IdeIntegration.cursor.dirName, 'commands'),
+    claudeMdFileName,
+  ]) {
     final path = p.join(projectRoot, rel);
 
     if (fileIO.linkExists(path)) {

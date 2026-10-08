@@ -210,7 +210,7 @@ List<String> _buildProjectItems({
     // .claude is either a symlink (the normal case) or a real directory
     // when link.dart couldn't symlink it — both mean "linked". Same fix
     // as link.dart/kill.dart's own symlink-only checks on this branch.
-    final claudePath = p.join(e.projectRoot, '.claude');
+    final claudePath = p.join(e.projectRoot, IdeIntegration.claudeCode.dirName);
     final linked = fileIO.linkExists(claudePath) || fileIO.dirExists(claudePath);
 
     final dot = locked

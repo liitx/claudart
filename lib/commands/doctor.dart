@@ -243,7 +243,7 @@ HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env, FileIO io) {
     );
   }
 
-  final fallbackRegistry = p.join(fallbackRoot, 'registry.json');
+  final fallbackRegistry = p.join(fallbackRoot, registryFileName);
   if (resolvedRoot != fallbackRoot && io.fileExists(fallbackRegistry)) {
     return (
       id: HarnessCheckId.workspaceRoot,
