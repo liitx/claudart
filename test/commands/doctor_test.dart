@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:claudart/commands/doctor.dart';
+import 'package:claudart/git_utils.dart';
 import 'package:claudart/harness/harness_check.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/process_runner.dart';
@@ -91,6 +92,13 @@ class _FakeProcessRunner implements ProcessRunner {
 ProcessResult _ok(String stdout) => ProcessResult(0, 0, stdout, '');
 ProcessResult _fail() => ProcessResult(0, 1, '', '');
 
+/// Builds the exact fake-runner key a `readGitConfig`/`writeGitConfig` call
+/// for [key] resolves to — from the same `gitEnvClearExecutable`/
+/// `gitEnvClearArgs` the implementation itself uses, not a second,
+/// separately-typed copy of the `env -u ...` flags.
+String _gitConfigCall(GitConfigKey key) =>
+    '$gitEnvClearExecutable ${gitEnvClearArgs.join(' ')} git config ${key.gitKey}';
+
 /// A baseline env with HOME/PATH set so `pathConfiguration` passes by
 /// default — individual tests override/add only the keys they care about,
 /// matching the pattern every other check already uses.
@@ -112,8 +120,8 @@ Map<String, ProcessResult> _responses({
       'which gh': _ok(''),
       'which claude': claudeOnPath ? _ok('') : _fail(),
       'which aws': awsOnPath ? _ok('') : _fail(),
-      'git config user.name': gitIdentitySet ? _ok('Aksana Buster') : _fail(),
-      'git config user.email': gitIdentitySet ? _ok('ab@liitx.com') : _fail(),
+      _gitConfigCall(GitConfigKey.userName): gitIdentitySet ? _ok('Aksana Buster') : _fail(),
+      _gitConfigCall(GitConfigKey.userEmail): gitIdentitySet ? _ok('ab@liitx.com') : _fail(),
       'gh auth status': ghAuthed ? _ok('') : _fail(),
       'claude auth status': _ok(authStatusStdout),
       if (awsStsResult != null) 'aws sts get-caller-identity': awsStsResult,
@@ -209,8 +217,16 @@ void main() {
     });
 
     test('git missing entirely: gitIdentity fails instead of throwing ProcessException', () async {
+      // Every git call now goes through `env -u ... git ...` — `env` itself
+      // genuinely missing isn't the realistic failure mode (it's a
+      // near-universal tool); git missing means `env` runs fine but fails
+      // to exec `git`, landing on the fake runner's own "no response
+      // configured" fallback (exit 127), not a thrown ProcessException.
+      final responses = _responses()
+        ..remove(_gitConfigCall(GitConfigKey.userName))
+        ..remove(_gitConfigCall(GitConfigKey.userEmail));
       final outcomes = await runDoctorChecks(
-        runner: _FakeProcessRunner(_responses(), notFound: const {'git'}),
+        runner: _FakeProcessRunner(responses),
         env: _cleanEnv,
         projectRoot: '/fake/repo',
         io: MemoryFileIO(),
@@ -650,7 +666,7 @@ void main() {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner({
           ..._responses(),
-          'git config core.hooksPath': _ok('.githooks'),
+          _gitConfigCall(GitConfigKey.hooksPath): _ok('.githooks'),
         }),
         env: _cleanEnv,
         projectRoot: '/fake/repo',
@@ -664,7 +680,7 @@ void main() {
       final outcomes = await runDoctorChecks(
         runner: _FakeProcessRunner({
           ..._responses(),
-          'git config core.hooksPath': _fail(),
+          _gitConfigCall(GitConfigKey.hooksPath): _fail(),
         }),
         env: _cleanEnv,
         projectRoot: '/fake/repo',

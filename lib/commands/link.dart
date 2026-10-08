@@ -378,37 +378,21 @@ void _ensureGitignore(String projectRoot, FileIO fileIO) {
 }
 
 const _githooksDirName = '.githooks';
-const _hooksPathConfigKey = 'core.hooksPath';
-const _gitExecutable = 'git';
-const _gitConfigArg = 'config';
 
 void _ensureHooksPath(String projectRoot, FileIO fileIO) {
   if (!fileIO.dirExists(p.join(projectRoot, _githooksDirName))) return;
-  try {
-    final current = Process.runSync(
-      _gitExecutable,
-      [_gitConfigArg, _hooksPathConfigKey],
-      workingDirectory: projectRoot,
-    );
-    final previous = current.exitCode == 0 ? (current.stdout as String).trim() : '';
-    if (previous == _githooksDirName) return;
+  final previous = readGitConfig(GitConfigKey.hooksPath, workingDirectory: projectRoot) ?? '';
+  if (previous == _githooksDirName) return;
 
-    Process.runSync(
-      _gitExecutable,
-      [_gitConfigArg, _hooksPathConfigKey, _githooksDirName],
-      workingDirectory: projectRoot,
-    );
-    // A non-empty previous value means something else (husky, lefthook, a
-    // hand-set path) already owned this — say what was replaced instead of
-    // silently clobbering it, so a project with its own hooks convention
-    // notices immediately rather than finding out when those hooks stop
-    // firing.
-    print(previous.isEmpty
-        ? '  git hooks: $_hooksPathConfigKey → $_githooksDirName'
-        : '  git hooks: $_hooksPathConfigKey $previous → $_githooksDirName (replaced)');
-  } on Exception catch (_) {
-    // Not a git repo, or git itself unavailable — nothing to configure.
-  }
+  writeGitConfig(GitConfigKey.hooksPath, _githooksDirName, workingDirectory: projectRoot);
+  // A non-empty previous value means something else (husky, lefthook, a
+  // hand-set path) already owned this — say what was replaced instead of
+  // silently clobbering it, so a project with its own hooks convention
+  // notices immediately rather than finding out when those hooks stop
+  // firing.
+  print(previous.isEmpty
+      ? '  git hooks: ${GitConfigKey.hooksPath.gitKey} → $_githooksDirName'
+      : '  git hooks: ${GitConfigKey.hooksPath.gitKey} $previous → $_githooksDirName (replaced)');
 }
 
 /// Writes a command template file, but never over a file that already

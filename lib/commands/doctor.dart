@@ -11,6 +11,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../file_io.dart';
+import '../git_utils.dart';
 import '../harness/harness_check.dart';
 import '../logging/logger.dart';
 import '../paths.dart';
@@ -139,8 +140,8 @@ Future<HarnessCheckOutcome> _checkTools(ProcessRunner proc) async {
 }
 
 Future<HarnessCheckOutcome> _checkGitIdentity(ProcessRunner proc, String root) async {
-  final name = await _gitConfig(proc, root, 'user.name');
-  final email = await _gitConfig(proc, root, 'user.email');
+  final name = readGitConfig(GitConfigKey.userName, workingDirectory: root, runner: proc);
+  final email = readGitConfig(GitConfigKey.userEmail, workingDirectory: root, runner: proc);
   if (name != null && email != null) {
     return (
       id: HarnessCheckId.gitIdentity,
@@ -153,13 +154,6 @@ Future<HarnessCheckOutcome> _checkGitIdentity(ProcessRunner proc, String root) a
     result: HarnessCheckResult.fail,
     detail: 'user.name/user.email not set for this repo',
   );
-}
-
-Future<String?> _gitConfig(ProcessRunner proc, String root, String key) async {
-  final result = await _tryRun(proc, _gitExecutable, ['config', key], workingDirectory: root);
-  if (result.exitCode != 0) return null;
-  final value = (result.stdout as String).trim();
-  return value.isEmpty ? null : value;
 }
 
 Future<HarnessCheckOutcome> _checkGhAuth(ProcessRunner proc) async {
@@ -452,7 +446,7 @@ Future<HarnessCheckOutcome> _checkGitHooksConfigured(
       detail: 'no .githooks/ in this project',
     );
   }
-  final configured = await _gitConfig(proc, root, 'core.hooksPath');
+  final configured = readGitConfig(GitConfigKey.hooksPath, workingDirectory: root, runner: proc);
   return configured == _githooksDirName
       ? (
           id: HarnessCheckId.gitHooksConfigured,
