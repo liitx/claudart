@@ -2,7 +2,9 @@ import 'dart:io';
 import 'package:claudart/errors/claudart_exception.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/logging/logger.dart';
+import 'package:claudart/paths.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
+import 'package:claudart/sensitivity/token_map.dart';
 import 'package:claudart/version.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/commands/add.dart';
@@ -101,40 +103,58 @@ Future<void> main(List<String> rawArgs) async {
     exit(0);
   }
 
-  if (args.isEmpty) {
-    await runLauncher();
-    exit(0);
-  }
+  final command = args.isEmpty ? 'launch' : args.first;
+  final rest = args.isEmpty ? const <String>[] : args.skip(1).toList();
 
-  final command = args.first;
-  final rest = args.skip(1).toList();
-
-  final claudartCommand = ClaudartCommand.fromString(command);
-  if (claudartCommand == null) {
-    print('Unknown command: $command\n');
-    print(_usage);
-    exit(1);
+  ClaudartCommand? claudartCommand;
+  if (args.isNotEmpty) {
+    claudartCommand = ClaudartCommand.fromString(command);
+    if (claudartCommand == null) {
+      print('Unknown command: $command\n');
+      print(_usage);
+      exit(1);
+    }
   }
 
   try {
-    await _dispatch(claudartCommand, rest);
+    if (args.isEmpty) {
+      // Covered by the same catch as every other command: the launcher
+      // dispatches into runKill/runSetup/runLink internally (see
+      // launch.dart), any of which can throw a ClaudartException just
+      // like running them directly would -- confirmed real, launch.dart
+      // has no catch of its own, so this previously propagated uncaught.
+      await runLauncher();
+      exit(0);
+    }
+    await _dispatch(claudartCommand!, rest);
   } on ClaudartException catch (e) {
     // Central catch: every command's ClaudartException lands here exactly
     // once, so error logging doesn't depend on each command file
     // remembering to call it -- SessionLogger.logError was only ever
     // wired into 2 of many command files before this. Resolves the same
-    // registry entry every command resolves its own sensitivityMode from,
-    // so a sensitive-mode project's error log still gets abstracted here.
+    // registry entry every command resolves its own sensitivityMode
+    // from, and loads its real TokenMap, so a sensitive-mode project's
+    // error log is actually abstracted here (logError itself now
+    // abstracts `reason`, not just `stackTrace` -- found and fixed as a
+    // real gap while verifying this, previously leaked raw workspace
+    // paths/causes even with sensitivityMode on).
     print('\n✗ ${e.toString()}');
     print('  ${e.failureType.suggestedAction}\n');
     final errorRoot = detectGitContext()?.root;
     final errorEntry = errorRoot != null ? Registry.load().findByProjectRoot(errorRoot) : null;
+    final errorTokenMap = errorEntry != null && errorEntry.sensitivityMode
+        ? TokenMap.load(tokenMapPathFor(errorEntry.workspacePath))
+        : null;
     SessionLogger(
       sensitivityMode: errorEntry?.sensitivityMode ?? false,
+      tokenMap: errorTokenMap,
       workspacePath: errorEntry?.workspacePath,
     ).logError(
       command: command,
-      errorType: e.errorType.label,
+      // Machine-keyed, not e.errorType.label's display text -- matches
+      // the existing snake_case/name convention other logError callers
+      // already write (e.g. scan.dart's 'threshold_hit').
+      errorType: e.errorType.name,
       fingerprint: '$command.${e.failureType.name}',
       reason: e.toString(),
     );

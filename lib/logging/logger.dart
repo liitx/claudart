@@ -76,9 +76,18 @@ class SessionLogger {
     final matchIdx =
         existing.indexWhere((e) => e['fingerprint'] == fingerprint);
 
+    // Found real while verifying #72: this abstracted stackTrace but not
+    // reason, so a sensitive-mode project's error log still leaked raw
+    // workspace paths/exception causes through `reason` -- the field
+    // every caller actually populates. scan.dart had the identical gap
+    // before this fix; both callers get it fixed here, not patched twice.
+    String safeReason = reason;
     String? safeStack = stackTrace;
-    if (sensitivityMode && tokenMap != null && safeStack != null) {
-      safeStack = abstractor.abstract(safeStack, tokenMap!, defaultDetector);
+    if (sensitivityMode && tokenMap != null) {
+      safeReason = abstractor.abstract(safeReason, tokenMap!, defaultDetector);
+      if (safeStack != null) {
+        safeStack = abstractor.abstract(safeStack, tokenMap!, defaultDetector);
+      }
     }
 
     if (matchIdx >= 0) {
@@ -92,7 +101,7 @@ class SessionLogger {
         'command': command,
         'outcome': errorType,
         'fingerprint': fingerprint,
-        'reason': reason,
+        'reason': safeReason,
         if (suggestion != null) 'suggestion': suggestion,
         if (safeStack != null) 'stack': safeStack,
         'count': 1,
