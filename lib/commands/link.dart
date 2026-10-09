@@ -45,6 +45,7 @@ final RegExp roadmapMarker = RegExp(
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
+const _recompileFlag = '--recompile';
 
 /// Registers the current project with claudart and creates the `.claude` symlink.
 ///
@@ -76,14 +77,16 @@ Future<void> runLink(
       askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
   final exit_ = exitFn ?? exit;
 
-  final unknownFlags = args.where((a) => a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag);
+  final unknownFlags = args.where((a) =>
+      a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag && a != _recompileFlag);
   if (unknownFlags.isNotEmpty) {
     print('\n✗ Unknown option: ${unknownFlags.first}');
-    print('  Usage: claudart link [project-name] [$_sensitiveFlag | $_noSensitiveFlag]\n');
+    print('  Usage: claudart link [project-name] [$_sensitiveFlag | $_noSensitiveFlag] [$_recompileFlag]\n');
     exit_(1);
   }
   final wantsSensitive = args.contains(_sensitiveFlag);
   final wantsNoSensitive = args.contains(_noSensitiveFlag);
+  final wantsRecompile = args.contains(_recompileFlag);
   if (wantsSensitive && wantsNoSensitive) {
     print('\n✗ Pass only one of $_sensitiveFlag / $_noSensitiveFlag.\n');
     exit_(1);
@@ -241,16 +244,19 @@ Future<void> runLink(
   // this function goes through fileIO so tests stay filesystem-free, and
   // this one is no different.
   //
-  // Recompiling on every link regardless of whether anything changed would
-  // waste real time on every re-link of an already-up-to-date project --
-  // only recompile when the generated content actually differs from what's
-  // already on disk. The project being linked, not claudart itself, is
-  // what needs recompiling: the generated file lives in *that* project's
-  // tree and only *that* project's binary consumes it. Only applies when
-  // the project looks like a compilable CLI (a bin/<name>.dart matching
-  // its own project name, same convention claudart/zedup both use) --
-  // skipped silently for a library or Flutter app, where "recompile" has
-  // no meaning.
+  // Recompiling is opt-in (--recompile), never automatic: linking a
+  // project whose binary is also the one currently installed and in use
+  // (claudart or zedup's own repo, when self-linked) would otherwise
+  // silently overwrite ~/bin/<name> with whatever's checked out at the
+  // moment -- including uncommitted WIP -- the first time that project is
+  // ever linked. `claudart compile` already exists as the deliberate,
+  // explicit way to rebuild; this flag is a convenience on top of it for
+  // a caller who's sure that's what they want, not a default behavior.
+  //
+  // Writing the generated file itself is NOT gated on the flag -- that
+  // part is always safe (pure config, no side effect on any installed
+  // binary) and should never drift from pubspec.yaml regardless of
+  // whether a recompile was requested.
   final pubspecPath = p.join(projectRoot, 'pubspec.yaml');
   if (fileIO.fileExists(pubspecPath)) {
     const codegen = DependencyConfigCodegen();
@@ -260,7 +266,9 @@ Future<void> runLink(
     final previousContent = fileIO.fileExists(generatedPath) ? fileIO.read(generatedPath) : null;
     if (newContent != previousContent) {
       fileIO.write(generatedPath, newContent);
-      await _recompileIfCli(effectiveName, projectRoot, fileIO, proc);
+      if (wantsRecompile) {
+        await _recompileIfCli(effectiveName, projectRoot, fileIO, proc);
+      }
     }
   }
 

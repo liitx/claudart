@@ -590,7 +590,35 @@ dependencies:
 
     setUpAll(() => registerFallbackValue(fakeResult('')));
 
-    test('recompiles the project binary when its bin/<name>.dart exists and content changed', () async {
+    test('does NOT recompile by default, even when bin/<name>.dart exists and content changed', () async {
+      // The real safety case this guards: linking claudart or zedup's own
+      // repo (self-linking) must never silently overwrite the installed
+      // ~/bin/<name> with whatever's currently checked out, including
+      // uncommitted WIP. Recompiling is opt-in (--recompile), not a
+      // default side effect of link.
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
+      final runner = MockProcessRunner();
+
+      await runLink(
+        [_projectName],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      verifyNever(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')));
+      expect(
+        io.fileExists(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath)),
+        isTrue,
+        reason: 'the generated config itself is always written, regardless of --recompile',
+      );
+    });
+
+    test('recompiles when --recompile is passed and bin/<name>.dart exists and content changed', () async {
       final io = _emptyIO();
       io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
       io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
@@ -599,7 +627,7 @@ dependencies:
           .thenAnswer((_) async => fakeResult(''));
 
       await runLink(
-        [_projectName],
+        [_projectName, '--recompile'],
         io: io,
         runner: runner,
         projectRootOverride: _projectRoot,
@@ -618,13 +646,13 @@ dependencies:
       expect(captured[2], _projectRoot);
     });
 
-    test('does not recompile when the project has no bin/<name>.dart entrypoint', () async {
+    test('--recompile does not recompile when the project has no bin/<name>.dart entrypoint', () async {
       final io = _emptyIO();
       io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
       final runner = MockProcessRunner();
 
       await runLink(
-        [_projectName],
+        [_projectName, '--recompile'],
         io: io,
         runner: runner,
         projectRootOverride: _projectRoot,
@@ -635,7 +663,7 @@ dependencies:
       verifyNever(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')));
     });
 
-    test('does not recompile on a second link when nothing changed', () async {
+    test('--recompile does not recompile on a second link when nothing changed', () async {
       final io = _emptyIO();
       io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
       io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
@@ -644,7 +672,7 @@ dependencies:
           .thenAnswer((_) async => fakeResult(''));
 
       await runLink(
-        [_projectName],
+        [_projectName, '--recompile'],
         io: io,
         runner: runner,
         projectRootOverride: _projectRoot,
@@ -652,7 +680,7 @@ dependencies:
         exitFn: _throwExit,
       );
       await runLink(
-        [_projectName],
+        [_projectName, '--recompile'],
         io: io,
         runner: runner,
         projectRootOverride: _projectRoot,
