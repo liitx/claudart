@@ -10,6 +10,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../codegen/artifact_state.dart';
+import '../codegen/claudart_artifact.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../harness/harness_check.dart';
@@ -97,7 +99,45 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
       timeout: bedrockPreflightTimeout ?? _defaultBedrockPreflightTimeout,
     ),
     await _checkGitHooksConfigured(proc, root, fileIO),
+    _checkArtifactFreshness(root, fileIO),
   ];
+}
+
+/// Surfaces drift between a `ClaudartArtifact`'s source and its last
+/// `claudart link` output without re-running link (which would overwrite
+/// it). Scoped to the current project: skipped entirely for a project
+/// that was never linked.
+HarnessCheckOutcome _checkArtifactFreshness(String root, FileIO io) {
+  final entry = Registry.load(io: io).findByProjectRoot(root);
+  if (entry == null) {
+    return (
+      id: HarnessCheckId.artifactFreshness,
+      result: HarnessCheckResult.skip,
+      detail: 'project not registered — run `claudart link` first',
+    );
+  }
+  final drifted = [
+    for (final artifact in ClaudartArtifact.values)
+      if (const {ArtifactState.stale, ArtifactState.missing}.contains(stateOf(
+        artifact,
+        projectRoot: root,
+        workspace: entry.workspacePath,
+        projectName: entry.name,
+        io: io,
+      )))
+        artifact.name,
+  ];
+  return drifted.isEmpty
+      ? (
+          id: HarnessCheckId.artifactFreshness,
+          result: HarnessCheckResult.ok,
+          detail: 'all generated artifacts match their current sources',
+        )
+      : (
+          id: HarnessCheckId.artifactFreshness,
+          result: HarnessCheckResult.fail,
+          detail: 'stale or missing: ${drifted.join(', ')} — run `claudart link`',
+        );
 }
 
 /// Ground truth for "is Bedrock actually active right now" — prefers the
