@@ -108,7 +108,16 @@ for bare strings). Do this on every session's own work, not only when told to au
 Always follow this order — no exceptions:
 1. **Verify** — read the relevant files, understand current state
 2. **Plan** — state what you intend to do before writing code. If multiple approaches exist, surface them. If uncertain, ask.
-3. **Test** — run safely, including the mandatory paradigm self-check (see Paradigms section above) — not only `dart analyze`/`dart test`
+3. **Test** — run safely, including the mandatory paradigm self-check (see Paradigms section above) — not only `dart analyze`/`dart test`. For every `lib/` file touched that has a mirrored test file, also run
+   `make mutation-test FILE=<file> TEST_FILE=<mirrored test file>` before presenting the change as
+   complete — `dart test` passing only proves the test ran, not that it would catch a real break
+   (confirmed: `git_utils.dart`'s `detectGitContext()` had 100% line coverage via indirect callers
+   and zero direct tests; PR #74's own review found 19 undetected mutations in `doctor.dart`,
+   none in the new code, all in pre-existing functions that happened to share the file — see
+   issue #75). A survived mutation in code *this session* wrote must be fixed before commit; a
+   survived mutation in pre-existing code the task didn't touch gets filed as an issue, not fixed
+   inline. Always `git diff <file>` after any run, interrupted or not — an interrupted run leaves
+   the file mutated on disk (see `Makefile`'s own warning on the target).
 4. **Confirm** — present result, wait for user confirmation
 5. **Commit** — only after confirmed
 
