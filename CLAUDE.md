@@ -108,7 +108,7 @@ for bare strings). Do this on every session's own work, not only when told to au
 Always follow this order — no exceptions:
 1. **Verify** — read the relevant files, understand current state
 2. **Plan** — state what you intend to do before writing code. If multiple approaches exist, surface them. If uncertain, ask.
-3. **Test** — run safely, including the mandatory paradigm self-check (see Paradigms section above) — not only `dart analyze`/`dart test`. For every `lib/` file touched that has a mirrored test file, also run
+3. **Test** — run safely, including the mandatory paradigm self-check (see Paradigms section above) — not only `dart analyze`/`dart test`. **Mandatory, unprompted, for every `lib/` file touched that has a mirrored test file**: run
    `make mutation-test FILE=<file> TEST_FILE=<mirrored test file>` before presenting the change as
    complete — `dart test` passing only proves the test ran, not that it would catch a real break
    (confirmed: `git_utils.dart`'s `detectGitContext()` had 100% line coverage via indirect callers
