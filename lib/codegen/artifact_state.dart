@@ -14,7 +14,6 @@ import 'package:path/path.dart' as p;
 import '../dependency_config.dart';
 import 'claudart_artifact.dart';
 import 'dependency_config_codegen.dart';
-import '../commands/link.dart' show generatedMarker, roadmapMarker;
 import '../file_io.dart';
 import '../paths.dart';
 import '../pipeline/agent_flow.dart';
@@ -113,29 +112,30 @@ ArtifactState _readmeRoadmapState({
   required String projectRoot,
   required FileIO io,
 }) {
-  final roadmapJsonPath = p.join(projectRoot, 'roadmap.json');
+  final roadmapJsonPath = p.join(projectRoot, kRoadmapJsonFilename);
   if (!io.fileExists(roadmapJsonPath)) return ArtifactState.notApplicable;
   final roadmapConfig = parseRoadmapConfig(io.read(roadmapJsonPath));
   if (roadmapConfig == null || roadmapConfig.rows.isEmpty) {
     return ArtifactState.notApplicable;
   }
-  final readmePath = p.join(projectRoot, 'README.md');
+  final readmePath = p.join(projectRoot, kReadmeFilename);
   if (!io.fileExists(readmePath)) return ArtifactState.notApplicable;
   final existingReadme = io.read(readmePath);
   final match = roadmapMarker.firstMatch(existingReadme);
   if (match == null) return ArtifactState.notApplicable;
   final fresh = readmeTemplate(
     roadmapRows: roadmapConfig.rows,
-    summaryText: roadmapConfig.summaryText ?? "What's coming",
+    summaryText: roadmapConfig.summaryText ?? kDefaultRoadmapSummaryText,
     footerLine: roadmapConfig.footerLine,
   );
-  // Compared the same way `_regenerateReadmeRoadmap` writes it: splice
-  // `fresh` into the matched region and check whether that's a no-op.
-  // A substring-equality check on the matched region alone is off by the
-  // trailing newline `fresh` always carries but the match (bounded by the
-  // `\n---` lookahead) never includes.
-  final spliced = existingReadme.replaceRange(match.start, match.end, fresh);
-  return spliced == existingReadme ? ArtifactState.fresh : ArtifactState.stale;
+  // After a real `_regenerateReadmeRoadmap` write, the matched region is
+  // exactly `fresh` — the next marker match always stops one character
+  // before the *next* occurrence of `\n---`, which is the suffix's own
+  // leading newline, not `fresh`'s own trailing one. So matched-region
+  // substring equality is the right comparison, not a splice-then-compare.
+  return existingReadme.substring(match.start, match.end) == fresh
+      ? ArtifactState.fresh
+      : ArtifactState.stale;
 }
 
 ArtifactState _dependencyConfigState({

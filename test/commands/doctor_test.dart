@@ -513,6 +513,12 @@ void main() {
       );
       final freshness = outcomes.firstWhere((o) => o.id == HarnessCheckId.artifactFreshness);
       expect(freshness.result, equals(HarnessCheckResult.fail));
+      // commandTemplates/claudeMdTail are missing (never linked);
+      // readmeRoadmap/dependencyConfig are notApplicable (no roadmap.json
+      // or pubspec.yaml in this fixture), so only the first two should be
+      // named.
+      expect(freshness.detail, contains('commandTemplates'));
+      expect(freshness.detail, contains('claudeMdTail'));
       expect(freshness.detail, contains('claudart link'));
     });
 

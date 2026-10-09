@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:claudart/commands/claudart_command.dart';
-import 'package:claudart/commands/link.dart' show roadmapMarker;
 import 'package:claudart/templates/readme_template.dart';
 import 'package:test/test.dart';
 

@@ -99,7 +99,7 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
       timeout: bedrockPreflightTimeout ?? _defaultBedrockPreflightTimeout,
     ),
     await _checkGitHooksConfigured(proc, root, fileIO),
-    _checkArtifactFreshness(root, fileIO),
+    _checkArtifactFreshness(proc, root, fileIO),
   ];
 }
 
@@ -107,8 +107,15 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
 /// `claudart link` output without re-running link (which would overwrite
 /// it). Scoped to the current project: skipped entirely for a project
 /// that was never linked.
-HarnessCheckOutcome _checkArtifactFreshness(String root, FileIO io) {
-  final entry = Registry.load(io: io).findByProjectRoot(root);
+///
+/// Resolves the git root the same way `link.dart` does before the registry
+/// lookup — `root` alone is `projectRootOverride ?? Directory.current.path`,
+/// but the registry's own `projectRoot` is always the git root
+/// (`resolveProjectRoot`). Running `claudart doctor` from a subdirectory
+/// would otherwise always report "not registered" for a project that is.
+HarnessCheckOutcome _checkArtifactFreshness(ProcessRunner proc, String root, FileIO io) {
+  final resolvedRoot = detectGitContext(runner: proc)?.root ?? root;
+  final entry = Registry.load(io: io).findByProjectRoot(resolvedRoot);
   if (entry == null) {
     return (
       id: HarnessCheckId.artifactFreshness,
@@ -120,7 +127,7 @@ HarnessCheckOutcome _checkArtifactFreshness(String root, FileIO io) {
     for (final artifact in ClaudartArtifact.values)
       if (const {ArtifactState.stale, ArtifactState.missing}.contains(stateOf(
         artifact,
-        projectRoot: root,
+        projectRoot: resolvedRoot,
         workspace: entry.workspacePath,
         projectName: entry.name,
         io: io,

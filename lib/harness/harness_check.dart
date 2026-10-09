@@ -85,7 +85,7 @@ enum HarnessCheckId {
         HarnessCheckId.bedrockMetadataDisabled     => 'bedrock metadata guard',
         HarnessCheckId.bedrockCredentialsPreflight => 'bedrock credentials',
         HarnessCheckId.gitHooksConfigured          => 'git hooks',
-        HarnessCheckId.artifactFreshness            => 'artifact freshness',
+        HarnessCheckId.artifactFreshness           => 'artifact freshness',
       };
 }
 

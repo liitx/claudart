@@ -5,6 +5,7 @@ import 'package:claudart/codegen/artifact_state.dart';
 import 'package:claudart/codegen/claudart_artifact.dart';
 import 'package:claudart/codegen/dependency_config_codegen.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/templates/claude_template.dart' show generatedMarker;
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -174,13 +175,10 @@ void main() {
   });
 
   group('self-hosting: a freshly linked project has no drift', () {
-    test('commandTemplates, claudeMdTail, and dependencyConfig are fresh', () async {
-      final io = await _linked();
-      expect(_state(ClaudartArtifact.commandTemplates, io), ArtifactState.fresh);
-      expect(_state(ClaudartArtifact.claudeMdTail, io), ArtifactState.fresh);
-      expect(_state(ClaudartArtifact.dependencyConfig, io), ArtifactState.fresh);
-    });
-
+    // commandTemplates/claudeMdTail/dependencyConfig's own "fresh
+    // immediately after link" cases above already cover this scenario per
+    // artifact — this adds the one case they don't: the opt-in artifact
+    // this fixture never enables.
     test('readmeRoadmap is notApplicable (this fixture never opts in)', () async {
       final io = await _linked();
       expect(_state(ClaudartArtifact.readmeRoadmap, io), ArtifactState.notApplicable);
