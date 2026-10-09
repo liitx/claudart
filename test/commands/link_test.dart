@@ -171,6 +171,10 @@ void main() {
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
+        // confirmFn answers every ask() call, including the newer
+        // workspace.json offer — decline it deterministically rather than
+        // falling through to the real interactive prompt default.
+        promptFn: (_, {bool optional = false}) => null,
         exitFn: _throwExit,
       );
       final entry = Registry.load(io: io).findByName(_projectName)!;
@@ -788,11 +792,16 @@ dependencies:
     });
 
     test('answering yes and no at the prompt behaves as before', () async {
+      // Answers only the sensitivity question true/false; declines the
+      // separate, newer workspace.json offer either way so this stays
+      // scoped to the sensitivity behavior it's named for.
+      bool? Function(String) sensitivityOnly(bool answer) =>
+          (String q) => q.toLowerCase().contains('sensitivity mode') ? answer : false;
       final yes = _emptyIO();
-      await link(yes, [_projectName], askFn: (_) => true);
+      await link(yes, [_projectName], askFn: sensitivityOnly(true));
       expect(Registry.load(io: yes).findByName(_projectName)!.sensitivityMode, isTrue);
       final no = _emptyIO();
-      await link(no, [_projectName], askFn: (_) => false);
+      await link(no, [_projectName], askFn: sensitivityOnly(false));
       expect(Registry.load(io: no).findByName(_projectName)!.sensitivityMode, isFalse);
     });
 
