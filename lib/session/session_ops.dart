@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
 import '../file_io.dart';
 import '../templates/handoff_template.dart';
 import '../paths.dart';
@@ -159,11 +161,11 @@ void _safeDelete(FileIO io, String path) {
   } on FileSystemException catch (_) {}
 }
 
-class SessionCloseException implements Exception {
+class SessionCloseException extends ClaudartException {
   final String failedStep;
   final Object? cause;
 
-  const SessionCloseException(this.failedStep, {this.cause});
+  SessionCloseException(this.failedStep, {this.cause}) : super(FailureType.sessionCloseFailed);
 
   @override
   String toString() =>

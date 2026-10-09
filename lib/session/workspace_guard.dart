@@ -1,4 +1,6 @@
 import 'package:path/path.dart' as p;
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
 import '../file_io.dart';
 
 const _lockFileName = 'workspace.lock';
@@ -57,11 +59,12 @@ Future<T> withGuard<T>(
 void clearLock(String workspacePath, {FileIO? io}) =>
     (io ?? const RealFileIO()).delete(lockFilePath(workspacePath));
 
-class WorkspaceLockedException implements Exception {
+class WorkspaceLockedException extends ClaudartException {
   final String workspacePath;
   final String interruptedOperation;
 
-  const WorkspaceLockedException(this.workspacePath, this.interruptedOperation);
+  WorkspaceLockedException(this.workspacePath, this.interruptedOperation)
+      : super(FailureType.workspaceLocked);
 
   @override
   String toString() =>

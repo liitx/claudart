@@ -130,6 +130,28 @@ void main() {
       expect(stack, isNot(contains('VolumeBloc')));
     });
 
+    test('sensitive mode abstracts reason before write', () {
+      // Found real while verifying PR #72's central error catch: this
+      // abstracted stackTrace but not reason -- the field every real
+      // caller actually populates -- so a sensitive-mode project's error
+      // log still leaked raw identifiers through `reason`.
+      final tm = TokenMap();
+      final sensitiveLogger = SessionLogger(
+        io: io,
+        sensitivityMode: true,
+        tokenMap: tm,
+      );
+      sensitiveLogger.logError(
+        command: 'scan',
+        errorType: 'error',
+        fingerprint: 'test.fp2',
+        reason: 'VolumeBloc.process failed',
+      );
+      final entries = readJsonl(_errorsPath);
+      final reason = entries.first['reason'] as String;
+      expect(reason, isNot(contains('VolumeBloc')));
+    });
+
     test('logPerformance writes header row', () {
       logger.logPerformance(command: 'scan', outcome: 'ok', filesScanned: 10);
       final content = io.read(_performancePath);
