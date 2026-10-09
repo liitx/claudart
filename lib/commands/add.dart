@@ -13,6 +13,7 @@
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../dependency_config.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../md_io.dart' show confirm;
@@ -87,7 +88,7 @@ Future<void> runAdd({
       ? fileIO.read(p.join(projectRoot, 'pubspec.yaml'))
       : '';
   final defaultSdk = _detectDartSdkConstraint(pubspecContent);
-  final defaultUsesDartrix = _detectsDartrixDependency(pubspecContent);
+  final defaultUsesDartrix = detectsDartrixDependency(pubspecContent);
 
   print('\n  Author  : ${author.name ?? '(not set)'} <${author.email ?? '(not set)'}>');
 
@@ -211,9 +212,6 @@ final RegExp _sdkConstraintPattern =
 
 String? _detectDartSdkConstraint(String pubspecContent) =>
     _sdkConstraintPattern.firstMatch(pubspecContent)?.group(1);
-
-bool _detectsDartrixDependency(String pubspecContent) =>
-    RegExp(r'^\s{2}dartrix:', multiLine: true).hasMatch(pubspecContent);
 
 // ── Archive scaffold content ──────────────────────────────────────────────────
 

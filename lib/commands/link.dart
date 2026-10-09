@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../codegen/dependency_config_codegen.dart';
+import '../dependency_config.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../md_io.dart' show confirmOrEof;
 import '../paths.dart';
+import '../process_runner.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
 import '../templates/claude_template.dart';
@@ -42,6 +45,7 @@ final RegExp roadmapMarker = RegExp(
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
+const _recompileFlag = '--recompile';
 
 /// Registers the current project with claudart and creates the `.claude` symlink.
 ///
@@ -58,12 +62,14 @@ const _noSensitiveFlag = '--no-sensitive';
 Future<void> runLink(
   List<String> args, {
   FileIO? io,
+  ProcessRunner? runner,
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
   bool? Function(String question)? askFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
+  final proc = runner ?? const RealProcessRunner();
   // A caller-supplied confirm always answers; the default reports null at end
   // of input so a missing answer is never mistaken for "no". [askFn] lets a
   // test simulate "nobody to answer".
@@ -71,14 +77,16 @@ Future<void> runLink(
       askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
   final exit_ = exitFn ?? exit;
 
-  final unknownFlags = args.where((a) => a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag);
+  final unknownFlags = args.where((a) =>
+      a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag && a != _recompileFlag);
   if (unknownFlags.isNotEmpty) {
     print('\n✗ Unknown option: ${unknownFlags.first}');
-    print('  Usage: claudart link [project-name] [$_sensitiveFlag | $_noSensitiveFlag]\n');
+    print('  Usage: claudart link [project-name] [$_sensitiveFlag | $_noSensitiveFlag] [$_recompileFlag]\n');
     exit_(1);
   }
   final wantsSensitive = args.contains(_sensitiveFlag);
   final wantsNoSensitive = args.contains(_noSensitiveFlag);
+  final wantsRecompile = args.contains(_recompileFlag);
   if (wantsSensitive && wantsNoSensitive) {
     print('\n✗ Pass only one of $_sensitiveFlag / $_noSensitiveFlag.\n');
     exit_(1);
@@ -224,6 +232,43 @@ Future<void> runLink(
         generatedRoadmap,
       );
       fileIO.write(readmePath, newReadme);
+    }
+  }
+
+  // 11 — Regenerate the dependency-config const from this project's own
+  // pubspec.yaml, every time link runs — so "what's configured" and "what
+  // the generated file says" never drift. Mirrors zedup's UserConfigCodegen
+  // (manifest -> generated .g.dart const), the first use of the same
+  // pattern in claudart. Rendered through the injected FileIO, not
+  // DependencyConfigCodegen's own real-file writer -- every other write in
+  // this function goes through fileIO so tests stay filesystem-free, and
+  // this one is no different.
+  //
+  // Recompiling is opt-in (--recompile), never automatic: linking a
+  // project whose binary is also the one currently installed and in use
+  // (claudart or zedup's own repo, when self-linked) would otherwise
+  // silently overwrite ~/bin/<name> with whatever's checked out at the
+  // moment -- including uncommitted WIP -- the first time that project is
+  // ever linked. `claudart compile` already exists as the deliberate,
+  // explicit way to rebuild; this flag is a convenience on top of it for
+  // a caller who's sure that's what they want, not a default behavior.
+  //
+  // Writing the generated file itself is NOT gated on the flag -- that
+  // part is always safe (pure config, no side effect on any installed
+  // binary) and should never drift from pubspec.yaml regardless of
+  // whether a recompile was requested.
+  final pubspecPath = p.join(projectRoot, 'pubspec.yaml');
+  if (fileIO.fileExists(pubspecPath)) {
+    const codegen = DependencyConfigCodegen();
+    final generatedPath = p.join(projectRoot, kDependencyConfigGeneratedRelativePath);
+    final newContent =
+        codegen.render(usesDartrix: detectsDartrixDependency(fileIO.read(pubspecPath)));
+    final previousContent = fileIO.fileExists(generatedPath) ? fileIO.read(generatedPath) : null;
+    if (newContent != previousContent) {
+      fileIO.write(generatedPath, newContent);
+      if (wantsRecompile) {
+        await _recompileIfCli(effectiveName, projectRoot, fileIO, proc);
+      }
     }
   }
 
@@ -393,6 +438,47 @@ void _ensureHooksPath(String projectRoot, FileIO fileIO) {
   print(previous.isEmpty
       ? '  git hooks: ${GitConfigKey.hooksPath.gitKey} → $_githooksDirName'
       : '  git hooks: ${GitConfigKey.hooksPath.gitKey} $previous → $_githooksDirName (replaced)');
+}
+
+const _dartExecutable = 'dart';
+const _compileArgs = ['compile', 'exe'];
+const _compileOutputFlag = '-o';
+const _binDirName = 'bin';
+
+/// Recompiles [projectName]'s own binary after its generated
+/// dependency-config content changed — mirrors zedup's own
+/// `UserConfigCodegen` -> `dart compile exe` pattern, generalized: the
+/// *linked project*, not claudart, is what needs recompiling, since the
+/// generated file lives in that project's own tree. Only applies when the
+/// project has a `bin/<name>.dart` matching its own project name (the same
+/// convention claudart/zedup both follow) — a library or Flutter app has
+/// no such entrypoint, and "recompile" has no meaning there, so this is a
+/// silent no-op rather than an error.
+Future<void> _recompileIfCli(
+  String projectName,
+  String projectRoot,
+  FileIO fileIO,
+  ProcessRunner proc,
+) async {
+  final entryPoint = p.join(_binDirName, '$projectName.dart');
+  if (!fileIO.fileExists(p.join(projectRoot, entryPoint))) return;
+
+  final home = Platform.environment[homeEnvVar];
+  if (home == null || home.isEmpty) return;
+  final output = p.join(home, _binDirName, projectName);
+
+  print('\nRecompiling $projectName ($output)...');
+  final result = await proc.run(
+    _dartExecutable,
+    [..._compileArgs, entryPoint, _compileOutputFlag, output],
+    workingDirectory: projectRoot,
+  );
+  if (result.exitCode == 0) {
+    print('✓ Recompiled $projectName.');
+  } else {
+    print('✗ Failed to recompile $projectName — fix the build, then re-run `claudart link`.');
+    print('  ${result.stderr}');
+  }
 }
 
 /// Writes a command template file, but never over a file that already

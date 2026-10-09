@@ -1,8 +1,10 @@
 import 'package:test/test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/link.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/codegen/dependency_config_codegen.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -536,6 +538,158 @@ old content
         exitFn: _throwExit,
       );
       expect(io.read(readmePath), contains('old content'));
+    });
+  });
+
+  group('link — dependency-config codegen', () {
+    test('regenerates lib/generated/dependency_config.g.dart from pubspec.yaml', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), '''
+name: my_app
+dependencies:
+  dartrix:
+    git:
+      url: https://github.com/liitx/dartrix.git
+''');
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final generated = io.read(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath));
+      expect(generated, contains('const bool usesDartrix = true;'));
+    });
+
+    test('usesDartrix is false when pubspec.yaml has no dartrix dependency', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: my_app\n');
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final generated = io.read(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath));
+      expect(generated, contains('const bool usesDartrix = false;'));
+    });
+
+    test('skips codegen entirely when the project has no pubspec.yaml', () async {
+      final io = _emptyIO();
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      expect(io.fileExists(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath)), isFalse);
+    });
+
+    setUpAll(() => registerFallbackValue(fakeResult('')));
+
+    test('does NOT recompile by default, even when bin/<name>.dart exists and content changed', () async {
+      // The real safety case this guards: linking claudart or zedup's own
+      // repo (self-linking) must never silently overwrite the installed
+      // ~/bin/<name> with whatever's currently checked out, including
+      // uncommitted WIP. Recompiling is opt-in (--recompile), not a
+      // default side effect of link.
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
+      final runner = MockProcessRunner();
+
+      await runLink(
+        [_projectName],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      verifyNever(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')));
+      expect(
+        io.fileExists(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath)),
+        isTrue,
+        reason: 'the generated config itself is always written, regardless of --recompile',
+      );
+    });
+
+    test('recompiles when --recompile is passed and bin/<name>.dart exists and content changed', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
+      final runner = MockProcessRunner();
+      when(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')))
+          .thenAnswer((_) async => fakeResult(''));
+
+      await runLink(
+        [_projectName, '--recompile'],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      final captured = verify(() => runner.run(
+            captureAny(),
+            captureAny(),
+            workingDirectory: captureAny(named: 'workingDirectory'),
+          )).captured;
+      expect(captured[0], 'dart');
+      expect(captured[1], contains('compile'));
+      expect(captured[1], contains(p.join('bin', '$_projectName.dart')));
+      expect(captured[2], _projectRoot);
+    });
+
+    test('--recompile does not recompile when the project has no bin/<name>.dart entrypoint', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      final runner = MockProcessRunner();
+
+      await runLink(
+        [_projectName, '--recompile'],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      verifyNever(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')));
+    });
+
+    test('--recompile does not recompile on a second link when nothing changed', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
+      final runner = MockProcessRunner();
+      when(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')))
+          .thenAnswer((_) async => fakeResult(''));
+
+      await runLink(
+        [_projectName, '--recompile'],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      await runLink(
+        [_projectName, '--recompile'],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      verify(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')))
+          .called(1);
     });
   });
 
