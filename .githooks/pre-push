@@ -98,5 +98,9 @@ echo -e "${BOLD}Duplicate-literal check (advisory)${RESET}"
 find lib -name '*.dart' -print0 | xargs -0 dart run tool/check_duplicate_literals.dart
 
 echo ""
+echo -e "${BOLD}Test-only symbol census (advisory)${RESET}"
+dart run tool/check_test_only_symbols.dart
+
+echo ""
 echo -e "${GREEN}${BOLD}All checks passed.${RESET} Pushing..."
 echo ""

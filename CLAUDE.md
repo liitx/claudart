@@ -114,10 +114,17 @@ Always follow this order — no exceptions:
    (confirmed: `git_utils.dart`'s `detectGitContext()` had 100% line coverage via indirect callers
    and zero direct tests; PR #74's own review found 19 undetected mutations in `doctor.dart`,
    none in the new code, all in pre-existing functions that happened to share the file — see
-   issue #75). A survived mutation in code *this session* wrote must be fixed before commit; a
-   survived mutation in pre-existing code the task didn't touch gets filed as an issue, not fixed
-   inline. Always `git diff <file>` after any run, interrupted or not — an interrupted run leaves
-   the file mutated on disk (see `Makefile`'s own warning on the target).
+   issue #75). When more than one `lib/` file changed in the same session, prefer
+   `make mutation-test-changed` over naming each pair by hand — it finds every changed `lib/`
+   file, pairs it with its mirrored test, and (unlike the plain `mutation-test` target) snapshots
+   each file and kills the whole process tree on a per-file timeout, so one file that hangs (a
+   confirmed, reproducible `mutation_test` limitation — see issue #77) can't leave anything
+   mutated on disk or block the rest of the batch. A survived mutation in code *this session*
+   wrote must be fixed before commit; a survived mutation in pre-existing code the task didn't
+   touch gets filed as an issue, not fixed inline. Always `git diff <file>` after any manual
+   `mutation-test` run, interrupted or not — an interrupted run leaves the file mutated on disk
+   (see `Makefile`'s own warning on the target); `mutation-test-changed` already does this check
+   for you.
 4. **Confirm** — present result, wait for user confirmation
 5. **Commit** — only after confirmed
 
