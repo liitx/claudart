@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../file_io.dart';
+import '../paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../util/enum_util.dart';
 
@@ -104,6 +105,13 @@ class WorkspaceOwner {
         handle: json['handle'] as String,
         strict: json['strict'] as bool? ?? false,
       );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'email': email,
+        'handle': handle,
+        'strict': strict,
+      };
 }
 
 class WorkspaceProject {
@@ -134,6 +142,14 @@ class WorkspaceProject {
       org: json['org'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'stack': [for (final s in stack) s.value],
+        'role': role.value,
+        if (repo != null) 'repo': repo,
+        if (org != null) 'org': org,
+      };
 }
 
 class WorkspaceSession {
@@ -163,6 +179,13 @@ class WorkspaceSession {
       sensitivityMode: json['sensitivityMode'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'agents': [for (final a in agents) a.value],
+        'knowledge': knowledge,
+        'proofNotation': proofNotation.value,
+        'sensitivityMode': sensitivityMode,
+      };
 }
 
 class WorkspaceConfig {
@@ -186,13 +209,19 @@ class WorkspaceConfig {
             json['session'] as Map<String, dynamic>),
       );
 
+  Map<String, dynamic> toJson() => {
+        'owner': owner.toJson(),
+        'project': project.toJson(),
+        'session': session.toJson(),
+      };
+
   /// Loads and parses workspace.json for the given workspace directory.
   ///
   /// Returns `null` when the file is missing or unparseable — callers should
   /// stop and tell the user to run `/setup`.
   static WorkspaceConfig? load(String workspaceDir, {FileIO? io}) {
     final fileIO = io ?? const RealFileIO();
-    final path = '$workspaceDir/workspace.json';
+    final path = workspaceConfigPathFor(workspaceDir);
     final raw = fileIO.read(path);
     if (raw.isEmpty) return null;
     try {
@@ -201,5 +230,17 @@ class WorkspaceConfig {
     } on Exception catch (_) {
       return null;
     }
+  }
+
+  /// Writes this config to `workspace.json` in [workspaceDir] as pretty-
+  /// printed JSON. Callers decide whether to call this at all — see
+  /// `link.dart`'s `_seedWorkspaceConfig`, which never calls it over an
+  /// existing file.
+  void write(String workspaceDir, {FileIO? io}) {
+    final fileIO = io ?? const RealFileIO();
+    fileIO.write(
+      workspaceConfigPathFor(workspaceDir),
+      const JsonEncoder.withIndent('  ').convert(toJson()),
+    );
   }
 }

@@ -5,6 +5,7 @@ import 'package:claudart/commands/link.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/codegen/dependency_config_codegen.dart';
+import 'package:claudart/workspace/workspace_config.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -18,6 +19,16 @@ class _ExitException implements Exception {
 Never _throwExit(int code) => throw _ExitException(code);
 
 MemoryFileIO _emptyIO() => MemoryFileIO();
+
+/// Answers successive prompts from a fixed queue, in order; returns null
+/// (EOF) once exhausted. Same pattern as setup_test.dart's own `_prompts`.
+String? Function(String, {bool optional}) _prompts(List<String?> queue) {
+  final iter = queue.iterator;
+  return (String _, {bool optional = false}) {
+    if (!iter.moveNext()) return null;
+    return iter.current;
+  };
+}
 
 void main() {
   group('link — new project registration', () {
@@ -82,6 +93,33 @@ void main() {
         exitFn: _throwExit,
       );
       expect(io.linkExists(p.join(_projectRoot, '.claude')), isTrue);
+    });
+
+    test('seeds the per-workspace project knowledge stub', () async {
+      final io = _emptyIO();
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final path = p.join(projectsKnowledgeDirFor(workspaceFor(_projectName)), '$_projectName.md');
+      expect(io.fileExists(path), isTrue);
+    });
+
+    test('does not overwrite an existing project knowledge stub', () async {
+      final io = _emptyIO();
+      final path = p.join(projectsKnowledgeDirFor(workspaceFor(_projectName)), '$_projectName.md');
+      io.write(path, '# hand-written notes');
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      expect(io.read(path), equals('# hand-written notes'));
     });
 
     test('adds .claude to .gitignore when not present', () async {
@@ -702,7 +740,17 @@ dependencies:
           exitFn: _throwExit,
         );
 
-    bool? neverAsked(String q) => throw StateError('should not have been asked: $q');
+    // Scoped to the sensitivity question specifically — a flag fully
+    // determining sensitivity mode must skip asking about it. workspace.json
+    // seeding is a separate, newer question (not covered by these flags);
+    // declining it here keeps these tests focused on the sensitivity
+    // guarantee they're named for.
+    bool? neverAsked(String q) {
+      if (q.toLowerCase().contains('sensitivity mode')) {
+        throw StateError('should not have been asked: $q');
+      }
+      return false;
+    }
 
     Matcher exitsWith(int code) =>
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', code));
@@ -789,6 +837,95 @@ dependencies:
         await link(io, [_projectName], askFn: (_) => false);
         expect(Registry.load(io: io).findByName(_projectName)!.sensitivityMode, isTrue);
       });
+    });
+  });
+
+  group('link — workspace.json seeding', () {
+    Future<void> link(
+      MemoryFileIO io, {
+      bool? Function(String)? askFn,
+      String? Function(String, {bool optional})? promptFn,
+    }) =>
+        runLink(
+          [_projectName],
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => false,
+          askFn: askFn,
+          promptFn: promptFn,
+          exitFn: _throwExit,
+        );
+
+    String workspaceJsonPath() => p.join(workspaceFor(_projectName), 'workspace.json');
+
+    test('does nothing when workspace.json already exists', () async {
+      final io = _emptyIO();
+      final path = p.join(workspaceFor(_projectName), 'workspace.json');
+      io.write(path, '{"hand": "written"}');
+      await link(
+        io,
+        askFn: (q) => q.contains('sensitivity mode')
+            ? false
+            : throw StateError('should not have asked: $q'),
+      );
+      expect(io.read(path), equals('{"hand": "written"}'));
+    });
+
+    test('declining the offer writes nothing', () async {
+      final io = _emptyIO();
+      await link(io, askFn: (_) => false);
+      expect(io.fileExists(workspaceJsonPath()), isFalse);
+    });
+
+    test('no input (EOF) writes nothing and does not abort the link', () async {
+      final io = _emptyIO();
+      // Sensitivity question answered deterministically (false) so the link
+      // itself proceeds; only the workspace.json offer sees "no input".
+      await link(io, askFn: (q) => q.contains('sensitivity mode') ? false : null);
+      expect(io.fileExists(workspaceJsonPath()), isFalse);
+      expect(Registry.load(io: io).findByName(_projectName), isNotNull);
+    });
+
+    test('a blank required answer writes nothing', () async {
+      final io = _emptyIO();
+      await link(
+        io,
+        askFn: (q) => q.contains('sensitivity mode') ? false : true,
+        promptFn: _prompts(['Aksana', null, 'aksana']), // email missing
+      );
+      expect(io.fileExists(workspaceJsonPath()), isFalse);
+    });
+
+    test('full answers write a workspace.json that loads back correctly', () async {
+      final io = _emptyIO();
+      await link(
+        io,
+        askFn: (q) {
+          if (q.contains('sensitivity mode')) return false;
+          if (q.contains('strict')) return false;
+          return true;
+        },
+        promptFn: _prompts([
+          'Aksana',
+          'a@vgv.dev',
+          'aksana',
+          'maintainer',
+          'dart,flutter',
+          'vgv',
+          'claudart',
+        ]),
+      );
+      final cfg = WorkspaceConfig.load(workspaceFor(_projectName), io: io)!;
+      expect(cfg.owner.name, equals('Aksana'));
+      expect(cfg.owner.email, equals('a@vgv.dev'));
+      expect(cfg.owner.handle, equals('aksana'));
+      expect(cfg.owner.strict, isFalse);
+      expect(cfg.project.name, equals(_projectName));
+      expect(cfg.project.stack, equals([StackType.dart, StackType.flutter]));
+      expect(cfg.project.role, equals(WorkspaceRole.maintainer));
+      expect(cfg.project.org, equals('vgv'));
+      expect(cfg.project.repo, equals('claudart'));
+      expect(cfg.session.sensitivityMode, isFalse);
     });
   });
 }
