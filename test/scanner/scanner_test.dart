@@ -1,6 +1,8 @@
 import 'package:test/test.dart';
 import 'package:claudart/scanner/scanner.dart';
 import 'package:claudart/scanner/scan_threshold_exception.dart';
+import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/errors/fault_class.dart';
 import 'package:claudart/ignore_rules.dart';
 import '../helpers/mocks.dart';
 
@@ -118,7 +120,9 @@ void main() {
                 (e) => e.suggestions,
                 'suggestions',
                 isNotEmpty,
-              ),
+              )
+              .having((e) => e.failureType, 'failureType', equals(FailureType.scanThresholdExceeded))
+              .having((e) => e.faultClass, 'faultClass', equals(FaultClass.environmentFault)),
         ),
       );
     });

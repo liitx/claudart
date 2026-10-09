@@ -8,6 +8,9 @@
 
 import 'dart:convert';
 
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
+
 enum ArchiveKind {
   archive,
   reminder;
@@ -66,9 +69,9 @@ class ArchiveEntry {
 /// Thrown when archive/index.json can't be parsed as a list of entries.
 /// Never swallowed to an empty list: a caller that did that would go on to
 /// overwrite the file with just the one entry it's appending.
-class CorruptArchiveIndexException implements Exception {
+class CorruptArchiveIndexException extends ClaudartException {
   final String cause;
-  const CorruptArchiveIndexException(this.cause);
+  CorruptArchiveIndexException(this.cause) : super(FailureType.archiveIndexCorrupt);
 
   @override
   String toString() => 'Archive index is corrupt: $cause';

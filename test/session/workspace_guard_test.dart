@@ -1,5 +1,7 @@
 import 'package:test/test.dart';
 import 'package:claudart/session/workspace_guard.dart';
+import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/errors/fault_class.dart';
 import '../helpers/mocks.dart';
 
 const _workspace = '/workspace/test-project';
@@ -60,6 +62,11 @@ void main() {
         fail('expected exception');
       } on WorkspaceLockedException catch (e) {
         expect(e.interruptedOperation, equals('scan'));
+        expect(e.failureType, equals(FailureType.workspaceLocked));
+        // Overridden to transientFault, not workspace's default
+        // environmentFault -- the lock clears itself once the other
+        // session finishes, so retrying is the right response.
+        expect(e.faultClass, equals(FaultClass.transientFault));
       }
     });
 

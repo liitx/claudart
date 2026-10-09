@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'package:claudart/errors/claudart_exception.dart';
 import 'package:claudart/git_utils.dart';
+import 'package:claudart/logging/logger.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
 import 'package:claudart/version.dart';
 import 'package:claudart/registry.dart';
@@ -114,6 +116,33 @@ Future<void> main(List<String> rawArgs) async {
     exit(1);
   }
 
+  try {
+    await _dispatch(claudartCommand, rest);
+  } on ClaudartException catch (e) {
+    // Central catch: every command's ClaudartException lands here exactly
+    // once, so error logging doesn't depend on each command file
+    // remembering to call it -- SessionLogger.logError was only ever
+    // wired into 2 of many command files before this. Resolves the same
+    // registry entry every command resolves its own sensitivityMode from,
+    // so a sensitive-mode project's error log still gets abstracted here.
+    print('\n✗ ${e.toString()}');
+    print('  ${e.failureType.suggestedAction}\n');
+    final errorRoot = detectGitContext()?.root;
+    final errorEntry = errorRoot != null ? Registry.load().findByProjectRoot(errorRoot) : null;
+    SessionLogger(
+      sensitivityMode: errorEntry?.sensitivityMode ?? false,
+      workspacePath: errorEntry?.workspacePath,
+    ).logError(
+      command: command,
+      errorType: e.errorType.label,
+      fingerprint: '$command.${e.failureType.name}',
+      reason: e.toString(),
+    );
+    exit(1);
+  }
+}
+
+Future<void> _dispatch(ClaudartCommand claudartCommand, List<String> rest) async {
   switch (claudartCommand) {
     case ClaudartCommand.chat:
       await runChatShell();

@@ -1,5 +1,7 @@
 import 'package:test/test.dart';
 import 'package:claudart/session/session_ops.dart';
+import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/errors/fault_class.dart';
 import 'package:claudart/file_io.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/templates/handoff_template.dart';
@@ -169,6 +171,8 @@ void main() {
         fail('expected exception');
       } on SessionCloseException catch (e) {
         expect(e.failedStep, equals('reset'));
+        expect(e.failureType, equals(FailureType.sessionCloseFailed));
+        expect(e.faultClass, equals(FaultClass.environmentFault));
       }
     });
   });
