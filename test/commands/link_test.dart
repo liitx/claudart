@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:claudart/commands/link.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/codegen/dependency_config_codegen.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -536,6 +537,54 @@ old content
         exitFn: _throwExit,
       );
       expect(io.read(readmePath), contains('old content'));
+    });
+  });
+
+  group('link — dependency-config codegen', () {
+    test('regenerates lib/generated/dependency_config.g.dart from pubspec.yaml', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), '''
+name: my_app
+dependencies:
+  dartrix:
+    git:
+      url: https://github.com/liitx/dartrix.git
+''');
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final generated = io.read(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath));
+      expect(generated, contains('const bool usesDartrix = true;'));
+    });
+
+    test('usesDartrix is false when pubspec.yaml has no dartrix dependency', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: my_app\n');
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final generated = io.read(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath));
+      expect(generated, contains('const bool usesDartrix = false;'));
+    });
+
+    test('skips codegen entirely when the project has no pubspec.yaml', () async {
+      final io = _emptyIO();
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      expect(io.fileExists(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath)), isFalse);
     });
   });
 

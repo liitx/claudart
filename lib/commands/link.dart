@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../codegen/dependency_config_codegen.dart';
+import '../dependency_config.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../md_io.dart' show confirmOrEof;
@@ -225,6 +227,23 @@ Future<void> runLink(
       );
       fileIO.write(readmePath, newReadme);
     }
+  }
+
+  // 11 — Regenerate the dependency-config const from this project's own
+  // pubspec.yaml, every time link runs — so "what's configured" and "what
+  // the generated file says" never drift. Mirrors zedup's UserConfigCodegen
+  // (manifest -> generated .g.dart const), the first use of the same
+  // pattern in claudart. Rendered through the injected FileIO, not
+  // DependencyConfigCodegen's own real-file writer -- every other write in
+  // this function goes through fileIO so tests stay filesystem-free, and
+  // this one is no different.
+  final pubspecPath = p.join(projectRoot, 'pubspec.yaml');
+  if (fileIO.fileExists(pubspecPath)) {
+    const codegen = DependencyConfigCodegen();
+    fileIO.write(
+      p.join(projectRoot, kDependencyConfigGeneratedRelativePath),
+      codegen.render(usesDartrix: detectsDartrixDependency(fileIO.read(pubspecPath))),
+    );
   }
 
   print('\n✓ Registered: $effectiveName');
