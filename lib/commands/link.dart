@@ -6,6 +6,7 @@ import '../file_io.dart';
 import '../git_utils.dart';
 import '../md_io.dart' show confirmOrEof;
 import '../paths.dart';
+import '../process_runner.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
 import '../templates/claude_template.dart';
@@ -60,12 +61,14 @@ const _noSensitiveFlag = '--no-sensitive';
 Future<void> runLink(
   List<String> args, {
   FileIO? io,
+  ProcessRunner? runner,
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
   bool? Function(String question)? askFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
+  final proc = runner ?? const RealProcessRunner();
   // A caller-supplied confirm always answers; the default reports null at end
   // of input so a missing answer is never mistaken for "no". [askFn] lets a
   // test simulate "nobody to answer".
@@ -237,13 +240,28 @@ Future<void> runLink(
   // DependencyConfigCodegen's own real-file writer -- every other write in
   // this function goes through fileIO so tests stay filesystem-free, and
   // this one is no different.
+  //
+  // Recompiling on every link regardless of whether anything changed would
+  // waste real time on every re-link of an already-up-to-date project --
+  // only recompile when the generated content actually differs from what's
+  // already on disk. The project being linked, not claudart itself, is
+  // what needs recompiling: the generated file lives in *that* project's
+  // tree and only *that* project's binary consumes it. Only applies when
+  // the project looks like a compilable CLI (a bin/<name>.dart matching
+  // its own project name, same convention claudart/zedup both use) --
+  // skipped silently for a library or Flutter app, where "recompile" has
+  // no meaning.
   final pubspecPath = p.join(projectRoot, 'pubspec.yaml');
   if (fileIO.fileExists(pubspecPath)) {
     const codegen = DependencyConfigCodegen();
-    fileIO.write(
-      p.join(projectRoot, kDependencyConfigGeneratedRelativePath),
-      codegen.render(usesDartrix: detectsDartrixDependency(fileIO.read(pubspecPath))),
-    );
+    final generatedPath = p.join(projectRoot, kDependencyConfigGeneratedRelativePath);
+    final newContent =
+        codegen.render(usesDartrix: detectsDartrixDependency(fileIO.read(pubspecPath)));
+    final previousContent = fileIO.fileExists(generatedPath) ? fileIO.read(generatedPath) : null;
+    if (newContent != previousContent) {
+      fileIO.write(generatedPath, newContent);
+      await _recompileIfCli(effectiveName, projectRoot, fileIO, proc);
+    }
   }
 
   print('\n✓ Registered: $effectiveName');
@@ -412,6 +430,47 @@ void _ensureHooksPath(String projectRoot, FileIO fileIO) {
   print(previous.isEmpty
       ? '  git hooks: ${GitConfigKey.hooksPath.gitKey} → $_githooksDirName'
       : '  git hooks: ${GitConfigKey.hooksPath.gitKey} $previous → $_githooksDirName (replaced)');
+}
+
+const _dartExecutable = 'dart';
+const _compileArgs = ['compile', 'exe'];
+const _compileOutputFlag = '-o';
+const _binDirName = 'bin';
+
+/// Recompiles [projectName]'s own binary after its generated
+/// dependency-config content changed — mirrors zedup's own
+/// `UserConfigCodegen` -> `dart compile exe` pattern, generalized: the
+/// *linked project*, not claudart, is what needs recompiling, since the
+/// generated file lives in that project's own tree. Only applies when the
+/// project has a `bin/<name>.dart` matching its own project name (the same
+/// convention claudart/zedup both follow) — a library or Flutter app has
+/// no such entrypoint, and "recompile" has no meaning there, so this is a
+/// silent no-op rather than an error.
+Future<void> _recompileIfCli(
+  String projectName,
+  String projectRoot,
+  FileIO fileIO,
+  ProcessRunner proc,
+) async {
+  final entryPoint = p.join(_binDirName, '$projectName.dart');
+  if (!fileIO.fileExists(p.join(projectRoot, entryPoint))) return;
+
+  final home = Platform.environment[homeEnvVar];
+  if (home == null || home.isEmpty) return;
+  final output = p.join(home, _binDirName, projectName);
+
+  print('\nRecompiling $projectName ($output)...');
+  final result = await proc.run(
+    _dartExecutable,
+    [..._compileArgs, entryPoint, _compileOutputFlag, output],
+    workingDirectory: projectRoot,
+  );
+  if (result.exitCode == 0) {
+    print('✓ Recompiled $projectName.');
+  } else {
+    print('✗ Failed to recompile $projectName — fix the build, then re-run `claudart link`.');
+    print('  ${result.stderr}');
+  }
 }
 
 /// Writes a command template file, but never over a file that already

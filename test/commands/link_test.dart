@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/link.dart';
 import 'package:claudart/registry.dart';
@@ -585,6 +586,82 @@ dependencies:
         exitFn: _throwExit,
       );
       expect(io.fileExists(p.join(_projectRoot, kDependencyConfigGeneratedRelativePath)), isFalse);
+    });
+
+    setUpAll(() => registerFallbackValue(fakeResult('')));
+
+    test('recompiles the project binary when its bin/<name>.dart exists and content changed', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
+      final runner = MockProcessRunner();
+      when(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')))
+          .thenAnswer((_) async => fakeResult(''));
+
+      await runLink(
+        [_projectName],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      final captured = verify(() => runner.run(
+            captureAny(),
+            captureAny(),
+            workingDirectory: captureAny(named: 'workingDirectory'),
+          )).captured;
+      expect(captured[0], 'dart');
+      expect(captured[1], contains('compile'));
+      expect(captured[1], contains(p.join('bin', '$_projectName.dart')));
+      expect(captured[2], _projectRoot);
+    });
+
+    test('does not recompile when the project has no bin/<name>.dart entrypoint', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      final runner = MockProcessRunner();
+
+      await runLink(
+        [_projectName],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      verifyNever(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')));
+    });
+
+    test('does not recompile on a second link when nothing changed', () async {
+      final io = _emptyIO();
+      io.write(p.join(_projectRoot, 'pubspec.yaml'), 'name: $_projectName\n');
+      io.write(p.join(_projectRoot, 'bin', '$_projectName.dart'), 'void main() {}\n');
+      final runner = MockProcessRunner();
+      when(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')))
+          .thenAnswer((_) async => fakeResult(''));
+
+      await runLink(
+        [_projectName],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      await runLink(
+        [_projectName],
+        io: io,
+        runner: runner,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+
+      verify(() => runner.run(any(), any(), workingDirectory: any(named: 'workingDirectory')))
+          .called(1);
     });
   });
 
