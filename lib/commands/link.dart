@@ -264,20 +264,20 @@ ProjectLinks createProjectLinks({
   required FileIO fileIO,
 }) {
   fileIO.createDir(workspace);
-  fileIO.createDir(p.join(workspace, '.claude', 'commands'));
+  fileIO.createDir(p.join(workspace, IdeIntegration.claudeCode.dirName, 'commands'));
 
-  final symlinkPath = p.join(projectRoot, '.claude');
-  final symlinkTarget = p.join(workspace, '.claude');
+  final symlinkPath = p.join(projectRoot, IdeIntegration.claudeCode.dirName);
+  final symlinkTarget = p.join(workspace, IdeIntegration.claudeCode.dirName);
 
   if (fileIO.linkExists(symlinkPath)) {
-    print('\n⚠  Removing existing .claude symlink.');
+    print('\n⚠  Removing existing ${IdeIntegration.claudeCode.dirName} symlink.');
     fileIO.deleteLink(symlinkPath);
   }
 
   final symlinkSkipped = fileIO.dirExists(symlinkPath);
   if (symlinkSkipped) {
-    print('\n⚠  .claude/ is a real directory — symlink skipped.');
-    print('  Slash commands in .claude/commands/ are already available.');
+    print('\n⚠  ${IdeIntegration.claudeCode.dirName}/ is a real directory — symlink skipped.');
+    print('  Slash commands in ${IdeIntegration.claudeCode.dirName}/commands/ are already available.');
   } else {
     fileIO.createLink(symlinkPath, symlinkTarget);
   }
@@ -285,7 +285,7 @@ ProjectLinks createProjectLinks({
   // Write all agent command templates to the workspace .claude/commands/.
   // Driven by AgentFlow.values — adding a new flow with hasCommandFile=true
   // automatically installs its template; no manual update required.
-  final workspaceCmdsDir = p.join(workspace, '.claude', 'commands');
+  final workspaceCmdsDir = p.join(workspace, IdeIntegration.claudeCode.dirName, 'commands');
   for (final flow in AgentFlow.values.where((f) => f.hasCommandFile)) {
     // Remove any un-suffixed legacy file first so pickers don't show duplicates.
     final legacy = p.join(workspaceCmdsDir, flow.legacyFileName);
@@ -303,7 +303,7 @@ ProjectLinks createProjectLinks({
   // kept rather than deleted — content is synced to the same template instead —
   // since a real directory may hold files the owner does not want removed.
   if (symlinkSkipped) {
-    final realCmdsDir = p.join(projectRoot, '.claude', 'commands');
+    final realCmdsDir = p.join(projectRoot, IdeIntegration.claudeCode.dirName, 'commands');
     fileIO.createDir(realCmdsDir);
     for (final flow in AgentFlow.values.where((f) => f.hasCommandFile)) {
       final template = flow.commandTemplate(workspace, effectiveName);
@@ -316,7 +316,7 @@ ProjectLinks createProjectLinks({
 
   // Create .cursor/commands symlink for Cursor IDE slash command integration.
   // Cursor reads slash commands from .cursor/commands/ — same markdown format.
-  final cursorDir = p.join(projectRoot, '.cursor');
+  final cursorDir = p.join(projectRoot, IdeIntegration.cursor.dirName);
   final cursorCmdsLink = p.join(cursorDir, 'commands');
   fileIO.createDir(cursorDir);
   if (fileIO.linkExists(cursorCmdsLink)) fileIO.deleteLink(cursorCmdsLink);
@@ -363,8 +363,8 @@ void _ensureGitignore(String projectRoot, FileIO fileIO) {
   final lines = current.split('\n');
 
   final missing = <String>[
-    if (!_gitignoreHas(lines, '.claude')) '.claude',
-    if (!_gitignoreHas(lines, '.cursor/')) '.cursor/',
+    if (!_gitignoreHas(lines, IdeIntegration.claudeCode.dirName)) IdeIntegration.claudeCode.dirName,
+    if (!_gitignoreHas(lines, '${IdeIntegration.cursor.dirName}/')) '${IdeIntegration.cursor.dirName}/',
   ];
 
   if (missing.isEmpty) return;

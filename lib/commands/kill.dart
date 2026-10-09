@@ -93,7 +93,7 @@ Future<void> runKill({
   // 4 — Check for an active session. `.claude` is either a symlink (the
   // normal case) or a real directory when link.dart couldn't symlink it —
   // both mean a session is linked. Only warn when neither exists.
-  final claudePath = p.join(projectRoot, '.claude');
+  final claudePath = p.join(projectRoot, IdeIntegration.claudeCode.dirName);
   if (!fileIO.linkExists(claudePath) && !fileIO.dirExists(claudePath)) {
     print('\n⚠  No active session found for ${entry.name}.');
     if (!decide('Kill anyway and archive the handoff?', headlessAnswer: true)) {

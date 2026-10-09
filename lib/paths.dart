@@ -12,6 +12,24 @@ const String flowCheckpointFileName   = 'flow_checkpoint.json';
 const String pendingConfirmationFileName = 'pending_confirmation.json';
 const String knowledgeDirName         = 'knowledge';
 const String claudeMdFileName         = 'CLAUDE.md';
+const String registryFileName         = 'registry.json';
+const String configFileName           = 'config.json';
+
+/// Which IDE's slash-command convention a workspace directory serves —
+/// each name is fixed by that tool, not a choice claudart or a project
+/// makes. `claudeCode`'s `commands` dir is real content; `cursor`'s is a
+/// symlink to the same workspace copy (see `link.dart`) — one source,
+/// two IDE-mandated entry points reading it.
+enum IdeIntegration {
+  claudeCode(dirName: '.claude'),
+  cursor(dirName: '.cursor');
+
+  const IdeIntegration({required this.dirName});
+
+  /// The directory name this IDE requires at the project root — fixed by
+  /// the tool itself, never renamed by claudart.
+  final String dirName;
+}
 
 /// Single source of truth for the env var name itself — `workspacesRoot`
 /// below and `claudart doctor`'s workspace-root check both read it; a
@@ -60,7 +78,7 @@ String get workspacesRoot {
 }
 
 /// Registry of all known project workspaces.
-String get registryPath => p.join(workspacesRoot, 'registry.json');
+String get registryPath => p.join(workspacesRoot, registryFileName);
 
 /// Returns the workspace directory for a named project.
 String workspaceFor(String projectName) => p.join(workspacesRoot, projectName);
@@ -73,11 +91,11 @@ String skillsPathFor(String ws) => p.join(ws, skillsFileName);
 String pendingConfirmationPathFor(String ws) =>
     p.join(ws, pendingConfirmationFileName);
 String archiveDirFor(String ws) => p.join(ws, archivesDirName);
-String configPathFor(String ws) => p.join(ws, 'config.json');
+String configPathFor(String ws) => p.join(ws, configFileName);
 String knowledgeDirFor(String ws) => p.join(ws, knowledgeDirName);
 String genericKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'generic');
 String projectsKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'projects');
-String claudeCommandsDirFor(String ws) => p.join(ws, '.claude', 'commands');
+String claudeCommandsDirFor(String ws) => p.join(ws, IdeIntegration.claudeCode.dirName, 'commands');
 String tokenMapPathFor(String ws) => p.join(ws, 'token_map.json');
 String logsDirFor(String ws) => p.join(ws, 'logs');
 String experimentsDirFor(String ws) => p.join(ws, 'experiments');
