@@ -8,10 +8,12 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:claudart/commands/doctor.dart';
+import 'package:claudart/commands/link.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/harness/harness_check.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/process_runner.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
@@ -477,6 +479,68 @@ void main() {
       final health = outcomes.firstWhere((o) => o.id == HarnessCheckId.registryHealth);
       expect(health.result, equals(HarnessCheckResult.fail));
       expect(health.detail, contains('gone'));
+    });
+  });
+
+  group('runDoctorChecks — artifact freshness', () {
+    test('skips when the project is not registered', () async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(),
+      );
+      final freshness = outcomes.firstWhere((o) => o.id == HarnessCheckId.artifactFreshness);
+      expect(freshness.result, equals(HarnessCheckResult.skip));
+    });
+
+    test('fails and names the drifted artifacts for a registered, never-linked project', () async {
+      // Registered (so the check doesn't skip) but with none of `link`'s
+      // own output on disk — every artifact should surface as drifted.
+      final io = MemoryFileIO(
+        dirs: {'/fake/repo'},
+        files: {
+          registryPath: '''
+{"workspaces": [{"name": "repo", "projectRoot": "/fake/repo", "workspacePath": "/fake/workspace-root/repo", "createdAt": "", "lastSession": ""}]}
+''',
+        },
+      );
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: {..._cleanEnv, 'CLAUDART_WORKSPACE': '/fake/workspace-root'},
+        projectRoot: '/fake/repo',
+        io: io,
+      );
+      final freshness = outcomes.firstWhere((o) => o.id == HarnessCheckId.artifactFreshness);
+      expect(freshness.result, equals(HarnessCheckResult.fail));
+      // commandTemplates/claudeMdTail are missing (never linked);
+      // readmeRoadmap/dependencyConfig are notApplicable (no roadmap.json
+      // or pubspec.yaml in this fixture), so only the first two should be
+      // named.
+      expect(freshness.detail, contains('commandTemplates'));
+      expect(freshness.detail, contains('claudeMdTail'));
+      expect(freshness.detail, contains('claudart link'));
+    });
+
+    test('ok right after a real claudart link', () async {
+      final io = MemoryFileIO(files: {
+        p.join('/fake/repo', 'pubspec.yaml'): 'name: repo\n',
+      });
+      await runLink(
+        ['repo'],
+        io: io,
+        projectRootOverride: '/fake/repo',
+        confirmFn: (_) => false,
+        exitFn: (code) => throw StateError('exit $code'),
+      );
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner(_responses()),
+        env: {..._cleanEnv, 'CLAUDART_WORKSPACE': workspacesRoot},
+        projectRoot: '/fake/repo',
+        io: io,
+      );
+      final freshness = outcomes.firstWhere((o) => o.id == HarnessCheckId.artifactFreshness);
+      expect(freshness.result, equals(HarnessCheckResult.ok));
     });
   });
 

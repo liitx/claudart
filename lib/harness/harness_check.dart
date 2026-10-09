@@ -66,7 +66,13 @@ enum HarnessCheckId {
   /// clone unless this is configured. `claudart link` sets it
   /// automatically; this check catches a project linked before that, or
   /// linked by a non-claudart tool.
-  gitHooksConfigured;
+  gitHooksConfigured,
+
+  /// Every `ClaudartArtifact` for the current project's `link` output is
+  /// `fresh` or `notApplicable` — a `stale`/`missing` one means a source
+  /// (pubspec.yaml, roadmap.json, generic knowledge files) changed since
+  /// the last `claudart link` and the generated output hasn't caught up.
+  artifactFreshness;
 
   String get label => switch (this) {
         HarnessCheckId.tools                      => 'tools',
@@ -79,6 +85,7 @@ enum HarnessCheckId {
         HarnessCheckId.bedrockMetadataDisabled     => 'bedrock metadata guard',
         HarnessCheckId.bedrockCredentialsPreflight => 'bedrock credentials',
         HarnessCheckId.gitHooksConfigured          => 'git hooks',
+        HarnessCheckId.artifactFreshness           => 'artifact freshness',
       };
 }
 

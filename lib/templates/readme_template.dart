@@ -65,9 +65,45 @@ RoadmapConfig? parseRoadmapConfig(String raw) {
   }
 }
 
+/// `<projectRoot>/roadmap.json` — the opt-in source [parseRoadmapConfig]
+/// reads from. Shared by `link.dart`'s write path and
+/// `artifact_state.dart`'s read-only staleness check.
+const String kRoadmapJsonFilename = 'roadmap.json';
+
+/// `<projectRoot>/README.md` — the file [readmeTemplate]'s output is
+/// spliced into. Shared the same way as [kRoadmapJsonFilename].
+const String kReadmeFilename = 'README.md';
+
+/// [readmeTemplate]'s default `summaryText` when a project's
+/// `roadmap.json` doesn't set its own.
+const String kDefaultRoadmapSummaryText = "What's coming";
+
+/// The marker `readmeTemplate`'s output always starts with — the splice
+/// point between the README's hand-curated `## Roadmap` heading (preserved,
+/// keeps its TOC anchor) and the machine-owned table below it. Stops before
+/// the next `---` section separator (not the next `## ` heading) — every
+/// top-level README section is followed by a `---` rule before the next
+/// heading, and stopping at `## ` instead would consume that separator,
+/// visibly joining Roadmap to the following section. Unlike
+/// `claude_template.dart`'s `generatedMarker`, this splice is opt-in: a
+/// README.md without this marker is left untouched entirely, since (unlike
+/// CLAUDE.md) README.md is not a claudart-owned file for every project.
+///
+/// `(?![\s\S])` is "end of input," not `\z` — Dart/JS regex has no `\z`
+/// metacharacter (that's Perl/Python syntax); in ECMAScript-flavored regex
+/// `\z` is silently a literal lowercase `z`. Using it here made the splice
+/// stop at the first `z` in the roadmap content instead of the end of
+/// input — worked by luck against claudart's own roadmap text (no `z`
+/// appears in it), corrupted the first live run against a project whose
+/// roadmap text contained "zedup," caught and fixed before landing.
+final RegExp roadmapMarker = RegExp(
+    r'^<!-- claudart:link:roadmap -->.*?(?=\n---|(?![\s\S]))',
+    multiLine: true,
+    dotAll: true);
+
 String readmeTemplate({
   required List<RoadmapRow> roadmapRows,
-  String summaryText = "What's coming",
+  String summaryText = kDefaultRoadmapSummaryText,
   String? footerLine,
 }) {
   final rows = roadmapRows
