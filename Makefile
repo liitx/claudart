@@ -82,3 +82,20 @@ mutation-test:
 	@mkdir -p /tmp/claudart_mutation_test
 	@printf '<?xml version="1.0" encoding="UTF-8"?>\n<mutations version="1.2">\n  <files><file>%s</file></files>\n  <commands><command group="test" expected-return="0" timeout="60">dart test %s</command></commands>\n</mutations>\n' "$(FILE)" "$(TEST_FILE)" > /tmp/claudart_mutation_test/config.xml
 	$(DART) run mutation_test -b -f md /tmp/claudart_mutation_test/config.xml
+
+## Runs `mutation-test` automatically against every changed lib/ file paired
+## with its mirrored test file, instead of a human naming one pair by hand
+## every time. Snapshots each file before its run and restores it after
+## pass/fail/timeout/interrupt -- issue #77 (mutation_test hangs on
+## lib/commands/link.dart specifically; confirmed, reproduced 3 times, not
+## this target's bug to fix) is handled by a per-file timeout that kills the
+## whole process tree, not a skip list -- a skip list goes stale the moment
+## #77 is fixed upstream, a timeout doesn't.
+## Usage: make mutation-test-changed [TIMEOUT_MIN=10]
+mutation-test-changed:
+	$(DART) run tool/mutation_test_changed.dart $(TIMEOUT_MIN)
+
+## Advisory census: lib/ symbols referenced only from test/, never from real
+## lib/ or bin/ code. Always exits 0 -- see the script's own header for why.
+test-only-census:
+	$(DART) run tool/check_test_only_symbols.dart
