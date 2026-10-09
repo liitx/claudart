@@ -8,60 +8,34 @@ void main() {
   group('ProjectConfig', () {
     test('fromJson returns defaults for an empty map', () {
       final cfg = ProjectConfig.fromJson(const {});
-      expect(cfg.sensitivityMode, isFalse);
-      expect(cfg.scanScope, equals(ScanScope.lib));
-      expect(cfg.scanTrigger, equals('on_setup'));
-      expect(cfg.diagnosticReporting, isFalse);
-      expect(cfg.lastScan, isNull);
-      expect(cfg.projectRoot, isNull);
       expect(cfg.afterFixCommand, equals('make rebuild'));
+      expect(cfg.allowedScopeRoots, isEmpty);
     });
 
     test('fromJson parses all fields correctly', () {
       final cfg = ProjectConfig.fromJson(const {
-        'sensitivityMode': true,
-        'scanScope': 'full',
-        'scanTrigger': 'on_demand',
-        'diagnosticReporting': true,
-        'lastScan': '2026-03-16T10:00:00Z',
-        'projectRoot': '/home/user/project',
         'afterFixCommand': 'dart test',
+        'allowedScopeRoots': ['../sibling'],
       });
-      expect(cfg.sensitivityMode, isTrue);
-      expect(cfg.scanScope, equals('full'));
-      expect(cfg.scanTrigger, equals('on_demand'));
-      expect(cfg.diagnosticReporting, isTrue);
-      expect(cfg.lastScan, equals('2026-03-16T10:00:00Z'));
-      expect(cfg.projectRoot, equals('/home/user/project'));
       expect(cfg.afterFixCommand, equals('dart test'));
+      expect(cfg.allowedScopeRoots, equals(['../sibling']));
     });
 
     test('round-trip toJson/fromJson preserves values', () {
       const original = ProjectConfig(
-        sensitivityMode: true,
-        scanScope: 'full',
-        scanTrigger: 'on_demand',
-        diagnosticReporting: false,
-        lastScan: '2026-01-01T00:00:00Z',
-        projectRoot: '/projects/myapp',
         afterFixCommand: 'dart test',
+        allowedScopeRoots: ['../sibling'],
       );
       final loaded = ProjectConfig.fromJson(original.toJson());
-      expect(loaded.sensitivityMode, equals(original.sensitivityMode));
-      expect(loaded.scanScope, equals(original.scanScope));
-      expect(loaded.scanTrigger, equals(original.scanTrigger));
-      expect(loaded.diagnosticReporting, equals(original.diagnosticReporting));
-      expect(loaded.lastScan, equals(original.lastScan));
-      expect(loaded.projectRoot, equals(original.projectRoot));
       expect(loaded.afterFixCommand, equals(original.afterFixCommand));
+      expect(loaded.allowedScopeRoots, equals(original.allowedScopeRoots));
     });
 
     test('copyWith produces updated config', () {
       const cfg = ProjectConfig();
-      final updated = cfg.copyWith(sensitivityMode: true, scanScope: 'full');
-      expect(updated.sensitivityMode, isTrue);
-      expect(updated.scanScope, equals('full'));
-      expect(updated.scanTrigger, equals('on_setup'));
+      final updated = cfg.copyWith(afterFixCommand: 'dart test');
+      expect(updated.afterFixCommand, equals('dart test'));
+      expect(updated.allowedScopeRoots, isEmpty);
     });
   });
 
@@ -109,7 +83,7 @@ void main() {
 
     test('copyWith keeps or replaces it', () {
       const base = ProjectConfig(stepTimeoutMinutes: 9);
-      expect(base.copyWith(scanScope: 'full').stepTimeoutMinutes, 9);
+      expect(base.copyWith(afterFixCommand: 'dart test').stepTimeoutMinutes, 9);
       expect(base.copyWith(stepTimeoutMinutes: 2).stepTimeoutMinutes, 2);
     });
 

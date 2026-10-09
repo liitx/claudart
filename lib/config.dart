@@ -19,15 +19,23 @@ abstract final class ScanScope {
 /// `config.json`; `0` turns it off.
 const Duration defaultStepTimeout = Duration(minutes: 15);
 
-/// Project-level persistent config stored as config.json in the workspace.
-class ProjectConfig {
-  final bool sensitivityMode;
-  final String scanScope;
-  final String scanTrigger;
-  final bool diagnosticReporting;
-  final String? lastScan;
-  final String? projectRoot;
+const _defaultAfterFixCommand = 'make rebuild';
+const _afterFixCommandKey = 'afterFixCommand';
+const _allowedScopeRootsKey = 'allowedScopeRoots';
+const _stepTimeoutMinutesKey = 'stepTimeoutMinutes';
 
+/// Project-level persistent config stored as config.json in the workspace.
+///
+/// `sensitivityMode`/`scanScope`/`scanTrigger`/`diagnosticReporting`/
+/// `lastScan`/`projectRoot` used to live here (commit 3bcbd91) alongside a
+/// now-superseded config.json-based scan architecture. `scan`'s project
+/// root and sensitivity mode moved to the registry (commit 9ac4d81); the
+/// old fields were never removed from this type after that migration and
+/// had zero real consumers anywhere in lib/ -- confirmed by reading every
+/// call site, not inferred. Removed rather than left as dead duplicates of
+/// RegistryEntry.sensitivityMode (the real, live flag the sensitivity/
+/// obfuscation feature actually reads).
+class ProjectConfig {
   /// Shell command run by `claudart rotate` after archiving the current
   /// session, before seeding the next handoff. Must exit 0 to continue.
   /// Defaults to `make rebuild` for self-hosted projects.
@@ -53,33 +61,21 @@ class ProjectConfig {
       };
 
   const ProjectConfig({
-    this.sensitivityMode = false,
-    this.scanScope = ScanScope.lib,
-    this.scanTrigger = 'on_setup',
-    this.diagnosticReporting = false,
-    this.lastScan,
-    this.projectRoot,
-    this.afterFixCommand = 'make rebuild',
+    this.afterFixCommand = _defaultAfterFixCommand,
     this.allowedScopeRoots = const [],
     this.stepTimeoutMinutes,
   });
 
   factory ProjectConfig.fromJson(Map<String, dynamic> json) {
     return ProjectConfig(
-      sensitivityMode: json['sensitivityMode'] as bool? ?? false,
-      scanScope: json['scanScope'] as String? ?? ScanScope.lib,
-      scanTrigger: json['scanTrigger'] as String? ?? 'on_setup',
-      diagnosticReporting: json['diagnosticReporting'] as bool? ?? false,
-      lastScan: json['lastScan'] as String?,
-      projectRoot: json['projectRoot'] as String?,
-      afterFixCommand: json['afterFixCommand'] as String? ?? 'make rebuild',
+      afterFixCommand: json[_afterFixCommandKey] as String? ?? _defaultAfterFixCommand,
       allowedScopeRoots: [
-        for (final r in (json['allowedScopeRoots'] as List<dynamic>? ?? const []))
+        for (final r in (json[_allowedScopeRootsKey] as List<dynamic>? ?? const []))
           if (r is String && r.trim().isNotEmpty) r.trim(),
       ],
       // Only a non-negative integer counts; anything else (a string, a
       // negative number) is treated as unset rather than guessed at.
-      stepTimeoutMinutes: switch (json['stepTimeoutMinutes']) {
+      stepTimeoutMinutes: switch (json[_stepTimeoutMinutesKey]) {
         final int minutes when minutes >= 0 => minutes,
         _ => null,
       },
@@ -87,35 +83,17 @@ class ProjectConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'sensitivityMode': sensitivityMode,
-        'scanScope': scanScope,
-        'scanTrigger': scanTrigger,
-        'diagnosticReporting': diagnosticReporting,
-        if (lastScan != null) 'lastScan': lastScan,
-        if (projectRoot != null) 'projectRoot': projectRoot,
-        'afterFixCommand': afterFixCommand,
-        if (allowedScopeRoots.isNotEmpty) 'allowedScopeRoots': allowedScopeRoots,
-        if (stepTimeoutMinutes != null) 'stepTimeoutMinutes': stepTimeoutMinutes,
+        _afterFixCommandKey: afterFixCommand,
+        if (allowedScopeRoots.isNotEmpty) _allowedScopeRootsKey: allowedScopeRoots,
+        if (stepTimeoutMinutes != null) _stepTimeoutMinutesKey: stepTimeoutMinutes,
       };
 
   ProjectConfig copyWith({
-    bool? sensitivityMode,
-    String? scanScope,
-    String? scanTrigger,
-    bool? diagnosticReporting,
-    String? lastScan,
-    String? projectRoot,
     String? afterFixCommand,
     List<String>? allowedScopeRoots,
     int? stepTimeoutMinutes,
   }) {
     return ProjectConfig(
-      sensitivityMode: sensitivityMode ?? this.sensitivityMode,
-      scanScope: scanScope ?? this.scanScope,
-      scanTrigger: scanTrigger ?? this.scanTrigger,
-      diagnosticReporting: diagnosticReporting ?? this.diagnosticReporting,
-      lastScan: lastScan ?? this.lastScan,
-      projectRoot: projectRoot ?? this.projectRoot,
       afterFixCommand: afterFixCommand ?? this.afterFixCommand,
       allowedScopeRoots: allowedScopeRoots ?? this.allowedScopeRoots,
       stepTimeoutMinutes: stepTimeoutMinutes ?? this.stepTimeoutMinutes,

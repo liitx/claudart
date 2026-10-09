@@ -10,17 +10,34 @@ environment:
 executables:
   claudart: claudart
 
+# Dependency ledger — record why each one is here, not just what. Kept
+# deliberately minimal: claudart's only 2 runtime deps are args+path, a
+# constraint already load-bearing elsewhere in this codebase (see
+# git_utils.dart's dartrix-promotion tradeoff) and worth defending
+# explicitly instead of letting it erode one small addition at a time.
 dependencies:
+  # CLI argument parsing for every claudart subcommand.
   args: ^2.5.0
+  # Cross-platform path joining/resolution — used everywhere a workspace
+  # or project path is built, instead of hand-rolled string concatenation.
   path: ^1.8.0
 
 dev_dependencies:
   lints: ^6.1.0
   test: ^1.31.0
+  # Runtime mocks/fakes for ProcessRunner, FileIO, etc. in tests.
   mocktail: ^1.0.5
+  # Dev-only (not `dependencies`): the matrix/coverage testing framework
+  # and paradigm law — available to test/ and custom_lint's own rule
+  # definitions, deliberately NOT to lib/, so claudart's production
+  # runtime footprint stays at just args+path. Promoting this to a real
+  # dependency (e.g. to share a production enum like FaultClass) is a
+  # real, visible cost -- a decision, not a default.
   dartrix:
     git:
       url: https://github.com/liitx/dartrix.git
   custom_lint: ^0.8.1
+  # This repo's own hand-ported custom_lint rules (bare_string_for_enum,
+  # enum_values_loop_in_single_test, ungrouped_identical_switch_cases).
   claudart_lints:
     path: tool/claudart_lints
