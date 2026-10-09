@@ -1,4 +1,10 @@
-/// Custom lint rules derived by hand from dartrix's PARADIGMS.md.
+/// Custom lint rules. Most are derived by hand from dartrix's PARADIGMS.md
+/// (see "Sync process" below); `UnconditionalConfirmRequiresPromptFn` is the
+/// one exception — it's claudart-local, tied to this repo's own
+/// `confirmFn`/`askFn`/`promptFn` interactive-prompt API shape, not a
+/// general cross-repo convention dartrix would own. Don't route a future
+/// PARADIGMS.md proposal for it; add claudart-local rules like it directly
+/// here and say so in their own doc comment.
 ///
 /// ## Dependency verdict
 ///
@@ -38,6 +44,7 @@ class _ClaudartLints extends PluginBase {
         BareStringForEnum(),
         EnumValuesLoopInSingleTest(),
         UngroupedIdenticalSwitchCases(),
+        UnconditionalConfirmRequiresPromptFn(),
       ];
 }
 
@@ -282,5 +289,95 @@ class UngroupedIdenticalSwitchCases extends DartLintRule {
         }
       }
     });
+  }
+}
+
+/// Flags `confirmFn: (_) => true` or `askFn: (_) => true` passed directly to
+/// a function that also accepts a `promptFn` parameter, when the call
+/// doesn't supply `promptFn`. An unconditional `=> true` always proceeds
+/// past the confirm/ask gate; an absent `promptFn` means that path falls
+/// through to the function's own real interactive prompt default.
+///
+/// Scope, stated plainly: this only catches a *direct* call shaped this
+/// way. The incident that motivated this rule was actually one level
+/// removed — a local test helper (itself taking no `promptFn`) forwarded
+/// `askFn: (_) => true` into `runLink`, and the rule can't see through that
+/// indirection to the real callee's parameter list. That specific site was
+/// fixed by hand; this rule exists to catch the next *direct* instance of
+/// the same shape, not to statically prove safety across any indirection.
+///
+/// Confirmed real: exactly this shape (a test's `confirmFn`/`askFn`
+/// answering every question `true`, no `promptFn` given) made a real
+/// `mutation_test` run hang indefinitely — the mutated subprocess's stdin
+/// pipe was open but never written to, so the default prompt's blocking
+/// read never returned. A deterministic `(_) => false`, or any closure
+/// that isn't an unconditional `true`, is unaffected.
+class UnconditionalConfirmRequiresPromptFn extends DartLintRule {
+  UnconditionalConfirmRequiresPromptFn() : super(code: _code);
+
+  static const _code = LintCode(
+    name: 'unconditional_confirm_requires_prompt_fn',
+    problemMessage:
+        'confirmFn/askFn unconditionally returns true with no promptFn '
+        'supplied — this falls through to the real interactive prompt '
+        'default, which can block indefinitely outside a real terminal.',
+    correctionMessage:
+        'Pass a promptFn (even one that just returns null) alongside an '
+        'unconditional confirmFn/askFn, or make the closure conditional/'
+        'false instead of always true.',
+  );
+
+  static const _targetParamNames = {'confirmFn', 'askFn'};
+  static const _fallbackParamName = 'promptFn';
+
+  @override
+  void run(
+    CustomLintResolver resolver,
+    DiagnosticReporter reporter,
+    CustomLintContext context,
+  ) {
+    context.registry.addMethodInvocation((node) {
+      final element = node.methodName.element;
+      if (element is! ExecutableElement) return;
+      final hasPromptFnParam =
+          element.formalParameters.any((p) => p.name == _fallbackParamName);
+      if (!hasPromptFnParam) return;
+
+      final suppliedPromptFn = node.argumentList.arguments
+          .whereType<NamedExpression>()
+          .any((a) => a.name.label.name == _fallbackParamName);
+      if (suppliedPromptFn) return;
+
+      for (final arg in node.argumentList.arguments) {
+        if (arg is! NamedExpression) continue;
+        if (!_targetParamNames.contains(arg.name.label.name)) continue;
+        if (_isUnconditionalTrue(arg.expression)) {
+          reporter.atNode(arg, _code);
+        }
+      }
+    });
+  }
+
+  /// True for `(_) => true` (expression body) or `(_) { return true; }`
+  /// (single-statement block body) — the two syntactic shapes of "always
+  /// returns the literal `true`, unconditionally."
+  static bool _isUnconditionalTrue(Expression expr) {
+    if (expr is! FunctionExpression) return false;
+    final body = expr.body;
+    if (body is ExpressionFunctionBody) {
+      return _isTrueLiteral(body.expression);
+    }
+    if (body is BlockFunctionBody) {
+      final statements = body.block.statements;
+      if (statements.length != 1) return false;
+      final stmt = statements.first;
+      return stmt is ReturnStatement && _isTrueLiteral(stmt.expression);
+    }
+    return false;
+  }
+
+  static bool _isTrueLiteral(Expression? expr) {
+    final unwrapped = expr?.unParenthesized;
+    return unwrapped is BooleanLiteral && unwrapped.value == true;
   }
 }

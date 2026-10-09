@@ -5,7 +5,8 @@ import '../codegen/dependency_config_codegen.dart';
 import '../dependency_config.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
-import '../md_io.dart' show confirmOrEof;
+import '../knowledge_templates.dart' show projectTemplate;
+import '../md_io.dart' show confirmOrEof, prompt;
 import '../paths.dart';
 import '../process_runner.dart';
 import '../pipeline/agent_flow.dart';
@@ -14,6 +15,7 @@ import '../templates/claude_template.dart';
 import '../templates/command_template_marker.dart';
 import '../templates/readme_template.dart';
 import '../ui/render.dart' as render;
+import '../workspace/workspace_config.dart';
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
@@ -38,10 +40,12 @@ Future<void> runLink(
   String? projectRootOverride,
   bool Function(String question)? confirmFn,
   bool? Function(String question)? askFn,
+  String? Function(String question, {bool optional})? promptFn,
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final proc = runner ?? const RealProcessRunner();
+  final prompt_ = promptFn ?? prompt;
   // A caller-supplied confirm always answers; the default reports null at end
   // of input so a missing answer is never mistaken for "no". [askFn] lets a
   // test simulate "nobody to answer".
@@ -169,6 +173,20 @@ Future<void> runLink(
         );
     }
   }
+
+  // Not a ClaudartArtifact variant: workspace.json is owner-authored, never
+  // machine-regenerated, so a staleness check on it would mean nothing.
+  // Seeded once, only when missing, only with answers the user types for
+  // this project in this run — see _seedWorkspaceConfig for why it never
+  // guesses owner identity from git config or another workspace.
+  _seedWorkspaceConfig(
+    workspace: workspace,
+    effectiveName: effectiveName,
+    sensitivityMode: sensitivityMode,
+    fileIO: fileIO,
+    prompt_: prompt_,
+    ask: ask,
+  );
 
   // Always non-null: every ClaudartArtifact.values entry is visited before
   // this line, and the commandTemplates case always assigns it.
@@ -308,6 +326,90 @@ Future<void> _regenerateDependencyConfig({
   }
 }
 
+/// Seeds `workspace.json` the first time a project is linked and nobody has
+/// hand-written one yet. Never overwrites an existing file, whatever flags
+/// or answers are passed — an existing file may already carry a
+/// hand-corrected identity (e.g. a client project's own email/org, distinct
+/// from this machine's default git identity) that a re-link must never
+/// touch.
+///
+/// Owner identity (name/email/handle) is never derived from git config, the
+/// registry, or another workspace's file — only from what the user types
+/// for this project in this run. A machine's global git identity is not
+/// necessarily the right identity for every project on it (e.g. a client
+/// repo under a different employer/org than this machine's own default) —
+/// guessing it would risk writing the wrong identity into workspace.json,
+/// which flows into commit attribution via scaffold.md
+/// ("Commit attribution is defined in scaffold.md owner — never override").
+/// No input (closed stdin) or a blank required answer writes nothing at
+/// all — never a partially-filled identity.
+void _seedWorkspaceConfig({
+  required String workspace,
+  required String effectiveName,
+  required bool sensitivityMode,
+  required FileIO fileIO,
+  required String? Function(String question, {bool optional}) prompt_,
+  required bool? Function(String question) ask,
+}) {
+  if (fileIO.fileExists(workspaceConfigPathFor(workspace))) return;
+
+  final wantsToCreate = ask('workspace.json missing for this project — create it now?');
+  if (wantsToCreate != true) {
+    print('\n  workspace.json not created — `claudart setup` needs it.');
+    print('  Re-run `claudart link` in a terminal to create it.');
+    return;
+  }
+
+  final name = prompt_('Owner name');
+  final email = prompt_('Owner email');
+  final handle = prompt_('Owner handle (e.g. GitHub username)');
+  if (name == null || email == null || handle == null) {
+    print('\n  No input available — workspace.json not created.');
+    return;
+  }
+  final strict = ask('Enforce strict architectural validation for this project?') ?? false;
+
+  final roleInput = prompt_('Role on this project (maintainer/contributor)', optional: true);
+  final role = roleInput != null ? WorkspaceRole.fromString(roleInput) : WorkspaceRole.contributor;
+
+  final stackInput = prompt_('Tech stack, comma-separated (e.g. dart,flutter)', optional: true);
+  final stack = (stackInput ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .map(StackType.fromString)
+      .whereType<StackType>()
+      .toList();
+
+  final org = prompt_('Org (press enter to skip)', optional: true);
+  final repo = prompt_('Repo (press enter to skip)', optional: true);
+
+  final genericFiles = fileIO
+      .listFiles(genericKnowledgeDir, extension: '.md')
+      .map((f) => p.basenameWithoutExtension(f))
+      .toList()
+    ..sort();
+
+  WorkspaceConfig(
+    owner: WorkspaceOwner(name: name, email: email, handle: handle, strict: strict),
+    project: WorkspaceProject(
+      name: effectiveName,
+      stack: stack,
+      role: role,
+      repo: repo,
+      org: org,
+    ),
+    session: WorkspaceSession(
+      agents: AgentFlow.values,
+      knowledge: genericFiles,
+      proofNotation: ProofNotation.generic,
+      sensitivityMode: sensitivityMode,
+    ),
+  ).write(workspace, io: fileIO);
+
+  print('\n  ✓ workspace.json created — review `owner` before running `claudart setup`.');
+}
+
 /// Result of [createProjectLinks] — the paths its caller reports to the user.
 typedef ProjectLinks = ({
   String symlinkPath,
@@ -406,6 +508,18 @@ ProjectLinks createProjectLinks({
   // which is exactly the gap that let a prior pre-push protection exist
   // on only one machine. A no-op for projects without that convention.
   _ensureHooksPath(projectRoot, fileIO);
+
+  // Per-workspace project-knowledge stub — the path claudeTemplate's
+  // generated CLAUDE.md tail already tells every agent to read
+  // ($workspacePath/knowledge/projects/$projectName.md). Write-once: never
+  // overwrites content the owner has since filled in. Not the same file
+  // `claudart init --project` writes — that one lives at the old v1 global
+  // workspacesRoot path, a different, now-superseded location.
+  final projectKnowledgePath =
+      p.join(projectsKnowledgeDirFor(workspace), '$effectiveName.md');
+  if (!fileIO.fileExists(projectKnowledgePath)) {
+    fileIO.write(projectKnowledgePath, projectTemplate(effectiveName));
+  }
 
   return (
     symlinkPath: symlinkPath,

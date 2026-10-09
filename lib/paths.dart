@@ -14,6 +14,7 @@ const String knowledgeDirName         = 'knowledge';
 const String claudeMdFileName         = 'CLAUDE.md';
 const String registryFileName         = 'registry.json';
 const String configFileName           = 'config.json';
+const String workspaceConfigFileName  = 'workspace.json';
 
 /// Which IDE's slash-command convention a workspace directory serves —
 /// each name is fixed by that tool, not a choice claudart or a project
@@ -92,6 +93,7 @@ String pendingConfirmationPathFor(String ws) =>
     p.join(ws, pendingConfirmationFileName);
 String archiveDirFor(String ws) => p.join(ws, archivesDirName);
 String configPathFor(String ws) => p.join(ws, configFileName);
+String workspaceConfigPathFor(String ws) => p.join(ws, workspaceConfigFileName);
 String knowledgeDirFor(String ws) => p.join(ws, knowledgeDirName);
 String genericKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'generic');
 String projectsKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'projects');

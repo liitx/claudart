@@ -154,4 +154,65 @@ void main() {
       expect(cfg.session.agents, equals([AgentFlow.suggest]));
     });
   });
+
+  group('WorkspaceConfig.toJson / write round-trip', () {
+    const config = WorkspaceConfig(
+      owner: WorkspaceOwner(
+        name: 'Aksana',
+        email: 'a@vgv.dev',
+        handle: 'aksana',
+        strict: true,
+      ),
+      project: WorkspaceProject(
+        name: 'claudart',
+        stack: [StackType.dart, StackType.flutter],
+        role: WorkspaceRole.maintainer,
+        repo: 'claudart',
+        org: 'vgv',
+      ),
+      session: WorkspaceSession(
+        agents: [AgentFlow.suggest, AgentFlow.debug],
+        knowledge: ['dart'],
+        proofNotation: ProofNotation.dartGrounded,
+        sensitivityMode: true,
+      ),
+    );
+
+    test('fromJson(toJson(x)) round-trips every field', () {
+      final roundTripped = WorkspaceConfig.fromJson(config.toJson());
+
+      expect(roundTripped.owner.name, equals(config.owner.name));
+      expect(roundTripped.owner.email, equals(config.owner.email));
+      expect(roundTripped.owner.handle, equals(config.owner.handle));
+      expect(roundTripped.owner.strict, equals(config.owner.strict));
+
+      expect(roundTripped.project.name, equals(config.project.name));
+      expect(roundTripped.project.stack, equals(config.project.stack));
+      expect(roundTripped.project.role, equals(config.project.role));
+      expect(roundTripped.project.repo, equals(config.project.repo));
+      expect(roundTripped.project.org, equals(config.project.org));
+
+      expect(roundTripped.session.agents, equals(config.session.agents));
+      expect(roundTripped.session.knowledge, equals(config.session.knowledge));
+      expect(roundTripped.session.proofNotation, equals(config.session.proofNotation));
+      expect(roundTripped.session.sensitivityMode, equals(config.session.sensitivityMode));
+    });
+
+    test('omits optional project fields from toJson when null', () {
+      const noOptionals = WorkspaceProject(
+        name: 'claudart',
+        stack: [StackType.dart],
+        role: WorkspaceRole.contributor,
+      );
+      expect(noOptionals.toJson().containsKey('repo'), isFalse);
+      expect(noOptionals.toJson().containsKey('org'), isFalse);
+    });
+
+    test('write persists content that load reads back identically', () {
+      final io = MemoryFileIO();
+      config.write(_workspaceDir, io: io);
+      final loaded = WorkspaceConfig.load(_workspaceDir, io: io)!;
+      expect(loaded.toJson(), equals(config.toJson()));
+    });
+  });
 }

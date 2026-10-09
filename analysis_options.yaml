@@ -21,12 +21,16 @@ analyzer:
     # Repeated identical switch-expression bodies not grouped with || —
     # see custom_lint block below
     ungrouped_identical_switch_cases: error
+    # confirmFn/askFn: (_) => true with no promptFn fallback — see
+    # custom_lint block below
+    unconditional_confirm_requires_prompt_fn: error
 
 custom_lint:
   rules:
     - bare_string_for_enum
     - enum_values_loop_in_single_test
     - ungrouped_identical_switch_cases
+    - unconditional_confirm_requires_prompt_fn
 
 linter:
   rules:
