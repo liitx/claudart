@@ -292,18 +292,26 @@ class UngroupedIdenticalSwitchCases extends DartLintRule {
   }
 }
 
-/// Flags `confirmFn: (_) => true` or `askFn: (_) => true` passed to a
-/// function that also accepts a `promptFn` parameter, when the call doesn't
-/// supply `promptFn`. An unconditional `=> true` always proceeds past the
-/// confirm/ask gate; an absent `promptFn` means that path falls through to
-/// the function's own real interactive prompt default. Confirmed real:
-/// exactly this shape (a test's `confirmFn`/`askFn` answering every
-/// question `true`, no `promptFn` given) made a real `mutation_test` run
-/// hang indefinitely — the mutated subprocess's stdin pipe was open but
-/// never written to, so the default prompt's blocking read never returned.
-/// A deterministic `(_) => false`, or any closure that isn't an
-/// unconditional `true`, is unaffected — this only catches the one shape
-/// that's provably always unsafe without a `promptFn` fallback.
+/// Flags `confirmFn: (_) => true` or `askFn: (_) => true` passed directly to
+/// a function that also accepts a `promptFn` parameter, when the call
+/// doesn't supply `promptFn`. An unconditional `=> true` always proceeds
+/// past the confirm/ask gate; an absent `promptFn` means that path falls
+/// through to the function's own real interactive prompt default.
+///
+/// Scope, stated plainly: this only catches a *direct* call shaped this
+/// way. The incident that motivated this rule was actually one level
+/// removed — a local test helper (itself taking no `promptFn`) forwarded
+/// `askFn: (_) => true` into `runLink`, and the rule can't see through that
+/// indirection to the real callee's parameter list. That specific site was
+/// fixed by hand; this rule exists to catch the next *direct* instance of
+/// the same shape, not to statically prove safety across any indirection.
+///
+/// Confirmed real: exactly this shape (a test's `confirmFn`/`askFn`
+/// answering every question `true`, no `promptFn` given) made a real
+/// `mutation_test` run hang indefinitely — the mutated subprocess's stdin
+/// pipe was open but never written to, so the default prompt's blocking
+/// read never returned. A deterministic `(_) => false`, or any closure
+/// that isn't an unconditional `true`, is unaffected.
 class UnconditionalConfirmRequiresPromptFn extends DartLintRule {
   UnconditionalConfirmRequiresPromptFn() : super(code: _code);
 
@@ -368,6 +376,8 @@ class UnconditionalConfirmRequiresPromptFn extends DartLintRule {
     return false;
   }
 
-  static bool _isTrueLiteral(Expression? expr) =>
-      expr is BooleanLiteral && expr.value == true;
+  static bool _isTrueLiteral(Expression? expr) {
+    final unwrapped = expr?.unParenthesized;
+    return unwrapped is BooleanLiteral && unwrapped.value == true;
+  }
 }

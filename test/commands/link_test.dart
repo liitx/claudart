@@ -11,6 +11,15 @@ import '../helpers/mocks.dart';
 const _projectRoot = '/projects/my-app';
 const _projectName = 'my-app';
 
+/// Substring every sensitivity-mode `ask()` question contains ("Change
+/// sensitivity mode?", "Enable sensitivity mode?") — used across this file's
+/// fixtures to answer that question specifically without also answering the
+/// separate workspace.json offer the same way.
+const _sensitivityModeQuestion = 'sensitivity mode';
+
+bool _asksAbout(String question, String substring) =>
+    question.toLowerCase().contains(substring);
+
 class _ExitException implements Exception {
   final int code;
   const _ExitException(this.code);
@@ -750,7 +759,7 @@ dependencies:
     // declining it here keeps these tests focused on the sensitivity
     // guarantee they're named for.
     bool? neverAsked(String q) {
-      if (q.toLowerCase().contains('sensitivity mode')) {
+      if (_asksAbout(q, _sensitivityModeQuestion)) {
         throw StateError('should not have been asked: $q');
       }
       return false;
@@ -796,7 +805,7 @@ dependencies:
       // separate, newer workspace.json offer either way so this stays
       // scoped to the sensitivity behavior it's named for.
       bool? Function(String) sensitivityOnly(bool answer) =>
-          (String q) => q.toLowerCase().contains('sensitivity mode') ? answer : false;
+          (String q) => _asksAbout(q, _sensitivityModeQuestion) ? answer : false;
       final yes = _emptyIO();
       await link(yes, [_projectName], askFn: sensitivityOnly(true));
       expect(Registry.load(io: yes).findByName(_projectName)!.sensitivityMode, isTrue);
@@ -865,15 +874,15 @@ dependencies:
           exitFn: _throwExit,
         );
 
-    String workspaceJsonPath() => p.join(workspaceFor(_projectName), 'workspace.json');
+    String workspaceJsonPath() => workspaceConfigPathFor(workspaceFor(_projectName));
 
     test('does nothing when workspace.json already exists', () async {
       final io = _emptyIO();
-      final path = p.join(workspaceFor(_projectName), 'workspace.json');
+      final path = workspaceJsonPath();
       io.write(path, '{"hand": "written"}');
       await link(
         io,
-        askFn: (q) => q.contains('sensitivity mode')
+        askFn: (q) => _asksAbout(q, _sensitivityModeQuestion)
             ? false
             : throw StateError('should not have asked: $q'),
       );
@@ -890,7 +899,7 @@ dependencies:
       final io = _emptyIO();
       // Sensitivity question answered deterministically (false) so the link
       // itself proceeds; only the workspace.json offer sees "no input".
-      await link(io, askFn: (q) => q.contains('sensitivity mode') ? false : null);
+      await link(io, askFn: (q) => _asksAbout(q, _sensitivityModeQuestion) ? false : null);
       expect(io.fileExists(workspaceJsonPath()), isFalse);
       expect(Registry.load(io: io).findByName(_projectName), isNotNull);
     });
@@ -899,7 +908,7 @@ dependencies:
       final io = _emptyIO();
       await link(
         io,
-        askFn: (q) => q.contains('sensitivity mode') ? false : true,
+        askFn: (q) => _asksAbout(q, _sensitivityModeQuestion) ? false : true,
         promptFn: _prompts(['Aksana', null, 'aksana']), // email missing
       );
       expect(io.fileExists(workspaceJsonPath()), isFalse);
@@ -910,7 +919,7 @@ dependencies:
       await link(
         io,
         askFn: (q) {
-          if (q.contains('sensitivity mode')) return false;
+          if (_asksAbout(q, _sensitivityModeQuestion)) return false;
           if (q.contains('strict')) return false;
           return true;
         },
@@ -935,6 +944,19 @@ dependencies:
       expect(cfg.project.org, equals('vgv'));
       expect(cfg.project.repo, equals('claudart'));
       expect(cfg.session.sensitivityMode, isFalse);
+    });
+
+    test('accepting the strict question sets owner.strict true', () async {
+      final io = _emptyIO();
+      // Everything but the sensitivity question answered true, including
+      // "create it now?" and "Enforce strict architectural validation?".
+      await link(
+        io,
+        askFn: (q) => _asksAbout(q, _sensitivityModeQuestion) ? false : true,
+        promptFn: _prompts(['Aksana', 'a@vgv.dev', 'aksana']),
+      );
+      final cfg = WorkspaceConfig.load(workspaceFor(_projectName), io: io)!;
+      expect(cfg.owner.strict, isTrue);
     });
   });
 }
