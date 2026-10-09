@@ -58,3 +58,27 @@ clean:
 
 ## Clean and rebuild
 rebuild: clean build
+
+## Targeted mutation testing -- catches tests that pass but verify nothing
+## real (coverage alone can't; confirmed empirically: git_utils.dart's
+## detectGitContext() had 100% line coverage via indirect callers but zero
+## direct tests, so 10/15 real mutations to it went undetected). Deliberately
+## scoped to one file + its own test file per invocation, never the whole
+## lib/ tree -- a full-repo run reruns the full suite per mutation point,
+## which the package's own docs warn can take hours.
+## Usage: make mutation-test FILE=lib/git_utils.dart TEST_FILE=test/git_utils_test.dart
+##
+## DANGER, confirmed real: this tool mutates FILE on disk, runs the test
+## command, then reverts it. If the process is killed mid-run (Ctrl-C, a
+## tool timeout) the revert never happens and FILE is left mutated and
+## committed-looking in your working tree -- happened once while building
+## this target (gitEnvClearArgs silently became [] in git_utils.dart,
+## which then broke unrelated tests in a confusing way until `git diff`
+## revealed the real cause). Always run `git diff FILE` after any run you
+## had to interrupt, before trusting anything else in the working tree.
+mutation-test:
+	@test -n "$(FILE)" || { echo "Usage: make mutation-test FILE=lib/foo.dart TEST_FILE=test/foo_test.dart" >&2; exit 2; }
+	@test -n "$(TEST_FILE)" || { echo "Usage: make mutation-test FILE=lib/foo.dart TEST_FILE=test/foo_test.dart" >&2; exit 2; }
+	@mkdir -p /tmp/claudart_mutation_test
+	@printf '<?xml version="1.0" encoding="UTF-8"?>\n<mutations version="1.2">\n  <files><file>%s</file></files>\n  <commands><command group="test" expected-return="0" timeout="60">dart test %s</command></commands>\n</mutations>\n' "$(FILE)" "$(TEST_FILE)" > /tmp/claudart_mutation_test/config.xml
+	$(DART) run mutation_test -b -f md /tmp/claudart_mutation_test/config.xml

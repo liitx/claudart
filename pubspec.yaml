@@ -41,3 +41,13 @@ dev_dependencies:
   # enum_values_loop_in_single_test, ungrouped_identical_switch_cases).
   claudart_lints:
     path: tool/claudart_lints
+  # Mutation testing -- catches tests that pass but verify nothing real
+  # (coverage alone can't; confirmed empirically against the ProjectConfig
+  # dead-field case). Added as-is rather than reimplemented: its own
+  # dependency footprint is just args+path+xml, no net-new runtime cost,
+  # and reimplementing a working tool would itself be the redundancy this
+  # project exists to avoid. Phase 1: use it as-is to get real mutation
+  # coverage working. Phase 2, once we know exactly which of its features
+  # we actually exercise: fold just that subset into dartrix natively and
+  # drop this dependency -- not decided or started yet.
+  mutation_test: ^1.8.0
