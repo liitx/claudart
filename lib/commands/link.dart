@@ -180,7 +180,12 @@ Future<void> runLink(
           fileIO: fileIO,
         );
       case ClaudartArtifact.claudeMdTail:
-        _regenerateClaudeMdTail(projectRoot: projectRoot, workspace: workspace, effectiveName: effectiveName, fileIO: fileIO);
+        _regenerateClaudeMdTail(
+          projectRoot: projectRoot,
+          workspace: workspace,
+          effectiveName: effectiveName,
+          fileIO: fileIO,
+        );
       case ClaudartArtifact.readmeRoadmap:
         _regenerateReadmeRoadmap(projectRoot: projectRoot, fileIO: fileIO);
       case ClaudartArtifact.dependencyConfig:
@@ -194,8 +199,8 @@ Future<void> runLink(
     }
   }
 
-  // Always non-null: ClaudartArtifact.commandTemplates is always first in
-  // .values and always assigns it, every loop iteration.
+  // Always non-null: every ClaudartArtifact.values entry is visited before
+  // this line, and the commandTemplates case always assigns it.
   final resolvedLinks = links!;
   print('\n✓ Registered: $effectiveName');
   print('  Workspace : $workspace');

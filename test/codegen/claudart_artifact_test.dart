@@ -15,7 +15,7 @@ void main() {
       );
     });
 
-    test('commandTemplates is first — runLink depends on it running before the others read links', () {
+    test('commandTemplates is first — locks the existing write order from before this enum existed', () {
       expect(ClaudartArtifact.values.first, ClaudartArtifact.commandTemplates);
     });
   });
