@@ -18,9 +18,15 @@ class CliSession {
   /// Runs `claudart <args>` in the project with [stdin] as its standard input.
   Future<({int code, String out})> run(List<String> args, {String stdin = ''}) async {
     final input = File(p.join(ws.parent.path, 'stdin.txt'))..writeAsStringSync(stdin);
+    // Same GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE leak risk as `create()`
+    // below — claudart itself shells out to git (detectGitContext,
+    // readGitAuthor), so a parent-inherited value could redirect those
+    // calls too. `environment:` only merges onto the parent env, it can't
+    // un-inherit a var already set there — `unset` inside the shell
+    // command is what actually clears it for this subprocess.
     final r = await Process.run(
       'sh',
-      ['-c', '"$_dart" "$_script" ${args.join(' ')} < "${input.path}"'],
+      ['-c', 'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; "$_dart" "$_script" ${args.join(' ')} < "${input.path}"'],
       workingDirectory: proj.path,
       environment: {'CLAUDART_WORKSPACE': ws.path},
     );
@@ -41,7 +47,18 @@ class CliSession {
       ['add', '-A'],
       ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-qm', 'init'],
     ]) {
-      final r = await Process.run('git', args, workingDirectory: proj.path);
+      // GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE, if inherited from a parent
+      // process (e.g. this suite running inside .githooks/pre-push from a
+      // linked worktree), silently redirect these calls into the real repo
+      // instead of this fresh temp one — confirmed real, corrupted a shared
+      // .git/config in exactly that scenario. Clearing via the environment
+      // map alone doesn't un-inherit them (Process.run merges onto the
+      // parent env by default); `env -u` is the one way to actually unset.
+      final r = await Process.run(
+        'env',
+        ['-u', 'GIT_DIR', '-u', 'GIT_WORK_TREE', '-u', 'GIT_INDEX_FILE', 'git', ...args],
+        workingDirectory: proj.path,
+      );
       expect(r.exitCode, 0, reason: '${r.stderr}');
     }
     final s = CliSession._(proj, Directory(p.join(tmp.path, 'ws')));

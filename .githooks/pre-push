@@ -12,6 +12,14 @@
 
 set -uo pipefail
 
+# A push from a linked worktree arrives with GIT_DIR/GIT_WORK_TREE/
+# GIT_INDEX_FILE set by git itself, pointed at that worktree's own
+# .git/worktrees/<name> — confirmed real: left set, every `git` call this
+# hook or the test suite's own subprocesses make (test/helpers/cli_session.dart
+# included) can silently redirect into the real repo instead of a fresh temp
+# one. Unset before anything else runs.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+
 REPO="$(git rev-parse --show-toplevel)"
 cd "$REPO"
 
@@ -40,8 +48,14 @@ fi
 # shell has a real one. That made this confirmation dead code, confirmed
 # under a pseudo-terminal: the prompt never appeared. Open /dev/tty
 # directly instead and let its own success/failure be the only signal.
-if exec 3</dev/tty 2>/dev/null; then
-  read -p "Push to remote? [y/N]: " confirm <&3
+# `read -p` writes its prompt to stdout, not to fd 3 — confirmed real:
+# when stdout isn't the visible terminal (captured/piped by whatever ran
+# `git push`), the prompt never appears anywhere, but `read` still blocks
+# on the real tty waiting for input. Looks hung until someone blindly
+# types an answer. Print to fd 3 explicitly instead of trusting `-p`.
+if exec 3<>/dev/tty 2>/dev/null; then
+  printf "Push to remote? [y/N]: " >&3
+  read -r confirm <&3
   exec 3>&-
   [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Push cancelled."; exit 1; }
 fi
