@@ -3,16 +3,38 @@
 //
 // Text-matching only, no analyzer dependency — matches
 // check_duplicate_literals.dart's own convention and keeps this tool's
-// dependency ledger minimal. Can only under-report: a name collision, or a
-// mention inside a comment/string, counts as "used." Dart has no runtime
-// string reflection to fool this the other way, so a real hit is a real
-// hit. Advisory only, always exits 0 — a hard gate would fail immediately
-// on this repo's own pre-existing hits, which are tracked, not fixed here.
+// dependency ledger minimal. Intended to only under-report (a name
+// collision, or a mention inside a comment/string, counts as "used," and
+// Dart has no runtime string reflection to fool this the other way) —
+// confirmed by independent review this still holds against the real repo
+// today (no false hit), but the mechanism has known gaps worth naming
+// rather than leaving implicit:
+//   - A declaration-shaped line inside a `'''...'''` template string (e.g.
+//     knowledge_templates.dart's embedded code samples) is parsed as a real
+//     declaration. Harmless in practice so far — such a "declaration"
+//     reliably collides with real template text elsewhere in its own file,
+//     which the own-file liveness check already treats as "used."
+//   - The "used in its own file" liveness check (ownFileOccurrences > 1) is
+//     satisfied by a constructor call, a `.values` reference, or even a
+//     mention inside the symbol's own `/// [Foo]` doc comment — a genuinely
+//     unused top-level class with an unused constructor can look "live"
+//     this way. This biases toward under-reporting, consistent with the
+//     tool's design, but it's a real reason a hit could be missing, not
+//     just name collisions.
+//   - The barrel-export parser only recognizes single-quoted
+//     `export '...' [show ...];` lines — a `hide` clause or a
+//     double-quoted export would be silently treated as a whole-file
+//     export (or missed entirely), which could under- or over-count public
+//     API. Not present in this repo's actual barrel today (checked).
+// Advisory only, always exits 0 — a hard gate would fail immediately on
+// this repo's own pre-existing hits, which are tracked, not fixed here.
 //
 // Scope: top-level declarations only (class/enum/mixin/extension/typedef/
-// function/const/final/var). Class and enum members are deliberately out
-// of scope — overrides, enum getters, and interface members would be far
-// too noisy to judge by text alone.
+// function/getter/const/final/var). Class and enum MEMBERS are
+// deliberately out of scope — overrides, enum getters, and interface
+// members would be far too noisy to judge by text alone. (A top-level
+// getter, declared directly in a file rather than inside a class/enum, is
+// different and is in scope — see `_topLevelGetterDecl`.)
 
 import 'dart:io';
 
@@ -25,14 +47,20 @@ final _typedefDecl = RegExp(r'^typedef\s+(\w+)\s*[<=]');
 final _topLevelVarDecl = RegExp(r'^(?:const|final|var)\s+(?:[\w<>,.? ]+\s+)?(\w+)\s*=');
 final _topLevelFunctionDecl = RegExp(
   r'^(?:Future<[\w<>,.? ]*>\??|void|bool|int|double|num|dynamic|'
-  r'[A-Z]\w*(?:<[\w<>,.? ]*>)?\??|[a-z]\w*\??)\s+(\w+)\s*\(',
+  r'[A-Z]\w*(?:<[\w<>,.? ]*>)?\??|[a-z]\w*\??)\s+(\w+)\s*(?:<[\w<>,.? ]*>)?\s*\(',
 );
+// Top-level only (column-anchored, so a class/enum member getter — already
+// out of scope, see this file's own header — never matches: it's always
+// indented). Missed in the first version: `String get workspacesRoot { ... }`
+// in lib/paths.dart was invisible to the census entirely.
+final _topLevelGetterDecl = RegExp(r'^(?:[\w<>,.? ]+\s+)?get\s+(\w+)\s*(?:=>|\{)');
 
 List<RegExp> get _declPatterns => [
       _classDecl,
       _enumDecl,
       _mixinDecl,
       _extensionDecl,
+      _topLevelGetterDecl,
       _typedefDecl,
       _topLevelVarDecl,
       _topLevelFunctionDecl,
@@ -129,6 +157,16 @@ Set<String> _publicApiSymbols(String barrelPath, Map<String, String> contents) {
 List<Declaration> _declarationsIn(String file, String content) {
   final found = <Declaration>[];
   for (final line in content.split('\n')) {
+    // A real bug, caught by its own output: the optional return-type group
+    // in several patterns (e.g. _topLevelGetterDecl) includes a literal
+    // space in its character class, so it can absorb leading indentation
+    // and match an indented class/enum member as if it were top-level —
+    // `  bool get canUpdateReadme => ...;` inside `enum WorkspaceRole`
+    // matched and was flagged as a false "test-only" hit before this
+    // guard. dart format never indents a real top-level declaration, so
+    // skipping any indented line is both correct and simpler than trying
+    // to patch every pattern's character class individually.
+    if (line.startsWith(' ') || line.startsWith('\t')) continue;
     for (final pattern in _declPatterns) {
       final match = pattern.firstMatch(line);
       if (match != null) {

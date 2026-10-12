@@ -1,0 +1,44 @@
+<!-- dart_mutation_rules.xml — extra mutation_test rules, specific to this
+     repo's own patterns, on top of (not instead of) the package's built-in
+     set. Spliced into the generated per-file config by the Makefile's
+     `mutation-test`/`mutation-test-changed` targets — not passed via
+     `--rules`, which replaces the built-ins unless `-b` is also given;
+     embedding a <rules> block directly in the input XML extends them
+     instead, which is what every rule below assumes.
+
+     Checked against the package's real bundled rules
+     (~/.pub-cache/.../mutation_test-*/lib/src/configuration/builtin_rules.dart)
+     before writing these, not assumed from secondhand documentation:
+     the built-ins already cover ==/!=/<=/>=/&&/||/arithmetic-with-assignment
+     exclusion/etc. They do NOT cover a bare `<`/`>` (no boundary-condition
+     mutation on those at all) or any switch-expression-arm literal flip.
+     Both gaps below are additive, not duplicates of a built-in rule. -->
+<rules>
+  <!-- Boundary-condition testing the built-ins skip entirely: a bare `<`/
+       `>` isn't mutated by default (only `<=`/`>=` are). Anchored on
+       surrounding whitespace so this can't match inside `=>` or a generic
+       (`List<int>`) and produce a mutant that fails to compile — a compile
+       failure is itself counted as a "kill," which would inflate the
+       quality score with a mutation that was never real. -->
+  <regex pattern="\s&lt;\s" id="claudart.relational.lt" dotAll="false">
+    <mutation text=" &lt;= "/>
+  </regex>
+  <regex pattern="\s&gt;\s" id="claudart.relational.gt" dotAll="false">
+    <mutation text=" &gt;= "/>
+  </regex>
+
+  <!-- This repo's own dominant architecture pattern — every enhanced-enum
+       boolean getter is a switch expression with `true`/`false` literal
+       arms (e.g. AgentFlow.hasCommandFile, WorkspaceRole.canUpdateReadme).
+       No built-in rule targets this shape at all. A surviving mutant here
+       means no test distinguishes that variant's getter from its opposite
+       — exactly the gap dartrix's matrix-testing paradigm (one test per
+       enum variant) exists to close, so this rule is the mutation-testing
+       side of the same discipline. -->
+  <regex pattern="=&gt;\s*true\s*," id="claudart.switch_arm.true_to_false">
+    <mutation text="=> false,"/>
+  </regex>
+  <regex pattern="=&gt;\s*false\s*," id="claudart.switch_arm.false_to_true">
+    <mutation text="=> true,"/>
+  </regex>
+</rules>
