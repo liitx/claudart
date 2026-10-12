@@ -738,6 +738,49 @@ void main() {
       );
       final hooks = outcomes.firstWhere((o) => o.id == HarnessCheckId.gitHooksConfigured);
       expect(hooks.result, equals(HarnessCheckResult.ok));
+      expect(hooks.detail, equals('core.hooksPath=.githooks'));
+    });
+
+    // Regression: core.hooksPath flipped from `.githooks` to an absolute path
+    // while the pre-push gate kept running, and the old string comparison
+    // reported FAIL on that working setup.
+    Future<HarnessCheckOutcome> hooksCheckWith(String configuredValue) async {
+      final outcomes = await runDoctorChecks(
+        runner: _FakeProcessRunner({
+          ..._responses(),
+          _gitConfigCall(GitConfigKey.hooksPath): _ok(configuredValue),
+        }),
+        env: _cleanEnv,
+        projectRoot: '/fake/repo',
+        io: MemoryFileIO(dirs: {'/fake/repo/.githooks'}),
+      );
+      return outcomes.firstWhere((o) => o.id == HarnessCheckId.gitHooksConfigured);
+    }
+
+    test('ok when core.hooksPath is an absolute path to this repo\'s .githooks', () async {
+      final hooks = await hooksCheckWith('/fake/repo/.githooks');
+      expect(hooks.result, equals(HarnessCheckResult.ok));
+      expect(hooks.detail, equals('core.hooksPath=/fake/repo/.githooks'));
+    });
+
+    test('ok when core.hooksPath is a relative path that normalizes to .githooks', () async {
+      final hooks = await hooksCheckWith('./.githooks/');
+      expect(hooks.result, equals(HarnessCheckResult.ok));
+    });
+
+    test('fails when core.hooksPath is an absolute path to a different directory', () async {
+      final hooks = await hooksCheckWith('/other/repo/.githooks');
+      expect(hooks.result, equals(HarnessCheckResult.fail));
+    });
+
+    test('fails when core.hooksPath is a different relative directory', () async {
+      final hooks = await hooksCheckWith('hooks');
+      expect(hooks.result, equals(HarnessCheckResult.fail));
+    });
+
+    test('fails when core.hooksPath is an absolute path to a sibling with the same basename prefix', () async {
+      final hooks = await hooksCheckWith('/fake/repo/.githooks-old');
+      expect(hooks.result, equals(HarnessCheckResult.fail));
     });
 
     test('fails when .githooks/ exists but core.hooksPath is not set to it', () async {
