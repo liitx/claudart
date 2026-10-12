@@ -494,11 +494,20 @@ Future<HarnessCheckOutcome> _checkGitHooksConfigured(
     );
   }
   final configured = readGitConfig(GitConfigKey.hooksPath, workingDirectory: root, runner: proc);
-  return configured == _githooksDirName
+  // Compared as directories, not strings: git accepts either a path relative
+  // to the repo root or an absolute one, and tooling can rewrite one into the
+  // other (confirmed: the value flipped from `.githooks` to the absolute path
+  // while the pre-push gate kept running). A string compare reported FAIL on a
+  // setup that was working.
+  final expected = p.normalize(p.join(root, _githooksDirName));
+  final resolved = configured == null
+      ? null
+      : p.normalize(p.isAbsolute(configured) ? configured : p.join(root, configured));
+  return resolved == expected
       ? (
           id: HarnessCheckId.gitHooksConfigured,
           result: HarnessCheckResult.ok,
-          detail: 'core.hooksPath=.githooks',
+          detail: 'core.hooksPath=$configured',
         )
       : (
           id: HarnessCheckId.gitHooksConfigured,
