@@ -31,6 +31,7 @@ import 'claude_session.dart';
 import 'event_response_map.dart';
 import 'pipeline_context.dart';
 import 'pipeline_event.dart';
+import 'pipeline_step_exception.dart';
 import 'route_tag.dart';
 import 'step_mode.dart';
 import 'step_result.dart';
@@ -605,10 +606,13 @@ String _describeDuration(Duration d) {
 ///
 /// [timeout] is a per-step backstop (default [defaultStepTimeout], `null` = no
 /// limit): if the subprocess has not finished by then, its whole process tree
-/// is killed and the step fails with an [Exception], the same type as the
-/// non-zero-exit failure below, so every caller's error handling applies
-/// unchanged. The step id is attached by the executor's `AgentFailed` event.
-/// [executable] and [traceOverride] are seams for tests.
+/// is killed and the step fails with a [StepTimedOutException]. Every failure
+/// mode here (missing provider, timeout, nonzero exit, no result line) throws
+/// a typed [ClaudartException] subclass (see pipeline_step_exception.dart) —
+/// every caller's existing `on Exception` handling applies unchanged, since
+/// `ClaudartException implements Exception`. The step id is attached by the
+/// executor's `AgentFailed` event. [executable] and [traceOverride] are seams
+/// for tests.
 Future<StepResult?> defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
@@ -624,10 +628,7 @@ Future<StepResult?> defaultClaudeRunner({
   // environment reach a mid-pipeline 401 from the `claude` subprocess
   // itself — see portability_gap.dart's providerWiring entry this closes.
   if (providerDetector() == null) {
-    throw Exception(
-      'No agent provider configured (checked ANTHROPIC_API_KEY, Bedrock '
-      'env vars, and ~/.claude/settings.json). Run `claudart doctor` to diagnose.',
-    );
+    throw ProviderNotConfiguredException();
   }
 
   // `StepDebugTrace.start()` resolves the log file via `debugLogFile()`.
@@ -700,10 +701,7 @@ Future<StepResult?> defaultClaudeRunner({
         exitCode: killedCode,
         stderrText: 'TIMED OUT after $after (stepTimeoutMinutes); killed the whole process tree',
       );
-      throw Exception(
-        'claude step timed out after $after and was killed. '
-        'Raise or disable (0) "stepTimeoutMinutes" in the workspace config.json.',
-      );
+      throw StepTimedOutException(timeout);
     }
     final lines = outcome.stream.lines;
     final thinkingBuffer = outcome.stream.thinking;
@@ -714,9 +712,7 @@ Future<StepResult?> defaultClaudeRunner({
 
     if (code != 0) {
       if (err.trim().isNotEmpty) stderr.writeln(err.trim());
-      throw Exception(
-        'claude exited $code${err.trim().isEmpty ? '' : ': ${err.trim()}'}',
-      );
+      throw StepExitedNonZeroException(code, stderr: err.trim().isEmpty ? null : err.trim());
     }
 
     final resultLine = lines.lastWhere(
@@ -724,7 +720,7 @@ Future<StepResult?> defaultClaudeRunner({
       orElse: () => '',
     );
     if (resultLine.isEmpty) {
-      throw Exception('claude produced no result line');
+      throw StepProducedNoResultException();
     }
 
     final result = parseClaudeResultLine(

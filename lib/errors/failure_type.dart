@@ -1,11 +1,15 @@
 // failure_type.dart — bottom layer of claudart's error taxonomy
 //
 // Specific state-of-response. Each variant rolls up to one ErrorType (its
-// subsystem) which rolls up to one FaultClass. Scoped to exactly the 4
-// real exceptions this codebase already throws (confirmed by reading
-// every throw site) -- not speculatively extended for not-yet-built
-// features (codegen, registry writes). Extend when a real throw site
-// needs a new variant.
+// subsystem) which rolls up to one FaultClass. Scoped to exactly the real
+// exceptions this codebase throws (confirmed by reading every throw site)
+// -- not speculatively extended for not-yet-built features (codegen,
+// registry writes). Extend when a real throw site needs a new variant.
+//
+// The 4 `pipeline*` variants were added after the original 4 -- confirmed
+// real gap: lib/pipeline/pipeline_executor.dart had 4 live bare
+// `throw Exception(...)` sites that predated and bypassed this taxonomy
+// entirely, not a deliberate exclusion.
 
 import 'error_type.dart';
 import 'fault_class.dart';
@@ -14,7 +18,11 @@ enum FailureType {
   scanThresholdExceeded,
   archiveIndexCorrupt,
   sessionCloseFailed,
-  workspaceLocked;
+  workspaceLocked,
+  providerNotConfigured,
+  stepTimedOut,
+  stepExitedNonzero,
+  stepProducedNoResult;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
   /// `errorType.faultClass`.
@@ -23,6 +31,11 @@ enum FailureType {
         FailureType.archiveIndexCorrupt => ErrorType.archive,
         FailureType.sessionCloseFailed => ErrorType.session,
         FailureType.workspaceLocked => ErrorType.workspace,
+        FailureType.providerNotConfigured ||
+        FailureType.stepTimedOut ||
+        FailureType.stepExitedNonzero ||
+        FailureType.stepProducedNoResult =>
+          ErrorType.pipeline,
       };
 
   /// Convenience getter — walks errorType → faultClass.
@@ -33,9 +46,16 @@ enum FailureType {
   /// (which defaults to environmentFault) but should classify as
   /// `transientFault` -- the lock clears itself once the other session
   /// finishes, so retrying is the right response, not asking the user to
-  /// fix something.
+  /// fix something. `providerNotConfigured` is on `pipeline` (which
+  /// defaults to externalServiceFault) but is really a config problem --
+  /// nothing about `claude` itself is misbehaving. `stepTimedOut` is also
+  /// on `pipeline` but should classify as `transientFault` -- the same
+  /// input may well succeed on retry (a slow model response, not a broken
+  /// one).
   FaultClass get effectiveFaultClass => switch (this) {
-        FailureType.workspaceLocked => FaultClass.transientFault,
+        FailureType.workspaceLocked || FailureType.stepTimedOut =>
+          FaultClass.transientFault,
+        FailureType.providerNotConfigured => FaultClass.configFault,
         _ => faultClass,
       };
 
@@ -44,6 +64,10 @@ enum FailureType {
         FailureType.archiveIndexCorrupt => 'Archive index corrupt',
         FailureType.sessionCloseFailed => 'Session close failed',
         FailureType.workspaceLocked => 'Workspace locked',
+        FailureType.providerNotConfigured => 'Provider not configured',
+        FailureType.stepTimedOut => 'Step timed out',
+        FailureType.stepExitedNonzero => 'Step exited nonzero',
+        FailureType.stepProducedNoResult => 'Step produced no result',
       };
 
   /// Actionable next step a user can take. Surfaces in caller-facing
@@ -61,5 +85,19 @@ enum FailureType {
         FailureType.workspaceLocked =>
           'Wait for the other session to finish, or confirm it has crashed '
               'before clearing the lock by hand.',
+        FailureType.providerNotConfigured =>
+          'Checked ANTHROPIC_API_KEY, Bedrock env vars, and '
+              '~/.claude/settings.json -- none resolved. Run `claudart doctor` '
+              'to diagnose.',
+        FailureType.stepTimedOut =>
+          'Raise or disable (0) "stepTimeoutMinutes" in the workspace '
+              'config.json, or retry -- a slow response is not necessarily a '
+              'broken one.',
+        FailureType.stepExitedNonzero =>
+          'Check the stderr output above for the real cause from `claude` '
+              'itself.',
+        FailureType.stepProducedNoResult =>
+          'Re-run the step -- `claude` closed its stream without emitting a '
+              'final result line.',
       };
 }

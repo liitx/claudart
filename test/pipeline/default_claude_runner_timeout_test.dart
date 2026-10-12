@@ -8,6 +8,7 @@ import 'package:claudart/config.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
+import 'package:claudart/pipeline/pipeline_step_exception.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/providers/agent_provider.dart';
 import 'package:path/path.dart' as p;
@@ -65,7 +66,7 @@ void main() {
         'echo \$! > "PIDS/child"\n'
         'wait';
 
-    test('fails at the limit with a plain Exception that names the config key', () async {
+    test('fails at the limit with a typed StepTimedOutException that names the config key', () async {
       final pids = Directory(p.join(tmp.path, 'pids'))..createSync();
       final exe = fakeClaude(hangBody.replaceAll('PIDS', pids.path));
       final watch = Stopwatch()..start();
@@ -77,8 +78,8 @@ void main() {
         error = e;
       }
 
-      expect(error, isA<Exception>());
-      expect(error, isNot(isA<TimeoutException>()), reason: 'same Exception type as the non-zero-exit branch');
+      expect(error, isA<StepTimedOutException>());
+      expect(error, isNot(isA<TimeoutException>()), reason: 'the raw dart:async TimeoutException is caught internally and rethrown as StepTimedOutException, never surfaces to the caller');
       expect('$error', contains('timed out after 1 second'));
       expect('$error', contains('stepTimeoutMinutes'));
       expect(watch.elapsed, lessThan(const Duration(seconds: 15)));
@@ -134,7 +135,7 @@ void main() {
     });
   });
 
-  test('a non-zero exit still throws the same kind of Exception as before', () async {
+  test('a non-zero exit throws a typed StepExitedNonZeroException', () async {
     final exe = fakeClaude('echo boom 1>&2\nexit 3');
     Object? error;
     try {
@@ -142,9 +143,45 @@ void main() {
     } on Object catch (e) {
       error = e;
     }
-    expect(error, isA<Exception>());
+    expect(error, isA<StepExitedNonZeroException>());
+    expect((error as StepExitedNonZeroException).exitCode, 3);
+    expect(error.stderr, 'boom');
     expect('$error', contains('claude exited 3'));
     expect('$error', isNot(contains('timed out')));
+  });
+
+  test('no result line in the stream throws a typed StepProducedNoResultException', () async {
+    // A real claude stream always ends with a "type":"result" line; this
+    // fake exits 0 having emitted something else entirely, exercising the
+    // real parser's own fallback path, not a simulated error.
+    final exe = fakeClaude('printf \'{"type":"system"}\\n\'');
+    Object? error;
+    try {
+      await run(exe, timeout: const Duration(seconds: 30));
+    } on Object catch (e) {
+      error = e;
+    }
+    expect(error, isA<StepProducedNoResultException>());
+    expect('$error', 'claude produced no result line');
+  });
+
+  test('no agent provider configured throws a typed ProviderNotConfiguredException', () async {
+    final exe = fakeClaude("printf '%s\\n' '$resultLine'");
+    Object? error;
+    try {
+      await defaultClaudeRunner(
+        model: AgentModel.haiku,
+        systemPrompt: 'system',
+        message: 'hello',
+        workingDir: tmp.path,
+        executable: exe,
+        providerDetector: () => null,
+      );
+    } on Object catch (e) {
+      error = e;
+    }
+    expect(error, isA<ProviderNotConfiguredException>());
+    expect('$error', contains('claudart doctor'));
   });
 
   test('the default limit is 15 minutes', () {
