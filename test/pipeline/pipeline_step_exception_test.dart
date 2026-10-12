@@ -21,7 +21,35 @@ void main() {
     });
   });
 
+  // Regression: the first version of StepTimedOutException formatted seconds
+  // only, so the default 15-minute limit read "900 seconds" while the executor's
+  // own debug trace (which used the original formatter) still said "15 minutes".
+  // Found in review; the formatter is now shared, and these pin it.
+  group('describeDuration', () {
+    test('whole minutes read as minutes', () {
+      expect(describeDuration(const Duration(minutes: 15)), '15 minutes');
+    });
+    test('exactly one minute is singular', () {
+      expect(describeDuration(const Duration(minutes: 1)), '1 minute');
+    });
+    test('a non-whole-minute value reads as seconds', () {
+      expect(describeDuration(const Duration(seconds: 90)), '90 seconds');
+    });
+    test('under a minute reads as seconds, singular at one', () {
+      expect(describeDuration(const Duration(seconds: 1)), '1 second');
+      expect(describeDuration(const Duration(seconds: 45)), '45 seconds');
+    });
+  });
+
   group('StepTimedOutException', () {
+    test('the default 15-minute limit reads as minutes in the message', () {
+      expect(
+        StepTimedOutException(const Duration(minutes: 15)).toString(),
+        'claude step timed out after 15 minutes and was killed. '
+        'Raise or disable (0) "stepTimeoutMinutes" in the workspace config.json.',
+      );
+    });
+
     test('carries stepTimedOut and its transientFault override', () {
       final e = StepTimedOutException(const Duration(seconds: 30));
       expect(e.failureType, FailureType.stepTimedOut);
@@ -63,10 +91,10 @@ void main() {
   });
 
   group('StepProducedNoResultException', () {
-    test('carries stepProducedNoResult and its subsystem default faultClass', () {
+    test('carries stepProducedNoResult and its transientFault override', () {
       final e = StepProducedNoResultException();
       expect(e.failureType, FailureType.stepProducedNoResult);
-      expect(e.faultClass, FaultClass.externalServiceFault);
+      expect(e.faultClass, FaultClass.transientFault);
     });
 
     test('toString names the real condition', () {

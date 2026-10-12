@@ -593,26 +593,18 @@ ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
           timeout: timeout,
         );
 
-String _describeDuration(Duration d) {
-  if (d.inMinutes >= 1 && d.inSeconds % 60 == 0) {
-    final m = d.inMinutes;
-    return m == 1 ? '1 minute' : '$m minutes';
-  }
-  final s = d.inSeconds;
-  return s == 1 ? '1 second' : '$s seconds';
-}
-
 /// Runs one `claude` step.
 ///
 /// [timeout] is a per-step backstop (default [defaultStepTimeout], `null` = no
 /// limit): if the subprocess has not finished by then, its whole process tree
 /// is killed and the step fails with a [StepTimedOutException]. Every failure
 /// mode here (missing provider, timeout, nonzero exit, no result line) throws
-/// a typed [ClaudartException] subclass (see pipeline_step_exception.dart) —
-/// every caller's existing `on Exception` handling applies unchanged, since
-/// `ClaudartException implements Exception`. The step id is attached by the
-/// executor's `AgentFailed` event. [executable] and [traceOverride] are seams
-/// for tests.
+/// a typed [ClaudartException] subclass (see pipeline_step_exception.dart).
+/// [PipelineExecutor] catches `on Exception` around this call, so its handling
+/// is unchanged; the chat shell's plain-message path has no catch of its own,
+/// so there these now reach bin/claudart.dart's central handler. The step id is
+/// attached by the executor's `AgentFailed` event. [executable] and
+/// [traceOverride] are seams for tests.
 Future<StepResult?> defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
@@ -696,7 +688,7 @@ Future<StepResult?> defaultClaudeRunner({
         const Duration(seconds: 2),
         onTimeout: () => -1,
       );
-      final after = _describeDuration(timeout!);
+      final after = describeDuration(timeout!);
       trace.writeExit(
         exitCode: killedCode,
         stderrText: 'TIMED OUT after $after (stepTimeoutMinutes); killed the whole process tree',

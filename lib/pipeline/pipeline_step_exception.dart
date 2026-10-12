@@ -8,12 +8,28 @@
 // convention (ScanThresholdException, WorkspaceLockedException, etc.), not a
 // single generic class taking a FailureType parameter.
 //
-// Every caller already catches `on Exception` and uses `.toString()`/`$e`
-// interpolation (pipeline_executor.dart:143-144, :747) -- these satisfy that
-// unchanged, since ClaudartException implements Exception.
+// PipelineExecutor catches `on Exception` around the runner call and keeps
+// `e.toString()` as AgentFailed.reason, so these work there unchanged
+// (ClaudartException implements Exception); only the generic "Exception: "
+// prefix is gone. The chat shell's plain-message path has no catch of its own,
+// so there these now reach bin/claudart.dart's central ClaudartException
+// handler instead of surfacing as an unhandled exception.
 
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
+
+/// "15 minutes", "1 minute", "90 seconds", "1 second" -- whole minutes read as
+/// minutes, anything else as seconds. Shared by [StepTimedOutException] and the
+/// executor's debug trace so the two can never describe the same limit
+/// differently.
+String describeDuration(Duration d) {
+  if (d.inMinutes >= 1 && d.inSeconds % 60 == 0) {
+    final m = d.inMinutes;
+    return m == 1 ? '1 minute' : '$m minutes';
+  }
+  final s = d.inSeconds;
+  return s == 1 ? '1 second' : '$s seconds';
+}
 
 class ProviderNotConfiguredException extends ClaudartException {
   ProviderNotConfiguredException() : super(FailureType.providerNotConfigured);
@@ -30,12 +46,9 @@ class StepTimedOutException extends ClaudartException {
   StepTimedOutException(this.timeout) : super(FailureType.stepTimedOut);
 
   @override
-  String toString() {
-    final seconds = timeout.inSeconds;
-    final after = seconds == 1 ? '1 second' : '$seconds seconds';
-    return 'claude step timed out after $after and was killed. '
-        'Raise or disable (0) "stepTimeoutMinutes" in the workspace config.json.';
-  }
+  String toString() =>
+      'claude step timed out after ${describeDuration(timeout)} and was killed. '
+      'Raise or disable (0) "stepTimeoutMinutes" in the workspace config.json.';
 }
 
 class StepExitedNonZeroException extends ClaudartException {

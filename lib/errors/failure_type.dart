@@ -51,9 +51,14 @@ enum FailureType {
   /// nothing about `claude` itself is misbehaving. `stepTimedOut` is also
   /// on `pipeline` but should classify as `transientFault` -- the same
   /// input may well succeed on retry (a slow model response, not a broken
-  /// one).
+  /// one). `stepProducedNoResult` is transient for the same reason: its own
+  /// suggestedAction is "re-run the step", so classifying it as a
+  /// non-retryable externalServiceFault would contradict the advice shown
+  /// next to it.
   FaultClass get effectiveFaultClass => switch (this) {
-        FailureType.workspaceLocked || FailureType.stepTimedOut =>
+        FailureType.workspaceLocked ||
+        FailureType.stepTimedOut ||
+        FailureType.stepProducedNoResult =>
           FaultClass.transientFault,
         FailureType.providerNotConfigured => FaultClass.configFault,
         _ => faultClass,
@@ -86,13 +91,11 @@ enum FailureType {
           'Wait for the other session to finish, or confirm it has crashed '
               'before clearing the lock by hand.',
         FailureType.providerNotConfigured =>
-          'Checked ANTHROPIC_API_KEY, Bedrock env vars, and '
-              '~/.claude/settings.json -- none resolved. Run `claudart doctor` '
-              'to diagnose.',
+          'Export ANTHROPIC_API_KEY, set the Bedrock env vars, or put them '
+              'in the env block of ~/.claude/settings.json, then re-run.',
         FailureType.stepTimedOut =>
-          'Raise or disable (0) "stepTimeoutMinutes" in the workspace '
-              'config.json, or retry -- a slow response is not necessarily a '
-              'broken one.',
+          'Retry the step -- a slow response is not necessarily a broken '
+              'one.',
         FailureType.stepExitedNonzero =>
           'Check the stderr output above for the real cause from `claude` '
               'itself.',

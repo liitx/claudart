@@ -56,8 +56,9 @@ void main() {
     test('stepExitedNonzero uses its subsystem default, unoverridden', () {
       expect(FailureType.stepExitedNonzero.effectiveFaultClass, FaultClass.externalServiceFault);
     });
-    test('stepProducedNoResult uses its subsystem default, unoverridden', () {
-      expect(FailureType.stepProducedNoResult.effectiveFaultClass, FaultClass.externalServiceFault);
+    test('stepProducedNoResult overrides to transientFault, matching its "re-run the step" advice', () {
+      expect(FailureType.stepProducedNoResult.faultClass, FaultClass.externalServiceFault);
+      expect(FailureType.stepProducedNoResult.effectiveFaultClass, FaultClass.transientFault);
     });
   });
 
@@ -77,20 +78,18 @@ void main() {
   // text survived an isNotEmpty-only check). archiveIndexCorrupt has the
   // same gap but predates this session — filed as an issue, not fixed here.
   group('FailureType new-variant exact text', () {
-    test('providerNotConfigured suggestedAction names every checked source', () {
+    test('providerNotConfigured suggestedAction says how to supply a provider', () {
       expect(
         FailureType.providerNotConfigured.suggestedAction,
-        'Checked ANTHROPIC_API_KEY, Bedrock env vars, and '
-        '~/.claude/settings.json -- none resolved. Run `claudart doctor` '
-        'to diagnose.',
+        'Export ANTHROPIC_API_KEY, set the Bedrock env vars, or put them '
+        'in the env block of ~/.claude/settings.json, then re-run.',
       );
     });
-    test('stepTimedOut suggestedAction names the config key and the retry option', () {
+    test('stepTimedOut suggestedAction offers a retry, not a repeat of the exception message', () {
       expect(
         FailureType.stepTimedOut.suggestedAction,
-        'Raise or disable (0) "stepTimeoutMinutes" in the workspace '
-        'config.json, or retry -- a slow response is not necessarily a '
-        'broken one.',
+        'Retry the step -- a slow response is not necessarily a broken '
+        'one.',
       );
     });
     test('stepExitedNonzero suggestedAction points at the stderr output', () {
