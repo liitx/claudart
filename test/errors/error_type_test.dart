@@ -16,6 +16,9 @@ void main() {
     test('workspace rolls up to environmentFault', () {
       expect(ErrorType.workspace.faultClass, FaultClass.environmentFault);
     });
+    test('pipeline rolls up to externalServiceFault', () {
+      expect(ErrorType.pipeline.faultClass, FaultClass.externalServiceFault);
+    });
   });
 
   group('ErrorType.label', () {
