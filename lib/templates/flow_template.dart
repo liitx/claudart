@@ -7,6 +7,7 @@
 // prompt; agents categorize intent, generate a plan, and construct the handoff.
 // The user approves the plan before the construct step runs.
 
+import '../session/session_state.dart' show HandoffStatus;
 import '../pipeline/agents/categorization.dart';
 import 'command_template_marker.dart';
 
@@ -88,14 +89,14 @@ Ask: "Approve this plan? [y to proceed / feedback to revise]"
 ## Step 4 — Construct handoff
 
 Write `<handoff path>` with all sections filled:
-- Status: suggest-investigating
+- Status: ${HandoffStatus.suggestInvestigating.value}
 - Bug/Goal: the user's intent
 - Expected Behavior: what success looks like
 - Root Cause / Key Insight: from classification
 - Scope: files and classes implied by the plan
 - Constraints: from complexity tier + category invariants
 
-Flip status to `ready-for-debug` if implementing; keep `suggest-investigating` if exploring.
+Flip status to `${HandoffStatus.readyForDebug.value}` if implementing; keep `${HandoffStatus.suggestInvestigating.value}` if exploring.
 
 Tell the user:
 ```

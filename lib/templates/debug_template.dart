@@ -1,3 +1,4 @@
+import '../session/session_state.dart' show HandoffStatus;
 import 'command_template_marker.dart';
 
 String debugCommandTemplate(String workspacePath, String projectName) => '''
@@ -26,7 +27,7 @@ claudart preflight debug
 - `✓ clean`: proceed silently.
 
 The preflight for `debug` enforces:
-- Handoff status must be `ready-for-debug` or `debug-in-progress`
+- Handoff status must be `${HandoffStatus.readyForDebug.value}` or `${HandoffStatus.debugInProgress.value}`
 - If root cause is confirmed but skills.md has no pending entry, warn (save was not run)
 
 ---
@@ -41,13 +42,13 @@ Read all of the following before doing anything else:
 Check the handoff for a `## Project` section and also read:
 - `$workspacePath/knowledge/projects/<project-name>.md`
 
-- If status is **NOT** `ready-for-debug` or `debug-in-progress`: **stop**.
+- If status is **NOT** `${HandoffStatus.readyForDebug.value}` or `${HandoffStatus.debugInProgress.value}`: **stop**.
   > "The handoff is not ready. Run `/suggest` first, then `/save` to lock the root cause."
-- If status is `ready-for-debug`:
+- If status is `${HandoffStatus.readyForDebug.value}`:
   - Check for a recent checkpoint: `$workspacePath/archive/checkpoint_*`
   - If no checkpoint exists, warn: "No checkpoint found. Consider running `/save` to lock the confirmed state before proceeding."
-  - Update status to `debug-in-progress` and proceed.
-- If status is `debug-in-progress`: read `## Debug Progress` to orient before continuing.
+  - Update status to `${HandoffStatus.debugInProgress.value}` and proceed.
+- If status is `${HandoffStatus.debugInProgress.value}`: read `## Debug Progress` to orient before continuing.
 
 ---
 
@@ -124,7 +125,7 @@ If you hit something outside scope:
    - What changed (files modified)
    - What is still unresolved
    - Specific question for suggest (one only)
-2. Set status to `needs-suggest`
+2. Set status to `${HandoffStatus.needsSuggest.value}`
 3. Tell the user: "Progress written. Run `/suggest` to continue."
 
 ---

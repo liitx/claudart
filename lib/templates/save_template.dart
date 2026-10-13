@@ -1,3 +1,4 @@
+import '../session/session_state.dart' show HandoffStatus;
 import '../pipeline/agents/confirmation.dart';
 import 'command_template_marker.dart';
 
@@ -75,9 +76,9 @@ After `claudart save` completes, tell the user what is next:
 
 | Status                    | Next step                                        |
 |---------------------------|--------------------------------------------------|
-| `suggest-investigating`   | Continue exploring. Run `/save` when root cause confirmed. |
-| `ready-for-debug`         | Root cause locked. Run `/debug` to implement the fix. |
-| `debug-in-progress`       | Fix in progress. Run `/save` again after fix confirmed. |
+| `''' + HandoffStatus.suggestInvestigating.value + r'''`   | Continue exploring. Run `/save` when root cause confirmed. |
+| `''' + HandoffStatus.readyForDebug.value + r'''`         | Root cause locked. Run `/debug` to implement the fix. |
+| `''' + HandoffStatus.debugInProgress.value + r'''`       | Fix in progress. Run `/save` again after fix confirmed. |
 
 ---
 
