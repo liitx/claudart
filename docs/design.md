@@ -464,6 +464,51 @@ This is I₆ in the invariant table below.
 
 ---
 
+## 9. Environments and Surfaces
+
+Section 1 describes one session. This section describes every place a session runs: how it is started, how the
+project is linked to its workspace, whether the project uses dartrix. Each layer is a typed enum or a getter on one,
+checked against the code, so a gap shows up as a failing test or a "no caller yet" row instead of a surprise.
+
+The generated reference is `docs/topology/environments.md` (and `docs/topology/handoff_status.md` for the state
+machine); `make topology` rewrites them and a test fails when they go stale.
+
+### 9.1 Layers
+
+| Layer | Typed as | Variants | Verified by |
+|---|---|---|---|
+| Entry point | `CommandEntry` + `ClaudartCommand.reachedFrom` | `cliSubcommand`, `launcherMenu` (`claudart` with no args), `chatShell` | `claudart_command_test.dart` scans `launch.dart` and `chat_shell.dart` for each call |
+| Run mode | `RunMode` + `ClaudartCommand.supportsHeadless` | `interactive`, `headless` (`teardown`, `rotate`, `kill`) | the same test scans each command's source for a `RunMode` parameter |
+| Render surface | `ClaudartSurface` | `cli`, `tui` (zedup) | `make consumer-check` (below) |
+| Handoff moves | `ClaudartCommand.handoffEvents` | the `HandoffEvent` each command passes | the same test scans `lib/` for each event |
+| Link state | `WorkspaceLinkState` + `linkStateOf` | `unlinked`, `symlinked`, `realDirectory` | `workspace_link_state_test.dart`; `launch` and `kill` read it |
+| dartrix | the project's pubspec (`detectsDartrixDependency`) | uses, does not use | the lifecycle matrix (below) |
+| Consumer | `SessionState.effectiveStatus` | what a reader shows for a handoff | the lifecycle matrix and `make consumer-check` |
+
+claudart is usable on its own: a CLI-only user needs none of zedup. zedup is an optional front end that reads the same
+`handoff.md` and calls the same exported API; it must agree with claudart on every status it shows.
+
+### 9.2 What is proven, and where
+
+- **Lifecycle matrix** (`test/conformance`): real commands, in memory, through whole sessions (setup, suggest, debug,
+  teardown, kill, rotate, restart), in every environment (3 link states x dartrix on or off = 6). After every step the
+  consumer view (`effectiveStatus`), the file and the logged move must agree with an independent literal. The result is
+  the same in every environment, which is itself the claim: the lifecycle does not depend on how the project is linked or
+  whether it uses dartrix.
+- **Consumer check** (`make consumer-check`): replays the same scenarios against zedup's REAL reader in a throwaway copy
+  of zedup wired to this checkout (neither repo is modified), and scans zedup for raw-string status writers.
+
+### 9.3 Known gaps (each is a failing check or a visible row, not folklore)
+
+| Gap | Where it shows | Owner |
+|---|---|---|
+| zedup reads the raw Status line, so a reset session shows as a live one | `make consumer-check`: 4 reader disagreements | zedup: read `SessionState.effectiveStatus` in `parseClaudartHandoff` |
+| zedup's TUI writes status as raw strings (`updateStatus`), bypassing validation and `transitions.jsonl` | `make consumer-check`: 2 raw writers (`suggest_coordinator.dart`, `debug_coordinator.dart`); `updateStatus` is now deprecated | zedup: use `applyHandoffEvent` |
+| dartrix has no behavioural effect on a session: only `claudart add`'s PLAN stub reads it, and the generated `dependency_config.g.dart` constant has no reader | `environments.md` "dartrix" section | decide: gate something on it, or drop the constant |
+| `claudart link` and `unlink` are not in the lifecycle matrix: the link state is a fixture, not an outcome of running them | `lifecycle_scenarios.dart` | add link/unlink scenarios |
+| the agent surface (a Claude Code or Cursor slash command running claudart) is not modelled | none yet | add a `CommandEntry` for it once its calls are enumerated |
+| 4 handoff events have no code caller (`saveUnconfirmed`, `saveConfirmedExploring`, `debugStarted`, `debugBlocked`): agents make those moves by editing `handoff.md` as the prompts say | `handoff_status.md` "Where each event is passed" | by design today; revisit if claudart should verify them |
+
 ## Summary: The Three Invariants
 
 These are the core invariants claudart enforces. They are not conventions — they are compile-time or runtime proofs.

@@ -104,3 +104,15 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | New events from real behaviour | `rotatedEmpty`, `reminderSaved` | 2d9f1a7 |
 | OPEN design question | the blank handoff left by kill/teardown/empty-rotate reads `suggest-investigating`, but the log says the move lands in `noHandoff`; decide which notion the state machine means | - |
 | Still no code caller | `saveUnconfirmed`, `saveConfirmedExploring`, `debugStarted`, `debugBlocked` (agent-performed via prompts) | - |
+
+## Resolution log, environments and surfaces (branch refactor/typed-handoff-status)
+
+| Item | Status |
+|---|---|
+| Typed link state (`WorkspaceLinkState`, `linkStateOf`); two hand-repeated checks in launch/kill replaced | done |
+| `ClaudartCommand.reachedFrom` / `supportsHeadless` / `handoffEvents` with drift tests against the sources | done |
+| `docs/topology/environments.md` generated; design.md section 9 | done |
+| Lifecycle matrix over 3 link states x dartrix on/off (6 environments): identical outcomes, no environment-dependent bug found | done |
+| `make consumer-check` now also scans zedup for raw status writers; `updateStatus` deprecated | done |
+| OPEN (zedup): read `effectiveStatus` in `parseClaudartHandoff`; replace 2 raw `updateStatus` writers with `applyHandoffEvent` | open |
+| OPEN: dartrix has no behavioural effect; link/unlink not in the lifecycle matrix; agent surface not modelled | open |
