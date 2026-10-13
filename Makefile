@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage
+.PHONY: build test clean rebuild lint analyze check-coverage topology
 
 ## Compile native binary to ~/bin/claudart
 build:
@@ -13,6 +13,11 @@ build:
 ## a test that reaches an unscripted prompt would hang; at EOF it returns.
 test:
 	$(DART) test --test-randomize-ordering-seed=random < /dev/null
+
+## Regenerate docs/topology/*.md from the code (the topology test fails when
+## the checked-in doc and the code disagree)
+topology:
+	UPDATE_TOPOLOGY=1 $(DART) test test/topology/handoff_topology_test.dart < /dev/null
 
 ## Run a single test file: make test-file FILE=test/commands/teardown_test.dart
 test-file:
