@@ -12,6 +12,7 @@ import 'kill.dart';
 import 'link.dart';
 import 'setup.dart';
 import '../ui/render.dart' as render;
+import '../workspace/workspace_link_state.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
@@ -209,11 +210,7 @@ List<String> _buildProjectItems({
   for (final e in entries) {
     final isCurrent = e == currentEntry;
     final locked = isLocked(e.workspacePath, io: fileIO);
-    // .claude is either a symlink (the normal case) or a real directory
-    // when link.dart couldn't symlink it — both mean "linked". Same fix
-    // as link.dart/kill.dart's own symlink-only checks on this branch.
-    final claudePath = p.join(e.projectRoot, IdeIntegration.claudeCode.dirName);
-    final linked = fileIO.linkExists(claudePath) || fileIO.dirExists(claudePath);
+    final linked = linkStateOf(fileIO, e.projectRoot).isLinked;
 
     final dot = locked
         ? ansi.c(ansi.yellow, '⚠')

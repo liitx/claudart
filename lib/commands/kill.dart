@@ -12,6 +12,7 @@ import '../session/run_mode.dart';
 import '../session/session_ops.dart';
 import '../session/session_state.dart';
 import '../session/workspace_guard.dart';
+import '../workspace/workspace_link_state.dart';
 import '../ui/render.dart' as render;
 
 /// Abandons the active session for the current project.
@@ -93,11 +94,9 @@ Future<void> runKill({
     clearLock(workspace, io: fileIO);
   }
 
-  // 4 — Check for an active session. `.claude` is either a symlink (the
-  // normal case) or a real directory when link.dart couldn't symlink it —
-  // both mean a session is linked. Only warn when neither exists.
-  final claudePath = p.join(projectRoot, IdeIntegration.claudeCode.dirName);
-  if (!fileIO.linkExists(claudePath) && !fileIO.dirExists(claudePath)) {
+  // 4 — Check for an active session: a linked project (symlink or the real
+  // directory fallback). Only warn when it is unlinked.
+  if (!linkStateOf(fileIO, projectRoot).isLinked) {
     print('\n⚠  No active session found for ${entry.name}.');
     if (!decide('Kill anyway and archive the handoff?', headlessAnswer: true)) {
       print('\nKill cancelled.\n');
