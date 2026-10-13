@@ -65,7 +65,7 @@ Future<void> runDebug({
   final handoff = fileIO.read(handoffFile);
   final status  = readHandoffStatus(handoff);
 
-  if (status != HandoffStatus.readyForDebug) {
+  if (!status.canStartDebug) {
     print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}${status.value}${ansi.reset} — expected ready-for-debug.');
     if (!confirm_('Run debug anyway?')) {
       print('Aborted.');

@@ -263,7 +263,7 @@ void main() {
 
   group('runDebug — status gate, one case per persisted status', () {
     for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
-      final asked = status != HandoffStatus.readyForDebug;
+      final asked = !const {HandoffStatus.readyForDebug, HandoffStatus.debugInProgress}.contains(status);
       test('${status.name}: confirm is ${asked ? 'asked' : 'skipped'}', () async {
         final io = _io(handoff: withHandoffStatus(_handoffReadyWithScope, status));
         var confirmCalls = 0;

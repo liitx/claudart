@@ -41,6 +41,19 @@ enum HandoffStatus {
         unknown              => 'unknown',
       };
 
+  /// True when `/debug` may start without an override: the root cause is
+  /// locked (`readyForDebug`) or debug already began (`debugInProgress`).
+  bool get canStartDebug => switch (this) {
+        readyForDebug ||
+        debugInProgress => true,
+        suggestInvestigating ||
+        readyForSuggest ||
+        debugComplete ||
+        needsSuggest ||
+        noHandoff ||
+        unknown => false,
+      };
+
   /// False for the display-only variants that are never written to disk.
   bool get isPersisted => switch (this) {
         noHandoff ||

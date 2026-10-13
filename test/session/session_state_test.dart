@@ -163,6 +163,51 @@ void main() {
     });
   });
 
+  group('HandoffStatus wire values', () {
+    // Independent literal table: the on-disk contract, not derived from the enum.
+    const wire = {
+      HandoffStatus.suggestInvestigating: 'suggest-investigating',
+      HandoffStatus.readyForSuggest: 'ready-for-suggest',
+      HandoffStatus.readyForDebug: 'ready-for-debug',
+      HandoffStatus.debugInProgress: 'debug-in-progress',
+      HandoffStatus.debugComplete: 'debug-complete',
+      HandoffStatus.needsSuggest: 'needs-suggest',
+      HandoffStatus.noHandoff: 'no-handoff',
+      HandoffStatus.unknown: 'unknown',
+    };
+
+    test('the table covers every variant', () {
+      expect(wire.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final entry in wire.entries) {
+      test('${entry.key.name}: value is "${entry.value}"', () {
+        expect(entry.key.value, entry.value);
+      });
+    }
+
+    for (final entry in wire.entries.where((e) => e.key.isPersisted)) {
+      test('${entry.key.name}: fromString("${entry.value}") parses back', () {
+        expect(HandoffStatus.fromString(entry.value), entry.key);
+      });
+    }
+  });
+
+  group('HandoffStatus.canStartDebug / isPersisted', () {
+    const startsDebug = {HandoffStatus.readyForDebug, HandoffStatus.debugInProgress};
+    const displayOnly = {HandoffStatus.noHandoff, HandoffStatus.unknown};
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: canStartDebug is ${startsDebug.contains(status)}', () {
+        expect(status.canStartDebug, startsDebug.contains(status));
+      });
+
+      test('${status.name}: isPersisted is ${!displayOnly.contains(status)}', () {
+        expect(status.isPersisted, !displayOnly.contains(status));
+      });
+    }
+  });
+
   group('SessionState.parse — edge cases', () {
     test('empty string returns all empty/unknown', () {
       final state = SessionState.parse('');

@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/session/sync_check.dart';
 
 // ── Shared handoff fixtures ───────────────────────────────────────────────────
@@ -277,6 +278,16 @@ void main() {
   });
 
   // ── checkHandoffStatus — debug ─────────────────────────────────────────────
+
+  group('checkHandoffStatus — debug agrees with HandoffStatus.canStartDebug', () {
+    for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
+      test('${status.name}: clean iff canStartDebug', () {
+        final result = checkHandoffStatus(
+            ClaudartOperation.debug, _handoff(status: status.value));
+        expect(result.isClean, const {HandoffStatus.readyForDebug, HandoffStatus.debugInProgress}.contains(status));
+      });
+    }
+  });
 
   group('checkHandoffStatus — debug operation', () {
     test('clean when status is ready-for-debug', () {
