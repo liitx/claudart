@@ -7,6 +7,7 @@ export 'paths.dart' show handoffFileName, skillsFileName, archivesDirName, archi
 export 'portability_gap.dart';
 export 'providers/agent_provider.dart';
 export 'registry.dart' show Registry, RegistryEntry;
+// updateStatus stays exported for existing consumers (it is deprecated).
 export 'md_io.dart'
     show
         applyHandoffEvent,
@@ -15,6 +16,7 @@ export 'md_io.dart'
         readSection,
         readStatus,
         updateSection,
+        // ignore: deprecated_member_use_from_same_package
         updateStatus,
         withHandoffStatus;
 export 'pipeline/agent_model.dart';

@@ -24,6 +24,7 @@ import 'package:claudart/pipeline/usage.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart';
+import 'package:claudart/workspace/workspace_link_state.dart';
 import 'package:path/path.dart' as p;
 
 import '../helpers/mocks.dart';
@@ -45,8 +46,46 @@ const _analysis = '<ROOT_CAUSE>rc</ROOT_CAUSE>'
 
 Never _noExit(int code) => throw StateError('exit($code)');
 
-MemoryFileIO freshLifecycleIo() {
-  final io = MemoryFileIO(dirs: {_projectRoot}, links: {_claudeLink});
+/// The environment a lifecycle runs in: how the project is linked to its
+/// workspace, and whether its pubspec declares dartrix.
+typedef LifecycleEnvironment = ({WorkspaceLinkState link, bool usesDartrix});
+
+/// Every link state x dartrix on/off.
+List<LifecycleEnvironment> lifecycleEnvironments() => [
+      for (final link in WorkspaceLinkState.values)
+        for (final usesDartrix in [false, true])
+          (link: link, usesDartrix: usesDartrix),
+    ];
+
+String describeEnvironment(LifecycleEnvironment env) =>
+    '${env.link.name}, ${env.usesDartrix ? 'with' : 'without'} dartrix';
+
+const _dartrixPubspec = 'name: my_app\n'
+    'dev_dependencies:\n'
+    '  dartrix:\n'
+    '    git:\n'
+    '      url: https://github.com/liitx/dartrix.git\n';
+
+/// The default environment: linked by symlink, no dartrix (what the unit tests
+/// and the zedup consumer check have always used).
+const defaultLifecycleEnvironment = (
+  link: WorkspaceLinkState.symlinked,
+  usesDartrix: false,
+);
+
+MemoryFileIO freshLifecycleIo([
+  LifecycleEnvironment env = defaultLifecycleEnvironment,
+]) {
+  final io = MemoryFileIO(
+    dirs: {
+      _projectRoot,
+      if (env.link == WorkspaceLinkState.realDirectory) _claudeLink,
+    },
+    links: {if (env.link == WorkspaceLinkState.symlinked) _claudeLink},
+    files: {
+      if (env.usesDartrix) '$_projectRoot/pubspec.yaml': _dartrixPubspec,
+    },
+  );
   Registry.empty()
       .add(const RegistryEntry(
         name: 'my-app',

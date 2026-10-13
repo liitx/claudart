@@ -74,6 +74,8 @@ some content
   group('updateStatus', () {
     test('replaces status value', () {
       const doc = '## Status\n\nsuggest-investigating\n';
+      // The deprecated raw writer is still exported; this pins its behavior.
+      // ignore: deprecated_member_use_from_same_package
       final result = updateStatus(doc, 'ready-for-debug');
       expect(result, contains('ready-for-debug'));
       expect(result, isNot(contains('suggest-investigating')));

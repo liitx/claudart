@@ -51,7 +51,7 @@ String withHandoffStatus(String content, HandoffStatus status) {
   if (!status.isPersisted) {
     throw ArgumentError.value(status, 'status', _displayOnlyStatusMessage);
   }
-  return updateStatus(content, status.value);
+  return _setStatusLine(content, status.value);
 }
 
 /// Applies [event] to the handoff's current status through the transition
@@ -73,8 +73,13 @@ String applyHandoffEvent(
 }
 
 /// Updates the Status line in the handoff with a raw string. Kept for
-/// existing external callers; new code uses [withHandoffStatus].
-String updateStatus(String content, String status) {
+/// existing external callers; new code uses [applyHandoffEvent], which checks
+/// the move against the transition table and reports it for logging.
+@Deprecated('Use applyHandoffEvent: it validates the move and logs it')
+String updateStatus(String content, String status) =>
+    _setStatusLine(content, status);
+
+String _setStatusLine(String content, String status) {
   return content.replaceFirstMapped(
     RegExp(r'(## Status\n+)(\S[^\n]*)'),
     (m) => '${m.group(1)}$status',

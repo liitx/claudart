@@ -2,7 +2,10 @@
 // REAL reader. Copied into a throwaway copy of zedup by run.sh (never run in
 // either real repo). After every step it feeds the handoff.md text to zedup's
 // parseClaudartHandoff and compares the status zedup would show with the status
-// claudart's contract says a consumer should see. Exit 1 on any disagreement.
+// claudart's contract says a consumer should see, and scans zedup's lib/ for
+// code that writes a status as a raw string (updateStatus) instead of through
+// claudart's applyHandoffEvent, which validates the move and logs it. Exit 1 on
+// any disagreement or raw writer.
 
 import 'dart:io';
 
@@ -44,10 +47,32 @@ Future<void> main() async {
   for (final d in disagreements) {
     print('  - $d');
   }
-  if (disagreements.isNotEmpty) {
-    print('\nzedup does not read SessionState.effectiveStatus yet: a blank '
-        'handoff (after kill, teardown or an empty rotate) shows as a live '
-        'session.');
-    exit(1);
+
+  // Writers: raw-string status writes bypass the transition table and the log.
+  final rawWriters = <String>[];
+  final call = RegExp(r'\bupdateStatus\(');
+  for (final file in Directory('lib')
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.dart'))) {
+    final lines = file.readAsLinesSync();
+    for (var i = 0; i < lines.length; i++) {
+      if (call.hasMatch(lines[i])) rawWriters.add('${file.path}:${i + 1}');
+    }
   }
+  print('\n${rawWriters.length} raw status writer(s) in zedup lib/');
+  for (final w in rawWriters) {
+    print('  - $w');
+  }
+
+  if (disagreements.isNotEmpty) {
+    print('\nREADER: zedup does not read SessionState.effectiveStatus yet: a '
+        'blank handoff (after kill, teardown or an empty rotate) shows as a '
+        'live session.');
+  }
+  if (rawWriters.isNotEmpty) {
+    print('\nWRITER: zedup writes status as a raw string. Use claudart\'s '
+        'applyHandoffEvent (validated, logged to transitions.jsonl) instead.');
+  }
+  if (disagreements.isNotEmpty || rawWriters.isNotEmpty) exit(1);
 }
