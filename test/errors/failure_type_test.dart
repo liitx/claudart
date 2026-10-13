@@ -14,6 +14,9 @@ void main() {
     test('sessionCloseFailed rolls up to session', () {
       expect(FailureType.sessionCloseFailed.errorType, ErrorType.session);
     });
+    test('invalidHandoffTransition rolls up to session', () {
+      expect(FailureType.invalidHandoffTransition.errorType, ErrorType.session);
+    });
     test('workspaceLocked rolls up to workspace', () {
       expect(FailureType.workspaceLocked.errorType, ErrorType.workspace);
     });
@@ -44,6 +47,12 @@ void main() {
     });
     test('sessionCloseFailed uses its subsystem default, unoverridden', () {
       expect(FailureType.sessionCloseFailed.effectiveFaultClass, FaultClass.environmentFault);
+    });
+    test('invalidHandoffTransition overrides to programmerFault: the code '
+        'asked for a move the state machine forbids', () {
+      const failure = FailureType.invalidHandoffTransition;
+      expect(failure.faultClass, FaultClass.environmentFault);
+      expect(failure.effectiveFaultClass, FaultClass.programmerFault);
     });
     test('providerNotConfigured overrides to configFault, not pipeline\'s default externalServiceFault', () {
       expect(FailureType.providerNotConfigured.faultClass, FaultClass.externalServiceFault);
@@ -97,6 +106,15 @@ void main() {
         FailureType.stepExitedNonzero.suggestedAction,
         'Check the stderr output above for the real cause from `claude` '
         'itself.',
+      );
+    });
+    test('invalidHandoffTransition suggestedAction says it is a claudart '
+        'bug and points at the spec', () {
+      expect(
+        FailureType.invalidHandoffTransition.suggestedAction,
+        'This is a claudart bug: a command ran from a handoff status the '
+        'state machine does not allow. Compare docs/design.md with the '
+        'status in handoff.md, then report it.',
       );
     });
     test('stepProducedNoResult suggestedAction names the real condition', () {

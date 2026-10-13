@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 import 'package:claudart/md_io.dart';
@@ -114,6 +116,48 @@ some content
       expect(
         HandoffStatus.values.where((s) => !s.isPersisted).toSet(),
         {HandoffStatus.noHandoff, HandoffStatus.unknown},
+      );
+    });
+  });
+
+  group('applyHandoffEvent', () {
+    String docIn(HandoffStatus status) => '## Status\n\n${status.value}\n';
+
+    test('applies a legal event: the status becomes the transition target', () {
+      final result = applyHandoffEvent(
+        docIn(HandoffStatus.readyForDebug),
+        HandoffEvent.debugStarted,
+      );
+      expect(readHandoffStatus(result), HandoffStatus.debugInProgress);
+    });
+
+    test('a self-loop event leaves the status as it was', () {
+      final result = applyHandoffEvent(
+        docIn(HandoffStatus.suggestInvestigating),
+        HandoffEvent.saveUnconfirmed,
+      );
+      expect(readHandoffStatus(result), HandoffStatus.suggestInvestigating);
+    });
+
+    test('rejects a move the transition table lacks, naming status and event',
+        () {
+      expect(
+        () => applyHandoffEvent(
+          docIn(HandoffStatus.debugComplete),
+          HandoffEvent.debugStarted,
+        ),
+        throwsA(
+          isA<InvalidHandoffTransitionException>()
+              .having((e) => e.from, 'from', HandoffStatus.debugComplete)
+              .having((e) => e.event, 'event', HandoffEvent.debugStarted),
+        ),
+      );
+    });
+
+    test('an unrecognised status in the file rejects every event', () {
+      expect(
+        () => applyHandoffEvent('## Status\n\nbogus\n', HandoffEvent.setup),
+        throwsA(isA<InvalidHandoffTransitionException>()),
       );
     });
   });

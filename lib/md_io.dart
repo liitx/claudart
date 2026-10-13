@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'pipeline/pipeline_context.dart' show ScopeFile;
+import 'session/handoff_event.dart';
+import 'session/invalid_handoff_transition_exception.dart';
 import 'session/session_state.dart' show HandoffStatus;
 import 'ui/line_editor.dart' as editor;
 
@@ -49,6 +51,17 @@ String withHandoffStatus(String content, HandoffStatus status) {
     throw ArgumentError.value(status, 'status', _displayOnlyStatusMessage);
   }
   return updateStatus(content, status.value);
+}
+
+/// Applies [event] to the handoff's current status through the transition
+/// table (docs/design.md). Throws [InvalidHandoffTransitionException] when the
+/// table has no such move, so a command can no longer write a status the state
+/// machine forbids.
+String applyHandoffEvent(String content, HandoffEvent event) {
+  final from = readHandoffStatus(content);
+  final to = from.after(event);
+  if (to == null) throw InvalidHandoffTransitionException(from, event);
+  return withHandoffStatus(content, to);
 }
 
 /// Updates the Status line in the handoff with a raw string. Kept for

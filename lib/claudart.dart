@@ -9,6 +9,7 @@ export 'providers/agent_provider.dart';
 export 'registry.dart' show Registry, RegistryEntry;
 export 'md_io.dart'
     show
+        applyHandoffEvent,
         parseScopeFiles,
         readHandoffStatus,
         readSection,
