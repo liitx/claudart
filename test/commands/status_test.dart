@@ -266,7 +266,11 @@ _Nothing yet.
       return output;
     }
 
-    MemoryFileIO ioWith({required String bug, String? skills}) {
+    MemoryFileIO ioWith({
+      required String bug,
+      String? skills,
+      String status = 'suggest-investigating',
+    }) {
       final io = MemoryFileIO();
       final workspace = workspaceFor(_projectName);
       Registry.empty()
@@ -282,7 +286,7 @@ _Nothing yet.
 
 ## Status
 
-suggest-investigating
+$status
 
 ---
 
@@ -336,6 +340,29 @@ $bug
       test('the Status line reads no-handoff', () async {
         final output = await statusOutput(ioWith(bug: blank));
         expect(output.join('\n'), contains('Status   : no-handoff'));
+      });
+
+      test('no Unresolved line for a blank handoff, even if its stale Status '
+          'says debug-in-progress', () async {
+        final output = await statusOutput(
+          ioWith(bug: blank, status: 'debug-in-progress'),
+        );
+        expect(output.join('\n'), isNot(contains('Unresolved:')));
+      });
+
+      test('a live debug-in-progress handoff does show it', () async {
+        final output = await statusOutput(
+          ioWith(bug: 'Crash on save', status: 'debug-in-progress'),
+        );
+        expect(output.join('\n'), contains('Unresolved:'));
+      });
+
+      test('the next step is claudart setup, not /suggest', () async {
+        // After teardown a CLI-only user is told what to do next. A blank
+        // handoff has nothing to suggest on: the next step is a new session.
+        final output = await statusOutput(ioWith(bug: blank));
+        expect(output.join('\n'), contains('Run: claudart setup'));
+        expect(output.join('\n'), isNot(contains('Run /suggest')));
       });
 
       test('--prompt mode shows no-handoff with the inactive dot', () async {

@@ -74,8 +74,8 @@ Future<void> runStatus({
   print('Status   : ${ansi.c(statusColour, shown.value)}');
   print('Bug      : ${_truncate(state.bug)}');
   print('Root cause: ${_truncate(state.rootCause)}');
-  if (state.status == HandoffStatus.debugInProgress ||
-      state.status == HandoffStatus.needsSuggest) {
+  if (shown == HandoffStatus.debugInProgress ||
+      shown == HandoffStatus.needsSuggest) {
     print('Unresolved: ${_truncate(unresolved)}');
   }
 
@@ -103,7 +103,7 @@ Future<void> runStatus({
   print('Skills   : ${skillsPathFor(workspace)}');
 
   print('\nNext step:');
-  switch (state.status) {
+  switch (shown) {
     case HandoffStatus.suggestInvestigating:
       print('  Run /suggest in your editor.');
     case HandoffStatus.readyForSuggest:

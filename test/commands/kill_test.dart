@@ -7,6 +7,7 @@ import 'package:claudart/file_io.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
@@ -168,6 +169,44 @@ void main() {
           'rejected': true,
         },
       ]);
+    });
+  });
+
+  group('kill — session summary', () {
+    test('a blank handoff is shown as no-handoff, not its stale Status line',
+        () async {
+      final io = _io();
+      io.write(handoffPathFor(_workspace), blankHandoff);
+      final output = <String>[];
+      await runZoned(
+        () => runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          exitFn: (code) => throw _ExitException(code),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      expect(output.join('\n'), contains('Status : no-handoff'));
+    });
+
+    test('a live handoff shows its own status', () async {
+      final io = _io();
+      final output = <String>[];
+      await runZoned(
+        () => runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          exitFn: (code) => throw _ExitException(code),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      expect(output.join('\n'), contains('Status : ready-for-debug'));
     });
   });
 
