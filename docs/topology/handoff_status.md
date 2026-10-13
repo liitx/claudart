@@ -45,23 +45,40 @@ stateDiagram-v2
 
 ## Where each event is passed
 
-Files in `lib/` that mention the event, other than the table itself. "— no caller yet" is wiring still to do.
+Files in `lib/` that mention the event, other than the table itself. "— no code caller" is wiring still to do.
 
 | event | passed by |
 |---|---|
 | setup | lib/commands/setup.dart |
-| saveUnconfirmed | — no caller yet |
-| saveConfirmedExploring | — no caller yet |
+| saveUnconfirmed | — no code caller |
+| saveConfirmedExploring | — no code caller |
 | saveConfirmedReady | lib/commands/suggest.dart |
-| debugStarted | — no caller yet |
-| debugBlocked | — no caller yet |
-| suggestResumed | — no caller yet |
+| debugStarted | — no code caller |
+| debugBlocked | — no code caller |
+| suggestResumed | — no code caller |
 | fixApplied | lib/commands/debug.dart |
 | rotated | lib/commands/rotate.dart |
 | rotatedEmpty | lib/commands/rotate.dart |
 | tornDown | lib/commands/teardown.dart |
 | reminderSaved | lib/commands/teardown.dart |
 | killed | lib/commands/kill.dart |
+
+## Statuses named in agent prompts
+
+Agents move a handoff by editing `handoff.md` as these prompts instruct, so a move with "— no code caller" above is made there. Each prompt names statuses through `HandoffStatus`, never as typed text (a test fails otherwise).
+
+| prompt | statuses it names |
+|---|---|
+| lib/pipeline/flows/flow_steps.dart | readyForSuggest |
+| lib/templates/debug_template.dart | debugInProgress, needsSuggest, readyForDebug |
+| lib/templates/flow_template.dart | readyForDebug, suggestInvestigating |
+| lib/templates/handoff_template.dart | suggestInvestigating |
+| lib/templates/save_template.dart | debugInProgress, readyForDebug, suggestInvestigating |
+| lib/templates/suggest_template.dart | debugInProgress, needsSuggest, readyForDebug, readyForSuggest, suggestInvestigating |
+
+## After a reset
+
+`kill`, `teardown` and an empty `rotate` leave the blank handoff, whose Status line reads `suggest-investigating` with no active content. `noHandoff` in the diagram and in `transitions.jsonl` means "no active session", not what the file says.
 
 ## Where it is logged
 

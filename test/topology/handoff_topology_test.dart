@@ -72,7 +72,9 @@ String renderStateDiagram() {
   ].join('\n');
 }
 
-const _noCaller = '— no caller yet';
+const _noCaller = '— no code caller';
+const _promptDirs = ['lib/templates/', 'lib/pipeline/flows/'];
+final _statusMention = RegExp(r'HandoffStatus\.(\w+)\.value');
 
 String renderUsageTable(Map<HandoffEvent, List<String>> usage) {
   final rows = [
@@ -82,6 +84,32 @@ String renderUsageTable(Map<HandoffEvent, List<String>> usage) {
   ];
   return ['| event | passed by |', '|---|---|', ...rows].join('\n');
 }
+
+/// Prompt file -> the statuses it names through the enum, sorted by name.
+/// Agents move a handoff by editing handoff.md as these prompts instruct.
+Map<String, List<String>> statusMentionsByFile(Map<String, String> sources) {
+  final variants = {for (final s in HandoffStatus.values) s.name};
+  final result = <String, List<String>>{};
+  for (final entry in sources.entries) {
+    if (!_promptDirs.any(entry.key.startsWith)) continue;
+    final names = {
+      for (final m in _statusMention.allMatches(entry.value))
+        if (variants.contains(m.group(1))) m.group(1)!,
+    }.toList()
+      ..sort();
+    if (names.isNotEmpty) result[entry.key] = names;
+  }
+  return Map.fromEntries(
+    result.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+  );
+}
+
+String renderPromptTable(Map<String, List<String>> mentions) => [
+      '| prompt | statuses it names |',
+      '|---|---|',
+      for (final entry in mentions.entries)
+        '| ${entry.key} | ${entry.value.join(', ')} |',
+    ].join('\n');
 
 String renderHandoffTopology(Map<String, String> sources) => [
       '# HandoffStatus topology',
@@ -109,6 +137,24 @@ String renderHandoffTopology(Map<String, String> sources) => [
           '"$_noCaller" is wiring still to do.',
       '',
       renderUsageTable(usageByEvent(sources)),
+      '',
+      '## Statuses named in agent prompts',
+      '',
+      'Agents move a handoff by editing `handoff.md` as these prompts '
+          'instruct, so a move with "$_noCaller" above is made there. Each '
+          'prompt names statuses through `HandoffStatus`, never as typed '
+          'text (a test fails otherwise).',
+      '',
+      renderPromptTable(statusMentionsByFile(sources)),
+      '',
+      '## After a reset',
+      '',
+      '`kill`, `teardown` and an empty `rotate` leave the blank handoff, '
+          'whose Status line reads '
+          '`${HandoffStatus.suggestInvestigating.value}` '
+          'with no active content. `${HandoffStatus.noHandoff.name}` in the '
+          'diagram and in `transitions.jsonl` means "no active session", not '
+          'what the file says.',
       '',
       '## Where it is logged',
       '',
@@ -158,6 +204,38 @@ void main() {
     test('has an entry for every event, empty when nothing passes it', () {
       expect(usage.keys, HandoffEvent.values);
       expect(usage[HandoffEvent.debugBlocked], isEmpty);
+    });
+  });
+
+  group('statusMentionsByFile', () {
+    final mentions = statusMentionsByFile({
+      'lib/templates/a.dart': '\${HandoffStatus.readyForDebug.value} and '
+          '\${HandoffStatus.needsSuggest.value} and '
+          '\${HandoffStatus.readyForDebug.value}',
+      'lib/pipeline/flows/b.dart': '\${HandoffStatus.debugComplete.value}',
+      'lib/commands/c.dart': '\${HandoffStatus.readyForDebug.value}',
+      'lib/templates/d.dart': 'no statuses here',
+      'lib/templates/e.dart': '\${HandoffStatus.notAVariant.value}',
+    });
+
+    test('lists each status once per prompt file, sorted by name', () {
+      expect(
+          mentions['lib/templates/a.dart'], ['needsSuggest', 'readyForDebug']);
+    });
+
+    test('covers flow prompts as well as templates', () {
+      expect(mentions['lib/pipeline/flows/b.dart'], ['debugComplete']);
+    });
+
+    test('ignores files outside the prompt directories', () {
+      expect(mentions, isNot(contains('lib/commands/c.dart')));
+    });
+
+    test('omits files that name no status, and names that are no variant', () {
+      expect(mentions.keys, [
+        'lib/pipeline/flows/b.dart',
+        'lib/templates/a.dart',
+      ]);
     });
   });
 
