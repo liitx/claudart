@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/md_io.dart'
     show readHandoffStatus, readSection, withHandoffStatus;
@@ -99,6 +103,15 @@ PipelineExecutor _executorWithNoOutput() =>
     PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
 
 const _rootCause = 'Off-by-one in foo()';
+
+/// The transitions a command logged, minus the timestamp.
+List<Map<String, dynamic>> _loggedTransitions(MemoryFileIO io) {
+  final raw = io.read(p.join(logsDirFor(_workspace), 'transitions.jsonl'));
+  return [
+    for (final line in raw.split('\n').where((l) => l.isNotEmpty))
+      {...jsonDecode(line) as Map<String, dynamic>}..remove('ts'),
+  ];
+}
 
 HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
@@ -257,6 +270,25 @@ void main() {
       expect(readSection(written, 'Root Cause'), _rootCause);
     });
 
+    test('logs the transition it applied: command, from, event, to', () async {
+      final io = _io();
+      await runSuggest(
+        io: io,
+        projectRootOverride: _projectRoot,
+        exitFn: _throwExit,
+        executor: _executorWithAnalysis(),
+        pickFn: (_) => 0,
+      );
+      expect(_loggedTransitions(io), [
+        {
+          'command': ClaudartCommand.suggest.name,
+          'from': HandoffStatus.suggestInvestigating.name,
+          'event': HandoffEvent.saveConfirmedReady.name,
+          'to': HandoffStatus.readyForDebug.name,
+        },
+      ]);
+    });
+
     test('choosing exit leaves the status untouched', () async {
       final io = _io();
       await expectLater(
@@ -306,6 +338,7 @@ void main() {
           );
           expect(modelCalls, 0, reason: 'rejected before any model call');
           expect(_statusOf(io), status);
+          expect(_loggedTransitions(io), isEmpty);
         }
       });
     }

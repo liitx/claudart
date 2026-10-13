@@ -3,6 +3,8 @@ import 'package:path/path.dart' as p;
 import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import 'claudart_command.dart';
 import '../md_io.dart';
 import 'scope_files.dart';
 import '../paths.dart';
@@ -202,7 +204,18 @@ Future<void> runDebug({
   }
 
   var updated = handoff;
-  updated = applyHandoffEvent(updated, HandoffEvent.fixApplied);
+  updated = applyHandoffEvent(
+    updated,
+    HandoffEvent.fixApplied,
+    onTransition: (transition) => SessionLogger(
+      io: fileIO,
+      sensitivityMode: entry.sensitivityMode,
+      workspacePath: workspace,
+    ).logTransition(
+      command: ClaudartCommand.debug.name,
+      transition: transition,
+    ),
+  );
   fileIO.write(handoffFile, updated);
 
   stdout.write(

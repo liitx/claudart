@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:claudart/logging/logger.dart';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/handoff_transition.dart';
+import 'package:claudart/session/session_state.dart';
 import 'package:claudart/sensitivity/token_map.dart';
 import 'package:path/path.dart' as p;
 import '../helpers/mocks.dart';
@@ -9,6 +12,7 @@ import 'package:claudart/paths.dart';
 String get _logsDir => p.join(claudeDir, 'logs');
 String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
 String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
+String get _transitionsPath => p.join(_logsDir, 'transitions.jsonl');
 String get _performancePath => p.join(_logsDir, 'performance.md');
 
 void main() {
@@ -55,6 +59,26 @@ void main() {
       expect(entry['scanScope'], equals('lib'));
       expect(entry['filesScanned'], equals(42));
       expect(entry['tokensNew'], equals(3));
+    });
+
+    test('logTransition records the command and the typed transition', () {
+      logger.logTransition(
+        command: 'suggest',
+        transition: const HandoffTransition(
+          from: HandoffStatus.suggestInvestigating,
+          event: HandoffEvent.saveConfirmedReady,
+          to: HandoffStatus.readyForDebug,
+        ),
+      );
+      final entries = readJsonl(_transitionsPath);
+      expect(entries, hasLength(1));
+      expect(entries.first['ts'], isA<String>());
+      expect({...entries.first}..remove('ts'), {
+        'command': 'suggest',
+        'from': 'suggestInvestigating',
+        'event': 'saveConfirmedReady',
+        'to': 'readyForDebug',
+      });
     });
 
     test('logError appends with fingerprint', () {

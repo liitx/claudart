@@ -2,6 +2,8 @@ import 'dart:io';
 import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import 'claudart_command.dart';
 import '../md_io.dart';
 import 'scope_files.dart';
 import '../paths.dart';
@@ -261,7 +263,18 @@ $mustNotTouch''';
   updated = updateSection(updated, 'Root Cause',  rootCause.trim());
   updated = updateSection(updated, 'Scope',        newScope.trim());
   updated = updateSection(updated, 'Constraints',  constraints.trim());
-  updated = applyHandoffEvent(updated, HandoffEvent.saveConfirmedReady);
+  updated = applyHandoffEvent(
+    updated,
+    HandoffEvent.saveConfirmedReady,
+    onTransition: (transition) => SessionLogger(
+      io: fileIO,
+      sensitivityMode: entry.sensitivityMode,
+      workspacePath: workspace,
+    ).logTransition(
+      command: ClaudartCommand.suggest.name,
+      transition: transition,
+    ),
+  );
   updated = updated.replaceFirst(
     RegExp(r'> Updated: [^\n]+'),
     '> Updated: ${DateTime.now().toIso8601String().split('.').first}',

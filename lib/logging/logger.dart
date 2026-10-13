@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
+import '../session/handoff_transition.dart';
 import '../paths.dart';
 import '../sensitivity/token_map.dart';
 import '../sensitivity/abstractor.dart';
@@ -8,6 +9,7 @@ import '../sensitivity/detector.dart';
 
 const int _maxInteractions = 500;
 const int _maxErrors = 200;
+const int _maxTransitions = 500;
 const int _maxPerformance = 50;
 
 /// Appends structured log entries to workspace log files.
@@ -29,6 +31,7 @@ class SessionLogger {
 
   String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
   String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
+  String get _transitionsPath => p.join(_logsDir, 'transitions.jsonl');
   String get _performancePath => p.join(_logsDir, 'performance.md');
 
   void logInteraction({
@@ -59,6 +62,23 @@ class SessionLogger {
       'outcome': outcome,
     };
     _appendJsonl(_interactionsPath, entry, _maxInteractions);
+  }
+
+  /// One handoff status change: which command applied which event, from which
+  /// status to which. Enum names only, so nothing here needs masking.
+  void logTransition({
+    required String command,
+    required HandoffTransition transition,
+  }) {
+    _appendJsonl(
+      _transitionsPath,
+      {
+        'ts': DateTime.now().toUtc().toIso8601String(),
+        'command': command,
+        ...transition.toJson(),
+      },
+      _maxTransitions,
+    );
   }
 
   void logError({

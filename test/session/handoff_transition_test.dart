@@ -1,4 +1,5 @@
 import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/handoff_transition.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 
@@ -217,6 +218,68 @@ void main() {
             HandoffEvent.fixApplied,
             HandoffEvent.killed,
           ]));
+    });
+  });
+
+  group('HandoffTransition', () {
+    const transition = HandoffTransition(
+      from: HandoffStatus.readyForDebug,
+      event: HandoffEvent.fixApplied,
+      to: HandoffStatus.debugComplete,
+    );
+
+    test('toJson names each enum by its variant name', () {
+      expect(transition.toJson(), {
+        'from': 'readyForDebug',
+        'event': 'fixApplied',
+        'to': 'debugComplete',
+      });
+    });
+
+    test('equal when from, event and to are equal', () {
+      expect(
+        transition,
+        const HandoffTransition(
+          from: HandoffStatus.readyForDebug,
+          event: HandoffEvent.fixApplied,
+          to: HandoffStatus.debugComplete,
+        ),
+      );
+      expect(
+        transition.hashCode,
+        const HandoffTransition(
+          from: HandoffStatus.readyForDebug,
+          event: HandoffEvent.fixApplied,
+          to: HandoffStatus.debugComplete,
+        ).hashCode,
+      );
+    });
+
+    test('differs when any one field differs', () {
+      expect(
+        transition,
+        isNot(const HandoffTransition(
+          from: HandoffStatus.debugInProgress,
+          event: HandoffEvent.fixApplied,
+          to: HandoffStatus.debugComplete,
+        )),
+      );
+      expect(
+        transition,
+        isNot(const HandoffTransition(
+          from: HandoffStatus.readyForDebug,
+          event: HandoffEvent.rotated,
+          to: HandoffStatus.debugComplete,
+        )),
+      );
+      expect(
+        transition,
+        isNot(const HandoffTransition(
+          from: HandoffStatus.readyForDebug,
+          event: HandoffEvent.fixApplied,
+          to: HandoffStatus.noHandoff,
+        )),
+      );
     });
   });
 }

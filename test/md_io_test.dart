@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/handoff_transition.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
@@ -152,6 +153,35 @@ some content
               .having((e) => e.event, 'event', HandoffEvent.debugStarted),
         ),
       );
+    });
+
+    test('reports the transition it applied to onTransition, once', () {
+      final seen = <HandoffTransition>[];
+      applyHandoffEvent(
+        docIn(HandoffStatus.readyForDebug),
+        HandoffEvent.debugStarted,
+        onTransition: seen.add,
+      );
+      expect(seen, [
+        const HandoffTransition(
+          from: HandoffStatus.readyForDebug,
+          event: HandoffEvent.debugStarted,
+          to: HandoffStatus.debugInProgress,
+        ),
+      ]);
+    });
+
+    test('a rejected move reports nothing to onTransition', () {
+      final seen = <HandoffTransition>[];
+      expect(
+        () => applyHandoffEvent(
+          docIn(HandoffStatus.debugComplete),
+          HandoffEvent.debugStarted,
+          onTransition: seen.add,
+        ),
+        throwsA(isA<InvalidHandoffTransitionException>()),
+      );
+      expect(seen, isEmpty);
     });
 
     test('an unrecognised status in the file rejects every event', () {
