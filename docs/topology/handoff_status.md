@@ -9,24 +9,24 @@ stateDiagram-v2
   suggestInvestigating --> suggestInvestigating: saveUnconfirmed, rotated
   suggestInvestigating --> readyForSuggest: saveConfirmedExploring
   suggestInvestigating --> readyForDebug: saveConfirmedReady
-  suggestInvestigating --> noHandoff: killed
+  suggestInvestigating --> noHandoff: rotatedEmpty, reminderSaved, killed
   readyForSuggest --> readyForDebug: saveConfirmedReady
-  readyForSuggest --> noHandoff: killed
+  readyForSuggest --> noHandoff: reminderSaved, killed
   readyForDebug --> readyForDebug: saveConfirmedReady
   readyForDebug --> debugInProgress: debugStarted
   readyForDebug --> debugComplete: fixApplied
   readyForDebug --> suggestInvestigating: rotated
-  readyForDebug --> noHandoff: killed
+  readyForDebug --> noHandoff: rotatedEmpty, reminderSaved, killed
   debugInProgress --> debugInProgress: saveUnconfirmed
   debugInProgress --> readyForDebug: saveConfirmedReady
   debugInProgress --> needsSuggest: debugBlocked
   debugInProgress --> debugComplete: fixApplied
   debugInProgress --> suggestInvestigating: rotated
-  debugInProgress --> noHandoff: killed
-  debugComplete --> noHandoff: tornDown, killed
+  debugInProgress --> noHandoff: rotatedEmpty, reminderSaved, killed
+  debugComplete --> noHandoff: tornDown, reminderSaved, killed
   needsSuggest --> readyForDebug: saveConfirmedReady
   needsSuggest --> suggestInvestigating: suggestResumed
-  needsSuggest --> noHandoff: killed
+  needsSuggest --> noHandoff: reminderSaved, killed
   noHandoff --> suggestInvestigating: setup
 ```
 
@@ -49,7 +49,7 @@ Files in `lib/` that mention the event, other than the table itself. "— no cal
 
 | event | passed by |
 |---|---|
-| setup | — no caller yet |
+| setup | lib/commands/setup.dart |
 | saveUnconfirmed | — no caller yet |
 | saveConfirmedExploring | — no caller yet |
 | saveConfirmedReady | lib/commands/suggest.dart |
@@ -57,9 +57,11 @@ Files in `lib/` that mention the event, other than the table itself. "— no cal
 | debugBlocked | — no caller yet |
 | suggestResumed | — no caller yet |
 | fixApplied | lib/commands/debug.dart |
-| rotated | — no caller yet |
-| tornDown | — no caller yet |
-| killed | — no caller yet |
+| rotated | lib/commands/rotate.dart |
+| rotatedEmpty | lib/commands/rotate.dart |
+| tornDown | lib/commands/teardown.dart |
+| reminderSaved | lib/commands/teardown.dart |
+| killed | lib/commands/kill.dart |
 
 ## Where it is logged
 

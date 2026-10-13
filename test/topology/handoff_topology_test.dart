@@ -178,7 +178,10 @@ void main() {
     test('merges events that share an edge into one arrow', () {
       expect(
         diagram,
-        contains('suggestInvestigating --> noHandoff: killed'),
+        contains(
+          'suggestInvestigating --> suggestInvestigating: '
+          'saveUnconfirmed, rotated',
+        ),
       );
       expect(
         diagram,
