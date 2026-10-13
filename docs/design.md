@@ -59,7 +59,24 @@ The session is a **deterministic finite automaton** `(S, C, δ, s₀, F)` where:
 | `debug-complete` | `claudart teardown` | `resolved` (archived) | — |
 | any | `claudart kill` | `∅` (handoff erased) | — |
 
-**Key property:** `δ` is exhaustive — the compiler enforces this because `HandoffStatus` is a Dart `enum` and every `switch` on it must be exhaustive. Missing cases are compile errors, not runtime bugs.
+**Key property:** `δ` is a real function in code: `HandoffStatus.after(HandoffEvent)` in
+`lib/session/session_state.dart`, returning the next status or `null` when the table has no such move
+(the move is rejected). It is *not* compiler-exhaustive — `after` switches over an `(event, status)` pair
+with a `null` default — so completeness is proven by `test/session/handoff_transition_test.dart`, which checks every
+`(status, event)` pair against an independent literal copy of this table, and checks that every persisted status is
+reachable from `no-handoff` and has an exit.
+
+**Events** (`lib/session/handoff_event.dart`) name outcomes, one per row above: `setup`, `saveUnconfirmed`,
+`saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`,
+`tornDown`, `killed`. `tornDown` and `killed` land in `no-handoff` (the handoff is reset or erased).
+
+**Deliberate extensions to the table** (what the commands actually do today; each is a row in the code and its test):
+
+| Current state | Event | Next state | Why |
+|---|---|---|---|
+| `ready-for-debug`, `debug-in-progress`, `needs-suggest` | `saveConfirmedReady` | `ready-for-debug` | `/suggest` re-run overwrites an existing handoff after the user confirms |
+| `ready-for-debug`, `debug-in-progress` | `fixApplied` | `debug-complete` | `/debug` applies its plan and marks it complete in one step; claudart does not verify the fix, so "fix verified" is named for what happens |
+| any persisted state | `killed` | `no-handoff` | `claudart kill` erases the handoff |
 
 ### State diagram
 

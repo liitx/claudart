@@ -1,3 +1,4 @@
+import 'handoff_event.dart';
 import 'teardown_utils.dart';
 
 /// Typed representation of the handoff status field.
@@ -39,6 +40,36 @@ enum HandoffStatus {
         needsSuggest         => 'needs-suggest',
         noHandoff            => 'no-handoff',
         unknown              => 'unknown',
+      };
+
+  /// The status after [event] happens in this status, or null when
+  /// docs/design.md's delta table has no such move (the move is rejected).
+  HandoffStatus? after(HandoffEvent event) => switch ((event, this)) {
+        (HandoffEvent.setup, noHandoff) ||
+        (HandoffEvent.saveUnconfirmed, suggestInvestigating) ||
+        (HandoffEvent.suggestResumed, needsSuggest) ||
+        (HandoffEvent.rotated,
+              suggestInvestigating || readyForDebug || debugInProgress) =>
+          suggestInvestigating,
+        (HandoffEvent.saveConfirmedExploring, suggestInvestigating) =>
+          readyForSuggest,
+        (HandoffEvent.saveConfirmedReady,
+              suggestInvestigating ||
+              readyForSuggest ||
+              readyForDebug ||
+              debugInProgress ||
+              needsSuggest) =>
+          readyForDebug,
+        (HandoffEvent.saveUnconfirmed, debugInProgress) ||
+        (HandoffEvent.debugStarted, readyForDebug) =>
+          debugInProgress,
+        (HandoffEvent.debugBlocked, debugInProgress) => needsSuggest,
+        (HandoffEvent.fixApplied, readyForDebug || debugInProgress) =>
+          debugComplete,
+        (HandoffEvent.tornDown, debugComplete) ||
+        (HandoffEvent.killed, _) when isPersisted =>
+          noHandoff,
+        _ => null,
       };
 
   /// True when `/debug` may start without an override: the root cause is
