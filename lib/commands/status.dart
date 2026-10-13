@@ -55,7 +55,7 @@ Future<void> runStatus({
     stdout.write(render.statusBar(
       name: entry.name,
       statusLabel: state.status.value,
-      statusColorCode: _statusColour(state.status),
+      statusColorCode: render.statusColour(state.status),
       active: state.status != HandoffStatus.unknown,
     ));
     return;
@@ -68,7 +68,8 @@ Future<void> runStatus({
   print(render.header('CLAUDART SESSION STATUS'));
   print('Project  : ${entry.name}');
   print('Branch   : ${currentBranch ?? state.branch}');
-  print('Status   : ${ansi.c(_statusColour(state.status), state.status.value)}');
+  final statusColour = render.statusColour(state.status);
+  print('Status   : ${ansi.c(statusColour, state.status.value)}');
   print('Bug      : ${_truncate(state.bug)}');
   print('Root cause: ${_truncate(state.rootCause)}');
   if (state.status == HandoffStatus.debugInProgress ||
@@ -124,13 +125,3 @@ String _truncate(String s, {int max = 80}) {
   return single.length > max ? '${single.substring(0, max)}…' : single;
 }
 
-String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating ||
-      HandoffStatus.readyForSuggest      => ansi.cyan,
-      HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress ||
-      HandoffStatus.debugComplete        => ansi.green,
-      HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown ||
-      HandoffStatus.noHandoff            => ansi.dim,
-    };

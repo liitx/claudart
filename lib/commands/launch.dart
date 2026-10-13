@@ -98,7 +98,7 @@ Future<void> runLauncher({
         currentEntry != null && selected.workspacePath == currentEntry.workspacePath;
     final branch = (isCurrentProject ? currentBranch : null) ?? state.branch;
     print('  Branch : $branch');
-    final statusColour = _statusColour(state.status);
+    final statusColour = render.statusColour(state.status);
     print('  Status : ${ansi.c(statusColour, state.status.value)}');
     if (state.hasActiveContent) {
       print('  Bug    : ${_truncate(state.bug)}');
@@ -257,16 +257,6 @@ void _printResumeInstructions(HandoffStatus status) {
   print('');
 }
 
-String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating ||
-      HandoffStatus.readyForSuggest      => ansi.cyan,
-      HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress ||
-      HandoffStatus.debugComplete        => ansi.green,
-      HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown ||
-      HandoffStatus.noHandoff            => ansi.dim,
-    };
 
 String _truncate(String s, {int max = 60}) =>
     s.length > max ? '${s.substring(0, max)}…' : s;

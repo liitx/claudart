@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/commands/status.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/ui/ansi.dart' as ansi;
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
@@ -321,5 +323,53 @@ $bug
       final output = await statusOutput(io);
       expect(output.join('\n'), isNot(contains('Relevant past patterns')));
     });
+
+    group('the status colour', () {
+      setUp(() => ansi.colorEnabledOverride = true);
+      tearDown(() => ansi.colorEnabledOverride = null);
+
+      test('colours the Status line by the handoff status (cyan while '
+          'exploring)', () async {
+        final output = await statusOutput(ioWith(bug: 'some real bug'));
+        expect(
+          output.join('\n'),
+          contains('Status   : ${ansi.cyan}suggest-investigating${ansi.reset}'),
+        );
+      });
+
+      test('colours --prompt mode the same way', () async {
+        final io = ioWith(bug: 'some real bug');
+        final captured = _CapturedStdout();
+        await IOOverrides.runZoned(
+          () => runStatus(
+            io: io,
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            prompt: true,
+          ),
+          stdout: () => captured,
+        );
+        await captured.close();
+        expect(
+          captured.text,
+          contains('${ansi.cyan}suggest-investigating${ansi.reset}'),
+        );
+      });
+    });
   });
+}
+
+/// Collects what a command writes straight to `stdout` (not via `print`).
+class _CapturedStdout implements Stdout {
+  final _buffer = StringBuffer();
+  String get text => _buffer.toString();
+
+  @override
+  void write(Object? object) => _buffer.write(object);
+
+  @override
+  Future<dynamic> close() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

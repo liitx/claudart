@@ -82,7 +82,7 @@ Future<void> runSetup({
   if (existing.isNotEmpty) {
     final state = SessionState.parse(existing);
     if (state.hasActiveContent) {
-      final statusColour = _statusColour(state.status);
+      final statusColour = render.statusColour(state.status);
       print('\n─── ${entry.name} ───────────────────────────────');
       print('  Branch : ${gitCtx?.branch ?? state.branch}');
       print('  Status : ${ansi.c(statusColour, state.status.value)}');
@@ -228,16 +228,6 @@ abstract final class _SetupMenu {
   static const back = 2;
 }
 
-String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating ||
-      HandoffStatus.readyForSuggest      => ansi.cyan,
-      HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress ||
-      HandoffStatus.debugComplete        => ansi.green,
-      HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown ||
-      HandoffStatus.noHandoff            => ansi.dim,
-    };
 
 String _truncate(String s, {int max = 60}) =>
     s.length > max ? '${s.substring(0, max)}…' : s;

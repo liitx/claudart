@@ -10,6 +10,7 @@ import 'package:claudart/paths.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart'
     show HandoffStatus, SessionState;
+import 'package:claudart/ui/ansi.dart' as ansi;
 import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
@@ -550,6 +551,27 @@ void main() {
           'rejected': true,
         },
       ]);
+    });
+
+    test('the existing-session menu colours the status (cyan while '
+        'exploring)', () async {
+      ansi.colorEnabledOverride = true;
+      addTearDown(() => ansi.colorEnabledOverride = null);
+      final io = _io(handoff: _activeHandoff);
+      final output = <String>[];
+      await expectLater(
+        runZoned(
+          () => setup(io, menuChoice: _menuBack),
+          zoneSpecification: ZoneSpecification(
+            print: (_, __, ___, line) => output.add(line),
+          ),
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(
+        output.join('\n'),
+        contains('Status : ${ansi.cyan}suggest-investigating${ansi.reset}'),
+      );
     });
 
     test('backing out of the menu logs nothing', () async {
