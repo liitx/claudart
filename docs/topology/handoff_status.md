@@ -78,7 +78,7 @@ Agents move a handoff by editing `handoff.md` as these prompts instruct, so a mo
 
 ## After a reset
 
-`kill`, `teardown` and an empty `rotate` leave the blank handoff, whose Status line reads `suggest-investigating` with no active content. `noHandoff` in the diagram and in `transitions.jsonl` means "no active session", not what the file says.
+`kill`, `teardown` and an empty `rotate` leave the blank handoff, whose Status line still reads `suggest-investigating` with no active content. `SessionState.effectiveStatus` reads it as `noHandoff`: that is what consumers should show and what `transitions.jsonl` logs. Show a session from `effectiveStatus`, never from the raw Status line. `make consumer-check` replays the lifecycle against zedup's real reader to prove it does.
 
 ## Where it is logged
 

@@ -150,11 +150,14 @@ String renderHandoffTopology(Map<String, String> sources) => [
       '## After a reset',
       '',
       '`kill`, `teardown` and an empty `rotate` leave the blank handoff, '
-          'whose Status line reads '
+          'whose Status line still reads '
           '`${HandoffStatus.suggestInvestigating.value}` '
-          'with no active content. `${HandoffStatus.noHandoff.name}` in the '
-          'diagram and in `transitions.jsonl` means "no active session", not '
-          'what the file says.',
+          'with no active content. `SessionState.effectiveStatus` reads it as '
+          '`${HandoffStatus.noHandoff.name}`: that is what consumers should '
+          'show and what `transitions.jsonl` logs. Show a session from '
+          '`effectiveStatus`, never from the raw Status line. '
+          '`make consumer-check` replays the lifecycle against zedup\'s real '
+          'reader to prove it does.',
       '',
       '## Where it is logged',
       '',

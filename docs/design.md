@@ -66,6 +66,11 @@ with a `null` default — so completeness is proven by `test/session/handoff_tra
 `(status, event)` pair against an independent literal copy of this table, and checks that every persisted status is
 reachable from `no-handoff` and has an exit.
 
+**Consumer view.** A reset leaves the blank handoff on disk, whose Status line still reads
+`suggest-investigating`. The status a consumer should show is `SessionState.effectiveStatus`: `no-handoff` when the
+handoff has no active content, the parsed status otherwise. `test/conformance/lifecycle_test.dart` pins it step by step
+across whole lifecycles, and `make consumer-check` replays the same scenarios against zedup's real reader.
+
 **Events** (`lib/session/handoff_event.dart`) name outcomes, one per row above: `setup`, `saveUnconfirmed`,
 `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`,
 `rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. `rotatedEmpty`, `tornDown`, `reminderSaved` and `killed` land in `no-handoff` (the handoff is reset or erased).
