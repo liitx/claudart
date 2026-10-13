@@ -13,7 +13,10 @@
 // enum's own test.
 
 /// The variant's own answer for [getter], in declaration order.
-Map<V, T> topologyOf<V extends Enum, T>(Iterable<V> variants, T Function(V) getter) =>
+Map<V, T> topologyOf<V extends Enum, T>(
+  Iterable<V> variants,
+  T Function(V) getter,
+) =>
     {for (final variant in variants) variant: getter(variant)};
 
 /// Markdown table: one row per variant, one column per named getter.
@@ -27,7 +30,13 @@ String renderTopology<V extends Enum>(
   final divider = '|${'---|' * (getters.length + 1)}';
   final rows = [
     for (final variant in variants)
-      '| ${variant.name} | ${getters.values.map((read) => '${read(variant)}').join(' | ')} |',
+      '| ${variant.name} | ${_cells(variant, getters.values)} |',
   ];
   return [header, divider, ...rows].join('\n');
 }
+
+String _cells<V extends Enum>(
+  V variant,
+  Iterable<Object? Function(V)> getters,
+) =>
+    getters.map((read) => '${read(variant)}').join(' | ');
