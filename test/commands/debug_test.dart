@@ -10,6 +10,8 @@ import 'package:claudart/pipeline/step_mode.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
+import '../helpers/variant_topology.dart';
 
 // debug_test.dart — validation-path coverage for runDebug.
 //
@@ -125,6 +127,8 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
       );
@@ -137,6 +141,8 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
       );
@@ -149,6 +155,8 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
       );
@@ -164,6 +172,7 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          pickFn: unscriptedPick,
           confirmFn: (q) {
             askedQuestion = q;
             return false;
@@ -181,6 +190,7 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          pickFn: unscriptedPick,
           confirmFn: (_) => true,
           executor: _executorWithNoOutput(),
         ),
@@ -198,6 +208,7 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          pickFn: unscriptedPick,
           confirmFn: (_) {
             confirmWasCalled = true;
             return true;
@@ -218,6 +229,8 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          pickFn: unscriptedPick,
           executor: _executorWithNoOutput(),
         ),
         throwsA(isA<_ExitException>()),
@@ -231,6 +244,8 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          pickFn: unscriptedPick,
           executor: _executorWithNoOutput(),
         );
       } on _ExitException {
@@ -248,6 +263,8 @@ void main() {
             io: io,
             projectRootOverride: _projectRoot,
             exitFn: _throwExit,
+            confirmFn: unscriptedConfirm,
+            pickFn: unscriptedPick,
             executor: _executorWithNoOutput(),
           ),
           zoneSpecification: ZoneSpecification(
@@ -262,8 +279,11 @@ void main() {
   });
 
   group('runDebug — status gate, one case per persisted status', () {
+    // Expected value = the variant's own canStartDebug; the enum's contract
+    // table (session_state_test) is what proves the getter itself is right.
+    final startsDebug = topologyOf(HandoffStatus.values, (s) => s.canStartDebug);
     for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
-      final asked = !const {HandoffStatus.readyForDebug, HandoffStatus.debugInProgress}.contains(status);
+      final asked = !startsDebug[status]!;
       test('${status.name}: confirm is ${asked ? 'asked' : 'skipped'}', () async {
         final io = _io(handoff: withHandoffStatus(_handoffReadyWithScope, status));
         var confirmCalls = 0;
@@ -272,6 +292,7 @@ void main() {
             io: io,
             projectRootOverride: _projectRoot,
             exitFn: _throwExit,
+            pickFn: unscriptedPick,
             confirmFn: (_) {
               confirmCalls++;
               return true;
@@ -294,6 +315,7 @@ void main() {
         io: io,
         projectRootOverride: _projectRoot,
         exitFn: _throwExit,
+        confirmFn: unscriptedConfirm,
         executor: _executorWithPlan(),
         pickFn: (_) => 0,
       );
@@ -308,6 +330,7 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
           executor: _executorWithPlan(),
           pickFn: (_) => 1,
         ),

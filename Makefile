@@ -8,9 +8,11 @@ DART    := dart
 build:
 	$(DART) compile exe $(ENTRY) -o $(BIN)
 
-## Run all tests with randomized ordering
+## Run all tests with randomized ordering. stdin is /dev/null on purpose: a
+## blocking synchronous stdin read cannot be interrupted by a test timeout, so
+## a test that reaches an unscripted prompt would hang; at EOF it returns.
 test:
-	$(DART) test --test-randomize-ordering-seed=random
+	$(DART) test --test-randomize-ordering-seed=random < /dev/null
 
 ## Run a single test file: make test-file FILE=test/commands/teardown_test.dart
 test-file:

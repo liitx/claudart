@@ -80,7 +80,7 @@ dart run custom_lint || FAILED=1
 
 echo ""
 echo -e "${BOLD}dart test${RESET}"
-dart test --test-randomize-ordering-seed=random || FAILED=1
+dart test --test-randomize-ordering-seed=random < /dev/null || FAILED=1
 
 echo ""
 if [[ $FAILED -ne 0 ]]; then

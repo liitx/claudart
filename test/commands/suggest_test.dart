@@ -10,6 +10,7 @@ import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
 
 // suggest_test.dart — validation-path coverage for runSuggest.
 //
@@ -119,6 +120,9 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
       );
@@ -131,6 +135,9 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
       );
@@ -143,6 +150,9 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
       );
@@ -157,6 +167,9 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
           executor: _executorWithNoOutput(),
         ),
         throwsA(isA<_ExitException>()),
@@ -170,6 +183,9 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
           executor: _executorWithNoOutput(),
         );
       } on _ExitException {
@@ -187,6 +203,9 @@ void main() {
             io: io,
             projectRootOverride: _projectRoot,
             exitFn: _throwExit,
+            confirmFn: unscriptedConfirm,
+            promptFn: unscriptedPrompt,
+            pickFn: unscriptedPick,
             executor: _executorWithNoOutput(),
           ),
           zoneSpecification: ZoneSpecification(
@@ -209,6 +228,8 @@ void main() {
         io: io,
         projectRootOverride: _projectRoot,
         exitFn: _throwExit,
+        confirmFn: unscriptedConfirm,
+        promptFn: unscriptedPrompt,
         executor: _executorWithAnalysis(),
         pickFn: (_) => 0,
       );
@@ -225,6 +246,8 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
           executor: _executorWithAnalysis(),
           pickFn: (_) => 2,
         ),
