@@ -1,0 +1,53 @@
+// consumer_check.dart — replays claudart's lifecycle scenarios against zedup's
+// REAL reader. Copied into a throwaway copy of zedup by run.sh (never run in
+// either real repo). After every step it feeds the handoff.md text to zedup's
+// parseClaudartHandoff and compares the status zedup would show with the status
+// claudart's contract says a consumer should see. Exit 1 on any disagreement.
+
+import 'dart:io';
+
+import 'package:claudart/session/session_state.dart';
+import 'package:zedup/src/features/dashboard/zedup_dashboard.dart'
+    show parseClaudartHandoff;
+
+import 'conformance/lifecycle_scenarios.dart';
+
+Future<void> main() async {
+  var checked = 0;
+  final disagreements = <String>[];
+
+  for (final scenario in lifecycleScenarios().entries) {
+    print('\n== ${scenario.key}');
+    final io = freshLifecycleIo();
+    for (final step in scenario.value) {
+      await quietly(() => step.run(io));
+      final shown = parseClaudartHandoff(
+        name: 'my-app',
+        path: 'handoff.md',
+        content: handoffContentOf(io),
+      ).status;
+      final agrees = shown == step.effective;
+      checked++;
+      print('  ${step.name.padRight(14)} claudart says '
+          '${step.effective.name.padRight(21)} zedup shows '
+          '${shown.name.padRight(21)} ${agrees ? 'ok' : 'DISAGREE'}');
+      if (!agrees) {
+        disagreements.add(
+          '${scenario.key} / ${step.name}: claudart ${step.effective.name}, '
+          'zedup ${shown.name}',
+        );
+      }
+    }
+  }
+
+  print('\n$checked steps checked, ${disagreements.length} disagreement(s)');
+  for (final d in disagreements) {
+    print('  - $d');
+  }
+  if (disagreements.isNotEmpty) {
+    print('\nzedup does not read SessionState.effectiveStatus yet: a blank '
+        'handoff (after kill, teardown or an empty rotate) shows as a live '
+        'session.');
+    exit(1);
+  }
+}

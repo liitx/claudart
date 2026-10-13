@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage topology
+.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check
 
 ## Compile native binary to ~/bin/claudart
 build:
@@ -18,6 +18,14 @@ test:
 ## the checked-in doc and the code disagree)
 topology:
 	UPDATE_TOPOLOGY=1 $(DART) test test/topology/handoff_topology_test.dart < /dev/null
+
+## Replay claudart's lifecycle scenarios against zedup's REAL reader, in a
+## throwaway copy of zedup wired to this checkout (neither repo is modified).
+## Exit 1 when zedup shows a status claudart's contract says it should not.
+##   make consumer-check            (zedup at ../zedup)
+##   make consumer-check ZEDUP=/path/to/zedup
+consumer-check:
+	tool/consumer_check/run.sh $(ZEDUP)
 
 ## Run a single test file: make test-file FILE=test/commands/teardown_test.dart
 test-file:
