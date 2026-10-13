@@ -18,40 +18,12 @@ import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 
+import '../helpers/event_usage.dart';
 import '../helpers/variant_topology.dart';
 
 const _docPath = 'docs/topology/handoff_status.md';
 const _updateEnvVar = 'UPDATE_TOPOLOGY';
 const _updateEnabledValue = '1';
-const _libDir = 'lib';
-
-/// The files that define the table itself; mentions there are not callers.
-const _tableFiles = {
-  'lib/session/handoff_event.dart',
-  'lib/session/session_state.dart',
-};
-
-final _eventMention = RegExp(r'HandoffEvent\.(\w+)');
-
-/// Event -> files (relative paths, sorted) that mention it, ignoring the
-/// files that define the table.
-Map<HandoffEvent, List<String>> usageByEvent(Map<String, String> sources) {
-  final byName = {for (final event in HandoffEvent.values) event.name: event};
-  final used = <HandoffEvent, Set<String>>{
-    for (final event in HandoffEvent.values) event: {},
-  };
-  for (final entry in sources.entries) {
-    if (_tableFiles.contains(entry.key)) continue;
-    for (final match in _eventMention.allMatches(entry.value)) {
-      final event = byName[match.group(1)];
-      if (event != null) used[event]!.add(entry.key);
-    }
-  }
-  return {
-    for (final event in HandoffEvent.values)
-      event: used[event]!.toList()..sort(),
-  };
-}
 
 /// Mermaid state diagram of every move `after` allows; events that share the
 /// same from/to edge share one labelled arrow.
@@ -168,14 +140,6 @@ String renderHandoffTopology(Map<String, String> sources) => [
       '',
     ].join('\n');
 
-Map<String, String> _readLibSources() => {
-      for (final file in Directory(_libDir)
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.dart')))
-        file.path: file.readAsStringSync(),
-    };
-
 void main() {
   group('usageByEvent', () {
     final sources = {
@@ -277,7 +241,7 @@ void main() {
 
   group('the checked-in doc', () {
     test('docs/topology/handoff_status.md matches the code', () {
-      final rendered = renderHandoffTopology(_readLibSources());
+      final rendered = renderHandoffTopology(readLibSources());
       if (Platform.environment[_updateEnvVar] == _updateEnabledValue) {
         File(_docPath)
           ..createSync(recursive: true)

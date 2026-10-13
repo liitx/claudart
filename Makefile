@@ -17,7 +17,7 @@ test:
 ## Regenerate docs/topology/*.md from the code (the topology test fails when
 ## the checked-in doc and the code disagree)
 topology:
-	UPDATE_TOPOLOGY=1 $(DART) test test/topology/handoff_topology_test.dart < /dev/null
+	UPDATE_TOPOLOGY=1 $(DART) test test/topology < /dev/null
 
 ## Replay claudart's lifecycle scenarios against zedup's REAL reader, in a
 ## throwaway copy of zedup wired to this checkout (neither repo is modified).
