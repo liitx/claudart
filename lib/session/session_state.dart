@@ -115,17 +115,10 @@ enum HandoffStatus {
         debugComplete => false,
       };
 
-  /// True when the workflow expects `/debug` next.
-  bool get expectsDebug => switch (this) {
-        readyForDebug ||
-        debugInProgress => true,
-        suggestInvestigating ||
-        readyForSuggest ||
-        debugComplete ||
-        needsSuggest ||
-        noHandoff ||
-        unknown => false,
-      };
+  /// True when the workflow expects `/debug` next. The same set as
+  /// [canStartDebug]: one definition, kept as a named alias because zedup's
+  /// workflow gating reads it.
+  bool get expectsDebug => canStartDebug;
 }
 
 /// Read-only structured view of a handoff.md file.

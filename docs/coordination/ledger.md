@@ -95,7 +95,7 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | B2 success path of suggest/debug never tested | fixed: status matrix per persisted state, expected from `after` | e9fd1df, 225781e, 58ed8d9 |
 | A2 `debug-in-progress` never written | open: `fixApplied` writes debug-complete directly; `debugStarted` has no caller yet | - |
 | A3 flow prompt writes `ready-for-suggest` | fixed: every agent prompt names statuses through `HandoffStatus`; a scan test fails on any typed status | cc8069b |
-| A6 dead getters `expectsSuggest`/`expectsDebug` | open: topology shows expectsDebug == canStartDebug | - |
+| A6 `expectsSuggest`/`expectsDebug` | CORRECTED: not dead -- zedup's tests and tool/smoke.dart use them (only its lib/ does not). Kept as public API. `expectsDebug` now delegates to `canStartDebug` (same set); both pinned per variant against literal sets | this commit |
 | E `suggest-needed` mention | fixed; template-wide scan test added | 272fa19 |
 | Behaviour change | `runDebug` no longer offers "Run debug anyway?"; a wrong status is a typed rejection before any model call. `runSuggest` rejects `debugComplete` | 225781e, 58ed8d9 |
 
