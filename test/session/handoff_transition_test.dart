@@ -98,9 +98,56 @@ const _legal = <_Move>{
     HandoffEvent.rotated,
     HandoffStatus.suggestInvestigating,
   ),
+  // extension: rotate with no pending issue archives and resets to blank
+  (
+    HandoffStatus.suggestInvestigating,
+    HandoffEvent.rotatedEmpty,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.readyForDebug,
+    HandoffEvent.rotatedEmpty,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.debugInProgress,
+    HandoffEvent.rotatedEmpty,
+    HandoffStatus.noHandoff,
+  ),
   (
     HandoffStatus.debugComplete,
     HandoffEvent.tornDown,
+    HandoffStatus.noHandoff,
+  ),
+  // extension: teardown declined as unresolved saves a reminder and resets
+  (
+    HandoffStatus.suggestInvestigating,
+    HandoffEvent.reminderSaved,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.readyForSuggest,
+    HandoffEvent.reminderSaved,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.readyForDebug,
+    HandoffEvent.reminderSaved,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.debugInProgress,
+    HandoffEvent.reminderSaved,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.debugComplete,
+    HandoffEvent.reminderSaved,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.needsSuggest,
+    HandoffEvent.reminderSaved,
     HandoffStatus.noHandoff,
   ),
   // kill: any persisted state, handoff erased

@@ -68,7 +68,7 @@ reachable from `no-handoff` and has an exit.
 
 **Events** (`lib/session/handoff_event.dart`) name outcomes, one per row above: `setup`, `saveUnconfirmed`,
 `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`,
-`tornDown`, `killed`. `tornDown` and `killed` land in `no-handoff` (the handoff is reset or erased).
+`rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. `rotatedEmpty`, `tornDown`, `reminderSaved` and `killed` land in `no-handoff` (the handoff is reset or erased).
 
 **Deliberate extensions to the table** (what the commands actually do today; each is a row in the code and its test):
 
@@ -76,6 +76,8 @@ reachable from `no-handoff` and has an exit.
 |---|---|---|---|
 | `ready-for-debug`, `debug-in-progress`, `needs-suggest` | `saveConfirmedReady` | `ready-for-debug` | `/suggest` re-run overwrites an existing handoff after the user confirms |
 | `ready-for-debug`, `debug-in-progress` | `fixApplied` | `debug-complete` | `/debug` applies its plan and marks it complete in one step; claudart does not verify the fix, so "fix verified" is named for what happens |
+| `suggest-investigating`, `ready-for-debug`, `debug-in-progress` | `rotatedEmpty` | `no-handoff` | `claudart rotate` with no pending issue archives the session and resets the handoff to blank |
+| any persisted state | `reminderSaved` | `no-handoff` | `claudart teardown` on an unresolved session saves a reminder and resets the handoff |
 | any persisted state | `killed` | `no-handoff` | `claudart kill` erases the handoff |
 
 ### State diagram

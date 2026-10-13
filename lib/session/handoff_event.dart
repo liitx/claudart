@@ -30,8 +30,16 @@ enum HandoffEvent {
   /// `claudart rotate` archived this session and seeded the next.
   rotated,
 
+  /// `claudart rotate` archived this session with no pending issue to seed,
+  /// so the handoff was reset to blank.
+  rotatedEmpty,
+
   /// `claudart teardown` closed a completed session.
   tornDown,
+
+  /// `claudart teardown` found the session unresolved, saved it as a reminder
+  /// and reset the handoff.
+  reminderSaved,
 
   /// `claudart kill` abandoned the session.
   killed,

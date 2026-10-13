@@ -67,6 +67,9 @@ enum HandoffStatus {
         (HandoffEvent.fixApplied, readyForDebug || debugInProgress) =>
           debugComplete,
         (HandoffEvent.tornDown, debugComplete) ||
+        (HandoffEvent.rotatedEmpty,
+              suggestInvestigating || readyForDebug || debugInProgress) ||
+        (HandoffEvent.reminderSaved, _) ||
         (HandoffEvent.killed, _) when isPersisted =>
           noHandoff,
         _ => null,
