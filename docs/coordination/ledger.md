@@ -84,3 +84,17 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 ## Corrections to earlier assumptions
 
 - The audit said 8 zedup lib files use AgentModel/AgentFlow; the coordinator count is 16. [V]
+
+## Resolution log (branch refactor/typed-handoff-status, local commits, not pushed)
+
+| Ledger | Status | Commit |
+|---|---|---|
+| A1 untyped writes / no transition function | fixed: `HandoffStatus.after(HandoffEvent)`, `applyHandoffEvent`; design.md corrected | 1f84bb8, 04ee7ad |
+| A4 debug precondition defined twice | fixed: `canStartDebug`, and a test keeps it equal to `after(fixApplied)` | 02cc4a6, 58ed8d9 |
+| A5 string compares in suggest/debug | fixed | e9fd1df |
+| B2 success path of suggest/debug never tested | fixed: status matrix per persisted state, expected from `after` | e9fd1df, 225781e, 58ed8d9 |
+| A2 `debug-in-progress` never written | open: `fixApplied` writes debug-complete directly; `debugStarted` has no caller yet | - |
+| A3 flow prompt writes `ready-for-suggest` | open: prompt text in `flow_steps.dart`, not interpolated from the enum | - |
+| A6 dead getters `expectsSuggest`/`expectsDebug` | open: topology shows expectsDebug == canStartDebug | - |
+| E `suggest-needed` mention | fixed; template-wide scan test added | 272fa19 |
+| Behaviour change | `runDebug` no longer offers "Run debug anyway?"; a wrong status is a typed rejection before any model call. `runSuggest` rejects `debugComplete` | 225781e, 58ed8d9 |
