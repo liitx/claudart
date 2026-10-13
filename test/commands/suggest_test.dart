@@ -98,8 +98,17 @@ const _rootCause = 'Off-by-one in foo()';
 
 /// Executor whose runner answers every step with one analysis carrying every
 /// tag the writer reads — drives the happy path through to the handoff write.
+HandoffStatus _statusOf(MemoryFileIO io) =>
+    readHandoffStatus(io.read(handoffPathFor(_workspace)));
+
 PipelineExecutor _executorWithAnalysis() => PipelineExecutor(
-      runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async =>
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        StepMode mode = StepMode.project,
+      }) async =>
           const StepResult(
             text: '<ROOT_CAUSE>$_rootCause</ROOT_CAUSE>'
                 '<SCOPE_FILES>- `lib/foo.dart`</SCOPE_FILES>'
@@ -220,9 +229,10 @@ void main() {
   });
 
   group('runSuggest — approved findings', () {
-    test('moves the handoff from suggestInvestigating to readyForDebug and records the root cause', () async {
+    test('approving moves suggestInvestigating to readyForDebug and keeps the '
+        'root cause', () async {
       final io = _io();
-      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.suggestInvestigating);
+      expect(_statusOf(io), HandoffStatus.suggestInvestigating);
 
       await runSuggest(
         io: io,
@@ -253,7 +263,7 @@ void main() {
         ),
         throwsA(isA<_ExitException>()),
       );
-      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.suggestInvestigating);
+      expect(_statusOf(io), HandoffStatus.suggestInvestigating);
     });
   });
 }

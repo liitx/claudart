@@ -38,12 +38,15 @@ String readStatus(String content) {
 HandoffStatus readHandoffStatus(String content) =>
     HandoffStatus.fromString(readStatus(content));
 
+const String _displayOnlyStatusMessage =
+    'display-only, never written to disk';
+
 /// Writes [status] to the Status line. Refuses the display-only variants
 /// ([HandoffStatus.noHandoff], [HandoffStatus.unknown]) so a bare string can
 /// no longer put a non-status on disk.
 String withHandoffStatus(String content, HandoffStatus status) {
   if (!status.isPersisted) {
-    throw ArgumentError.value(status, 'status', 'display-only, never written to disk');
+    throw ArgumentError.value(status, 'status', _displayOnlyStatusMessage);
   }
   return updateStatus(content, status.value);
 }

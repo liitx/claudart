@@ -14,21 +14,28 @@ enum _Light {
 
 void main() {
   group('topologyOf', () {
-    test('maps every variant to its own getter value, in declaration order', () {
+    test('maps each variant to its own getter value, in declaration order', () {
       final topology = topologyOf(_Light.values, (l) => l.stops);
       expect(topology, {_Light.red: true, _Light.green: false});
       expect(topology.keys.toList(), _Light.values);
     });
 
     test('works for any getter type', () {
-      expect(topologyOf(_Light.values, (l) => l.seconds), {_Light.red: 30, _Light.green: 25});
+      expect(
+        topologyOf(_Light.values, (l) => l.seconds),
+        {_Light.red: 30, _Light.green: 25},
+      );
     });
   });
 
   group('renderTopology', () {
-    test('renders one row per variant and one column per named getter, exactly', () {
+    test('renders one row per variant, one column per named getter, exactly',
+        () {
       expect(
-        renderTopology<_Light>(_Light.values, {'stops': (l) => l.stops, 'seconds': (l) => l.seconds}),
+        renderTopology<_Light>(
+          _Light.values,
+          {'stops': (l) => l.stops, 'seconds': (l) => l.seconds},
+        ),
         '| variant | stops | seconds |\n'
         '|---|---|---|\n'
         '| red | true | 30 |\n'

@@ -19,16 +19,38 @@ void main() {
       expect(template, contains('/workspace/knowledge/projects/<project-name>.md'));
     });
 
-    test('status routing names each status as its on-disk wire value, one route per line', () {
-      expect(template, contains('- `needs-suggest`: read **Debug Progress** first'));
-      expect(template, contains('- `ready-for-suggest` or `suggest-investigating`: proceed to Step 2.'));
-      expect(template, contains('- `ready-for-debug` or `debug-in-progress`: ask "This looks ready for `/debug` — re-run `/suggest` and overwrite the existing KT anyway?"'));
+    test('status routing names each status by its on-disk wire value', () {
+      expect(
+        template,
+        contains('- `needs-suggest`: read **Debug Progress** first'),
+      );
+      expect(
+        template,
+        contains(
+          '- `ready-for-suggest` or `suggest-investigating`: '
+          'proceed to Step 2.',
+        ),
+      );
+      expect(
+        template,
+        contains(
+          '- `ready-for-debug` or `debug-in-progress`: ask '
+          '"This looks ready for `/debug` — re-run `/suggest` and overwrite '
+          'the existing KT anyway?"',
+        ),
+      );
     });
 
     test('the write steps name the target status as its wire value', () {
       expect(template, contains('2. Set status to `ready-for-debug`'));
       expect(template, contains('If status was `needs-suggest`:'));
-      expect(template, contains('4. Write `## Suggest Resume Notes`, flip status to `ready-for-debug`'));
+      expect(
+        template,
+        contains(
+          '4. Write `## Suggest Resume Notes`, '
+          'flip status to `ready-for-debug`',
+        ),
+      );
     });
   });
 }

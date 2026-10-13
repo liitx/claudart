@@ -67,8 +67,12 @@ Future<void> runSuggest({
   final handoff = fileIO.read(handoffFile);
   final status  = readHandoffStatus(handoff);
 
-  if (status == HandoffStatus.readyForDebug || status == HandoffStatus.debugInProgress) {
-    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}${status.value}${ansi.reset} — suggest already ran.');
+  if (status == HandoffStatus.readyForDebug ||
+      status == HandoffStatus.debugInProgress) {
+    print(
+      '\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is '
+      '${ansi.bold}${status.value}${ansi.reset} — suggest already ran.',
+    );
     if (!confirm_('Re-run suggest and overwrite?')) {
       print('Aborted.');
       exit_(0);

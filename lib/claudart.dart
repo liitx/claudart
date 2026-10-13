@@ -7,7 +7,15 @@ export 'paths.dart' show handoffFileName, skillsFileName, archivesDirName, archi
 export 'portability_gap.dart';
 export 'providers/agent_provider.dart';
 export 'registry.dart' show Registry, RegistryEntry;
-export 'md_io.dart' show readHandoffStatus, readSection, readStatus, updateSection, updateStatus, withHandoffStatus, parseScopeFiles;
+export 'md_io.dart'
+    show
+        parseScopeFiles,
+        readHandoffStatus,
+        readSection,
+        readStatus,
+        updateSection,
+        updateStatus,
+        withHandoffStatus;
 export 'pipeline/agent_model.dart';
 export 'pipeline/agent_flow.dart';
 export 'pipeline/agents/confirmation.dart';

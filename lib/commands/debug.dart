@@ -66,7 +66,10 @@ Future<void> runDebug({
   final status  = readHandoffStatus(handoff);
 
   if (!status.canStartDebug) {
-    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}${status.value}${ansi.reset} — expected ready-for-debug.');
+    print(
+      '\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is '
+      '${ansi.bold}${status.value}${ansi.reset} — expected ready-for-debug.',
+    );
     if (!confirm_('Run debug anyway?')) {
       print('Aborted.');
       exit_(0);

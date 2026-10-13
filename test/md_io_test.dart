@@ -82,7 +82,7 @@ some content
     final persisted = HandoffStatus.values.where((s) => s.isPersisted);
 
     for (final status in persisted) {
-      test('${status.name}: withHandoffStatus then readHandoffStatus round-trips', () {
+      test('${status.name}: write then read round-trips', () {
         final written = withHandoffStatus(doc, status);
         expect(readHandoffStatus(written), status);
         expect(readStatus(written), status.value);
@@ -96,7 +96,11 @@ some content
           throwsA(
             isA<ArgumentError>()
                 .having((e) => e.name, 'name', 'status')
-                .having((e) => e.message, 'message', 'display-only, never written to disk'),
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'display-only, never written to disk',
+                ),
           ),
         );
       });
@@ -106,7 +110,7 @@ some content
       expect(readHandoffStatus('no status here'), HandoffStatus.unknown);
     });
 
-    test('isPersisted partitions the enum: exactly noHandoff and unknown are display-only', () {
+    test('isPersisted: exactly noHandoff and unknown are display-only', () {
       expect(
         HandoffStatus.values.where((s) => !s.isPersisted).toSet(),
         {HandoffStatus.noHandoff, HandoffStatus.unknown},

@@ -164,7 +164,8 @@ void main() {
   });
 
   group('HandoffStatus wire values', () {
-    // Independent literal table: the on-disk contract, not derived from the enum.
+    // Independent literal table: the on-disk contract, not derived from
+    // the enum.
     const wire = {
       HandoffStatus.suggestInvestigating: 'suggest-investigating',
       HandoffStatus.readyForSuggest: 'ready-for-suggest',
@@ -194,16 +195,22 @@ void main() {
   });
 
   group('HandoffStatus.canStartDebug / isPersisted', () {
-    const startsDebug = {HandoffStatus.readyForDebug, HandoffStatus.debugInProgress};
+    const startsDebug = {
+      HandoffStatus.readyForDebug,
+      HandoffStatus.debugInProgress,
+    };
     const displayOnly = {HandoffStatus.noHandoff, HandoffStatus.unknown};
 
     for (final status in HandoffStatus.values) {
-      test('${status.name}: canStartDebug is ${startsDebug.contains(status)}', () {
-        expect(status.canStartDebug, startsDebug.contains(status));
+      final starts = startsDebug.contains(status);
+      final persisted = !displayOnly.contains(status);
+
+      test('${status.name}: canStartDebug is $starts', () {
+        expect(status.canStartDebug, starts);
       });
 
-      test('${status.name}: isPersisted is ${!displayOnly.contains(status)}', () {
-        expect(status.isPersisted, !displayOnly.contains(status));
+      test('${status.name}: isPersisted is $persisted', () {
+        expect(status.isPersisted, persisted);
       });
     }
   });

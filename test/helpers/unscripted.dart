@@ -8,11 +8,16 @@
 // instead of failing. Passing these makes the same regression fail at once,
 // naming the question that was never scripted.
 
-Never _unscripted(String kind, String detail) =>
-    throw StateError('unscripted $kind: $detail — script it in the test or fix the code path that reached it');
+Never _unscripted(String kind, String detail) => throw StateError(
+      'unscripted $kind: $detail — script it in the test '
+      'or fix the code path that reached it',
+    );
 
-bool unscriptedConfirm(String question) => _unscripted('confirm', '"$question"');
+bool unscriptedConfirm(String question) =>
+    _unscripted('confirm', '"$question"');
 
-String? unscriptedPrompt(String question, {bool optional = false}) => _unscripted('prompt', '"$question"');
+String? unscriptedPrompt(String question, {bool optional = false}) =>
+    _unscripted('prompt', '"$question"');
 
-int unscriptedPick(List<String> items) => _unscripted('pick', items.join(' | '));
+int unscriptedPick(List<String> items) =>
+    _unscripted('pick', items.join(' | '));

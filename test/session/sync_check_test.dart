@@ -280,8 +280,9 @@ void main() {
 
   // ── checkHandoffStatus — debug ─────────────────────────────────────────────
 
-  group('checkHandoffStatus — debug agrees with HandoffStatus.canStartDebug', () {
-    final startsDebug = topologyOf(HandoffStatus.values, (s) => s.canStartDebug);
+  group('checkHandoffStatus — debug agrees with canStartDebug', () {
+    final startsDebug =
+        topologyOf(HandoffStatus.values, (s) => s.canStartDebug);
     for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
       test('${status.name}: clean iff canStartDebug', () {
         final result = checkHandoffStatus(

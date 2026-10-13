@@ -110,8 +110,17 @@ PipelineExecutor _executorWithNoOutput() =>
 
 /// Answers every step with a plan that has CHANGES but no EDIT_FILE tags:
 /// drives the happy path to the handoff write without touching real disk.
+HandoffStatus _statusOf(MemoryFileIO io) =>
+    readHandoffStatus(io.read(handoffPathFor(_workspace)));
+
 PipelineExecutor _executorWithPlan() => PipelineExecutor(
-      runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async =>
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        StepMode mode = StepMode.project,
+      }) async =>
           const StepResult(
             text: '<CHANGES>no file edits needed</CHANGES>',
             usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
@@ -281,11 +290,15 @@ void main() {
   group('runDebug — status gate, one case per persisted status', () {
     // Expected value = the variant's own canStartDebug; the enum's contract
     // table (session_state_test) is what proves the getter itself is right.
-    final startsDebug = topologyOf(HandoffStatus.values, (s) => s.canStartDebug);
+    final startsDebug =
+        topologyOf(HandoffStatus.values, (s) => s.canStartDebug);
     for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
       final asked = !startsDebug[status]!;
-      test('${status.name}: confirm is ${asked ? 'asked' : 'skipped'}', () async {
-        final io = _io(handoff: withHandoffStatus(_handoffReadyWithScope, status));
+      final verdict = asked ? 'asked' : 'skipped';
+      test('${status.name}: confirm is $verdict', () async {
+        final io = _io(
+          handoff: withHandoffStatus(_handoffReadyWithScope, status),
+        );
         var confirmCalls = 0;
         await expectLater(
           runDebug(
@@ -309,7 +322,7 @@ void main() {
   group('runDebug — applied plan', () {
     test('moves the handoff from readyForDebug to debugComplete', () async {
       final io = _io();
-      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.readyForDebug);
+      expect(_statusOf(io), HandoffStatus.readyForDebug);
 
       await runDebug(
         io: io,
@@ -320,7 +333,7 @@ void main() {
         pickFn: (_) => 0,
       );
 
-      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.debugComplete);
+      expect(_statusOf(io), HandoffStatus.debugComplete);
     });
 
     test('choosing exit leaves the status readyForDebug', () async {
@@ -336,7 +349,7 @@ void main() {
         ),
         throwsA(isA<_ExitException>()),
       );
-      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.readyForDebug);
+      expect(_statusOf(io), HandoffStatus.readyForDebug);
     });
   });
 }
