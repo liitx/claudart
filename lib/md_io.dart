@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'pipeline/pipeline_context.dart' show ScopeFile;
+import 'session/session_state.dart' show HandoffStatus;
 import 'ui/line_editor.dart' as editor;
 
 /// Reads a section from a markdown file between `## Header` and the next `## `.
@@ -32,7 +33,23 @@ String readStatus(String content) {
   return match?.group(1)?.trim() ?? 'unknown';
 }
 
-/// Updates the Status line in the handoff.
+/// Reads the Status line as a typed [HandoffStatus]; a missing or
+/// unrecognised value is [HandoffStatus.unknown].
+HandoffStatus readHandoffStatus(String content) =>
+    HandoffStatus.fromString(readStatus(content));
+
+/// Writes [status] to the Status line. Refuses the display-only variants
+/// ([HandoffStatus.noHandoff], [HandoffStatus.unknown]) so a bare string can
+/// no longer put a non-status on disk.
+String withHandoffStatus(String content, HandoffStatus status) {
+  if (!status.isPersisted) {
+    throw ArgumentError.value(status, 'status', 'display-only, never written to disk');
+  }
+  return updateStatus(content, status.value);
+}
+
+/// Updates the Status line in the handoff with a raw string. Kept for
+/// existing external callers; new code uses [withHandoffStatus].
 String updateStatus(String content, String status) {
   return content.replaceFirstMapped(
     RegExp(r'(## Status\n+)(\S[^\n]*)'),

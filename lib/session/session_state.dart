@@ -41,6 +41,18 @@ enum HandoffStatus {
         unknown              => 'unknown',
       };
 
+  /// False for the display-only variants that are never written to disk.
+  bool get isPersisted => switch (this) {
+        noHandoff ||
+        unknown => false,
+        suggestInvestigating ||
+        readyForSuggest ||
+        readyForDebug ||
+        debugInProgress ||
+        debugComplete ||
+        needsSuggest => true,
+      };
+
   /// Display label used in TUI status badges.
   String get label => value;
 

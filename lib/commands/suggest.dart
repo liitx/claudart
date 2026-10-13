@@ -14,6 +14,7 @@ import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../session/session_ops.dart';
+import '../session/session_state.dart' show HandoffStatus;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 
@@ -64,10 +65,10 @@ Future<void> runSuggest({
   }
 
   final handoff = fileIO.read(handoffFile);
-  final status  = readStatus(handoff);
+  final status  = readHandoffStatus(handoff);
 
-  if (status == 'ready-for-debug' || status == 'debug-in-progress') {
-    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}$status${ansi.reset} — suggest already ran.');
+  if (status == HandoffStatus.readyForDebug || status == HandoffStatus.debugInProgress) {
+    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}${status.value}${ansi.reset} — suggest already ran.');
     if (!confirm_('Re-run suggest and overwrite?')) {
       print('Aborted.');
       exit_(0);
@@ -245,7 +246,7 @@ $mustNotTouch''';
   updated = updateSection(updated, 'Root Cause',  rootCause.trim());
   updated = updateSection(updated, 'Scope',        newScope.trim());
   updated = updateSection(updated, 'Constraints',  constraints.trim());
-  updated = updateStatus(updated, 'ready-for-debug');
+  updated = withHandoffStatus(updated, HandoffStatus.readyForDebug);
   updated = updated.replaceFirst(
     RegExp(r'> Updated: [^\n]+'),
     '> Updated: ${DateTime.now().toIso8601String().split('.').first}',

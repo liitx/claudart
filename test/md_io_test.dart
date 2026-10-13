@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 import 'package:claudart/md_io.dart';
 import 'helpers/mocks.dart';
@@ -73,6 +74,43 @@ some content
       final result = updateStatus(doc, 'ready-for-debug');
       expect(result, contains('ready-for-debug'));
       expect(result, isNot(contains('suggest-investigating')));
+    });
+  });
+
+  group('typed handoff status', () {
+    const doc = '## Status\n\nsuggest-investigating\n';
+    final persisted = HandoffStatus.values.where((s) => s.isPersisted);
+
+    for (final status in persisted) {
+      test('${status.name}: withHandoffStatus then readHandoffStatus round-trips', () {
+        final written = withHandoffStatus(doc, status);
+        expect(readHandoffStatus(written), status);
+        expect(readStatus(written), status.value);
+      });
+    }
+
+    for (final status in HandoffStatus.values.where((s) => !s.isPersisted)) {
+      test('${status.name}: display-only, refused on write', () {
+        expect(
+          () => withHandoffStatus(doc, status),
+          throwsA(
+            isA<ArgumentError>()
+                .having((e) => e.name, 'name', 'status')
+                .having((e) => e.message, 'message', 'display-only, never written to disk'),
+          ),
+        );
+      });
+    }
+
+    test('readHandoffStatus maps a missing status to unknown', () {
+      expect(readHandoffStatus('no status here'), HandoffStatus.unknown);
+    });
+
+    test('isPersisted partitions the enum: exactly noHandoff and unknown are display-only', () {
+      expect(
+        HandoffStatus.values.where((s) => !s.isPersisted).toSet(),
+        {HandoffStatus.noHandoff, HandoffStatus.unknown},
+      );
     });
   });
 

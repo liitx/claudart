@@ -12,6 +12,7 @@ import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../registry.dart';
+import '../session/session_state.dart' show HandoffStatus;
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../ui/menu.dart';
@@ -62,10 +63,10 @@ Future<void> runDebug({
   }
 
   final handoff = fileIO.read(handoffFile);
-  final status  = readStatus(handoff);
+  final status  = readHandoffStatus(handoff);
 
-  if (status != 'ready-for-debug') {
-    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}$status${ansi.reset} — expected ready-for-debug.');
+  if (status != HandoffStatus.readyForDebug) {
+    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}${status.value}${ansi.reset} — expected ready-for-debug.');
     if (!confirm_('Run debug anyway?')) {
       print('Aborted.');
       exit_(0);
@@ -203,7 +204,7 @@ Future<void> runDebug({
   }
 
   var updated = handoff;
-  updated = updateStatus(updated, 'debug-complete');
+  updated = withHandoffStatus(updated, HandoffStatus.debugComplete);
   fileIO.write(handoffFile, updated);
 
   stdout.write(

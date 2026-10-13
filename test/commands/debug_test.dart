@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:claudart/commands/debug.dart';
+import 'package:claudart/md_io.dart' show readHandoffStatus, withHandoffStatus;
 import 'package:claudart/registry.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/paths.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
+import 'package:claudart/pipeline/step_result.dart';
+import 'package:claudart/pipeline/usage.dart';
 import '../helpers/mocks.dart';
 
 // debug_test.dart — validation-path coverage for runDebug.
@@ -101,6 +105,16 @@ MemoryFileIO _io({String? handoff = _handoffReadyWithScope}) {
 
 PipelineExecutor _executorWithNoOutput() =>
     PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
+
+/// Answers every step with a plan that has CHANGES but no EDIT_FILE tags:
+/// drives the happy path to the handoff write without touching real disk.
+PipelineExecutor _executorWithPlan() => PipelineExecutor(
+      runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async =>
+          const StepResult(
+            text: '<CHANGES>no file edits needed</CHANGES>',
+            usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+          ),
+    );
 
 void main() {
   group('runDebug — validation', () {
@@ -244,6 +258,62 @@ void main() {
         // expected
       }
       expect(output.join('\n'), contains('Project  : my-app'));
+    });
+  });
+
+  group('runDebug — status gate, one case per persisted status', () {
+    for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
+      final asked = status != HandoffStatus.readyForDebug;
+      test('${status.name}: confirm is ${asked ? 'asked' : 'skipped'}', () async {
+        final io = _io(handoff: withHandoffStatus(_handoffReadyWithScope, status));
+        var confirmCalls = 0;
+        await expectLater(
+          runDebug(
+            io: io,
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            confirmFn: (_) {
+              confirmCalls++;
+              return true;
+            },
+            executor: _executorWithNoOutput(),
+          ),
+          throwsA(isA<_ExitException>()),
+        );
+        expect(confirmCalls, asked ? 1 : 0);
+      });
+    }
+  });
+
+  group('runDebug — applied plan', () {
+    test('moves the handoff from readyForDebug to debugComplete', () async {
+      final io = _io();
+      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.readyForDebug);
+
+      await runDebug(
+        io: io,
+        projectRootOverride: _projectRoot,
+        exitFn: _throwExit,
+        executor: _executorWithPlan(),
+        pickFn: (_) => 0,
+      );
+
+      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.debugComplete);
+    });
+
+    test('choosing exit leaves the status readyForDebug', () async {
+      final io = _io();
+      await expectLater(
+        runDebug(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithPlan(),
+          pickFn: (_) => 1,
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(readHandoffStatus(io.read(handoffPathFor(_workspace))), HandoffStatus.readyForDebug);
     });
   });
 }
