@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import 'claudart_command.dart';
 import '../templates/handoff_template.dart';
 import '../md_io.dart';
 import '../paths.dart';
@@ -11,6 +13,7 @@ import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../registry.dart';
 import '../session/archive_entry.dart';
+import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
 import '../session/session_state.dart';
@@ -320,6 +323,21 @@ Future<void> runTeardown({
     print('\n✗ ${e.toString()}\n');
     exit_(1);
   }
+
+  // Record the move once the guarded close succeeded. Not enforced: teardown
+  // is deliberately permissive (a human may confirm "resolved" from any
+  // status), so a status the table lacks is logged, not thrown.
+  SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: workspace,
+  ).logHandoffMove(
+    command: ClaudartCommand.teardown.name,
+    from: readHandoffStatus(handoff),
+    event: archiveKind == ArchiveKind.archive
+        ? HandoffEvent.tornDown
+        : HandoffEvent.reminderSaved,
+  );
 
   // Suggest commit message.
   final commitMsg = buildCommitMessage(area, bug, rootCause, fixSummary!);

@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
-import '../md_io.dart' show confirmOrEof;
+import '../logging/logger.dart';
+import '../md_io.dart' show confirmOrEof, readHandoffStatus;
 import '../paths.dart';
 import '../registry.dart';
+import 'claudart_command.dart';
+import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
 import '../session/session_state.dart';
@@ -140,6 +143,18 @@ Future<void> runKill({
     print('\n✗ ${e.toString()}\n');
     exit_(1);
   }
+
+  // Record the move only after the close succeeded. Not enforced: kill is
+  // deliberately permissive, so a status the table lacks is logged, not thrown.
+  SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: workspace,
+  ).logHandoffMove(
+    command: ClaudartCommand.kill.name,
+    from: readHandoffStatus(handoff),
+    event: HandoffEvent.killed,
+  );
 
   // 8 — Update registry timestamp.
   registry.touchSession(entry.name).save(io: fileIO);

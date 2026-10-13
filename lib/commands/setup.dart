@@ -10,9 +10,11 @@ import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../sensitivity/token_map.dart';
 import '../logging/logger.dart';
+import '../session/handoff_event.dart';
 import '../session/session_state.dart' show SessionState, HandoffStatus;
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
+import 'claudart_command.dart';
 import 'scan.dart';
 import '../session/session_ops.dart';
 import '../ui/render.dart' as render;
@@ -74,6 +76,9 @@ Future<void> runSetup({
   // Check for active handoff — offer menu if one exists with real content.
   final existing =
       fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
+  // The status this setup starts from: none when there is no live handoff, or
+  // the one a "Start fresh" overwrites.
+  var startedFrom = HandoffStatus.noHandoff;
   if (existing.isNotEmpty) {
     final state = SessionState.parse(existing);
     if (state.hasActiveContent) {
@@ -99,6 +104,7 @@ Future<void> runSetup({
         exit_(0);
       }
       assert(choice == _SetupMenu.startFresh);
+      startedFrom = state.status;
       final archivedName = archiveCurrentHandoff(workspace: workspace, io: fileIO);
       if (archivedName != null) {
         print(ansi.c(ansi.dim, '  Previous session archived → $archivedName'));
@@ -198,6 +204,13 @@ Future<void> runSetup({
     command: 'setup',
     outcome: 'ok',
     platform: Platform.operatingSystem,
+  );
+  // Not enforced: "Start fresh" over a live handoff is allowed today, so it is
+  // logged as a move the table lacks rather than thrown.
+  logger.logHandoffMove(
+    command: ClaudartCommand.setup.name,
+    from: startedFrom,
+    event: HandoffEvent.setup,
   );
 
   print('\n✓ Handoff written to $handoffFile');

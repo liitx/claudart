@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
+import '../session/handoff_event.dart';
 import '../session/handoff_transition.dart';
+import '../session/session_state.dart' show HandoffStatus;
 import '../paths.dart';
 import '../sensitivity/token_map.dart';
 import '../sensitivity/abstractor.dart';
@@ -76,6 +78,37 @@ class SessionLogger {
         'ts': DateTime.now().toUtc().toIso8601String(),
         'command': command,
         ...transition.toJson(),
+      },
+      _maxTransitions,
+    );
+  }
+
+  /// For commands that replace or erase the handoff instead of editing its
+  /// status line (kill, rotate, teardown, setup): records [event] against
+  /// [from]. A move the table lacks is logged `rejected: true` and NOT thrown
+  /// -- those commands are deliberately permissive today, and this is the
+  /// data on how real use differs from docs/design.md before it is enforced.
+  void logHandoffMove({
+    required String command,
+    required HandoffStatus from,
+    required HandoffEvent event,
+  }) {
+    final to = from.after(event);
+    if (to != null) {
+      logTransition(
+        command: command,
+        transition: HandoffTransition(from: from, event: event, to: to),
+      );
+      return;
+    }
+    _appendJsonl(
+      _transitionsPath,
+      {
+        'ts': DateTime.now().toUtc().toIso8601String(),
+        'command': command,
+        'from': from.name,
+        'event': event.name,
+        'rejected': true,
       },
       _maxTransitions,
     );

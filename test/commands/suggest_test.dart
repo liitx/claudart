@@ -1,7 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-
-import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/suggest.dart';
@@ -16,6 +13,7 @@ import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:claudart/pipeline/step_mode.dart';
+import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import '../helpers/variant_topology.dart';
@@ -103,15 +101,6 @@ PipelineExecutor _executorWithNoOutput() =>
     PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
 
 const _rootCause = 'Off-by-one in foo()';
-
-/// The transitions a command logged, minus the timestamp.
-List<Map<String, dynamic>> _loggedTransitions(MemoryFileIO io) {
-  final raw = io.read(p.join(logsDirFor(_workspace), 'transitions.jsonl'));
-  return [
-    for (final line in raw.split('\n').where((l) => l.isNotEmpty))
-      {...jsonDecode(line) as Map<String, dynamic>}..remove('ts'),
-  ];
-}
 
 HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
@@ -279,7 +268,7 @@ void main() {
         executor: _executorWithAnalysis(),
         pickFn: (_) => 0,
       );
-      expect(_loggedTransitions(io), [
+      expect(loggedMoves(io, _workspace), [
         {
           'command': ClaudartCommand.suggest.name,
           'from': HandoffStatus.suggestInvestigating.name,
@@ -338,7 +327,7 @@ void main() {
           );
           expect(modelCalls, 0, reason: 'rejected before any model call');
           expect(_statusOf(io), status);
-          expect(_loggedTransitions(io), isEmpty);
+          expect(loggedMoves(io, _workspace), isEmpty);
         }
       });
     }

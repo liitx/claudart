@@ -81,6 +81,38 @@ void main() {
       });
     });
 
+    test('logHandoffMove logs an allowed move exactly like logTransition', () {
+      logger.logHandoffMove(
+        command: 'kill',
+        from: HandoffStatus.readyForDebug,
+        event: HandoffEvent.killed,
+      );
+      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')), [
+        {
+          'command': 'kill',
+          'from': 'readyForDebug',
+          'event': 'killed',
+          'to': 'noHandoff',
+        },
+      ]);
+    });
+
+    test('logHandoffMove marks a move the table lacks as rejected, no to', () {
+      logger.logHandoffMove(
+        command: 'rotate',
+        from: HandoffStatus.debugComplete,
+        event: HandoffEvent.rotated,
+      );
+      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')), [
+        {
+          'command': 'rotate',
+          'from': 'debugComplete',
+          'event': 'rotated',
+          'rejected': true,
+        },
+      ]);
+    });
+
     test('logError appends with fingerprint', () {
       logger.logError(
         command: 'scan',
