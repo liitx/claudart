@@ -14,6 +14,8 @@ import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../session/session_ops.dart';
+import '../session/handoff_event.dart';
+import '../session/invalid_handoff_transition_exception.dart';
 import '../session/session_state.dart' show HandoffStatus;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
@@ -66,6 +68,15 @@ Future<void> runSuggest({
 
   final handoff = fileIO.read(handoffFile);
   final status  = readHandoffStatus(handoff);
+
+  // Fail before spending any model call when the state machine would reject
+  // the write this run ends with.
+  if (status.after(HandoffEvent.saveConfirmedReady) == null) {
+    throw InvalidHandoffTransitionException(
+      status,
+      HandoffEvent.saveConfirmedReady,
+    );
+  }
 
   if (status == HandoffStatus.readyForDebug ||
       status == HandoffStatus.debugInProgress) {
@@ -250,7 +261,7 @@ $mustNotTouch''';
   updated = updateSection(updated, 'Root Cause',  rootCause.trim());
   updated = updateSection(updated, 'Scope',        newScope.trim());
   updated = updateSection(updated, 'Constraints',  constraints.trim());
-  updated = withHandoffStatus(updated, HandoffStatus.readyForDebug);
+  updated = applyHandoffEvent(updated, HandoffEvent.saveConfirmedReady);
   updated = updated.replaceFirst(
     RegExp(r'> Updated: [^\n]+'),
     '> Updated: ${DateTime.now().toIso8601String().split('.').first}',

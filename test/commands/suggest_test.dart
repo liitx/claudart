@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:claudart/commands/suggest.dart';
-import 'package:claudart/md_io.dart' show readHandoffStatus, readSection;
+import 'package:claudart/md_io.dart'
+    show readHandoffStatus, readSection, withHandoffStatus;
 import 'package:claudart/registry.dart';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/paths.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -11,6 +14,7 @@ import 'package:claudart/pipeline/usage.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
+import '../helpers/variant_topology.dart';
 
 // suggest_test.dart — validation-path coverage for runSuggest.
 //
@@ -96,28 +100,32 @@ PipelineExecutor _executorWithNoOutput() =>
 
 const _rootCause = 'Off-by-one in foo()';
 
-/// Executor whose runner answers every step with one analysis carrying every
-/// tag the writer reads — drives the happy path through to the handoff write.
 HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
 
-PipelineExecutor _executorWithAnalysis() => PipelineExecutor(
+/// Executor whose runner answers every step with one analysis carrying every
+/// tag the writer reads — drives the happy path through to the handoff write.
+/// [onCall] counts model calls, so a test can prove none were spent.
+PipelineExecutor _executorWithAnalysis({void Function()? onCall}) =>
+    PipelineExecutor(
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
         StepMode mode = StepMode.project,
-      }) async =>
-          const StepResult(
-            text: '<ROOT_CAUSE>$_rootCause</ROOT_CAUSE>'
-                '<SCOPE_FILES>- `lib/foo.dart`</SCOPE_FILES>'
-                '<SCOPE_ENTRIES>foo()</SCOPE_ENTRIES>'
-                '<SCOPE_CLASSES>Foo</SCOPE_CLASSES>'
-                '<MUST_NOT_TOUCH>lib/bar.dart</MUST_NOT_TOUCH>'
-                '<CONSTRAINTS>keep API</CONSTRAINTS>',
-            usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
-          ),
+      }) async {
+        onCall?.call();
+        return const StepResult(
+          text: '<ROOT_CAUSE>$_rootCause</ROOT_CAUSE>'
+              '<SCOPE_FILES>- `lib/foo.dart`</SCOPE_FILES>'
+              '<SCOPE_ENTRIES>foo()</SCOPE_ENTRIES>'
+              '<SCOPE_CLASSES>Foo</SCOPE_CLASSES>'
+              '<MUST_NOT_TOUCH>lib/bar.dart</MUST_NOT_TOUCH>'
+              '<CONSTRAINTS>keep API</CONSTRAINTS>',
+          usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+        );
+      },
     );
 
 void main() {
@@ -265,5 +273,41 @@ void main() {
       );
       expect(_statusOf(io), HandoffStatus.suggestInvestigating);
     });
+  });
+
+  group('runSuggest — status gate follows HandoffStatus.after', () {
+    final accepted = topologyOf(
+      HandoffStatus.values,
+      (s) => s.after(HandoffEvent.saveConfirmedReady) != null,
+    );
+
+    for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
+      final runs = accepted[status]!;
+      final outcome = runs ? 'runs and locks readyForDebug' : 'is rejected';
+      test('${status.name}: $outcome', () async {
+        final io = _io(handoff: withHandoffStatus(_handoffWithScope, status));
+        var modelCalls = 0;
+        final run = runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithAnalysis(onCall: () => modelCalls++),
+          confirmFn: (_) => true,
+          promptFn: unscriptedPrompt,
+          pickFn: (_) => 0,
+        );
+        if (runs) {
+          await run;
+          expect(_statusOf(io), HandoffStatus.readyForDebug);
+        } else {
+          await expectLater(
+            run,
+            throwsA(isA<InvalidHandoffTransitionException>()),
+          );
+          expect(modelCalls, 0, reason: 'rejected before any model call');
+          expect(_statusOf(io), status);
+        }
+      });
+    }
   });
 }
