@@ -17,27 +17,34 @@ void main() {
   // The lifecycle must not depend on how the project is linked or whether it
   // uses dartrix: every scenario runs in every environment with the same
   // expected statuses.
+  // One test per scenario, steps in order: they share one in-memory
+  // filesystem, so they must not be split into tests that can be shuffled
+  // (the pre-push hook randomizes test order).
   for (final environment in lifecycleEnvironments()) {
     for (final scenario in lifecycleScenarios().entries) {
-      group('${describeEnvironment(environment)}: ${scenario.key}', () {
-        late final io = freshLifecycleIo(environment);
-
-        test('starts with no handoff file: noHandoff', () {
-          expect(effectiveStatusOf(io), HandoffStatus.noHandoff);
-        });
+      test('${describeEnvironment(environment)}: ${scenario.key}', () async {
+        final io = freshLifecycleIo(environment);
+        expect(
+          effectiveStatusOf(io),
+          HandoffStatus.noHandoff,
+          reason: 'starts with no handoff file',
+        );
 
         for (final step in scenario.value) {
-          test('${step.name}: file, log and consumer view agree', () async {
-            await quietly(() => step.run(io));
-            expect(effectiveStatusOf(io), step.effective);
-            if (step.logged) {
-              expect(
-                loggedTo(io),
-                step.effective.name,
-                reason: 'the logged move must land where the file says',
-              );
-            }
-          });
+          await quietly(() => step.run(io));
+          expect(
+            effectiveStatusOf(io),
+            step.effective,
+            reason: '${step.name}: the consumer view',
+          );
+          if (step.logged) {
+            expect(
+              loggedTo(io),
+              step.effective.name,
+              reason: '${step.name}: the logged move must land where the '
+                  'file says',
+            );
+          }
         }
       });
     }
