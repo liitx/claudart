@@ -3,6 +3,8 @@ import 'package:test/test.dart';
 import 'package:claudart/commands/debug.dart';
 import 'package:claudart/md_io.dart' show readHandoffStatus, withHandoffStatus;
 import 'package:claudart/registry.dart';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/paths.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -13,17 +15,15 @@ import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import '../helpers/variant_topology.dart';
 
-// debug_test.dart — validation-path coverage for runDebug.
+// debug_test.dart — coverage for runDebug.
 //
 // Companion to suggest_test.dart. Covers: registration/handoff/scope
-// validation exits, the status-confirmation gate (now injectable via
-// confirmFn — previously hardcoded stdin.readLineSync()), and the
-// reader-step-produces-nothing path via an injected PipelineExecutor.
-//
-// Not covered: the review/apply menu past a successful implementer step
-// (pickFn is injectable now, but reaching that point needs a full fake
-// PipelineExecutor round-trip through both reader and implementer steps
-// with realistic EDIT_FILE-tagged output — out of scope for this pass).
+// validation exits; the status gate, one case per persisted status, expected
+// from HandoffStatus.after(fixApplied) (a rejected status throws before any
+// model call); the reader-step-produces-nothing path; and the approve/exit
+// choice past a successful implementer step, asserting the written status.
+// Interaction seams that a test does not script are the throwing
+// `unscripted*` helpers, so a regression fails instead of blocking on stdin.
 
 const _projectRoot = '/projects/my-app';
 const _workspace   = '/workspaces/my-app';
@@ -71,22 +71,6 @@ Something is broken.
 _Not yet determined._
 ''';
 
-const _handoffNotReady = '''# Agent Handoff — my-app
-
-## Status
-
-suggest-investigating
-
-## Bug
-
-Something is broken.
-
-## Scope
-
-### Files in play
-- `lib/foo.dart`
-''';
-
 MemoryFileIO _io({String? handoff = _handoffReadyWithScope}) {
   const entry = RegistryEntry(
     name: 'my-app',
@@ -113,18 +97,22 @@ PipelineExecutor _executorWithNoOutput() =>
 HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
 
-PipelineExecutor _executorWithPlan() => PipelineExecutor(
+/// [onCall] counts model calls, so a test can prove none were spent.
+PipelineExecutor _executorWithPlan({void Function()? onCall}) =>
+    PipelineExecutor(
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
         StepMode mode = StepMode.project,
-      }) async =>
-          const StepResult(
-            text: '<CHANGES>no file edits needed</CHANGES>',
-            usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
-          ),
+      }) async {
+        onCall?.call();
+        return const StepResult(
+          text: '<CHANGES>no file edits needed</CHANGES>',
+          usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+        );
+      },
     );
 
 void main() {
@@ -136,7 +124,6 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
-          confirmFn: unscriptedConfirm,
           pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
@@ -150,7 +137,6 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
-          confirmFn: unscriptedConfirm,
           pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
@@ -164,69 +150,10 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
-          confirmFn: unscriptedConfirm,
           pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
       );
-    });
-  });
-
-  group('runDebug — status confirmation gate', () {
-    test('status != ready-for-debug: confirming "no" aborts with exit 0', () async {
-      final io = _io(handoff: _handoffNotReady);
-      var askedQuestion = '';
-      await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-          confirmFn: (q) {
-            askedQuestion = q;
-            return false;
-          },
-        ),
-        throwsA(isA<_ExitException>().having((e) => e.code, 'code', equals(0))),
-      );
-      expect(askedQuestion, equals('Run debug anyway?'));
-    });
-
-    test('status != ready-for-debug: confirming "yes" proceeds past the gate', () async {
-      final io = _io(handoff: _handoffNotReady);
-      await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-          confirmFn: (_) => true,
-          executor: _executorWithNoOutput(),
-        ),
-        // Proceeds past the gate, then hits the reader-produces-nothing
-        // exit(1) — proving the gate itself did not block.
-        throwsA(isA<_ExitException>().having((e) => e.code, 'code', equals(1))),
-      );
-    });
-
-    test('status is already ready-for-debug: gate is skipped entirely', () async {
-      final io = _io();
-      var confirmWasCalled = false;
-      await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-          confirmFn: (_) {
-            confirmWasCalled = true;
-            return true;
-          },
-          executor: _executorWithNoOutput(),
-        ),
-        throwsA(isA<_ExitException>()),
-      );
-      expect(confirmWasCalled, isFalse);
     });
   });
 
@@ -238,7 +165,6 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
-          confirmFn: unscriptedConfirm,
           pickFn: unscriptedPick,
           executor: _executorWithNoOutput(),
         ),
@@ -253,7 +179,6 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
-          confirmFn: unscriptedConfirm,
           pickFn: unscriptedPick,
           executor: _executorWithNoOutput(),
         );
@@ -272,8 +197,7 @@ void main() {
             io: io,
             projectRootOverride: _projectRoot,
             exitFn: _throwExit,
-            confirmFn: unscriptedConfirm,
-            pickFn: unscriptedPick,
+              pickFn: unscriptedPick,
             executor: _executorWithNoOutput(),
           ),
           zoneSpecification: ZoneSpecification(
@@ -287,34 +211,38 @@ void main() {
     });
   });
 
-  group('runDebug — status gate, one case per persisted status', () {
-    // Expected value = the variant's own canStartDebug; the enum's contract
-    // table (session_state_test) is what proves the getter itself is right.
-    final startsDebug =
-        topologyOf(HandoffStatus.values, (s) => s.canStartDebug);
+  group('runDebug — status gate follows HandoffStatus.after', () {
+    final accepted = topologyOf(
+      HandoffStatus.values,
+      (s) => s.after(HandoffEvent.fixApplied) != null,
+    );
+
     for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
-      final asked = !startsDebug[status]!;
-      final verdict = asked ? 'asked' : 'skipped';
-      test('${status.name}: confirm is $verdict', () async {
+      final runs = accepted[status]!;
+      final outcome = runs ? 'runs to debugComplete' : 'is rejected';
+      test('${status.name}: $outcome', () async {
         final io = _io(
           handoff: withHandoffStatus(_handoffReadyWithScope, status),
         );
-        var confirmCalls = 0;
-        await expectLater(
-          runDebug(
-            io: io,
-            projectRootOverride: _projectRoot,
-            exitFn: _throwExit,
-            pickFn: unscriptedPick,
-            confirmFn: (_) {
-              confirmCalls++;
-              return true;
-            },
-            executor: _executorWithNoOutput(),
-          ),
-          throwsA(isA<_ExitException>()),
+        var modelCalls = 0;
+        final run = runDebug(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithPlan(onCall: () => modelCalls++),
+          pickFn: (_) => 0,
         );
-        expect(confirmCalls, asked ? 1 : 0);
+        if (runs) {
+          await run;
+          expect(_statusOf(io), HandoffStatus.debugComplete);
+        } else {
+          await expectLater(
+            run,
+            throwsA(isA<InvalidHandoffTransitionException>()),
+          );
+          expect(modelCalls, 0, reason: 'rejected before any model call');
+          expect(_statusOf(io), status);
+        }
       });
     }
   });
@@ -328,7 +256,6 @@ void main() {
         io: io,
         projectRootOverride: _projectRoot,
         exitFn: _throwExit,
-        confirmFn: unscriptedConfirm,
         executor: _executorWithPlan(),
         pickFn: (_) => 0,
       );
@@ -343,7 +270,6 @@ void main() {
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
-          confirmFn: unscriptedConfirm,
           executor: _executorWithPlan(),
           pickFn: (_) => 1,
         ),

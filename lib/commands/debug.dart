@@ -12,7 +12,8 @@ import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../registry.dart';
-import '../session/session_state.dart' show HandoffStatus;
+import '../session/handoff_event.dart';
+import '../session/invalid_handoff_transition_exception.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../ui/menu.dart';
@@ -23,12 +24,10 @@ Future<void> runDebug({
   String? projectRootOverride,
   Never Function(int code)? exitFn,
   PipelineExecutor? executor,
-  bool Function(String question)? confirmFn,
   int Function(List<String> items)? pickFn,
 }) async {
   final fileIO   = io       ?? const RealFileIO();
   final exit_    = exitFn   ?? exit;
-  final confirm_ = confirmFn ?? confirm;
   final pick_    = pickFn   ?? arrowMenu;
 
   // ── Locate project ──────────────────────────────────────────────────────────
@@ -65,15 +64,11 @@ Future<void> runDebug({
   final handoff = fileIO.read(handoffFile);
   final status  = readHandoffStatus(handoff);
 
-  if (!status.canStartDebug) {
-    print(
-      '\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is '
-      '${ansi.bold}${status.value}${ansi.reset} — expected ready-for-debug.',
-    );
-    if (!confirm_('Run debug anyway?')) {
-      print('Aborted.');
-      exit_(0);
-    }
+  // Fail before spending any model call when the state machine would reject
+  // the write this run ends with. The old "Run debug anyway?" override could
+  // only end in this rejection, so it is gone.
+  if (status.after(HandoffEvent.fixApplied) == null) {
+    throw InvalidHandoffTransitionException(status, HandoffEvent.fixApplied);
   }
 
   // ── Parse handoff ───────────────────────────────────────────────────────────
@@ -207,7 +202,7 @@ Future<void> runDebug({
   }
 
   var updated = handoff;
-  updated = withHandoffStatus(updated, HandoffStatus.debugComplete);
+  updated = applyHandoffEvent(updated, HandoffEvent.fixApplied);
   fileIO.write(handoffFile, updated);
 
   stdout.write(

@@ -154,6 +154,18 @@ void main() {
     }
   });
 
+  group('HandoffStatus.canStartDebug agrees with after(fixApplied)', () {
+    // Two definitions of "debug may run here"; this keeps them from drifting.
+    for (final status in HandoffStatus.values) {
+      test(status.name, () {
+        expect(
+          status.canStartDebug,
+          status.after(HandoffEvent.fixApplied) != null,
+        );
+      });
+    }
+  });
+
   group('HandoffStatus.after — properties', () {
     Set<HandoffStatus> reachableFrom(HandoffStatus start) {
       final seen = {start};
