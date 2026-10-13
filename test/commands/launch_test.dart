@@ -6,6 +6,7 @@ import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/session/workspace_guard.dart';
+import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import 'package:claudart/ui/ansi.dart' as ansi;
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
@@ -417,6 +418,31 @@ void main() {
       );
 
       expect(output.join('\n'), contains('Branch : feat/fix'));
+    });
+
+    test('a blank handoff shows no-handoff, not its stale Status line',
+        () async {
+      ansi.colorEnabledOverride = false;
+      addTearDown(() => ansi.colorEnabledOverride = null);
+      final io = _io(withHandoff: true, withLink: false);
+      io.write(handoffPathFor(_workspace), blankHandoff);
+      final output = <String>[];
+      var pickCall = 0;
+      await runZoned(
+        () => runLauncher(
+          io: io,
+          projectRootOverride: null,
+          pickFn: (_) {
+            pickCall++;
+            return pickCall == 1 ? 0 : ActiveMenu.back;
+          },
+          exitFn: _throwExit,
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      expect(output.join('\n'), contains('Status : no-handoff'));
     });
 
     test('colours the Status line by the handoff status (yellow when ready '

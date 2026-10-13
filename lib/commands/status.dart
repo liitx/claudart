@@ -49,14 +49,16 @@ Future<void> runStatus({
   }
 
   final state = SessionState.parse(content);
+  // What to show: a blank handoff is no-handoff, not its stale Status line.
+  final shown = state.effectiveStatus;
 
   // ── Prompt mode: compact single-line output for shell RPROMPT/PS1 ──────────
   if (prompt) {
     stdout.write(render.statusBar(
       name: entry.name,
-      statusLabel: state.status.value,
-      statusColorCode: render.statusColour(state.status),
-      active: state.status != HandoffStatus.unknown,
+      statusLabel: shown.value,
+      statusColorCode: render.statusColour(shown),
+      active: shown.isPersisted,
     ));
     return;
   }
@@ -68,8 +70,8 @@ Future<void> runStatus({
   print(render.header('CLAUDART SESSION STATUS'));
   print('Project  : ${entry.name}');
   print('Branch   : ${currentBranch ?? state.branch}');
-  final statusColour = render.statusColour(state.status);
-  print('Status   : ${ansi.c(statusColour, state.status.value)}');
+  final statusColour = render.statusColour(shown);
+  print('Status   : ${ansi.c(statusColour, shown.value)}');
   print('Bug      : ${_truncate(state.bug)}');
   print('Root cause: ${_truncate(state.rootCause)}');
   if (state.status == HandoffStatus.debugInProgress ||

@@ -149,6 +149,15 @@ class SessionState {
   bool get hasActiveContent =>
       !_isBlank(bug) || !_isBlank(rootCause) || !_isBlank(attempted);
 
+  /// The status a consumer should show: [status] when the handoff holds a real
+  /// session, [HandoffStatus.noHandoff] when it does not. The blank handoff
+  /// that kill, teardown and an empty rotate leave behind still has a
+  /// `suggest-investigating` Status line, but it is not a session; reading
+  /// [status] alone would present it as one. Every consumer (claudart's
+  /// commands, zedup) should read this, so they cannot disagree.
+  HandoffStatus get effectiveStatus =>
+      hasActiveContent ? status : HandoffStatus.noHandoff;
+
   static bool _isBlank(String s) =>
       s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');
 

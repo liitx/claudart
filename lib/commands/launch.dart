@@ -98,8 +98,10 @@ Future<void> runLauncher({
         currentEntry != null && selected.workspacePath == currentEntry.workspacePath;
     final branch = (isCurrentProject ? currentBranch : null) ?? state.branch;
     print('  Branch : $branch');
-    final statusColour = render.statusColour(state.status);
-    print('  Status : ${ansi.c(statusColour, state.status.value)}');
+    // A blank handoff is no-handoff, not its stale Status line.
+    final shown = state.effectiveStatus;
+    final statusColour = render.statusColour(shown);
+    print('  Status : ${ansi.c(statusColour, shown.value)}');
     if (state.hasActiveContent) {
       print('  Bug    : ${_truncate(state.bug)}');
     }

@@ -289,6 +289,61 @@ void main() {
     });
   });
 
+  group('SessionState.effectiveStatus', () {
+    // What a consumer should show: a handoff with no real content is not a
+    // session, whatever its Status line says (the blank handoff left by kill,
+    // teardown and an empty rotate reads suggest-investigating).
+    const blank = '_Not yet determined._';
+    SessionState state(HandoffStatus status, {required bool active}) =>
+        SessionState(
+          status: status,
+          branch: 'main',
+          bug: active ? 'Crash on save' : blank,
+          rootCause: blank,
+          attempted: blank,
+          changed: blank,
+          unresolved: blank,
+        );
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: active content keeps its own status', () {
+        expect(state(status, active: true).effectiveStatus, status);
+      });
+
+      test('${status.name}: no active content is noHandoff', () {
+        expect(
+          state(status, active: false).effectiveStatus,
+          HandoffStatus.noHandoff,
+        );
+      });
+    }
+
+    test('an empty file parses to noHandoff', () {
+      expect(SessionState.parse('').effectiveStatus, HandoffStatus.noHandoff);
+    });
+
+    test('the blank handoff template parses to noHandoff', () {
+      expect(
+        SessionState.parse(blankHandoff).effectiveStatus,
+        HandoffStatus.noHandoff,
+      );
+    });
+
+    test('a handoff setup just wrote keeps suggestInvestigating', () {
+      final written = handoffTemplate(
+        branch: 'fix/x',
+        date: '2026-01-01',
+        bug: 'Real bug',
+        expected: 'It works',
+        projectName: 'my-app',
+      );
+      expect(
+        SessionState.parse(written).effectiveStatus,
+        HandoffStatus.suggestInvestigating,
+      );
+    });
+  });
+
   group('SessionState.parse — edge cases', () {
     test('empty string returns all empty/unknown', () {
       final state = SessionState.parse('');

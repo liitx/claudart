@@ -324,6 +324,38 @@ $bug
       expect(output.join('\n'), isNot(contains('Relevant past patterns')));
     });
 
+    group('a blank handoff is not a session', () {
+      // The blank handoff kill, teardown and an empty rotate leave behind
+      // still has a suggest-investigating Status line; it must read as
+      // no-handoff, the same status SessionState.effectiveStatus gives zedup.
+      const blank = '_Not yet determined._';
+
+      setUp(() => ansi.colorEnabledOverride = false);
+      tearDown(() => ansi.colorEnabledOverride = null);
+
+      test('the Status line reads no-handoff', () async {
+        final output = await statusOutput(ioWith(bug: blank));
+        expect(output.join('\n'), contains('Status   : no-handoff'));
+      });
+
+      test('--prompt mode shows no-handoff with the inactive dot', () async {
+        final captured = _CapturedStdout();
+        await IOOverrides.runZoned(
+          () => runStatus(
+            io: ioWith(bug: blank),
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            prompt: true,
+          ),
+          stdout: () => captured,
+        );
+        await captured.close();
+        expect(captured.text, contains('no-handoff'));
+        expect(captured.text, contains('○'));
+        expect(captured.text, isNot(contains('●')));
+      });
+    });
+
     group('the status colour', () {
       setUp(() => ansi.colorEnabledOverride = true);
       tearDown(() => ansi.colorEnabledOverride = null);
