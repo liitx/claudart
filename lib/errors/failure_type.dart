@@ -64,7 +64,6 @@ enum FailureType {
         FailureType.stepProducedNoResult =>
           FaultClass.transientFault,
         FailureType.providerNotConfigured => FaultClass.configFault,
-        FailureType.invalidHandoffTransition => FaultClass.programmerFault,
         _ => faultClass,
       };
 
@@ -93,9 +92,9 @@ enum FailureType {
           'Check the workspace state has been rolled back correctly, then '
               'retry the operation.',
         FailureType.invalidHandoffTransition =>
-          'This is a claudart bug: a command ran from a handoff status the '
-              'state machine does not allow. Compare docs/design.md with the '
-              'status in handoff.md, then report it.',
+          'Run `claudart status` to see where the session is, then use the '
+              'command that fits that status (docs/design.md lists the moves). '
+              'If the status looks wrong, check handoff.md.',
         FailureType.workspaceLocked =>
           'Wait for the other session to finish, or confirm it has crashed '
               'before clearing the lock by hand.',

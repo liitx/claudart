@@ -12,9 +12,9 @@ void main() {
       HandoffEvent.debugStarted,
     );
 
-    test('carries invalidHandoffTransition and its programmerFault class', () {
+    test('carries invalidHandoffTransition and its session fault class', () {
       expect(e.failureType, FailureType.invalidHandoffTransition);
-      expect(e.faultClass, FaultClass.programmerFault);
+      expect(e.faultClass, FaultClass.environmentFault);
     });
 
     test('keeps the offending status and event as typed fields', () {

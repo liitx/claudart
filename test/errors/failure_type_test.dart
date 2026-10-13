@@ -48,11 +48,10 @@ void main() {
     test('sessionCloseFailed uses its subsystem default, unoverridden', () {
       expect(FailureType.sessionCloseFailed.effectiveFaultClass, FaultClass.environmentFault);
     });
-    test('invalidHandoffTransition overrides to programmerFault: the code '
-        'asked for a move the state machine forbids', () {
+    test('invalidHandoffTransition uses its subsystem default, unoverridden',
+        () {
       const failure = FailureType.invalidHandoffTransition;
-      expect(failure.faultClass, FaultClass.environmentFault);
-      expect(failure.effectiveFaultClass, FaultClass.programmerFault);
+      expect(failure.effectiveFaultClass, FaultClass.environmentFault);
     });
     test('providerNotConfigured overrides to configFault, not pipeline\'s default externalServiceFault', () {
       expect(FailureType.providerNotConfigured.faultClass, FaultClass.externalServiceFault);
@@ -108,13 +107,12 @@ void main() {
         'itself.',
       );
     });
-    test('invalidHandoffTransition suggestedAction says it is a claudart '
-        'bug and points at the spec', () {
+    test('invalidHandoffTransition suggestedAction says where to look', () {
       expect(
         FailureType.invalidHandoffTransition.suggestedAction,
-        'This is a claudart bug: a command ran from a handoff status the '
-        'state machine does not allow. Compare docs/design.md with the '
-        'status in handoff.md, then report it.',
+        'Run `claudart status` to see where the session is, then use the '
+        'command that fits that status (docs/design.md lists the moves). '
+        'If the status looks wrong, check handoff.md.',
       );
     });
     test('stepProducedNoResult suggestedAction names the real condition', () {
