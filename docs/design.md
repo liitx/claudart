@@ -37,7 +37,8 @@ The session is a **deterministic finite automaton** `(S, C, δ, s₀, F)` where:
 - `F = { resolved }` (accepting / terminal state reached by teardown; not an
   `HandoffStatus` value itself — `debug-complete` transitions here via
   `/teardown`, at which point the handoff is archived and reset)
-- `δ : S × C → S` is the transition function (total — every command has a defined outcome in every state)
+- `δ : S × E → S ∪ {rejected}` is the transition function, partial by design: a move the table does not list is
+  rejected (`HandoffStatus.after` returns `null`)
 
 **Transition function δ:**
 
@@ -90,7 +91,7 @@ across whole lifecycles, and `make consumer-check` replays the same scenarios ag
 ```mermaid
 stateDiagram-v2
   [*] --> noHandoff
-  noHandoff --> suggestInvestigating: /suggest
+  noHandoff --> suggestInvestigating: setup
   suggestInvestigating --> readyForSuggest: explore
   readyForSuggest --> readyForDebug: /save
   readyForDebug --> debugInProgress: /debug
@@ -100,7 +101,8 @@ stateDiagram-v2
   debugComplete --> [*]: /teardown
 ```
 
-Matches README.md's own diagram exactly — kept in sync deliberately;
+A simplified view for reading. The complete, generated diagram (every move
+`HandoffStatus.after` allows) is in docs/topology/handoff_status.md and README.md;
 `unknown` (parse-failure sentinel) and the `claudart kill`/`claudart
 rotate` edges (available from any state, omitted here to keep the
 diagram legible) are the two things this simplified view leaves out of
@@ -601,6 +603,20 @@ appends `{command: workspaces, outcome: listed N workspaces}` to the *asking* wo
   are best run in that workspace's own agent session, which `claudart workspaces` points to.
 - Existing workspaces keep their old command files until `claudart link` is re-run (`doctor` reports them stale).
 - zedup should call `summarizeWorkspaces` and `selectProject` (now exported) instead of parsing `registry.json` itself.
+
+### 9.8 Layering (audited, open)
+
+Dependencies are meant to run downward, with `lib/commands/` on top. Audited against the imports:
+
+- **Holds:** nothing outside `lib/commands/` imports it, and `lib/session/` does not import `commands`.
+- **Not one-way, no file-level cycle:** `pipeline` and `templates` import each other (`agent_flow.dart` imports the
+  templates; `flow`, `save`, `suggest` and `teardown` templates import `pipeline/agents/*`); `pipeline` and `ui` import
+  each other; `session` and `templates` import each other (`session_ops.dart` imports `handoff_template`).
+- **Lower layers reaching up into `pipeline`:** `logging/planner_log.dart`, `workspace/workspace_config.dart`, and
+  `md_io.dart` (which also imports `ui`, so `session` reaches `ui` through `skills_lookup`).
+- **Not yet enforced.** PARADIGMS.md keeps a lint for dependency direction as prose-only until a workspace names its
+  layering. Fixing these means moving shared types (the agent categories the templates read, the render helpers
+  `pipeline` calls) down into a leaf directory; that is a restructure, to be done as its own change with its own tests.
 
 ### 9.6 Data layer and model metadata (see PLAN.md, Phase 14)
 
