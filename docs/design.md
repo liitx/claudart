@@ -509,6 +509,52 @@ claudart is usable on its own: a CLI-only user needs none of zedup. zedup is an 
 | the agent surface (a Claude Code or Cursor slash command running claudart) is not modelled | none yet | add a `CommandEntry` for it once its calls are enumerated |
 | 4 handoff events have no code caller (`saveUnconfirmed`, `saveConfirmedExploring`, `debugStarted`, `debugBlocked`): agents make those moves by editing `handoff.md` as the prompts say | `handoff_status.md` "Where each event is passed" | by design today; revisit if claudart should verify them |
 
+### 9.4 Ownership: how the three repos split
+
+Every public component has one owning repo. The owner declares it and tests it (a literal table per variant,
+mutation-tested). A consumer tests only its own extensions and its integration with the owner, never the owner's
+behavior again. `make ownership` snapshots this into `docs/topology/ownership.md`: components per repo, names declared
+in more than one repo, and tests that assert another repo's component behavior.
+
+| Repo | Owns | Consumers must not re-test |
+|---|---|---|
+| claudart | the session state machine (`HandoffStatus`, `HandoffEvent`, `after`, `effectiveStatus`), the error taxonomy, the model registry (`AgentModel`, `AgentFlow.preferredModel`), `ClaudartCommand` and its entry/headless/event declarations, link state, codegen | any of the above |
+| dartrix | the matrix and coverage framework (`Dartrix`, `testSelector`, the shoelace snapshot types) and the paradigm law | its own matrix mechanics |
+| zedup | the TUI: its own screens, hotkeys, tool manifests, `kZedupConfig`, its extensions on claudart types (e.g. `AgentFlow.label`) | claudart's types' behavior |
+
+Findings from the first scan, each a tracked gap rather than folklore:
+
+- **Duplicated components:** `ErrorType`, `FailureType`, `FaultClass` and `FaultSeverity` are declared in both claudart
+  and zedup (zedup has its own copy of the error taxonomy). One owner: claudart; zedup consumes it (Phase 1 step 8).
+- **Misplaced tests, now fixed:** `AgentModel` (alias, slug, shortName, `bestFor*`) and `AgentFlow.preferredModel` were
+  tested only in zedup's `claudart_model_test.dart`: the owner did not test its own components. They are now pinned in
+  `test/pipeline/agent_model_test.dart` and `agent_flow_test.dart`.
+- **Redundant tests, to remove from zedup:** `agent_result_test.dart` asserts `HandoffStatus.expectsDebug`,
+  `expectsSuggest` and `fromString` (claudart pins all three per variant); `agent_dispatcher_test.dart` and
+  `claudart_model_test.dart` assert `AgentModel.alias` and the `bestFor*` predicates (now pinned here).
+- **dartrix knows zedup's variants:** its shoelace test fixtures hard-code zedup's `BranchType` names as strings. The
+  framework should stay generic; the fixture should use its own fictional enum.
+
+### 9.5 Environment configuration drives what a user sees
+
+The user's environment (which tools they use, how the project is linked, which agents and stack they chose) should
+decide which enums and templates they are exposed to, so they only interface with code that applies to them.
+
+| Where it already works | How |
+|---|---|
+| zedup | `zedup setup` answers + each tool's manifest generate `kZedupConfig`; the UI exposes only opted-in tools' commands, hotkeys and screens |
+| claudart slash commands | `claudart link` writes a command file for each `AgentFlow` with `hasCommandFile`, so the commands a user sees are driven by an enum |
+
+| Where it does not yet | Evidence |
+|---|---|
+| workspace.json's `session.agents`, `knowledge` and `stack` | written by `claudart link`; read only by the `/setup` agent prompt (an agent following instructions), never by Dart code: the command files `link` generates come from `AgentFlow.values`, not the user's `session.agents` |
+| the generated `dependency_config.g.dart` (`usesDartrix`) | no reader; dartrix changes nothing a user sees except `claudart add`'s PLAN stub |
+
+Direction, in dependency order: (1) make workspace.json's selection the input to `claudart link`'s generated command files
+(zedup's manifest approach is the model); (2) generate a per-environment registry that exposes only the enabled
+components, because a `const bool` cannot gate an import in Dart; (3) have the lifecycle matrix and `make consumer-check`
+run in each configuration so the exposed surface is proven, not assumed.
+
 ## Summary: The Three Invariants
 
 These are the core invariants claudart enforces. They are not conventions — they are compile-time or runtime proofs.

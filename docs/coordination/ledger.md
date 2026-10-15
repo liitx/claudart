@@ -116,3 +116,15 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | `make consumer-check` now also scans zedup for raw status writers; `updateStatus` deprecated | done |
 | OPEN (zedup): read `effectiveStatus` in `parseClaudartHandoff`; replace 2 raw `updateStatus` writers with `applyHandoffEvent` | open |
 | OPEN: dartrix has no behavioural effect; link/unlink not in the lifecycle matrix; agent surface not modelled | open |
+
+## Resolution log, ownership across repos
+
+| Item | Status |
+|---|---|
+| `make ownership` / tool/ownership/ownership_scan.dart: components per repo, duplicated names, tests asserting another repo's component behavior; docs/topology/ownership.md | done |
+| claudart-owned `AgentModel` and `AgentFlow.preferredModel` had NO claudart tests (only zedup's): now pinned in agent_model_test / agent_flow_test | done |
+| Observation to decide: `AgentModel.sonnet.slug` is `claude-sonnet-5`; the current Sonnet ID in this environment is `claude-sonnet-5-5`. Pinned as-is; confirm which is intended | open |
+| zedup: remove redundant assertions of claudart components (agent_result_test: HandoffStatus members; agent_dispatcher_test / claudart_model_test: AgentModel alias and bestFor*) | open (zedup branch) |
+| zedup: delete its copy of the error taxonomy (ErrorType, FailureType, FaultClass, FaultSeverity), consume claudart's | open (Phase 1 step 8) |
+| dartrix: shoelace fixtures hard-code zedup's BranchType names; use a fictional enum | open (dartrix branch) |
+| workspace.json agents/knowledge/stack drive nothing in Dart; link's command files come from AgentFlow.values | open (design.md 9.5) |
