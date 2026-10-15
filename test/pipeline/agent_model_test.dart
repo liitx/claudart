@@ -24,7 +24,7 @@ const _specs = <AgentModel, _Spec>{
   ),
   AgentModel.sonnet: (
     alias: 'sonnet',
-    slug: 'claude-sonnet-5',
+    slug: 'claude-sonnet-5-5',
     shortName: 'sonnet-5',
     contextWindow: 200000,
     maxOutputTokens: 16000,

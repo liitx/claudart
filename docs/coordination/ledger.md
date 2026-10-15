@@ -123,7 +123,7 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 |---|---|
 | `make ownership` / tool/ownership/ownership_scan.dart: components per repo, duplicated names, tests asserting another repo's component behavior; docs/topology/ownership.md | done |
 | claudart-owned `AgentModel` and `AgentFlow.preferredModel` had NO claudart tests (only zedup's): now pinned in agent_model_test / agent_flow_test | done |
-| Observation to decide: `AgentModel.sonnet.slug` is `claude-sonnet-5`; the current Sonnet ID in this environment is `claude-sonnet-5-5`. Pinned as-is; confirm which is intended | open |
+| `AgentModel.sonnet.slug` was `claude-sonnet-5`; owner confirmed `claude-sonnet-5-5`. Fixed in claudart. zedup's test fixture `claudart_model_fixtures.dart` still hard-codes the old slug: update (or delete it, see the redundant-test item) when zedup bumps claudart | fixed here; zedup open |
 | zedup: remove redundant assertions of claudart components (agent_result_test: HandoffStatus members; agent_dispatcher_test / claudart_model_test: AgentModel alias and bestFor*) | open (zedup branch) |
 | zedup: delete its copy of the error taxonomy (ErrorType, FailureType, FaultClass, FaultSeverity), consume claudart's | open (Phase 1 step 8) |
 | dartrix: shoelace fixtures hard-code zedup's BranchType names; use a fictional enum | open (dartrix branch) |
