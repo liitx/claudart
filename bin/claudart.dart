@@ -98,7 +98,11 @@ Future<void> main(List<String> rawArgs) async {
     args.add(arg);
   }
 
-  final projectOption = extractProjectOption(args);
+  final firstCommand =
+      args.isEmpty ? null : ClaudartCommand.fromString(args.first);
+  final projectOption = firstCommand?.ownsProjectOption ?? false
+      ? (args: List<String>.of(args), name: null, missingValue: false)
+      : extractProjectOption(args);
   if (projectOption.missingValue) {
     print('--project needs a project name. '
         'Run `claudart workspaces` to see the linked ones.');

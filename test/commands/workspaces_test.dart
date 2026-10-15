@@ -58,6 +58,8 @@ void main() {
     final io = await _bothLinked();
     final summaries = api.summarizeWorkspaces(api.Registry.load(io: io), io);
     expect(summaries, isA<List<api.WorkspaceSummary>>());
+    expect(api.HandoffEvent.values, isNotEmpty);
+    expect(api.HandoffTransition, isNotNull);
     expect(
       api.selectProject(api.Registry.load(io: io), 'my-app'),
       isA<api.ProjectSelected>(),

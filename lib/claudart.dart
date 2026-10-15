@@ -19,6 +19,8 @@ export 'md_io.dart'
         // ignore: deprecated_member_use_from_same_package
         updateStatus,
         withHandoffStatus;
+export 'session/handoff_event.dart' show HandoffEvent;
+export 'session/handoff_transition.dart' show HandoffTransition;
 export 'pipeline/agent_model.dart';
 export 'pipeline/agent_flow.dart';
 export 'pipeline/agents/confirmation.dart';

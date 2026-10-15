@@ -180,4 +180,19 @@ void main() {
       });
     }
   });
+
+  group('ownsProjectOption', () {
+    for (final command in ClaudartCommand.values) {
+      final expected = command == ClaudartCommand.init;
+      test('${command.name}: ownsProjectOption is $expected', () {
+        expect(command.ownsProjectOption, expected);
+      });
+
+      test('${command.name}: owning --project excludes the selector', () {
+        if (command.ownsProjectOption) {
+          expect(command.supportsProjectSelector, isFalse);
+        }
+      });
+    }
+  });
 }

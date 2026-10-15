@@ -200,6 +200,13 @@ void main() {
       expect(r.out, contains('other, proj'));
     });
 
+    test('init keeps its own --project <name> and is not hijacked', () async {
+      final s = await _pair();
+      final r = await s.proj.run(['init', '--project', 'brand-new']);
+      expect(r.out, isNot(contains('is not supported by')));
+      expect(r.out, isNot(contains('Unknown project')));
+    });
+
     test('a command that does not act on a session says so', () async {
       final s = await _pair();
       final r = await s.proj.run(['--project', 'other', 'doctor']);

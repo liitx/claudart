@@ -144,6 +144,10 @@ enum ClaudartCommand {
           const {},
       };
 
+  /// `init --project <name>` names a NEW project knowledge file; the global
+  /// selector (which names an already-linked workspace) must leave it alone.
+  bool get ownsProjectOption => this == init;
+
   /// Whether `--project <name>` can choose which registered project the command
   /// acts on: the commands that work on an existing project's session or
   /// workspace. Checked against each command's source (it must take a project
