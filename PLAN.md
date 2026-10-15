@@ -941,6 +941,96 @@ Tests (no redundancy): the owner pins each store (literal tables, mutation-teste
 Restart criteria / open: confirm with a captured stream before step 4; decide whether
 `slug` is dropped or kept as a fallback label.
 
+### Phase 15 — Enums as the source of truth; environment-scoped surfaces by generated rendering
+Opened 2026-10-15, not started. Question (owner): how should claudart, zedup and dartrix each
+set a source of truth so Dart code generation dynamically exposes an API layer scoped to the
+user's environment and dependencies, efficiently and provably non-redundantly? Answered by an
+Opus review with experiments (Dart 3.8.1 AOT, macOS arm64); the load-bearing results were
+re-run by the coordinator and reproduce byte for byte.
+
+**Decision: the Dart enums are the source of truth.** A hand-written YAML next to an enum
+creates the redundancy we are removing, and it has already drifted: `ZedCommand` has 11
+variants, zedup's `manifest/zedup.yaml` lists 6 commands. The cross-repo contract already
+exists as pub API (zedup imports `package:claudart/claudart.dart`; an enum change reaches it
+as exhaustive-switch compile errors). What each repo publishes is its public library's enums
+with metadata as getters, the pattern `ClaudartCommand.reachedFrom/supportsHeadless/
+handoffEvents` and `AgentFlow.hasCommandFile` already use. No YAML, no schema versioning.
+
+**Measured: exposure mechanisms** (synthetic 3000-function component; exe size, AOT):
+
+| Mechanism | Exe size | Restricts what the user sees | Reduces what runs |
+|---|---|---|---|
+| component not imported | 5,413,808 | yes | yes |
+| `const false` branch / `bool.fromEnvironment` false | 5,413,808 | no | yes (dead branch removed) |
+| `bool.fromEnvironment` true | 8,253,776 | no | no |
+| exhaustive enum switch over a const enabled list | 8,023,952 | no | no: every arm's code is kept |
+| generated registry that is the sole path to the code | 5,413,808 | no | yes |
+| conditional import on `-D` | stub chosen even with `-Dfeature.big=true` | no | no: only `dart.library.*` branches work |
+| runtime-false branch | 8,270,192 | no | no |
+
+- A barrel/facade filters top-level names in the analyzer, but enum variants leak through any
+  `show` facade and a direct `package:x/src/...` import bypasses it, so it is not a security or
+  scoping boundary.
+- A dead 2.8 MB component costs about 0.7 ms at startup (14.2 vs 14.9 ms). claudart's real
+  components are far smaller (not measured), so "most performant" does NOT justify
+  per-environment compilation for claudart. For zedup, which already recompiles, a generated
+  registry is free.
+
+**Verdict.** Do not build per-environment API facades or barrels, build_runner (no repo uses
+it; claudart keeps dependencies minimal), conditional imports, runtime plugins, or per-
+environment recompiles of claudart. The environment-scoped part is the user-facing SURFACES
+(slash-command files, help, hotkeys, menus): enum values filtered by a typed selection,
+rendered inside `claudart link` / `zedup setup`, with render-and-diff drift checks. This
+supersedes design.md 9.5's earlier idea of a generated per-environment registry.
+
+**Generator mechanics.** A plain Dart function inside `claudart link` / `zedup setup` (plus a
+`dart run` wrapper), using the existing `ClaudartArtifact` + `stateOf` render-and-diff pattern.
+No repo has CI (no `.github`), so staleness is caught by a `dart test` drift test per generated
+file: render, compare with the committed file. zedup has none today. A dependency change
+reaches zedup by `dart pub upgrade claudart` -> exhaustive switches break -> its generator
+re-renders from the imported `.values` -> its drift test forces the regeneration to be
+committed. Smell: zedup's `user_config.g.dart` is tracked in git but derived from one user's
+setup answers; it should not be committed.
+
+**Non-redundancy: single source per fact.**
+
+| Fact | Single source | Generated or derived consumers | Redundancy today |
+|---|---|---|---|
+| claudart commands | `ClaudartCommand` | dispatch, help, consumer-check | none |
+| slash commands | `AgentFlow` | `.claude/commands/*.md` | none |
+| zedup commands | `ZedCommand` | should drive `kZedupConfig.commands` | YAML copy, drifted |
+| events, statuses | `HandoffEvent`, `HandoffStatus` | zedup by import | `noHandoff` is a "Zedup-local" variant inside claudart's enum |
+| error taxonomy | claudart `errors/` | none | zedup copies all four enums |
+| models | `AgentModel` | none | none found in zedup |
+| uses dartrix | the project's `pubspec.yaml` | `dependency_config.g.dart` | generated output with zero readers |
+| enabled agents | `workspace.json` `session.agents` (parsed to `List<AgentFlow>`) | none | parsed, never read |
+| enabled tools | zedup setup answers | `kZedupConfig` | `coverageAxes` has no consumer |
+
+Checks that prove it: (1) ownership scan reaches 0 duplicates (exists; 4 today); (2) derived-not-
+copied tests (exist for `ClaudartCommand`); (3) a drift test per generated file (claudart: 4
+artifacts via `stateOf`; zedup: none); (4) one writer per generated file (missing:
+`GeneratedFileWriter` is copied 3 times); (5) every generated symbol has a reader (missing; it
+would have caught `usesDartrix`, `coverageAxes` and 3 uncalled emitters).
+
+**First slice: enabled agents, entirely inside claudart.** Source: `AgentFlow` + the typed
+`WorkspaceSession.agents`. The `commandTemplates` render filters on `hasCommandFile &&
+agents.contains(flow)` ("empty list means all", for backward compatibility). `stateOf` and
+`doctor` already cover staleness; add one test that the filtered file set equals the filtered
+enum set. This proves source -> typed selection -> scoped surface -> drift detection with no
+new `.g.dart`.
+
+Order after that: (1) zedup derives its manifest commands from `ZedCommand` getters; delete the
+YAML `commands` section and the `package:<tool>/manifest.dart` emission; (2) consolidate the
+error taxonomy under claudart; (3) move zedup-only `noHandoff` out of claudart's
+`HandoffStatus`; (4) make `DartrixConfig` typed over enums or delete it; (5) one shared
+`GeneratedFileWriter`. Delete: `DependencyConfigCodegen`, `dependency_config.g.dart` and
+`ClaudartArtifact.dependencyConfig` unless something starts reading it; `coverageAxes`; the 3
+uncalled zedup emitters; the YAML manifests once (1) is done.
+
+**Riskiest assumption, needs the owner:** that "the user interfaces with enums" means Dart
+symbols. The review's reading is that users interface with CLI commands, slash-command files
+and hotkeys, so the "dynamic API layer" reduces to filtered rendering of those surfaces.
+
 ---
 
 ## GitHub archive convention
@@ -1026,6 +1116,8 @@ graph LR
 | Self-hosting law | If claudart can't debug its own bugs with its own workflow, the tool is broken |
 | Model metadata is per step, observed not declared | A session spans many steps and models; only the stream of the run says which model actually ran, so that is the 1:1 source. Declared (registry) and resolved (machine env) are predictions |
 | The repository layer starts at the handoff | Registry, workspace, archive and pending stores already exist; the handoff is the one datum zedup edits by hand, so `HandoffStore` is the smallest slice that proves the layer |
+| Enums are the source of truth; no YAML mirror | A YAML copy of an enum has already drifted (ZedCommand 11 variants vs 6 in zedup.yaml). The cross-repo contract is already pub API |
+| No per-environment facades or recompiles for claudart | Measured: a dead 2.8 MB component costs ~0.7 ms at startup; facades filter only top-level names and enum variants leak; conditional imports ignore `-D` |
 | Per-project workspaces (v2) | Single global workspace had string-matching fragility and no project isolation |
 | Templates are source of truth | No information lives only in a rendered document; README is always derivable, never the origin |
 | Diagrams live in PLAN.md, not a diagrams/ folder | Diagram travels with the feature it describes; GitHub renders Mermaid as SVG |

@@ -138,3 +138,15 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | `sensitivityMode` drift: registry.json false vs workspace.json true for claudart | open (Phase 14 step 3) |
 | Repository layer: start with `HandoffStore` (load + apply) and move zedup's raw handoff writers onto it | open (Phase 14 step 1) |
 | Capture a real `stream-json` run before adding an observed-model field | open (Phase 14 step 4) |
+
+## Resolution log, source of truth and generation (PLAN.md Phase 15)
+
+| Item | Status |
+|---|---|
+| Opus review with measured experiments; key numbers reproduced by the coordinator | recorded in PLAN.md Phase 15 |
+| Decision: enums are the source of truth; no YAML mirror (ZedCommand 11 variants vs 6 in zedup.yaml, verified) | recorded |
+| Decision: no per-environment facades / recompiles / build_runner / conditional imports for claudart | recorded; supersedes design.md 9.5's registry idea |
+| First slice: enabled agents filter the generated command files (typed `WorkspaceSession.agents`, "empty = all") | open, awaiting owner's answer on what "user interfaces with" means |
+| zedup: derive commands from ZedCommand, delete the YAML commands and the nonexistent `package:<tool>/manifest.dart` emission; do not commit `user_config.g.dart` | open (zedup branch) |
+| Delete `DependencyConfigCodegen` / `dependency_config.g.dart` / `ClaudartArtifact.dependencyConfig` unless something reads it | open |
+| Proof checks still missing: a drift test per zedup generated file; one shared `GeneratedFileWriter`; every generated symbol has a reader | open |

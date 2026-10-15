@@ -550,10 +550,11 @@ decide which enums and templates they are exposed to, so they only interface wit
 | workspace.json's `session.agents`, `knowledge` and `stack` | written by `claudart link`; read only by the `/setup` agent prompt (an agent following instructions), never by Dart code: the command files `link` generates come from `AgentFlow.values`, not the user's `session.agents` |
 | the generated `dependency_config.g.dart` (`usesDartrix`) | no reader; dartrix changes nothing a user sees except `claudart add`'s PLAN stub |
 
-Direction, in dependency order: (1) make workspace.json's selection the input to `claudart link`'s generated command files
-(zedup's manifest approach is the model); (2) generate a per-environment registry that exposes only the enabled
-components, because a `const bool` cannot gate an import in Dart; (3) have the lifecycle matrix and `make consumer-check`
-run in each configuration so the exposed surface is proven, not assumed.
+Direction, in dependency order: (1) make workspace.json's selection the input to `claudart link`'s generated command files;
+(2) run the lifecycle matrix and `make consumer-check` in each configuration so the exposed surface is proven, not assumed.
+An earlier draft here proposed a generated per-environment registry; PLAN.md Phase 15 supersedes it with measurements
+(a facade filters only top-level names, enum variants leak through it, and a dead component costs about 0.7 ms at startup),
+so the scoping is done by filtered rendering of the user-facing surfaces, not by per-environment API facades.
 
 ### 9.6 Data layer and model metadata (see PLAN.md, Phase 14)
 
@@ -567,6 +568,17 @@ Model information has three kinds: declared (the `AgentModel` registry, keyed by
 an alias to: provider env, `~/.claude/settings.json`) and observed (what the `claude` stream says actually ran). Only the
 observed value is 1:1, and it belongs to a step, not a session. Today nothing reads it; the plan to add it, and the
 repository layer that keeps all of this behind claudart's API, is PLAN.md Phase 14.
+
+## 10. Source of truth and generation (see PLAN.md, Phase 15)
+
+The Dart enums are the source of truth, not a YAML mirror of them. Each repo publishes its public enums with metadata as
+getters (the shape `ClaudartCommand` and `AgentFlow` already have); other repos consume them as ordinary pub API, so a change
+reaches them as exhaustive-switch compile errors. Generation exists only for user-facing surfaces (slash-command files,
+help, hotkeys, menus): enum values filtered by a typed selection, rendered inside `claudart link` / `zedup setup`, with a
+render-and-diff drift test per generated file. No per-environment facades, no build_runner, no conditional imports.
+
+Non-redundancy is checked, not asserted: `make ownership` (duplicate components), a derived-not-copied test per declaration,
+a drift test per generated file, one writer per generated file, and every generated symbol has a reader.
 
 ## Summary: The Three Invariants
 
