@@ -865,6 +865,82 @@ and `blankHandoff`. The opus-for-design routing itself is untouched:
 `reasoner`/`implementer`/`plan`/`construct` are exactly as Phase 13 left
 them — only the disk round-trip between `suggest` and `debug` is gone.
 
+### Phase 14 — Repository layer: claudart as the API; model metadata as observed state
+Opened 2026-10-15, not started. Owner requirement: a model passes metadata through
+the system, so it must be state, and changing a model must be safe — claudart has
+to read what the model actually is on the machine (1:1), not trust a hard-coded
+guess. claudart is effectively the API zedup consumes; a repository layer over
+the handoff, the environment and the configuration should drive the architecture.
+Independently verified by an Opus review against the code (2026-10-15).
+
+**Verified findings (file:line in the review; re-checked by the coordinator):**
+- `AgentModel` (`lib/pipeline/agent_model.dart`) is a hard-coded registry. At runtime
+  only `alias` is used (`--model <alias>`, `pipeline_executor.dart` ~651). `slug`,
+  `contextWindow`, `maxOutputTokens` and `fromSlug` have NO reader in claudart or
+  zedup; `shortName` is display only. So correcting `sonnet`'s slug (commit 3299f5e)
+  changed documentation, not behavior.
+- Nothing reads the model that actually ran. `parseClaudartResultLine` reads usage,
+  cost, `stop_reason`, `duration_ms`, `num_turns` — no model. `AgentStarted` carries
+  the INTENDED model. The repo has no captured real `stream-json` sample.
+- What an alias resolves to is machine state: on Bedrock `ANTHROPIC_DEFAULT_*_MODEL`
+  (names self-described as "assumed" in `agent_provider.dart`); `detectEffective`
+  merges `~/.claude/settings.json`'s `env` under the process env but only names the
+  provider, never the id. The executor gates on the provider (`pipeline_executor.dart`
+  ~622) although `agent_provider.dart`'s header still says it is not wired in.
+- Session data is read and written by several independent parsers: `md_io.readStatus`
+  (first line) vs `SessionState.parse` (whole section) vs zedup's own readers;
+  `registry.json` parsed again in zedup's dashboard; `sensitivityMode` stored in both
+  `registry.json` (false) and `workspace.json` (true) for claudart itself — live drift;
+  zedup's suggest/debug coordinators and archive restore write `handoff.md` raw,
+  bypassing `applyHandoffEvent`.
+
+**Three kinds of model information (the distinction the design turns on):**
+
+| Kind | Source | Handling |
+|---|---|---|
+| Declared | `AgentModel` in code, keyed by alias | stays in code; demote or drop `slug`, `contextWindow`, `maxOutputTokens` until something reads them |
+| Resolved | the machine: merged env (`ANTHROPIC_DEFAULT_<ALIAS>_MODEL`), provider | re-read at every launch, never stored in the session; a PREDICTION only |
+| Observed | the `claude` stream of that run | stored per step, append-only; the only 1:1 source |
+
+**Logical order of state** (Opus's correction: model metadata belongs per STEP, not
+per session — a session spans many steps and models, reader haiku, reasoner sonnet):
+machine/env (provider, alias resolution; derived, re-read) -> registry root -> project
+(`RegistryEntry`, `config.json`) -> workspace (`workspace.json`) -> session (handoff,
+status) -> run (flow checkpoint) -> step -> model call (intended alias, predicted id,
+observed id, usage; stored). Revalidation: compare predicted vs observed at each step
+and record a drift event; re-read provider and mapping at each launch; no mid-session
+watcher.
+
+**Repository layer — scoped by the review.** Registry, WorkspaceConfig,
+PendingConfirmationStore and the archive index are already small typed stores over an
+injectable `FileIO`; `applyHandoffEvent` is already the command path. The missing seam is
+the handoff itself: zedup has path helpers and text functions but no load/save API, so it
+edits the file by hand. The proposed six repositories plus a snapshot aggregate is more
+than the problem needs.
+
+Order (each step is its own tested commit):
+1. `HandoffStore.load(ws) -> SessionState` and `HandoffStore.apply(ws, HandoffEvent)`
+   over `FileIO` + `SessionState.parse` + `applyHandoffEvent`; export it; zedup reads
+   `effectiveStatus` and moves its two coordinators and the archive restore onto it.
+   Needs a `restored` event; check whether the debug coordinator's direct
+   `debug-complete` is a move the table rejects (changes docs/design.md's delta table).
+2. One root resolver (`workspacesRoot`); delete zedup's own `registry.json` parsing.
+3. One file owns `sensitivityMode` (resolve the registry/workspace.json drift).
+4. Capture a real `stream-json` run with `CLAUDART_DEBUG` and confirm which fields name
+   the model; then add an observed-model field to `StepResult` / `AgentCompleted` and
+   the per-step log.
+5. Only then, if zedup still needs it, a read-only snapshot object.
+
+Not to build yet: the snapshot aggregate; an Environment or Log repository; a mid-session
+model watcher; any per-alias id table before a real stream is captured.
+
+Tests (no redundancy): the owner pins each store (literal tables, mutation-tested);
+`make consumer-check` fails while zedup writes raw or reads the raw status;
+`make ownership` fails to improve while components are duplicated.
+
+Restart criteria / open: confirm with a captured stream before step 4; decide whether
+`slug` is dropped or kept as a fallback label.
+
 ---
 
 ## GitHub archive convention
@@ -948,6 +1024,8 @@ graph LR
 | handoff.md is the session, not the process | Terminal process is ephemeral; handoff survives kills, context limits, model switches |
 | Injectable I/O everywhere in lib/ | No hardcoded stdin/stdout — interactive components must be testable without a TTY |
 | Self-hosting law | If claudart can't debug its own bugs with its own workflow, the tool is broken |
+| Model metadata is per step, observed not declared | A session spans many steps and models; only the stream of the run says which model actually ran, so that is the 1:1 source. Declared (registry) and resolved (machine env) are predictions |
+| The repository layer starts at the handoff | Registry, workspace, archive and pending stores already exist; the handoff is the one datum zedup edits by hand, so `HandoffStore` is the smallest slice that proves the layer |
 | Per-project workspaces (v2) | Single global workspace had string-matching fragility and no project isolation |
 | Templates are source of truth | No information lives only in a rendered document; README is always derivable, never the origin |
 | Diagrams live in PLAN.md, not a diagrams/ folder | Diagram travels with the feature it describes; GitHub renders Mermaid as SVG |

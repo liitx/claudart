@@ -128,3 +128,13 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | zedup: delete its copy of the error taxonomy (ErrorType, FailureType, FaultClass, FaultSeverity), consume claudart's | open (Phase 1 step 8) |
 | dartrix: shoelace fixtures hard-code zedup's BranchType names; use a fictional enum | open (dartrix branch) |
 | workspace.json agents/knowledge/stack drive nothing in Dart; link's command files come from AgentFlow.values | open (design.md 9.5) |
+
+## Resolution log, model metadata and the repository layer (PLAN.md Phase 14)
+
+| Item | Status |
+|---|---|
+| Opus review: model metadata is per step; declared / resolved / observed; nothing reads the observed model today | recorded in PLAN.md Phase 14 |
+| CORRECTION to commit 3299f5e: `AgentModel.slug` (and contextWindow, maxOutputTokens, fromSlug) have no reader anywhere, so the slug fix changed documentation, not runtime behavior | noted |
+| `sensitivityMode` drift: registry.json false vs workspace.json true for claudart | open (Phase 14 step 3) |
+| Repository layer: start with `HandoffStore` (load + apply) and move zedup's raw handoff writers onto it | open (Phase 14 step 1) |
+| Capture a real `stream-json` run before adding an observed-model field | open (Phase 14 step 4) |

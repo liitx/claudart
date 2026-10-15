@@ -555,6 +555,19 @@ Direction, in dependency order: (1) make workspace.json's selection the input to
 components, because a `const bool` cannot gate an import in Dart; (3) have the lifecycle matrix and `make consumer-check`
 run in each configuration so the exposed surface is proven, not assumed.
 
+### 9.6 Data layer and model metadata (see PLAN.md, Phase 14)
+
+Session and configuration state is persisted in a handful of files, each with one typed owner (handoff: `SessionState`;
+registry: `Registry`; workspace: `WorkspaceConfig`; project: `ProjectConfig`; archive: `ArchiveEntry`; pending:
+`PendingConfirmationStore`; logs: `SessionLogger`). Where two readers parse the same file independently the layers can
+drift; the first verified instances are the handoff status (three readers), `sensitivityMode` (stored in both
+`registry.json` and `workspace.json`, and they disagree today) and zedup's raw handoff writes.
+
+Model information has three kinds: declared (the `AgentModel` registry, keyed by alias), resolved (what the machine maps
+an alias to: provider env, `~/.claude/settings.json`) and observed (what the `claude` stream says actually ran). Only the
+observed value is 1:1, and it belongs to a step, not a session. Today nothing reads it; the plan to add it, and the
+repository layer that keeps all of this behind claudart's API, is PLAN.md Phase 14.
+
 ## Summary: The Three Invariants
 
 These are the core invariants claudart enforces. They are not conventions — they are compile-time or runtime proofs.
