@@ -29,9 +29,23 @@ import 'package:path/path.dart' as p;
 
 import '../helpers/mocks.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
-const _claudeLink = '/projects/my-app/.claude';
+/// A linked project: its registry name, repo root and claudart workspace.
+typedef LifecycleProject = ({String name, String root, String workspace});
+
+const defaultLifecycleProject = (
+  name: 'my-app',
+  root: '/projects/my-app',
+  workspace: '/workspaces/my-app',
+);
+
+/// A second linked project, for scoping tests across workspaces.
+const siblingLifecycleProject = (
+  name: 'other-app',
+  root: '/projects/other-app',
+  workspace: '/workspaces/other-app',
+);
+
+String _claudeLink(LifecycleProject project) => '${project.root}/.claude';
 const _setupAnswers = [
   'fix/null-ref',
   'Some bug.',
@@ -73,28 +87,42 @@ const defaultLifecycleEnvironment = (
   usesDartrix: false,
 );
 
+/// An in-memory filesystem with every project in [projects] registered and
+/// linked as [env] says.
 MemoryFileIO freshLifecycleIo([
   LifecycleEnvironment env = defaultLifecycleEnvironment,
+  List<LifecycleProject> projects = const [defaultLifecycleProject],
 ]) {
   final io = MemoryFileIO(
     dirs: {
-      _projectRoot,
-      if (env.link == WorkspaceLinkState.realDirectory) _claudeLink,
+      for (final project in projects) ...{
+        project.root,
+        if (env.link == WorkspaceLinkState.realDirectory) _claudeLink(project),
+      },
     },
-    links: {if (env.link == WorkspaceLinkState.symlinked) _claudeLink},
+    links: {
+      if (env.link == WorkspaceLinkState.symlinked)
+        for (final project in projects) _claudeLink(project),
+    },
     files: {
-      if (env.usesDartrix) '$_projectRoot/pubspec.yaml': _dartrixPubspec,
+      if (env.usesDartrix)
+        for (final project in projects)
+          '${project.root}/pubspec.yaml': _dartrixPubspec,
     },
   );
-  Registry.empty()
-      .add(const RegistryEntry(
-        name: 'my-app',
-        projectRoot: _projectRoot,
-        workspacePath: _workspace,
+  var registry = Registry.empty();
+  for (final project in projects) {
+    registry = registry.add(
+      RegistryEntry(
+        name: project.name,
+        projectRoot: project.root,
+        workspacePath: project.workspace,
         createdAt: '2026-01-01',
         lastSession: '2026-03-15',
-      ))
-      .save(io: io);
+      ),
+    );
+  }
+  registry.save(io: io);
   return io;
 }
 
@@ -119,11 +147,15 @@ Future<void> quietly(Future<void> Function() body) => runZoned(
 
 // -- Steps (each drives one real command) --------------------------------
 
-Future<void> setup(MemoryFileIO io, {int menu = 0}) {
+Future<void> setup(
+  MemoryFileIO io, {
+  int menu = 0,
+  LifecycleProject project = defaultLifecycleProject,
+}) {
   final answers = _setupAnswers.iterator;
   return runSetup(
     io: io,
-    projectRootOverride: _projectRoot,
+    projectRootOverride: project.root,
     confirmFn: (_) => true,
     promptFn: (q, {optional = false}) =>
         answers.moveNext() ? answers.current : null,
@@ -133,9 +165,13 @@ Future<void> setup(MemoryFileIO io, {int menu = 0}) {
   );
 }
 
-Future<void> suggest(MemoryFileIO io) => runSuggest(
+Future<void> suggest(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runSuggest(
       io: io,
-      projectRootOverride: _projectRoot,
+      projectRootOverride: project.root,
       exitFn: _noExit,
       executor: _exec(_analysis),
       confirmFn: (_) => true,
@@ -143,42 +179,61 @@ Future<void> suggest(MemoryFileIO io) => runSuggest(
       pickFn: (_) => 0,
     );
 
-Future<void> debug(MemoryFileIO io) => runDebug(
+Future<void> debug(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runDebug(
       io: io,
-      projectRootOverride: _projectRoot,
+      projectRootOverride: project.root,
       exitFn: _noExit,
       executor: _exec('<CHANGES>none</CHANGES>'),
       pickFn: (_) => 0,
     );
 
-Future<void> kill(MemoryFileIO io) => runKill(
+Future<void> kill(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runKill(
       io: io,
-      projectRootOverride: _projectRoot,
+      projectRootOverride: project.root,
       confirmFn: (_) => true,
       exitFn: _noExit,
     );
 
-Future<void> rotate(MemoryFileIO io) async {
+Future<void> rotate(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) async {
   await runRotate(
     io: io,
-    projectRootOverride: _projectRoot,
+    projectRootOverride: project.root,
     exitFn: _noExit,
     confirmFn: (_) => true,
     buildFn: (_) async => true,
   );
 }
 
-Future<void> teardown(MemoryFileIO io) => runTeardown(
+Future<void> teardown(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runTeardown(
       io: io,
-      projectRootOverride: _projectRoot,
+      projectRootOverride: project.root,
       mode: RunMode.headless,
       exitFn: _noExit,
     );
 
-void seedPending(MemoryFileIO io) => io.write(
-      handoffPathFor(_workspace),
+void seedPending(
+  MemoryFileIO io, [
+  LifecycleProject project = defaultLifecycleProject,
+]) =>
+    io.write(
+      handoffPathFor(project.workspace),
       updateSection(
-        io.read(handoffPathFor(_workspace)),
+        io.read(handoffPathFor(project.workspace)),
         'Pending Issues',
         '- [ ] Next issue to do',
       ),
@@ -186,21 +241,31 @@ void seedPending(MemoryFileIO io) => io.write(
 
 // -- What the step left behind --------------------------------------------
 
-HandoffStatus effectiveStatusOf(MemoryFileIO io) {
-  final file = handoffPathFor(_workspace);
+HandoffStatus effectiveStatusOf(
+  MemoryFileIO io, [
+  LifecycleProject project = defaultLifecycleProject,
+]) {
+  final file = handoffPathFor(project.workspace);
   return SessionState.parse(io.fileExists(file) ? io.read(file) : '')
       .effectiveStatus;
 }
 
 /// The raw handoff.md text, '' when the file does not exist.
-String handoffContentOf(MemoryFileIO io) {
-  final file = handoffPathFor(_workspace);
+String handoffContentOf(
+  MemoryFileIO io, [
+  LifecycleProject project = defaultLifecycleProject,
+]) {
+  final file = handoffPathFor(project.workspace);
   return io.fileExists(file) ? io.read(file) : '';
 }
 
 /// The last logged move's `to` (null when it was rejected or nothing logged).
-String? loggedTo(MemoryFileIO io) {
-  final raw = io.read(p.join(logsDirFor(_workspace), 'transitions.jsonl'));
+String? loggedTo(
+  MemoryFileIO io, [
+  LifecycleProject project = defaultLifecycleProject,
+]) {
+  final raw =
+      io.read(p.join(logsDirFor(project.workspace), 'transitions.jsonl'));
   final last = raw.split('\n').where((l) => l.isNotEmpty).lastOrNull;
   if (last == null) return null;
   final entry = jsonDecode(last) as Map<String, dynamic>;
@@ -222,47 +287,60 @@ LifecycleStep lifecycleStep(
 }) =>
     (name: name, run: run, effective: effective, logged: logged);
 
-Future<void> setupDefault(MemoryFileIO io) => setup(io);
-Future<void> setupStartFresh(MemoryFileIO io) => setup(io, menu: 1);
+/// Scenario name -> ordered steps, bound to [project]. Expected statuses are
+/// literals.
+Map<String, List<LifecycleStep>> lifecycleScenarios({
+  LifecycleProject project = defaultLifecycleProject,
+}) {
+  Future<void> Function(MemoryFileIO io) bind(
+    Future<void> Function(MemoryFileIO io, {LifecycleProject project}) command,
+  ) =>
+      (io) => command(io, project: project);
 
-/// Scenario name -> ordered steps. Expected statuses are literals.
-Map<String, List<LifecycleStep>> lifecycleScenarios() {
   final setupStep = lifecycleStep(
     'setup',
-    setupDefault,
+    (io) => setup(io, project: project),
     HandoffStatus.suggestInvestigating,
   );
   return {
     'setup, suggest, debug, teardown': [
       setupStep,
-      lifecycleStep('suggest', suggest, HandoffStatus.readyForDebug),
-      lifecycleStep('debug', debug, HandoffStatus.debugComplete),
-      lifecycleStep('teardown', teardown, HandoffStatus.noHandoff),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep('debug', bind(debug), HandoffStatus.debugComplete),
+      lifecycleStep('teardown', bind(teardown), HandoffStatus.noHandoff),
     ],
     'setup, suggest, kill': [
       setupStep,
-      lifecycleStep('suggest', suggest, HandoffStatus.readyForDebug),
-      lifecycleStep('kill', kill, HandoffStatus.noHandoff),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
     ],
     'setup, kill': [
       setupStep,
-      lifecycleStep('kill', kill, HandoffStatus.noHandoff),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
     ],
     'rotate with a pending issue seeds the next session': [
       setupStep,
-      lifecycleStep('suggest', suggest, HandoffStatus.readyForDebug),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
       lifecycleStep(
         'seed pending',
-        (io) async => seedPending(io),
+        (io) async => seedPending(io, project),
         HandoffStatus.readyForDebug,
         logged: false,
       ),
-      lifecycleStep('rotate', rotate, HandoffStatus.suggestInvestigating),
+      lifecycleStep(
+        'rotate',
+        bind(rotate),
+        HandoffStatus.suggestInvestigating,
+      ),
     ],
     'rotate with nothing pending leaves no session': [
       setupStep,
-      lifecycleStep('suggest', suggest, HandoffStatus.readyForDebug),
-      lifecycleStep('rotate', rotate, HandoffStatus.noHandoff),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep('rotate', bind(rotate), HandoffStatus.noHandoff),
     ],
   };
 }
+
+/// "Start fresh" over a live handoff, for tests that need it on its own.
+Future<void> setupDefault(MemoryFileIO io) => setup(io);
+Future<void> setupStartFresh(MemoryFileIO io) => setup(io, menu: 1);
