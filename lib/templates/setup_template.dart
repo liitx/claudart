@@ -1,4 +1,5 @@
 import 'command_template_marker.dart';
+import 'workspace_scope_note.dart';
 
 String setupCommandTemplate(String workspacePath, String projectName) =>
     '''---
@@ -7,7 +8,10 @@ $claudartCommandMarker
 ---
 
 ''' +
-    r'''You are **Agent 1 — Workspace Setup**.
+    workspaceScopeNote(projectName) +
+    r'''
+
+You are **Agent 1 — Workspace Setup**.
 
 You run once. Your job is to compile the stable scaffold for this workspace so that all subsequent session agents (suggest, debug, save) inherit it without reloading.
 

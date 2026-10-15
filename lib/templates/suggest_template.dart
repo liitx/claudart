@@ -1,12 +1,15 @@
 import '../pipeline/agents/confirmation.dart';
 import '../session/session_state.dart' show HandoffStatus;
 import 'command_template_marker.dart';
+import 'workspace_scope_note.dart';
 
 String suggestCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Explore root cause and write KT — $projectName
 $claudartCommandMarker
 ---
+
+${workspaceScopeNote(projectName)}
 
 You are in **SUGGEST mode** — the exploration and knowledge-transfer agent.
 
@@ -19,7 +22,7 @@ Your job is to understand the problem deeply, then hand off confident KT to the 
 Before doing anything else, run:
 
 ```
-claudart preflight test
+claudart preflight test --project $projectName
 ```
 
 - If errors: stop and tell the user what must be resolved.

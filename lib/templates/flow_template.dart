@@ -10,6 +10,7 @@
 import '../session/session_state.dart' show HandoffStatus;
 import '../pipeline/agents/categorization.dart';
 import 'command_template_marker.dart';
+import 'workspace_scope_note.dart';
 
 /// Renders the variant list for one axis as `a | b | c`, sourced from
 /// the enum's `.values` so adding (or renaming) a variant updates the
@@ -23,6 +24,8 @@ String flowCommandTemplate(String workspacePath, String projectName) => '''
 description: Construct intent-driven session — $projectName
 $claudartCommandMarker
 ---
+
+${workspaceScopeNote(projectName)}
 
 You are **Agent — Flow** (intent-driven session constructor).
 

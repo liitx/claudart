@@ -1,5 +1,6 @@
 import '../pipeline/agents/confirmation.dart';
 import 'command_template_marker.dart';
+import 'workspace_scope_note.dart';
 
 String teardownCommandTemplate(String workspacePath, String projectName) => '''
 ---
@@ -7,9 +8,11 @@ description: Close session and update knowledge — $projectName
 $claudartCommandMarker
 ---
 
+${workspaceScopeNote(projectName)}
+
 You are running **SESSION TEARDOWN**.
 
-> Preferred: use the Dart CLI — `claudart teardown`
+> Preferred: use the Dart CLI — `claudart teardown --project $projectName`
 > Only use this slash command if you want to drive teardown interactively.
 
 ---

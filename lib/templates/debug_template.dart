@@ -1,11 +1,14 @@
 import '../session/session_state.dart' show HandoffStatus;
 import 'command_template_marker.dart';
+import 'workspace_scope_note.dart';
 
 String debugCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Implement scoped fix from handoff — $projectName
 $claudartCommandMarker
 ---
+
+${workspaceScopeNote(projectName)}
 
 You are in **DEBUG mode** — the deterministic, scoped fix agent.
 
@@ -18,7 +21,7 @@ You do not explore. You do not speculate. You execute the path defined in the ha
 Run this before reading anything:
 
 ```
-claudart preflight debug
+claudart preflight debug --project $projectName
 ```
 
 - `✗ errors`: stop immediately — handoff status is wrong. Report the error verbatim.
