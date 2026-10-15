@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check
+.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership
 
 ## Compile native binary to ~/bin/claudart
 build:
@@ -18,6 +18,12 @@ test:
 ## the checked-in doc and the code disagree)
 topology:
 	UPDATE_TOPOLOGY=1 $(DART) test test/topology < /dev/null
+
+## Snapshot of which repo owns which component (claudart, dartrix, zedup are
+## expected as sibling checkouts), the names declared in more than one, and the
+## tests that assert another repo's component behavior. Read only.
+ownership:
+	$(DART) run tool/ownership/ownership_scan.dart > docs/topology/ownership.md
 
 ## Replay claudart's lifecycle scenarios against zedup's REAL reader, in a
 ## throwaway copy of zedup wired to this checkout (neither repo is modified).
