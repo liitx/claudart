@@ -4,34 +4,35 @@
 
 ## Commands
 
-Where each command can be started, whether it takes `--headless`, and which handoff events it passes. Declared on `ClaudartCommand` and checked against the sources by `claudart_command_test.dart`.
+Where each command can be started, whether it takes `--headless`, whether `--project <name>` can choose the workspace it acts on, and which handoff events it passes. Declared on `ClaudartCommand` and checked against the sources by `claudart_command_test.dart`.
 
-| variant | entry points | headless | handoff events |
-|---|---|---|---|
-| chat | cliSubcommand | false | — |
-| archives | cliSubcommand | false | — |
-| add | cliSubcommand | false | — |
-| init | cliSubcommand | false | — |
-| link | cliSubcommand, launcherMenu | false | — |
-| unlink | cliSubcommand | false | — |
-| setup | cliSubcommand, launcherMenu | false | setup |
-| status | cliSubcommand | false | — |
-| teardown | cliSubcommand | true | tornDown, reminderSaved |
-| suggest | cliSubcommand, chatShell | false | saveConfirmedReady |
-| debug | cliSubcommand | false | fixApplied |
-| flow | cliSubcommand, chatShell | false | — |
-| save | cliSubcommand | false | — |
-| rotate | cliSubcommand | true | rotated, rotatedEmpty |
-| kill | cliSubcommand, launcherMenu | true | killed |
-| resume | cliSubcommand | false | — |
-| confirmPending | cliSubcommand | false | — |
-| preflight | cliSubcommand | false | — |
-| scan | cliSubcommand | false | — |
-| report | cliSubcommand | false | — |
-| map | cliSubcommand | false | — |
-| experiment | cliSubcommand | false | — |
-| compile | cliSubcommand | false | — |
-| doctor | cliSubcommand | false | — |
+| variant | entry points | headless | --project | handoff events |
+|---|---|---|---|---|
+| chat | cliSubcommand | false | false | — |
+| archives | cliSubcommand | false | true | — |
+| add | cliSubcommand | false | false | — |
+| init | cliSubcommand | false | false | — |
+| link | cliSubcommand, launcherMenu | false | false | — |
+| unlink | cliSubcommand | false | false | — |
+| setup | cliSubcommand, launcherMenu | false | true | setup |
+| status | cliSubcommand | false | true | — |
+| teardown | cliSubcommand | true | true | tornDown, reminderSaved |
+| suggest | cliSubcommand, chatShell | false | true | saveConfirmedReady |
+| debug | cliSubcommand | false | true | fixApplied |
+| flow | cliSubcommand, chatShell | false | true | — |
+| save | cliSubcommand | false | true | — |
+| rotate | cliSubcommand | true | true | rotated, rotatedEmpty |
+| kill | cliSubcommand, launcherMenu | true | true | killed |
+| resume | cliSubcommand | false | true | — |
+| confirmPending | cliSubcommand | false | false | — |
+| preflight | cliSubcommand | false | true | — |
+| scan | cliSubcommand | false | false | — |
+| report | cliSubcommand | false | false | — |
+| map | cliSubcommand | false | false | — |
+| experiment | cliSubcommand | false | false | — |
+| compile | cliSubcommand | false | false | — |
+| doctor | cliSubcommand | false | false | — |
+| workspaces | cliSubcommand | false | true | — |
 
 ## Surfaces
 

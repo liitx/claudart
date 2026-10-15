@@ -33,12 +33,14 @@ class CliSession {
     return (code: r.exitCode, out: '${r.stdout}${r.stderr}');
   }
 
-  /// Creates a git project, then `init`, `link --no-sensitive` and `setup`.
-  static Future<CliSession> create({String? makefile}) async {
-    final tmp = Directory.systemTemp.createTempSync('cli_session_');
-    addTearDown(() => tmp.deleteSync(recursive: true));
-    final proj = Directory(p.join(tmp.path, 'proj'))..createSync();
-    File(p.join(proj.path, 'pubspec.yaml')).writeAsStringSync('name: proj\n');
+  /// Makes a fresh git project called [dirName] under [tmp] (one commit).
+  static Future<Directory> _gitProject(
+    Directory tmp,
+    String dirName, {
+    String? makefile,
+  }) async {
+    final proj = Directory(p.join(tmp.path, dirName))..createSync();
+    File(p.join(proj.path, 'pubspec.yaml')).writeAsStringSync('name: $dirName\n');
     Directory(p.join(proj.path, 'lib')).createSync();
     File(p.join(proj.path, 'lib', 'a.dart')).writeAsStringSync('int a() => 1;\n');
     if (makefile != null) File(p.join(proj.path, 'Makefile')).writeAsStringSync(makefile);
@@ -61,11 +63,29 @@ class CliSession {
       );
       expect(r.exitCode, 0, reason: '${r.stderr}');
     }
+    return proj;
+  }
+
+  /// Creates a git project, then `init`, `link --no-sensitive` and `setup`.
+  static Future<CliSession> create({String? makefile}) async {
+    final tmp = Directory.systemTemp.createTempSync('cli_session_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final proj = await _gitProject(tmp, 'proj', makefile: makefile);
     final s = CliSession._(proj, Directory(p.join(tmp.path, 'ws')));
     expect((await s.run(['init'], stdin: 'y\n')).code, 0);
     expect((await s.run(['link', 'proj', '--no-sensitive'])).code, 0);
     final setup = await s.run(['setup'], stdin: 'a bug\nexpected\nlib/a.dart\na\ny\n');
     expect(setup.code, 0, reason: setup.out);
     return s;
+  }
+
+  /// A second linked project in the SAME workspace root (same registry): a
+  /// fresh git repo [name], linked but with no session started.
+  Future<CliSession> addProject(String name) async {
+    final tmp = ws.parent;
+    final other = CliSession._(await _gitProject(tmp, name), ws);
+    final link = await other.run(['link', name, '--no-sensitive']);
+    expect(link.code, 0, reason: link.out);
+    return other;
   }
 }

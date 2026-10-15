@@ -48,7 +48,8 @@ enum ClaudartCommand {
   map,
   experiment,
   compile,
-  doctor;
+  doctor,
+  workspaces;
 
   /// The entry points that start this command. Every command is a subcommand;
   /// the launcher menu and the chat shell reach only a few. Checked against
@@ -77,7 +78,8 @@ enum ClaudartCommand {
         map ||
         experiment ||
         compile ||
-        doctor =>
+        doctor ||
+        workspaces =>
           {CommandEntry.cliSubcommand},
       };
 
@@ -105,7 +107,8 @@ enum ClaudartCommand {
         map ||
         experiment ||
         compile ||
-        doctor =>
+        doctor ||
+        workspaces =>
           false,
       };
 
@@ -136,8 +139,43 @@ enum ClaudartCommand {
         map ||
         experiment ||
         compile ||
-        doctor =>
+        doctor ||
+        workspaces =>
           const {},
+      };
+
+  /// Whether `--project <name>` can choose which registered project the command
+  /// acts on: the commands that work on an existing project's session or
+  /// workspace. Checked against each command's source (it must take a project
+  /// override) by claudart_command_test.dart.
+  bool get supportsProjectSelector => switch (this) {
+        setup ||
+        status ||
+        suggest ||
+        debug ||
+        flow ||
+        save ||
+        rotate ||
+        teardown ||
+        kill ||
+        resume ||
+        archives ||
+        preflight ||
+        workspaces =>
+          true,
+        chat ||
+        add ||
+        init ||
+        link ||
+        unlink ||
+        confirmPending ||
+        scan ||
+        report ||
+        map ||
+        experiment ||
+        compile ||
+        doctor =>
+          false,
       };
 
   /// Wire-format name as typed on the command line.
@@ -166,6 +204,7 @@ enum ClaudartCommand {
         experiment     => 'experiment',
         compile        => 'compile',
         doctor         => 'doctor',
+        workspaces     => 'workspaces',
       };
 
   /// Resolves a [ClaudartCommand] from the first CLI argument. Returns null
@@ -196,6 +235,7 @@ enum ClaudartCommand {
         'experiment'     => experiment,
         'compile'        => compile,
         'doctor'         => doctor,
+        'workspaces'     => workspaces,
         _                => null,
       };
 }

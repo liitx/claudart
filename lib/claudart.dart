@@ -41,6 +41,17 @@ export 'pipeline/event_response_map.dart';
 export 'pipeline/step_route.dart';
 export 'pipeline/usage.dart';
 export 'pipeline/xml_tags.dart';
+// Linked-workspace awareness: a consumer (zedup) lists the workspaces and
+// resolves a `--project` name through these, not by parsing registry.json.
+export 'commands/project_selector.dart'
+    show
+        ProjectNotFound,
+        ProjectSelected,
+        ProjectSelection,
+        NoProjectSelected,
+        selectProject;
+export 'commands/workspaces.dart'
+    show WorkspaceSummary, summarizeWorkspaces;
 export 'session/archive_entry.dart';
 export 'session/session_state.dart';
 export 'session/pending_confirmation.dart';

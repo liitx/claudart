@@ -141,4 +141,43 @@ void main() {
       });
     }
   });
+
+  group('supportsProjectSelector', () {
+    // The commands that act on an existing registered project's session or
+    // workspace, so `--project <name>` can choose which. Independent literal.
+    const selectable = {
+      ClaudartCommand.setup,
+      ClaudartCommand.status,
+      ClaudartCommand.suggest,
+      ClaudartCommand.debug,
+      ClaudartCommand.flow,
+      ClaudartCommand.save,
+      ClaudartCommand.rotate,
+      ClaudartCommand.teardown,
+      ClaudartCommand.kill,
+      ClaudartCommand.resume,
+      ClaudartCommand.archives,
+      ClaudartCommand.preflight,
+      ClaudartCommand.workspaces,
+    };
+
+    for (final command in ClaudartCommand.values) {
+      final expected = selectable.contains(command);
+      test('${command.name}: supportsProjectSelector is $expected', () {
+        expect(command.supportsProjectSelector, expected);
+      });
+
+      // Drift: a selectable command must actually take a project override.
+      test('${command.name}: a selectable command takes projectRootOverride',
+          () {
+        if (!command.supportsProjectSelector) return;
+        final path = _sourceFor(command);
+        expect(path, isNotNull);
+        expect(
+          File(path!).readAsStringSync().contains('projectRootOverride'),
+          isTrue,
+        );
+      });
+    }
+  });
 }

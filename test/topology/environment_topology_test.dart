@@ -59,13 +59,15 @@ String renderEnvironmentTopology(Map<String, String> sources) {
     '',
     '## Commands',
     '',
-    'Where each command can be started, whether it takes `--headless`, and '
-        'which handoff events it passes. Declared on `ClaudartCommand` and '
-        'checked against the sources by `claudart_command_test.dart`.',
+    'Where each command can be started, whether it takes `--headless`, whether '
+        '`--project <name>` can choose the workspace it acts on, and which '
+        'handoff events it passes. Declared on `ClaudartCommand` and checked '
+        'against the sources by `claudart_command_test.dart`.',
     '',
     renderTopology<ClaudartCommand>(ClaudartCommand.values, {
       'entry points': (c) => _list(c.reachedFrom.map((e) => e.name)),
       'headless': (c) => c.supportsHeadless,
+      '--project': (c) => c.supportsProjectSelector,
       'handoff events': (c) => _list(c.handoffEvents.map((e) => e.name)),
     }),
     '',
