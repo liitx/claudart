@@ -481,6 +481,8 @@ machine); `make topology` rewrites them and a test fails when they go stale.
 | Run mode | `RunMode` + `ClaudartCommand.supportsHeadless` | `interactive`, `headless` (`teardown`, `rotate`, `kill`) | the same test scans each command's source for a `RunMode` parameter |
 | Render surface | `ClaudartSurface` | `cli`, `tui` (zedup) | `make consumer-check` (below) |
 | Handoff moves | `ClaudartCommand.handoffEvents` | the `HandoffEvent` each command passes | the same test scans `lib/` for each event |
+| Workspace awareness | `WorkspaceSummary` + `claudart workspaces [--json]` | every linked workspace: status, link state, lock, current | `workspaces_test.dart`, `workspaces_cli_test.dart` (real binary) |
+| Workspace targeting | `--project <name>` + `ClaudartCommand.supportsProjectSelector` + `selectProject` | the 13 commands that act on a registered project's session | `project_selector_test.dart`, `workspaces_cli_test.dart`; a selectable command must take a project override |
 | Link state | `WorkspaceLinkState` + `linkStateOf` | `unlinked`, `symlinked`, `realDirectory` | `workspace_link_state_test.dart`; `launch` and `kill` read it |
 | dartrix | the project's pubspec (`detectsDartrixDependency`) | uses, does not use | the lifecycle matrix (below) |
 | Consumer | `SessionState.effectiveStatus` | what a reader shows for a handoff | the lifecycle matrix and `make consumer-check` |
@@ -555,6 +557,50 @@ Direction, in dependency order: (1) make workspace.json's selection the input to
 An earlier draft here proposed a generated per-environment registry; PLAN.md Phase 15 supersedes it with measurements
 (a facade filters only top-level names, enum variants leak through it, and a dead component costs about 0.7 ms at startup),
 so the scoping is done by filtered rendering of the user-facing surfaces, not by per-environment API facades.
+
+### 9.7 Workspace scoping (verified)
+
+A session belongs to one workspace, and one claudart installation serves many. Two questions are separate: is each
+session scoped to its own workspace, and can an agent learn about and reach the others.
+
+**What scopes a session today.** Each project's `.claude` is linked to its own workspace's `.claude/commands`, and every
+generated slash-command file is named `<flow>-<project>.md`. A flow finds its workspace in one of two ways:
+
+| Flow | How it finds its workspace | Its claudart CLI calls |
+|---|---|---|
+| suggest, debug, save, teardown | the workspace path is baked into the file | now pass `--project <name>` |
+| setup, flow | at run time: `claudart status` for the current directory | n/a |
+
+**Proved, not assumed** (`test/conformance/workspace_scope_test.dart`, two linked projects in one registry):
+- each workspace's generated commands name only their own workspace path and never the other's;
+- every command in every lifecycle step, in both directions, leaves the other workspace's files and its registry entry
+  byte-identical (injecting a registry bug that touches every entry fails 4 cases, naming the step);
+- a command run from a directory that is not a linked project exits 1 and writes nothing.
+
+**Gaps found while verifying, and what closed them:**
+- Inside the four baked-path flows the file reads used the baked workspace while the CLI calls used the current
+  directory, so an agent whose directory had moved would read one workspace and checkpoint another. Those flows now pass
+  `--project <name>`, so both resolve to the same workspace.
+- No agent-visible way to learn that other workspaces exist. `claudart workspaces [--json]` lists them (status via
+  `effectiveStatus`, link state, lock, which is current), and every command template now carries a scope note
+  (`workspaceScopeNote`) saying how to list them, never to edit another handoff by hand, and to use `--project`.
+- `--project` first lost live-branch detection for the selected project (a project override skipped git detection, so
+  `claudart --project other setup` prompted for the branch and swallowed the first answer). Found by running the real
+  binary; `detectGitContext` now takes a working directory and 8 call sites use it.
+- The central error handler logged to the current directory's workspace even under `--project`; it now logs to the
+  selected one (a hand-mutation of that line is caught).
+
+**Logged, so the behaviour can be checked from the files:** `--project` appends
+`{command, outcome: targeted-by-project}` to the *targeted* workspace's `logs/interactions.jsonl`; `claudart workspaces`
+appends `{command: workspaces, outcome: listed N workspaces}` to the *asking* workspace's. An unknown name writes nothing
+(no workspace to write to). Each is asserted against the real binary, including that no other workspace's log changes.
+
+**Open:**
+- An agent can start a session in another workspace only partly. `claudart --project <name> setup` works with its
+  answers on stdin (tested), and `rotate`, `teardown` and `kill` take `--headless`; the model-driven `suggest` and `debug`
+  are best run in that workspace's own agent session, which `claudart workspaces` points to.
+- Existing workspaces keep their old command files until `claudart link` is re-run (`doctor` reports them stale).
+- zedup should call `summarizeWorkspaces` and `selectProject` (now exported) instead of parsing `registry.json` itself.
 
 ### 9.6 Data layer and model metadata (see PLAN.md, Phase 14)
 

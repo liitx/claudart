@@ -150,3 +150,18 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | zedup: derive commands from ZedCommand, delete the YAML commands and the nonexistent `package:<tool>/manifest.dart` emission; do not commit `user_config.g.dart` | open (zedup branch) |
 | Delete `DependencyConfigCodegen` / `dependency_config.g.dart` / `ClaudartArtifact.dependencyConfig` unless something reads it | open |
 | Proof checks still missing: a drift test per zedup generated file; one shared `GeneratedFileWriter`; every generated symbol has a reader | open |
+
+## Resolution log, workspace scoping
+
+| Item | Status |
+|---|---|
+| Verified (two-workspace conformance): commands name only their own workspace; every lifecycle step leaves the other workspace and its registry entry byte-identical; an unregistered cwd changes nothing | done |
+| Gap closed: baked-path flows mixed a baked workspace with cwd-resolved CLI calls; they now pass `--project <name>` | done |
+| `claudart workspaces [--json]`, `WorkspaceSummary`, scope note in every command template | done |
+| `--project <name>` selector (13 commands), `selectProject`, exported for zedup; real-binary tests incl. a destructive command | done |
+| Found by the real binary: a project override skipped git detection (branch prompt, swallowed answer); `detectGitContext` takes a working directory, 8 sites fixed | done |
+| Central error log now follows the selected project | done |
+| Logs: `--project` writes targeted-by-project to the target workspace, `workspaces` writes listed N to the asking one (interactions.jsonl) | done |
+| OPEN: re-run `claudart link` in existing workspaces to regenerate command files (doctor flags them stale) | open |
+| OPEN (zedup): use `summarizeWorkspaces` / `selectProject` instead of parsing registry.json | open |
+| OPEN: model-driven suggest/debug for another workspace are best run in that workspace's own session | by design |
