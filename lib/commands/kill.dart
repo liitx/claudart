@@ -61,7 +61,7 @@ Future<void> runKill({
   print(render.header('CLAUDART SESSION KILL'));
 
   // 1 — Detect project root.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   if (projectRoot == null) {
     print('\n✗ Not inside a git repository. Cannot detect project.\n');

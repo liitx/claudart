@@ -47,7 +47,7 @@ Future<void> runSetup({
   print(render.header('CLAUDART SESSION SETUP'));
 
   // Resolve project root.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
 
   if (projectRoot == null) {

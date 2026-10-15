@@ -18,7 +18,7 @@ Future<void> runStatus({
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
 
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   final currentBranch = gitCtx?.branch;
 

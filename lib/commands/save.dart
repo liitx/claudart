@@ -32,7 +32,7 @@ Future<SkillsUpdateResult> runSave({
   print(render.header('CLAUDART SAVE'));
 
   // 1 — Registry lookup.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   if (projectRoot == null) {
     print('\n✗ Not inside a git repository. Cannot detect project.\n');

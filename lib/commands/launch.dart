@@ -34,7 +34,7 @@ Future<void> runLauncher({
   // ── Phase 1: Registry load ─────────────────────────────────────────────────
 
   final registry = Registry.load(io: fileIO);
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final currentRoot = projectRootOverride ?? gitCtx?.root;
   final currentBranch = gitCtx?.branch;
 

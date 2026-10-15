@@ -72,7 +72,7 @@ Future<RotateResult>  runRotate({
   print(render.header('CLAUDART ROTATE'));
 
   // 1 — Registry lookup.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   if (projectRoot == null) {
     print('✗ Not inside a git repository. Cannot detect project.');

@@ -48,7 +48,7 @@ Future<void> runTeardown({
     print('  ${ansi.dim}headless — every decision below resolves itself; verify the summary at the end${ansi.reset}\n');
   }
 
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
 
   if (projectRoot == null) {
