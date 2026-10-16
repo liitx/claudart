@@ -19,6 +19,8 @@ export 'md_io.dart'
         // ignore: deprecated_member_use_from_same_package
         updateStatus,
         withHandoffStatus;
+export 'commands/claudart_command.dart' show ClaudartCommand, CommandEntry;
+export 'logging/logger.dart' show SessionLogger;
 export 'session/handoff_event.dart' show HandoffEvent;
 export 'session/handoff_transition.dart' show HandoffTransition;
 export 'pipeline/agent_model.dart';
