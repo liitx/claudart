@@ -144,6 +144,14 @@ enum ClaudartCommand {
           const {},
       };
 
+  /// Whether the command runs model steps and records, per step, which model
+  /// ran (`logs/models.jsonl`). Checked against each command's source (it must
+  /// build its executor with the recording sink) by claudart_command_test.dart.
+  bool get recordsStepModels => switch (this) {
+        suggest || debug || flow => true,
+        _ => false,
+      };
+
   /// `init --project <name>` names a NEW project knowledge file; the global
   /// selector (which names an already-linked workspace) must leave it alone.
   bool get ownsProjectOption => this == init;

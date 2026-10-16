@@ -5,6 +5,8 @@ import '../session/handoff_event.dart';
 import '../session/handoff_transition.dart';
 import '../session/session_state.dart' show HandoffStatus;
 import '../paths.dart';
+import '../pipeline/model_observation.dart';
+import '../pipeline/pipeline_event.dart' show AgentCompleted;
 import '../sensitivity/token_map.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
@@ -13,6 +15,7 @@ const int _maxInteractions = 500;
 const int _maxErrors = 200;
 const int _maxTransitions = 500;
 const int _maxPerformance = 50;
+const int _maxModelRecords = 500;
 
 /// Appends structured log entries to workspace log files.
 class SessionLogger {
@@ -34,6 +37,7 @@ class SessionLogger {
   String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
   String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
   String get _transitionsPath => p.join(_logsDir, 'transitions.jsonl');
+  String get _modelsPath => p.join(_logsDir, 'models.jsonl');
   String get _performancePath => p.join(_logsDir, 'performance.md');
 
   void logInteraction({
@@ -112,6 +116,42 @@ class SessionLogger {
       },
       _maxTransitions,
     );
+  }
+
+  /// One line per model a step ran on: the intended model, what the stream
+  /// reported, and how they differ. Read from the completion event, so it
+  /// costs no model call; nothing is written when the stream named no model.
+  void logStepModels({
+    required String command,
+    required AgentCompleted event,
+  }) {
+    final intended = event.intendedModel;
+    if (intended == null) return;
+    for (final observation in event.models) {
+      final reconciliation =
+          reconcileModel(intended: intended, observation: observation);
+      _appendJsonl(
+        _modelsPath,
+        {
+          'ts': DateTime.now().toUtc().toIso8601String(),
+          'command': command,
+          ...reconciliation.toRecordJson(stepId: event.stepId),
+        },
+        _maxModelRecords,
+      );
+    }
+  }
+
+  /// The newest record for each step, oldest step first: what the session's
+  /// steps last ran on.
+  List<Map<String, dynamic>> readStepModelRecords() {
+    final latest = <Object?, Map<String, dynamic>>{};
+    for (final record in _readJsonlEntries(_modelsPath)) {
+      final stepId = record[ModelRecordField.stepId.name];
+      latest.remove(stepId);
+      latest[stepId] = record;
+    }
+    return latest.values.toList();
   }
 
   void logError({

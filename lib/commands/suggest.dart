@@ -60,6 +60,10 @@ Future<void> runSuggest({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
+        onStepCompleted: (event) => SessionLogger(
+          io: fileIO,
+          workspacePath: workspace,
+        ).logStepModels(command: ClaudartCommand.suggest.name, event: event),
       );
   final handoffFile  = handoffPathFor(workspace);
 

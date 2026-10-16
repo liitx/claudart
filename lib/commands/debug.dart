@@ -55,6 +55,10 @@ Future<void> runDebug({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
+        onStepCompleted: (event) => SessionLogger(
+          io: fileIO,
+          workspacePath: workspace,
+        ).logStepModels(command: ClaudartCommand.debug.name, event: event),
       );
   final handoffFile = handoffPathFor(workspace);
 

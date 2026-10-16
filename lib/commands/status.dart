@@ -1,6 +1,8 @@
 import 'dart:io';
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import '../pipeline/model_observation.dart' show describeModelRecord;
 import '../paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart';
@@ -101,6 +103,15 @@ Future<void> runStatus({
   print('');
   print('Handoff  : $handoffFile');
   print('Skills   : ${skillsPathFor(workspace)}');
+
+  final modelRecords =
+      SessionLogger(io: fileIO, workspacePath: workspace).readStepModelRecords();
+  if (modelRecords.isNotEmpty) {
+    print('\nModels (newest per step):');
+    for (final record in modelRecords) {
+      print('  ${describeModelRecord(record)}');
+    }
+  }
 
   print('\nNext step:');
   switch (shown) {

@@ -195,4 +195,29 @@ void main() {
       });
     }
   });
+
+  group('recordsStepModels', () {
+    const recording = {
+      ClaudartCommand.suggest,
+      ClaudartCommand.debug,
+      ClaudartCommand.flow,
+    };
+
+    for (final command in ClaudartCommand.values) {
+      final expected = recording.contains(command);
+      test('${command.name}: recordsStepModels is $expected', () {
+        expect(command.recordsStepModels, expected);
+      });
+
+      // Drift: the declaration must match what the source does.
+      test('${command.name}: source records step models only if declared', () {
+        final path = _sourceFor(command);
+        if (path == null) return;
+        expect(
+          File(path).readAsStringSync().contains('logStepModels'),
+          command.recordsStepModels,
+        );
+      });
+    }
+  });
 }

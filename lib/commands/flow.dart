@@ -7,6 +7,8 @@
 // Differs from suggest: the agent builds the handoff, not the user.
 // Experimental variant — treat as a preview feature.
 
+import 'claudart_command.dart';
+import '../logging/logger.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -70,6 +72,10 @@ Future<void> runFlow({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
+        onStepCompleted: (event) => SessionLogger(
+          io: fileIO,
+          workspacePath: workspace,
+        ).logStepModels(command: ClaudartCommand.flow.name, event: event),
       );
 
   // ── Check for saved checkpoint ─────────────────────────────────────────────

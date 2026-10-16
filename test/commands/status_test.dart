@@ -254,6 +254,73 @@ _Nothing yet.
     });
   });
 
+  group('status — models', () {
+    Future<String> statusText(MemoryFileIO io) async {
+      final output = <String>[];
+      await runZoned(
+        () => runStatus(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      return output.join('\n');
+    }
+
+    MemoryFileIO ioWithModels(List<String> records) {
+      final io = MemoryFileIO();
+      final workspace = workspaceFor(_projectName);
+      Registry.empty()
+          .add(RegistryEntry(
+            name: _projectName,
+            projectRoot: _projectRoot,
+            workspacePath: workspace,
+            createdAt: '2026-03-17',
+            lastSession: '2026-03-17',
+          ))
+          .save(io: io);
+      io.write(
+        handoffPathFor(workspace),
+        '# Agent Handoff\n\n## Status\n\nsuggest-investigating\n\n---\n\n'
+        '## Bug\n\nA bug.\n',
+      );
+      if (records.isNotEmpty) {
+        io.write(
+          '${logsDirFor(workspace)}/models.jsonl',
+          '${records.join('\n')}\n',
+        );
+      }
+      return io;
+    }
+
+    String record(String step, String id, {String drift = '[]'}) =>
+        '{"stepId":"$step","intended":"haiku","resolved":"haiku",'
+        '"drift":$drift,"contextUsedFraction":0.25,"outputCapReached":false,'
+        '"observation":{"observedModelId":"$id"}}';
+
+    test('shows the newest record per step, with intended, observed and drift',
+        () async {
+      final out = await statusText(ioWithModels([
+        record('reader', 'claude-old'),
+        record('reasoner', 'claude-b', drift: '["maxOutputTokens"]'),
+        record('reader', 'claude-new'),
+      ]));
+      expect(out, contains('Models (newest per step):'));
+      expect(out, contains('reader  haiku -> claude-new  context 25%  drift: none'));
+      expect(out, contains('reasoner  haiku -> claude-b  context 25%  '
+          'drift: maxOutputTokens'));
+      expect(out, isNot(contains('claude-old')));
+    });
+
+    test('shows no Models section when nothing was recorded', () async {
+      final out = await statusText(ioWithModels(const []));
+      expect(out, isNot(contains('Models')));
+    });
+  });
+
   group('status — relevant past patterns', () {
     Future<List<String>> statusOutput(MemoryFileIO io) async {
       final output = <String>[];
