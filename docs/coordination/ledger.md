@@ -196,3 +196,14 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | Stale generated command templates | claudart | doctor FAIL | fixed: `claudart link --no-sensitive`, doctor all OK |
 | "Debug mode" for all workspaces | all | `--debug` / CLAUDART_DEBUG=1 trace | claudart 2 (env in the generated settings) |
 | Coverage floor 74 vs measured 85.8 | claudart | check-coverage | claudart 3 |
+
+## Resolution log, zedup consumes the typed handoff (2026-10-16)
+
+| Item | Status |
+|---|---|
+| claudart PR #91 merged by the owner (ruleset `Protect main` has an admin bypass; no ruleset change was made) | done |
+| zedup reader on effectiveStatus; both raw writers on applyHandoffEvent; consumer-check 16/16, 0 writers | done on zedup branch feat/consume-typed-handoff (local) |
+| Redundant claudart-owned AgentModel test and fixture removed from zedup | done on that branch |
+| `mutation_test` is claudart's wrapper of a third-party package; dartrix has no mutation API (folding it in is undecided); zedup borrows claudart's rules file | open: owner decision |
+| Barrel exports ClaudartCommand, CommandEntry, SessionLogger so consumers need no path imports | done in this PR; zedup to switch to the barrel after merge |
+| Ownership scan: ErrorType, FailureType, FaultClass, FaultSeverity declared in claudart and zedup | open: zedup step 5 |

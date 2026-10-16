@@ -37,3 +37,16 @@ modified .DS_Store are noise to remove. 2122 tests pass; analyze reports 10.
    also writes lib/generated/dependency_config.g.dart into the project; review
    that diff before committing.
 7. Remove tool/_tmp_headless_suggest.dart and the .DS_Store change.
+
+Update (2026-10-16): claudart PR #91 merged, so zedup is unblocked. Built on
+branch feat/consume-typed-handoff (zedup, local, based on origin/main; not yet
+pushed): claudart bumped; steps 2 (reader reads effectiveStatus) and 3 (both
+coordinators write through applyHandoffEvent and log each move) are done, with
+the first tests those write paths ever had; the redundant claudart-owned
+AgentModel test and fixture are deleted (step 5, part). `make consumer-check`
+against that branch: 16 of 16 steps agree, 0 raw writers. Real `mutation_test`
+(claudart's rules file) on the changed functions: 0 undetected. Still open:
+step 4 (summarizeWorkspaces), the rest of step 5 (AgentCompleted.models in the
+pane, the duplicate error taxonomy), step 6 (link). The coordinators import
+ClaudartCommand and SessionLogger by path because the barrel lacked them; the
+claudart PR exporting both lets zedup switch to the barrel.
