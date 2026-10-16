@@ -179,3 +179,20 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | OPEN (zedup): read `models` from `AgentCompleted` in its own workflow pane instead of the intended model only | open |
 | OPEN: only haiku was captured; sonnet/opus/fable observations and Bedrock id mapping not yet seen | open |
 | Pre-existing mutation survivors, not from this work: `logger.dart` 20 (interactions/errors/performance code, lines 62-286), `status.dart` 27 (branch warning, next-step prints, `_truncate`); the new code in both is fully killed | open: file as an issue |
+
+## Gap analysis across claudart, zedup, dartrix (2026-10-16)
+
+Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
+
+| Gap | Where | Evidence | Fix (plan step) |
+|---|---|---|---|
+| claudart branch not on main, so zedup cannot use the typed API | claudart | zedup pins claudart main (resolved 9e70467) | claudart 1 (merge) |
+| zedup shows a blank handoff as a live session | zedup | consumer-check: 4 DISAGREE of 16 | zedup 2 |
+| 2 raw status writers bypass the state machine | zedup | debug_coordinator.dart:191, suggest_coordinator.dart:187 | zedup 3 |
+| zedup parses registry.json itself | zedup | PLAN Phase 14 | zedup 4 |
+| zedup and dartrix CLAUDE.md carry no claudart workflow, knowledge base or PARADIGMS pointer; no hooks | zedup, dartrix | grep: 0 markers | zedup 6, dartrix 4, claudart 2 |
+| No mechanism makes Claude Code route implementation through claudart | all | only claudart has a PostToolUse reminder | claudart 2 (generated settings artifact, posture consider/enforce) |
+| dartrix v0.6.0 PARADIGMS unmerged; claudart reads v0.5.0 | dartrix | 5c23dfe on docs/four-roles-testing-paradigm | dartrix 1 |
+| Stale generated command templates | claudart | doctor FAIL | fixed: `claudart link --no-sensitive`, doctor all OK |
+| "Debug mode" for all workspaces | all | `--debug` / CLAUDART_DEBUG=1 trace | claudart 2 (env in the generated settings) |
+| Coverage floor 74 vs measured 85.8 | claudart | check-coverage | claudart 3 |
