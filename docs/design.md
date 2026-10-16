@@ -628,8 +628,17 @@ drift; the first verified instances are the handoff status (three readers), `sen
 
 Model information has three kinds: declared (the `AgentModel` registry, keyed by alias), resolved (what the machine maps
 an alias to: provider env, `~/.claude/settings.json`) and observed (what the `claude` stream says actually ran). Only the
-observed value is 1:1, and it belongs to a step, not a session. Today nothing reads it; the plan to add it, and the
-repository layer that keeps all of this behind claudart's API, is PLAN.md Phase 14.
+observed value is 1:1, and it belongs to a step, not a session.
+
+**Observed model state (built).** The `claude` stream's final `result` line already carries `modelUsage[<id>]` (id,
+`contextWindow`, `maxOutputTokens`, per-model tokens and cost; captured from a real run), so reading it adds no model
+call and no prompt tokens. `parseClaudeResultLine` puts it on `StepResult.models`; the completion event carries it with
+the intended model; `reconcileModel` compares it with the declared `AgentModel` (`slug` via `fromSlug`, `contextWindow`,
+`maxOutputTokens`); `SessionLogger.logStepModels` appends one line per step and model to `logs/models.jsonl`; `claudart
+status` shows the newest per step. The declared fields are kept because each is read here. The proof is generated:
+`docs/topology/model_metadata.md`, with tests that fail on a declared fact nothing reads, on a model id spelled outside
+`agent_model.dart`, and on a run that adds a call or changes a prompt. The repository layer over the rest of the state
+is PLAN.md Phase 14.
 
 ## 10. Source of truth and generation (see PLAN.md, Phase 15)
 

@@ -941,6 +941,21 @@ Tests (no redundancy): the owner pins each store (literal tables, mutation-teste
 Restart criteria / open: confirm with a captured stream before step 4; decide whether
 `slug` is dropped or kept as a fallback label.
 
+Update (2026-10-16): owner decision, supersedes "demote or drop" above: `slug`,
+`contextWindow` and `maxOutputTokens` are KEPT. They are session context the user wants
+for analytics and visibility, and each now has a reader: the observed id is resolved
+through `AgentModel.fromSlug`, and `reconcileModel` compares the observed window and
+output cap with the declared ones. Step 4 is done. A real `claude -p --output-format
+stream-json --verbose` haiku run showed the final `result` line already carries
+`modelUsage[<observed id>]` (`contextWindow`, `maxOutputTokens`, `canonicalModel`,
+`provider`, per-model tokens and cost), so observation costs no extra call and no prompt
+tokens. That run also showed real drift: observed haiku `maxOutputTokens` is 32000,
+declared 8192. Built: `ModelObservation`, `reconcileModel`, `StepResult.models`,
+`AgentCompleted.intendedModel/models`, `SessionLogger.logStepModels` ->
+`<workspace>/logs/models.jsonl`, `claudart status` shows the newest record per step, and
+`docs/topology/model_metadata.md` is the generated proof (a declared fact with no reader,
+or a model id spelled outside `agent_model.dart`, fails a test).
+
 ### Phase 15 — Enums as the source of truth; environment-scoped surfaces by generated rendering
 Opened 2026-10-15, not started. Question (owner): how should claudart, zedup and dartrix each
 set a source of truth so Dart code generation dynamically exposes an API layer scoped to the

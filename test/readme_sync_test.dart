@@ -144,6 +144,7 @@ void main() {
       'interactions.jsonl',
       'transitions.jsonl',
       'errors.jsonl',
+      'models.jsonl',
       'performance.md',
     ];
 

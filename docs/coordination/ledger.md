@@ -165,3 +165,17 @@ dartrix: `Dartrix`->`CoverageMatrix`, `getSelector`->`selectorFor`, `aggregateSt
 | OPEN: re-run `claudart link` in existing workspaces to regenerate command files (doctor flags them stale) | open |
 | OPEN (zedup): use `summarizeWorkspaces` / `selectProject` instead of parsing registry.json | open |
 | OPEN: model-driven suggest/debug for another workspace are best run in that workspace's own session | by design |
+
+## Resolution log, model metadata as observed state
+
+| Item | Status |
+|---|---|
+| Owner decision: keep `slug`, `contextWindow`, `maxOutputTokens`; they are session context, each now has a reader | done |
+| Real `stream-json` run captured: the result line's `modelUsage` names the model, window, output cap, provider, per-model tokens and cost; fixture `test/fixtures/claude_result_line_haiku.json` | done |
+| Finding: observed haiku `maxOutputTokens` 32000 vs declared 8192 (drift is data; declared value not changed) | open: decide whether declared tracks the CLI's reported cap |
+| `ModelObservation`, `reconcileModel`, `StepResult.models`, `AgentCompleted.intendedModel/models` | done |
+| `logs/models.jsonl` via `logStepModels` (suggest, debug, flow, drift-tested by `ClaudartCommand.recordsStepModels`); `claudart status` shows the newest per step | done |
+| Generated proof `docs/topology/model_metadata.md`; token conservation test (no extra call, no prompt change) | done |
+| OPEN (zedup): read `models` from `AgentCompleted` in its own workflow pane instead of the intended model only | open |
+| OPEN: only haiku was captured; sonnet/opus/fable observations and Bedrock id mapping not yet seen | open |
+| Pre-existing mutation survivors, not from this work: `logger.dart` 20 (interactions/errors/performance code, lines 62-286), `status.dart` 27 (branch warning, next-step prints, `_truncate`); the new code in both is fully killed | open: file as an issue |
