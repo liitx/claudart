@@ -18,6 +18,7 @@ enum FailureType {
   scanThresholdExceeded,
   archiveIndexCorrupt,
   sessionCloseFailed,
+  invalidHandoffTransition,
   workspaceLocked,
   providerNotConfigured,
   stepTimedOut,
@@ -29,7 +30,9 @@ enum FailureType {
   ErrorType get errorType => switch (this) {
         FailureType.scanThresholdExceeded => ErrorType.scan,
         FailureType.archiveIndexCorrupt => ErrorType.archive,
-        FailureType.sessionCloseFailed => ErrorType.session,
+        FailureType.sessionCloseFailed ||
+        FailureType.invalidHandoffTransition =>
+          ErrorType.session,
         FailureType.workspaceLocked => ErrorType.workspace,
         FailureType.providerNotConfigured ||
         FailureType.stepTimedOut ||
@@ -68,6 +71,7 @@ enum FailureType {
         FailureType.scanThresholdExceeded => 'Scan threshold exceeded',
         FailureType.archiveIndexCorrupt => 'Archive index corrupt',
         FailureType.sessionCloseFailed => 'Session close failed',
+        FailureType.invalidHandoffTransition => 'Invalid handoff transition',
         FailureType.workspaceLocked => 'Workspace locked',
         FailureType.providerNotConfigured => 'Provider not configured',
         FailureType.stepTimedOut => 'Step timed out',
@@ -87,6 +91,10 @@ enum FailureType {
         FailureType.sessionCloseFailed =>
           'Check the workspace state has been rolled back correctly, then '
               'retry the operation.',
+        FailureType.invalidHandoffTransition =>
+          'Run `claudart status` to see where the session is, then use the '
+              'command that fits that status (docs/design.md lists the moves). '
+              'If the status looks wrong, check handoff.md.',
         FailureType.workspaceLocked =>
           'Wait for the other session to finish, or confirm it has crashed '
               'before clearing the lock by hand.',

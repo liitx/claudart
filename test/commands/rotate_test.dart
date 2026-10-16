@@ -2,13 +2,17 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
+import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/templates/handoff_template.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/session/teardown_utils.dart';
 import 'package:claudart/workspace/workspace_index.dart';
+import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -495,6 +499,60 @@ void main() {
       expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
       // Live handoff NOT overwritten — still original content.
       expect(io.files[handoffFile], originalContent);
+    });
+  });
+
+  group('runRotate — transition log', () {
+    Future<RotateResult> rotate(
+      MemoryFileIO io, {
+      bool Function(String)? confirm,
+      Future<bool> Function(String)? build,
+    }) =>
+        runRotate(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _noExit,
+          confirmFn: confirm ?? _confirmYes,
+          buildFn: build ?? _buildOk,
+        );
+
+    test('seeding the next issue logs rotated into suggestInvestigating',
+        () async {
+      final io = _io();
+      await rotate(io);
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.rotate.name,
+          'from': HandoffStatus.readyForDebug.name,
+          'event': HandoffEvent.rotated.name,
+          'to': HandoffStatus.suggestInvestigating.name,
+        },
+      ]);
+    });
+
+    test('nothing pending logs rotatedEmpty into noHandoff', () async {
+      final io = _io(handoff: _handoffNoPending);
+      await rotate(io);
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.rotate.name,
+          'from': HandoffStatus.readyForDebug.name,
+          'event': HandoffEvent.rotatedEmpty.name,
+          'to': HandoffStatus.noHandoff.name,
+        },
+      ]);
+    });
+
+    test('a cancelled rotation logs nothing', () async {
+      final io = _io();
+      await rotate(io, confirm: (_) => false);
+      expect(loggedMoves(io, _workspace), isEmpty);
+    });
+
+    test('a failed build gate logs nothing', () async {
+      final io = _io();
+      await rotate(io, build: _buildFail);
+      expect(loggedMoves(io, _workspace), isEmpty);
     });
   });
 

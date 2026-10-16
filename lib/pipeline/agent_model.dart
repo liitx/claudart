@@ -71,7 +71,7 @@ enum AgentModel {
   /// Pipeline roles: reasoner (analysis), planner (change planning), debug.
   sonnet(
     alias:           'sonnet',
-    slug:            'claude-sonnet-5',
+    slug:            'claude-sonnet-5-5',
     shortName:       'sonnet-5',
     contextWindow:   200000,
     maxOutputTokens: 16000,

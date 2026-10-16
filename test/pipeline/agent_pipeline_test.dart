@@ -14,13 +14,17 @@ import 'package:test/test.dart';
 import '../matrix/claudart_matrix.dart';
 import '../matrix/pipeline_feature.dart';
 import '../matrix/pipeline_flow_type.dart';
-import 'mock_claude_runner.dart';
+import '../helpers/scripted_claude_runner.dart';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 String _fixture(String name) {
   final file = File('test/pipeline/fixtures/$name');
-  return file.existsSync() ? file.readAsStringSync() : '';
+  if (!file.existsSync()) {
+    // A missing fixture used to become '' and let tests assert on nothing.
+    throw StateError('Missing test fixture: ${file.path}');
+  }
+  return file.readAsStringSync();
 }
 
 final _readerXml   = _fixture('reader_output.xml');
@@ -46,8 +50,8 @@ void main() {
     claudartMatrix,
     PipelineFlowType.suggest.getSelector(PipelineFeature.reader),
     (sel) async {
-      final mock = MockClaudeRunner({'reader': _readerXml});
-      final exec = PipelineExecutor(runner: mock.runner);
+      final fake = ScriptedClaudeRunner({SuggestSteps.reader(1): _readerXml});
+      final exec = PipelineExecutor(runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps:        [SuggestSteps.reader(1)],
         ctx:          _baseCtx(),
@@ -56,8 +60,9 @@ void main() {
       );
 
       expect(ctx.readerOut, contains('FINDINGS'));
-      expect(mock.captured, hasLength(1));
-      expect(mock.captured.first.model, equals(AgentModel.haiku));
+      expect(fake.calls, hasLength(1));
+      expect(fake.calls.first.model, equals(AgentModel.haiku));
+      expect(fake.unusedSteps, isEmpty);
     },
   );
 
@@ -67,8 +72,8 @@ void main() {
     claudartMatrix,
     PipelineFlowType.suggest.getSelector(PipelineFeature.reasoner),
     (sel) async {
-      final mock = MockClaudeRunner({'reasoner': _reasonerXml});
-      final exec = PipelineExecutor(runner: mock.runner);
+      final fake = ScriptedClaudeRunner({SuggestSteps.reasoner: _reasonerXml});
+      final exec = PipelineExecutor(runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps:        [SuggestSteps.reasoner],
         ctx:          _baseCtx().withSlot('reader', _readerXml),
@@ -78,7 +83,7 @@ void main() {
 
       expect(ctx.reasonerOut, contains('ROOT_CAUSE'));
       expect(ctx.reasonerOut, contains('SCOPE_FILES'));
-      expect(mock.captured.first.model, equals(AgentModel.sonnet));
+      expect(fake.calls.first.model, equals(AgentModel.sonnet));
     },
   );
 
@@ -88,15 +93,15 @@ void main() {
     claudartMatrix,
     PipelineFlowType.suggest.getSelector(PipelineFeature.planner),
     (sel) async {
-      final mock = MockClaudeRunner({
-        'planner': _plannerXml,
-        // Distinguishes the applier call from the planner call — both
-        // fixtures' raw text otherwise share no step-identifying substring,
-        // so a single-entry mock would return the same text for both
-        // (masking the postProcess merge this test exercises).
-        'Apply these changes': _applierXml,
+      // Each reply is scripted for its own step, so the planner and the applier
+      // cannot be confused (the postProcess merge this test exercises depends
+      // on the applier getting the applier's text).
+      final steps = SuggestSteps.refinement(1);
+      final fake = ScriptedClaudeRunner({
+        steps[0]: _plannerXml,
+        steps[2]: _applierXml,
       });
-      final exec = PipelineExecutor(runner: mock.runner);
+      final exec = PipelineExecutor(runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps: SuggestSteps.refinement(1),
         ctx: _baseCtx()
@@ -115,7 +120,13 @@ void main() {
           reason: 'planner output should contain CHANGES tag');
       expect(ctx['applier'], contains('ROOT_CAUSE'),
           reason: 'applier output should hold the merged analysis sections');
-      expect(mock.captured.first.model, equals(AgentModel.sonnet));
+      expect(fake.calls.first.model, equals(AgentModel.sonnet));
+      expect(
+        fake.calls.map((c) => c.systemPrompt),
+        [steps[0].systemPrompt, steps[2].systemPrompt],
+        reason: 'planner first, then the applier (the lookup step is skipped)',
+      );
+      expect(fake.unusedSteps, isEmpty);
     },
   );
 
@@ -131,7 +142,6 @@ void main() {
 
       // Second planner call produces CHANGES after receiving the answer
       var plannerCallCount = 0;
-      final mock = MockClaudeRunner({});
       ClaudeRunner countingRunner = ({
         required AgentModel model,
         required String systemPrompt,
@@ -139,7 +149,6 @@ void main() {
         required String workingDir,
         StepMode mode = StepMode.project,
       }) async {
-        mock.captured.add(CallRecord(model: model, systemPrompt: systemPrompt, message: message));
         if (model == AgentModel.haiku) {
           return StepResult(text: answerXml, usage: const Usage(input: 50, output: 20, cost: 0.0005, cacheRead: 0));
         }
@@ -173,21 +182,14 @@ void main() {
     claudartMatrix,
     PipelineFlowType.suggest.getSelector(PipelineFeature.applier),
     (sel) async {
-      // Mock: planner → CHANGES; applier → updated XML
-      var step = 0;
-      ClaudeRunner twoStepRunner = ({
-        required AgentModel model,
-        required String systemPrompt,
-        required String message,
-        required String workingDir,
-        StepMode mode = StepMode.project,
-      }) async {
-        step++;
-        final text = step == 1 ? _plannerXml : _applierXml;
-        return StepResult(text: text, usage: const Usage(input: 100, output: 50, cost: 0.001, cacheRead: 0));
-      };
+      // Planner → CHANGES; applier → updated XML, each scripted for its step.
+      final steps = SuggestSteps.refinement(1);
+      final fake = ScriptedClaudeRunner({
+        steps[0]: _plannerXml,
+        steps[2]: _applierXml,
+      });
 
-      final exec = PipelineExecutor(runner: twoStepRunner);
+      final exec = PipelineExecutor(runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps: SuggestSteps.refinement(1),
         ctx: _baseCtx()
@@ -208,11 +210,11 @@ void main() {
   // ── Usage accumulation (component: tokenTracker) ───────────────────────────
 
   test('usage accumulates across multiple steps', () async {
-    final mock = MockClaudeRunner({
-      'reader':   _readerXml,
-      'reasoner': _reasonerXml,
+    final fake = ScriptedClaudeRunner({
+      SuggestSteps.reader(1): _readerXml,
+      SuggestSteps.reasoner:  _reasonerXml,
     });
-    final exec = PipelineExecutor(runner: mock.runner);
+    final exec = PipelineExecutor(runner: fake.runner);
 
     var ctx = _baseCtx();
     ctx = await exec.runFuture(steps: [SuggestSteps.reader(1)], ctx: ctx, displayStep: 1, displayTotal: 3);
@@ -234,8 +236,11 @@ void main() {
           '<INTENT>implement</INTENT>'
           '<COMPLEXITY>compound</COMPLEXITY>'
           '<MODEL>sonnet</MODEL>';
-      final mock = MockClaudeRunner({'categorize': categorizeXml});
-      final exec = PipelineExecutor(runner: mock.runner, prompter: (_) async => 'y');
+      final fake = ScriptedClaudeRunner({FlowSteps.categorize: categorizeXml});
+      final exec = PipelineExecutor(
+        runner:   fake.runner,
+        prompter: (_) async => 'y',
+      );
       final ctx  = await exec.runFuture(
         steps:        [FlowSteps.categorize],
         ctx:          _baseCtx(),
@@ -244,7 +249,7 @@ void main() {
       );
 
       expect(ctx['categorize'], contains('CATEGORY'));
-      expect(mock.captured.first.model, equals(AgentModel.haiku));
+      expect(fake.calls.first.model, equals(AgentModel.haiku));
     },
   );
 
@@ -258,20 +263,12 @@ void main() {
           '<PLAN>1. Add null check\n2. Update tests</PLAN>';
       const constructXml =
           '<HANDOFF>## Status\nready-for-debug\n## Bug/Goal\nAdd null check</HANDOFF>';
-      var callCount = 0;
-      Future<StepResult?> twoStepRunner({
-        required AgentModel model,
-        required String systemPrompt,
-        required String message,
-        required String workingDir,
-        StepMode mode = StepMode.project,
-      }) async {
-        callCount++;
-        final text = callCount == 1 ? planXml : constructXml;
-        return StepResult(text: text, usage: const Usage(input: 100, output: 50, cost: 0.001, cacheRead: 0));
-      }
+      final fake = ScriptedClaudeRunner({
+        FlowSteps.plan:      planXml,
+        FlowSteps.construct: constructXml,
+      });
       final exec = PipelineExecutor(
-        runner:           twoStepRunner,
+        runner:           fake.runner,
         prompter:         (_) async => 'y',
         approvalSelector: (_) async => 0, // approve — inject so the gate needs no TTY
       );
@@ -282,7 +279,15 @@ void main() {
         displayTotal: 3,
       );
 
-      expect(ctx['plan'] ?? ctx['construct'], isNotNull);
+      // Approved plan stored as scripted; the construct step then ran on it.
+      expect(ctx['plan'], equals(planXml));
+      expect(ctx['construct'], equals(constructXml));
+      expect(
+        fake.calls.map((c) => c.systemPrompt),
+        [FlowSteps.plan.systemPrompt, FlowSteps.construct.systemPrompt],
+        reason: 'plan runs first, then construct',
+      );
+      expect(fake.unusedSteps, isEmpty);
     },
   );
 
@@ -294,8 +299,11 @@ void main() {
     (sel) async {
       const handoffXml =
           '<HANDOFF>## Status\nready-for-debug\n## Bug/Goal\nFix null label</HANDOFF>';
-      final mock = MockClaudeRunner({'construct': handoffXml});
-      final exec = PipelineExecutor(runner: mock.runner, prompter: (_) async => '');
+      final fake = ScriptedClaudeRunner({FlowSteps.construct: handoffXml});
+      final exec = PipelineExecutor(
+        runner:   fake.runner,
+        prompter: (_) async => '',
+      );
       final ctx  = await exec.runFuture(
         steps:        [FlowSteps.construct],
         ctx:          _baseCtx().withSlot('plan', '<PLAN>1. Fix label\n</PLAN>'),
@@ -304,7 +312,7 @@ void main() {
       );
 
       expect(ctx['construct'], contains('HANDOFF'));
-      expect(mock.captured.first.model, equals(AgentModel.sonnet));
+      expect(fake.calls.first.model, equals(AgentModel.sonnet));
     },
   );
 

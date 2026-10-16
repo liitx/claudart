@@ -29,6 +29,7 @@ import 'agent_response.dart';
 import 'agent_step.dart';
 import 'claude_session.dart';
 import 'event_response_map.dart';
+import 'model_observation.dart';
 import 'pipeline_context.dart';
 import 'pipeline_event.dart';
 import 'pipeline_step_exception.dart';
@@ -71,12 +72,17 @@ class PipelineExecutor {
   /// which [runFuture] reads to decide whether to print.
   final bool verbose;
 
+  /// Called by [runFuture] for each completed step, so a caller can persist
+  /// what the step ran on. Not called by [run], which does no IO of its own.
+  final void Function(AgentCompleted event)? onStepCompleted;
+
   PipelineExecutor({
     ClaudeRunner?     runner,
     UserPrompter?     prompter,
     ApprovalSelector? approvalSelector,
     this.strict  = false,
     this.verbose = false,
+    this.onStepCompleted,
     Duration? stepTimeout = defaultStepTimeout,
   })  : _runner           = runner           ?? _runnerWithTimeout(stepTimeout),
         _prompter         = prompter         ?? _defaultPrompter,
@@ -163,6 +169,8 @@ class PipelineExecutor {
       yield AgentCompleted(
         stepId: current.id,
         usage: result.usage,
+        intendedModel: stepModel,
+        models: result.models,
         postProcessRewrote: rewrote,
         thinking: result.thinking,
         stopReason: result.stopReason,
@@ -366,6 +374,7 @@ class PipelineExecutor {
           // erasing that new line instead of the spinner's — an artifact
           // left behind in the output.
           clearSpinner();
+          onStepCompleted?.call(event);
           if (verbose && postProcessRewrote) {
             print('  ${ansi.dim}◦ postProcess fired on "$stepId" — output rewritten${ansi.reset}');
           }
@@ -572,6 +581,7 @@ StepResult parseClaudeResultLine(
     stopReason: json['stop_reason'] as String?,
     durationMs: json['duration_ms'] as int?,
     numTurns: json['num_turns'] as int?,
+    models: parseModelUsage(json['modelUsage']),
   );
 }
 

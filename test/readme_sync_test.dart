@@ -1,7 +1,11 @@
 import 'dart:io';
 import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/readme_template.dart';
 import 'package:test/test.dart';
+
+import 'topology/handoff_topology_test.dart' show renderStateDiagram;
 
 /// Verifies README.md stays 1:1 with the codebase.
 ///
@@ -129,5 +133,59 @@ void main() {
             'run `claudart link` to regenerate, or the table was hand-edited.',
       );
     });
+  });
+
+  // Code -> README: what the code declares, the README must name. The groups
+  // above hold the other direction (everything the README names exists).
+  group('Architecture sync (code to README)', () {
+    const diagramOpen = '<!-- claudart:topology:handoff-diagram -->';
+    const diagramClose = '<!-- /claudart:topology:handoff-diagram -->';
+    const logFiles = [
+      'interactions.jsonl',
+      'transitions.jsonl',
+      'errors.jsonl',
+      'models.jsonl',
+      'performance.md',
+    ];
+
+    test('the state diagram is the one HandoffStatus.after generates', () {
+      final start = readme.indexOf(diagramOpen) + diagramOpen.length;
+      final end = readme.indexOf(diagramClose);
+      expect(readme.substring(start, end).trim(), renderStateDiagram());
+    });
+
+    for (final command in ClaudartCommand.values) {
+      test('command ${command.wireName} has a row in the CLI table', () {
+        expect(readme, contains('| `${command.wireName}` |'));
+      });
+    }
+
+    for (final event in HandoffEvent.values) {
+      test('event ${event.name} is named', () {
+        expect(readme, contains('`${event.name}`'));
+      });
+    }
+
+    for (final status in HandoffStatus.values) {
+      test('status ${status.name} is named', () {
+        expect(readme, contains('`${status.name}`'));
+      });
+    }
+
+    final libDirs = Directory('lib')
+        .listSync()
+        .whereType<Directory>()
+        .map((d) => d.uri.pathSegments.where((s) => s.isNotEmpty).last);
+    for (final dir in libDirs) {
+      test('lib/$dir/ is in the directory table', () {
+        expect(readme, contains('`lib/$dir/`'));
+      });
+    }
+
+    for (final logFile in logFiles) {
+      test('log $logFile is described', () {
+        expect(readme, contains('`$logFile`'));
+      });
+    }
   });
 }

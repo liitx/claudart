@@ -20,6 +20,7 @@
 //   User sees the plan before construct runs.
 //   Declining aborts and yields PipelineCompleted with pre-construct ctx.
 
+import '../../session/session_state.dart' show HandoffStatus;
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -57,7 +58,7 @@ abstract final class FlowSteps {
       'determine if the answer can be inferred from what was provided. '
       'Output <ANSWER>...</ANSWER> if resolvable, or <UNKNOWN>...</UNKNOWN> if not.';
 
-  static const String _constructSystem =
+  static final String _constructSystem =
       'You are a handoff constructor. Given an approved plan, construct a '
       'complete handoff.md document. Output only <HANDOFF>...</HANDOFF> '
       'with these exact section headers in order. '
@@ -65,7 +66,7 @@ abstract final class FlowSteps {
       'type names listed there — do not reference any path, directory, or '
       'type not listed. If no project index is provided, describe scope '
       'generically rather than inventing specific paths or types.\n'
-      '## Status\nready-for-suggest\n\n'
+      '## Status\n${HandoffStatus.readyForSuggest.value}\n\n'
       '## Bug\n(concise bug or goal description)\n\n'
       '## Expected Behavior\n(what should happen)\n\n'
       '## Root Cause\n(key insight from the plan)\n\n'

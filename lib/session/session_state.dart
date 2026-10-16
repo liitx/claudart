@@ -1,3 +1,4 @@
+import 'handoff_event.dart';
 import 'teardown_utils.dart';
 
 /// Typed representation of the handoff status field.
@@ -41,6 +42,64 @@ enum HandoffStatus {
         unknown              => 'unknown',
       };
 
+  /// The status after [event] happens in this status, or null when
+  /// docs/design.md's delta table has no such move (the move is rejected).
+  HandoffStatus? after(HandoffEvent event) => switch ((event, this)) {
+        (HandoffEvent.setup, noHandoff) ||
+        (HandoffEvent.saveUnconfirmed, suggestInvestigating) ||
+        (HandoffEvent.suggestResumed, needsSuggest) ||
+        (HandoffEvent.rotated,
+              suggestInvestigating || readyForDebug || debugInProgress) =>
+          suggestInvestigating,
+        (HandoffEvent.saveConfirmedExploring, suggestInvestigating) =>
+          readyForSuggest,
+        (HandoffEvent.saveConfirmedReady,
+              suggestInvestigating ||
+              readyForSuggest ||
+              readyForDebug ||
+              debugInProgress ||
+              needsSuggest) =>
+          readyForDebug,
+        (HandoffEvent.saveUnconfirmed, debugInProgress) ||
+        (HandoffEvent.debugStarted, readyForDebug) =>
+          debugInProgress,
+        (HandoffEvent.debugBlocked, debugInProgress) => needsSuggest,
+        (HandoffEvent.fixApplied, readyForDebug || debugInProgress) =>
+          debugComplete,
+        (HandoffEvent.tornDown, debugComplete) ||
+        (HandoffEvent.rotatedEmpty,
+              suggestInvestigating || readyForDebug || debugInProgress) ||
+        (HandoffEvent.reminderSaved, _) ||
+        (HandoffEvent.killed, _) when isPersisted =>
+          noHandoff,
+        _ => null,
+      };
+
+  /// True when `/debug` may start without an override: the root cause is
+  /// locked (`readyForDebug`) or debug already began (`debugInProgress`).
+  bool get canStartDebug => switch (this) {
+        readyForDebug ||
+        debugInProgress => true,
+        suggestInvestigating ||
+        readyForSuggest ||
+        debugComplete ||
+        needsSuggest ||
+        noHandoff ||
+        unknown => false,
+      };
+
+  /// False for the display-only variants that are never written to disk.
+  bool get isPersisted => switch (this) {
+        noHandoff ||
+        unknown => false,
+        suggestInvestigating ||
+        readyForSuggest ||
+        readyForDebug ||
+        debugInProgress ||
+        debugComplete ||
+        needsSuggest => true,
+      };
+
   /// Display label used in TUI status badges.
   String get label => value;
 
@@ -56,17 +115,10 @@ enum HandoffStatus {
         debugComplete => false,
       };
 
-  /// True when the workflow expects `/debug` next.
-  bool get expectsDebug => switch (this) {
-        readyForDebug ||
-        debugInProgress => true,
-        suggestInvestigating ||
-        readyForSuggest ||
-        debugComplete ||
-        needsSuggest ||
-        noHandoff ||
-        unknown => false,
-      };
+  /// True when the workflow expects `/debug` next. The same set as
+  /// [canStartDebug]: one definition, kept as a named alias because zedup's
+  /// workflow gating reads it.
+  bool get expectsDebug => canStartDebug;
 }
 
 /// Read-only structured view of a handoff.md file.
@@ -96,6 +148,15 @@ class SessionState {
   /// meaningful field — i.e., the session was actually started.
   bool get hasActiveContent =>
       !_isBlank(bug) || !_isBlank(rootCause) || !_isBlank(attempted);
+
+  /// The status a consumer should show: [status] when the handoff holds a real
+  /// session, [HandoffStatus.noHandoff] when it does not. The blank handoff
+  /// that kill, teardown and an empty rotate leave behind still has a
+  /// `suggest-investigating` Status line, but it is not a session; reading
+  /// [status] alone would present it as one. Every consumer (claudart's
+  /// commands, zedup) should read this, so they cannot disagree.
+  HandoffStatus get effectiveStatus =>
+      hasActiveContent ? status : HandoffStatus.noHandoff;
 
   static bool _isBlank(String s) =>
       s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');

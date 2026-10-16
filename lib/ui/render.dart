@@ -17,6 +17,7 @@
 
 import '../pipeline/agent_response.dart';
 import '../pipeline/state_hue.dart';
+import '../session/session_state.dart' show HandoffStatus;
 import 'ansi.dart' as ansi;
 
 /// The `StateHue → ANSI` bridge — claudart's own mapping to its output
@@ -29,6 +30,21 @@ String hueCode(StateHue hue) => switch (hue) {
       StateHue.paused   => ansi.magenta,
       StateHue.error    => ansi.red,
       StateHue.success  => ansi.green,
+    };
+
+/// The ANSI colour a [HandoffStatus] is shown in on every command's status
+/// line: cyan while exploring, yellow when ready to implement, green once
+/// debug has begun, red when blocked, dim for the display-only variants.
+String statusColour(HandoffStatus s) => switch (s) {
+      HandoffStatus.suggestInvestigating ||
+      HandoffStatus.readyForSuggest =>
+        ansi.cyan,
+      HandoffStatus.readyForDebug => ansi.yellow,
+      HandoffStatus.debugInProgress ||
+      HandoffStatus.debugComplete =>
+        ansi.green,
+      HandoffStatus.needsSuggest => ansi.red,
+      HandoffStatus.unknown || HandoffStatus.noHandoff => ansi.dim,
     };
 
 /// Wraps a block in a continuous gutter rule coloured by [hue]: the header on

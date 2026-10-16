@@ -13,6 +13,7 @@
 
 **Start here**
 - [What it is](#what-it-is) — claudart vs Claude Code, in one table
+- [Architecture at a glance](#architecture-at-a-glance) — the layers, what each owns, which way dependencies run
 - [Verify it yourself](#verify-it-yourself) — every number on this page, reproducible in three commands
 
 **How one session runs**
@@ -29,12 +30,13 @@
 
 **Where you touch it**
 - [CLI surface](#cli-surface) — every command, verified against real `--help` output, plus what `claudart doctor` checks
-- [Workspace on disk](#workspace-on-disk) — the one file startup reads, and everything it points to
+- [Workspace on disk](#workspace-on-disk) — the one file startup reads, and everything it points to, including the logs
+- [Workspaces and targeting](#workspaces-and-targeting) — one session per workspace; how an agent sees and reaches the others
 - [TUI vs CLI](#tui-vs-cli) — the same typed state, rendered two ways
 - [Authentication](#authentication) — how a pipeline step stays logged in as you
 
 **Reference**
-- [Full architecture](#full-architecture) — the three-layer diagram tying it all together
+- [Full architecture](#full-architecture) — the diagram tying it all together
 - [Roadmap](#roadmap)
 - [Cross-repo](#cross-repo) — claudart's relationship to dartrix and zedup
 - [Related](#related)
@@ -56,6 +58,42 @@
 | **Runs on** | your machine only (`~/.claudart/`) | Anthropic servers, reading abstracted context |
 
 Self-hosting law, from this repo's own CLAUDE.md: claudart must be able to debug its own bugs using its own workflow. This README was rewritten by a `claudart debug` run against a handoff that `claudart suggest` wrote.
+
+---
+
+## Architecture at a glance
+
+Everything below is typed. A fact lives on one enum or one function, and the docs under `docs/topology/` are generated from those, with tests that fail when the code and a doc disagree (`make topology`, `make ownership`, `make consumer-check`).
+
+| Layer | Source of truth | What it owns |
+|---|---|---|
+| Entry point | [`ClaudartCommand`](lib/commands/claudart_command.dart) | every command and how it is reached: `reachedFrom`, `supportsHeadless`, `supportsProjectSelector`, `handoffEvents` |
+| Session state | [`HandoffStatus`](lib/session/session_state.dart) + [`HandoffEvent`](lib/session/handoff_event.dart) | which move is legal from which status (`after`), and what a reader should show (`effectiveStatus`) |
+| Workspace | [`Registry`](lib/registry.dart) + [`WorkspaceSummary`](lib/commands/workspaces.dart) | project root to workspace, link state, lock, last session |
+| Targeting | `--project <name>` + `selectProject` | which linked workspace a command acts on |
+| Engine | [`AgentFlow`](lib/pipeline/agent_flow.dart) + `PipelineExecutor` | the steps `suggest`, `debug` and `flow` share, and model routing |
+| Logs | [`SessionLogger`](lib/logging/logger.dart) | what each command did, per workspace |
+| Consumers | `lib/claudart.dart` | the public API zedup imports; zedup must show the same status claudart does |
+
+What each `lib/` directory is for:
+
+| Directory | Role |
+|---|---|
+| `lib/commands/` | one file per subcommand; the only layer that touches the terminal flow |
+| `lib/session/` | the state machine, handoff operations, workspace lock |
+| `lib/pipeline/` | the agent engine: steps, executor, model routing, flows |
+| `lib/templates/` | pure functions that render a string; no I/O |
+| `lib/workspace/` | workspace config, index and link state |
+| `lib/logging/` | per-workspace logs and the global planner log |
+| `lib/ui/` | terminal rendering |
+| `lib/errors/` | the layered error taxonomy: exception, error type, failure type |
+| `lib/providers/` | which auth backend the `claude` subprocess uses |
+| `lib/sensitivity/`, `lib/scanner/`, `lib/similarity/`, `lib/assets/` | token abstraction, scanning, retrieval, the bundled corpus |
+| `lib/codegen/`, `lib/generated/` | generated artifacts and whether they are current |
+| `lib/harness/` | the typed checks behind `claudart doctor` |
+| `lib/util/` | small generic helpers |
+
+Dependencies run downward: `commands` use everything below them, and nothing outside `commands` imports it. Three pairs of directories still import each other (`pipeline` and `templates`, `pipeline` and `ui`, `session` and `templates`) without forming a file-level cycle; that is recorded as open work in [docs/design.md](docs/design.md), not hidden here.
 
 ---
 
@@ -114,38 +152,56 @@ The floor is a measured baseline with headroom, not a target. 74.0 sits roughly 
 
 ## The session state machine
 
-A session is a state machine, not a chat log. `claudart setup` writes a `handoff.md` whose `## Status` section holds one of six canonical strings. Every command that touches that file parses the string into [`HandoffStatus`](lib/session/session_state.dart#L7), decides what is legal next, and writes a new one back. No free text drives control flow anywhere in the loop.
+A session is a state machine, not a chat log. `claudart setup` writes a `handoff.md` whose `## Status` section holds one of six canonical strings. Every command that touches that file parses the string into [`HandoffStatus`](lib/session/session_state.dart), decides what is legal next, and writes a new one back. No free text drives control flow anywhere in the loop.
 
+<!-- claudart:topology:handoff-diagram -->
 ```mermaid
 stateDiagram-v2
-  [*] --> suggestInvestigating: claudart setup
-  [*] --> readyForSuggest: claudart flow
-  suggestInvestigating --> readyForDebug: claudart suggest
-  readyForSuggest --> readyForDebug: claudart suggest
-  needsSuggest --> readyForDebug: claudart suggest
-  readyForDebug --> debugInProgress: claudart debug (step 1)
-  debugInProgress --> needsSuggest: blocked by agent
-  debugInProgress --> debugComplete: agent done
-  needsSuggest --> debugComplete: suggest + debug
-  debugComplete --> [*]: claudart teardown
+  suggestInvestigating --> suggestInvestigating: saveUnconfirmed, rotated
+  suggestInvestigating --> readyForSuggest: saveConfirmedExploring
+  suggestInvestigating --> readyForDebug: saveConfirmedReady
+  suggestInvestigating --> noHandoff: rotatedEmpty, reminderSaved, killed
+  readyForSuggest --> readyForDebug: saveConfirmedReady
+  readyForSuggest --> noHandoff: reminderSaved, killed
+  readyForDebug --> readyForDebug: saveConfirmedReady
+  readyForDebug --> debugInProgress: debugStarted
+  readyForDebug --> debugComplete: fixApplied
+  readyForDebug --> suggestInvestigating: rotated
+  readyForDebug --> noHandoff: rotatedEmpty, reminderSaved, killed
+  debugInProgress --> debugInProgress: saveUnconfirmed
+  debugInProgress --> readyForDebug: saveConfirmedReady
+  debugInProgress --> needsSuggest: debugBlocked
+  debugInProgress --> debugComplete: fixApplied
+  debugInProgress --> suggestInvestigating: rotated
+  debugInProgress --> noHandoff: rotatedEmpty, reminderSaved, killed
+  debugComplete --> noHandoff: tornDown, reminderSaved, killed
+  needsSuggest --> readyForDebug: saveConfirmedReady
+  needsSuggest --> suggestInvestigating: suggestResumed
+  needsSuggest --> noHandoff: reminderSaved, killed
+  noHandoff --> suggestInvestigating: setup
 ```
+<!-- /claudart:topology:handoff-diagram -->
+
+The diagram above is generated from `HandoffStatus.after` (`make topology`), so it cannot drift from the code; a test compares it with this page. Each arrow is labelled with a [`HandoffEvent`](lib/session/handoff_event.dart): `setup`, `saveUnconfirmed`, `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`, `rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. The generated [topology doc](docs/topology/handoff_status.md) also lists which file passes each event. `claudart flow` writes `readyForSuggest` straight into the handoff and is outside the table.
 
 `HandoffStatus` has eight variants. Six are persisted to disk; two never are:
 
 | Variant | On-disk value | Written by | Meaning |
 |---|---|---|---|
 | `suggestInvestigating` | `suggest-investigating` | `claudart setup` | bug captured, root cause unknown |
-| `readyForSuggest` | `ready-for-suggest` | `claudart flow` construct step | agent-built handoff, investigation still open |
+| `readyForSuggest` | `ready-for-suggest` | `claudart flow` construct step (direct write, no event) | agent-built handoff, investigation still open |
 | `readyForDebug` | `ready-for-debug` | `claudart suggest` | root cause locked, fix not written |
-| `debugInProgress` | `debug-in-progress` | agent (`/debug`) | fix underway |
-| `debugComplete` | `debug-complete` | `claudart debug` | edits on disk, awaiting verification |
+| `debugInProgress` | `debug-in-progress` | agent (`/debug`, event `debugStarted`) | fix underway |
+| `debugComplete` | `debug-complete` | `claudart debug` (event `fixApplied`) | edits on disk, awaiting verification |
 | `needsSuggest` | `needs-suggest` | agent (`/debug` blocked) | debug hit a wall, bounce back |
 | `noHandoff` | — | never | zedup-local: no handoff file at all |
 | `unknown` | — | never | unparsable Status section |
 
 The typed value is what dispatch switches on. [`lib/commands/status.dart`](lib/commands/status.dart#L103) carries two exhaustive switches over all eight — next-step advice and terminal colour. Adding a ninth variant is a compile error at both sites, not a runtime surprise.
 
-Precondition enforcement is explicit, not implied. `claudart debug` prints a warning if the status is not exactly `ready-for-debug`, then calls `confirm('Run debug anyway?')` — a soft gate. `claudart suggest` detects that suggest already ran, asks before overwriting, and archives the existing handoff first.
+Preconditions are hard gates. `claudart debug` checks that `fixApplied` is legal from the current status before it spends a model call, and throws `InvalidHandoffTransitionException` if not; the central error handler logs it. The reset commands (`kill`, `rotate`, `teardown`, `setup`) are deliberately permissive and overwrite the handoff; a move the table does not list is logged `rejected: true` in `transitions.jsonl` instead of thrown, so real use can be compared with the spec before it is enforced. `claudart suggest` still asks before overwriting an existing root cause and archives the old handoff first.
+
+**What a reader shows.** A reset leaves a blank handoff whose Status line still reads `suggest-investigating`. [`SessionState.effectiveStatus`](lib/session/session_state.dart) reads that as `noHandoff`, and that is what `status`, `workspaces`, the launcher and zedup display. Show a session from `effectiveStatus`, never from the raw Status line; `make consumer-check` replays the lifecycle against zedup's real reader to prove it does.
 
 ---
 
@@ -155,7 +211,7 @@ Precondition enforcement is explicit, not implied. `claudart debug` prints a war
 
 | Section | Written by | Read by |
 |---|---|---|
-| `## Status` | setup, suggest, debug | every command |
+| `## Status` | every command that passes a `HandoffEvent` (see the generated topology doc) | every command |
 | `## Bug` | setup | suggest, debug, skills retrieval |
 | `## Expected Behavior` | setup | suggest, debug |
 | `## Root Cause` | suggest | debug |
@@ -405,40 +461,43 @@ claudart save           # checkpoint, deposit confirmed facts to skills
 claudart debug          # read scope, implement fix, write files
 claudart teardown       # archive, promote skills, suggest commit
 claudart doctor         # check this machine: tools, auth, provider, workspace, registry
+claudart workspaces     # every linked workspace and where its session stands (--json for agents)
+claudart --project <name> status   # aim a session command at another linked workspace
 ```
 
-[`ClaudartCommand`](lib/commands/claudart_command.dart#L11) has 24 variants and is the single source of truth for dispatch. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable. That makes 25 reachable entry points.
+[`ClaudartCommand`](lib/commands/claudart_command.dart) is the single source of truth for dispatch, and carries each command's facts as getters: how it is reached, whether it runs headless, whether `--project` can target it, and which handoff events it passes. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable.
 
 <details>
 <summary><strong>Full command table, one row per dispatch arm</strong></summary>
 
 | Command | Role | Dispatch |
 |---|---|---|
-| `chat` | interactive chat shell, the agentflow front door | [bin/claudart.dart:118](bin/claudart.dart#L118) |
-| `archives` | list session archives, resume or view a snapshot | [bin/claudart.dart:120](bin/claudart.dart#L120) |
-| `add` | scaffold a brand-new project: PLAN.md, CLAUDE.md, registry entry, symlink | [bin/claudart.dart:122](bin/claudart.dart#L122) |
-| `init` | initialize the workspace with starter knowledge | [bin/claudart.dart:124](bin/claudart.dart#L124) |
-| `link` | symlink workspace into a project, register it, regenerate doc tails | [bin/claudart.dart:126](bin/claudart.dart#L126) |
-| `unlink` | remove workspace symlinks cleanly | [bin/claudart.dart:128](bin/claudart.dart#L128) |
-| `setup` | start a session, write handoff.md | [bin/claudart.dart:130](bin/claudart.dart#L130) |
-| `status` | session state; `--prompt` emits a compact string for RPROMPT/PS1 | [bin/claudart.dart:134](bin/claudart.dart#L134) |
-| `teardown` | archive, promote skills, suggest a commit; `--headless` decides everything itself | [bin/claudart.dart:136](bin/claudart.dart#L136) |
-| `suggest` | run the suggest pipeline | [bin/claudart.dart:140](bin/claudart.dart#L140) |
-| `debug` | run the debug pipeline | [bin/claudart.dart:142](bin/claudart.dart#L142) |
-| `flow` | experimental agent-constructed session | [bin/claudart.dart:144](bin/claudart.dart#L144) |
-| `save` | checkpoint the session, deposit confirmed facts | [bin/claudart.dart:146](bin/claudart.dart#L146) |
-| `rotate` | archive, run the build gate, seed the next handoff from Pending Issues | [bin/claudart.dart:148](bin/claudart.dart#L148) |
-| `kill` | abandon the session, no skills update | [bin/claudart.dart:150](bin/claudart.dart#L150) |
-| `resume` | pre-populate setup from the most recent archive entry | [bin/claudart.dart:152](bin/claudart.dart#L152) |
-| `confirm-pending` | set or clear the workspace's pending confirmation | [bin/claudart.dart:154](bin/claudart.dart#L154) |
-| `preflight` | sync check before `debug`, `save`, or `test` | [bin/claudart.dart:156](bin/claudart.dart#L156) |
-| `scan` | re-scan the project for sensitive tokens | [bin/claudart.dart:159](bin/claudart.dart#L159) |
-| `report` | diagnostic report; `--file-issue` files GitHub issues | [bin/claudart.dart:174](bin/claudart.dart#L174) |
-| `map` | generate token_map.md from token_map.json | [bin/claudart.dart:182](bin/claudart.dart#L182) |
-| `experiment` | run a command and tee its output to `experiments/` | [bin/claudart.dart:189](bin/claudart.dart#L189) |
-| `compile` | rebuild the binary and install it to `~/bin/claudart` | [bin/claudart.dart:191](bin/claudart.dart#L191) |
-| `doctor` | fresh-machine check: tools, git identity, `gh` auth, provider env, workspace root, registry, PATH | [bin/claudart.dart:193](bin/claudart.dart#L193) |
-| `version` | print the version, before dispatch | [bin/claudart.dart:97](bin/claudart.dart#L97) |
+| `chat` | interactive chat shell, the agentflow front door | [dispatch](bin/claudart.dart) |
+| `archives` | list session archives, resume or view a snapshot | [dispatch](bin/claudart.dart) |
+| `add` | scaffold a brand-new project: PLAN.md, CLAUDE.md, registry entry, symlink | [dispatch](bin/claudart.dart) |
+| `init` | initialize the workspace with starter knowledge | [dispatch](bin/claudart.dart) |
+| `link` | symlink workspace into a project, register it, regenerate doc tails | [dispatch](bin/claudart.dart) |
+| `unlink` | remove workspace symlinks cleanly | [dispatch](bin/claudart.dart) |
+| `setup` | start a session, write handoff.md | [dispatch](bin/claudart.dart) |
+| `status` | session state; `--prompt` emits a compact string for RPROMPT/PS1 | [dispatch](bin/claudart.dart) |
+| `teardown` | archive, promote skills, suggest a commit; `--headless` decides everything itself | [dispatch](bin/claudart.dart) |
+| `suggest` | run the suggest pipeline | [dispatch](bin/claudart.dart) |
+| `debug` | run the debug pipeline | [dispatch](bin/claudart.dart) |
+| `flow` | experimental agent-constructed session | [dispatch](bin/claudart.dart) |
+| `save` | checkpoint the session, deposit confirmed facts | [dispatch](bin/claudart.dart) |
+| `rotate` | archive, run the build gate, seed the next handoff from Pending Issues | [dispatch](bin/claudart.dart) |
+| `kill` | abandon the session, no skills update | [dispatch](bin/claudart.dart) |
+| `resume` | pre-populate setup from the most recent archive entry | [dispatch](bin/claudart.dart) |
+| `confirm-pending` | set or clear the workspace's pending confirmation | [dispatch](bin/claudart.dart) |
+| `preflight` | sync check before `debug`, `save`, or `test` | [dispatch](bin/claudart.dart) |
+| `scan` | re-scan the project for sensitive tokens | [dispatch](bin/claudart.dart) |
+| `report` | diagnostic report; `--file-issue` files GitHub issues | [dispatch](bin/claudart.dart) |
+| `map` | generate token_map.md from token_map.json | [dispatch](bin/claudart.dart) |
+| `experiment` | run a command and tee its output to `experiments/` | [dispatch](bin/claudart.dart) |
+| `compile` | rebuild the binary and install it to `~/bin/claudart` | [dispatch](bin/claudart.dart) |
+| `workspaces` | list every linked workspace: status, link state, lock, which is current; `--json` for agents | [dispatch](bin/claudart.dart) |
+| `doctor` | fresh-machine check: tools, git identity, `gh` auth, provider env, workspace root, registry, PATH | [dispatch](bin/claudart.dart) |
+| `version` | print the version, before dispatch | [dispatch](bin/claudart.dart) |
 
 </details>
 
@@ -482,11 +541,14 @@ Commands:
   experiment <name> -- <cmd> [args]  Run a command and tee output to experiments/<name>_<ts>.ansi
   compile                Recompile the claudart binary and install it to ~/bin/claudart
   doctor                 Fresh-machine verification: tools on PATH, git identity, gh auth, provider env
+  workspaces [--json]    List every linked workspace and where its session stands (for you or an agent)
   version                Print the current claudart version
 
 Options:
   -h, --help       Show this help message
   --version        Print the current claudart version
+  --project <name> Act on that linked workspace instead of the current directory's (session
+                   commands only; see `claudart workspaces` for the names)
   --debug          Write per-step trace (system prompt, message, token
                    counts, cost) to $CLAUDART_DEBUG_PATH (default
                    /tmp/claudart_debug.log). Same effect as setting
@@ -546,7 +608,7 @@ Each run is logged through `SessionLogger` — one `interactions.jsonl` line per
 
 ## Templates and generated documents
 
-claudart generates project documents from pure functions in `lib/templates/` — fourteen of them, no I/O, each rendering a string its caller writes. The three that touch files you keep in git are spliced, never overwritten.
+claudart generates project documents from pure functions in `lib/templates/` — no I/O, each rendering a string its caller writes. Every slash-command template opens with the same scope note ([`workspace_scope_note.dart`](lib/templates/workspace_scope_note.dart)), so the wording cannot drift between commands. The three that touch files you keep in git are spliced, never overwritten.
 
 | Template | Produces | Regenerated by |
 |---|---|---|
@@ -616,11 +678,25 @@ $ find <workspace> -maxdepth 2
 ./archive/              # rotated handoffs + index.json
 ./knowledge/projects/   # per-project knowledge files
 ./logs/interactions.jsonl  # per-command audit log (command, outcome, timing)
+./logs/transitions.jsonl   # every handoff move: command, from, event, to
+./logs/errors.jsonl        # deduplicated errors with fingerprint and count
+./logs/models.jsonl        # per step: intended model, observed model, drift
+./logs/performance.md      # per-command timing table
 ./experiments/          # claudart experiment output
 ./.claude/              # slash commands symlinked into the project
 ```
 
-The audit log at `logs/interactions.jsonl` is written by [`SessionLogger`](lib/logging/logger.dart#L14) (`lib/logging/logger.dart`) — one JSON line per command invocation (`command`, `outcome`, timing, and scan/sensitivity metadata where relevant), capped at 500 entries. It is queryable but never consulted by running commands — purely for understanding past sessions.
+Each workspace keeps its own logs under `logs/`, all written by [`SessionLogger`](lib/logging/logger.dart) and none consulted by running commands; they exist so behaviour can be checked from the files.
+
+| Log | One line per | Cap |
+|---|---|---|
+| `interactions.jsonl` | command run: `command`, `outcome`, timing, scan metadata | 500 |
+| `transitions.jsonl` | handoff move: `command`, `from`, `event`, `to` (enum names); `rejected: true` for a move the table lacks | 500 |
+| `errors.jsonl` | distinct error, deduplicated by fingerprint with a count | 200 |
+| `models.jsonl` | model a step ran on: intended alias, the id the `claude` stream reported, context used, drift from the declared `AgentModel` (shown by `claudart status`) | 500 |
+| `performance.md` | timed command, as a markdown table row | 50 |
+
+`--project` and `claudart workspaces` write to `interactions.jsonl` too: the first records `targeted-by-project` in the workspace it aimed at, the second records `listed N workspaces` in the workspace that asked.
 
 Routing decisions are a separate, global log. [`PlannerLog`](lib/logging/planner_log.dart#L132) appends one JSON line per categorize step — the three-axis classification (`category`, `intent`, `complexity`), the routed model, and design-surface counts — to `~/.claudart/planner.jsonl`, sibling to `registry.json` rather than per-workspace. It's wired into `claudart flow` only ([`lib/commands/flow.dart`](lib/commands/flow.dart#L42)); `suggest` and `debug`'s own Phase 0 categorize steps don't call it yet.
 
@@ -660,6 +736,18 @@ flowchart LR
 `workspacesRoot` is a getter, not a cached top-level value — it re-reads `CLAUDART_WORKSPACE` on every call, so the answer is whatever *this* process's environment says right now. That has one sharp edge: if your shell exports the override but a process launched outside that shell (a GUI-launched editor, launchd) does not inherit it, that process resolves `~/.claudart` instead, and the two can each grow a registry that silently diverges. `claudart doctor`'s `workspace root` check fails on exactly that condition — override set, and `~/.claudart/registry.json` exists too. It can only see it from a process that has the override; one without it gets `[SKIP]`, the reminder that a second root may exist.
 
 Generic knowledge lives once, at `<root>/knowledge/generic/`, not per project. `claudart link` and `claudart add` list its files into each project's generated `CLAUDE.md` tail, so adding a file there reaches every linked project on its next `link`.
+
+---
+
+## Workspaces and targeting
+
+A session belongs to one workspace, and one claudart installation serves many. Each project's `.claude` is linked to its own workspace, and every generated slash command is named `<flow>-<project>.md`, so sessions do not share files. Two tests hold that: with two linked projects, every lifecycle step in one leaves the other's files and registry entry byte-identical, and a command run from a directory that is not a linked project exits 1 and writes nothing.
+
+**Seeing the others.** `claudart workspaces` lists every linked workspace with its effective status, link state, lock and which one is current; `--json` gives the same for an agent ([`WorkspaceSummary`](lib/commands/workspaces.dart)). Every slash command carries a scope note that points an agent here and tells it never to edit another workspace's `handoff.md` by hand.
+
+**Reaching one.** `claudart --project <name> <command>` aims a command at a named workspace instead of the current directory. Only a registered name resolves, never a path, and only commands whose `supportsProjectSelector` is true accept it. The four slash commands with a baked workspace path (`suggest`, `debug`, `save`, `teardown`) pass `--project` themselves, so their file reads and CLI calls always resolve to the same workspace. `init --project <name>` is a different option (a new project's knowledge file) and is left alone.
+
+**Limits.** An agent can run `rotate`, `teardown` and `kill` with `--headless` in another workspace, and `setup` with its answers on stdin. The model-driven `suggest` and `debug` are best run from that workspace's own session. Existing workspaces keep their old command files until `claudart link` is run again; `claudart doctor` flags them as stale.
 
 ---
 
@@ -817,7 +905,7 @@ flowchart TB
   classDef ext fill:#dbeafe,color:#1e3a8a,stroke:#3b82f6
 ```
 
-Three layers, each independently testable. The registry maps a git project to its workspace once, at `link` time. The session layer is the state machine — `handoff.md`'s typed status decides which command may run next. The engine layer is shared: `suggest` and `debug` are two lists of `AgentStep`s handed to one `PipelineExecutor`. Classification (the three axes: category, intent, complexity) drives model routing before the engine runs. `claudart save` is an optional checkpoint anywhere in that loop, not a precondition of `debug` — `debug` gates only on `handoff.md`'s status (see [The session state machine](#the-session-state-machine)).
+The diagram shows the flow; [Architecture at a glance](#architecture-at-a-glance) shows the layers it runs on. The registry maps a git project to its workspace once, at `link` time. The session layer is the state machine: `handoff.md`'s typed status decides which command may run next. The engine layer is shared: `suggest` and `debug` are two lists of `AgentStep`s handed to one `PipelineExecutor`, with classification (category, intent, complexity) driving model routing before it runs. Targeting and awareness (`--project`, `claudart workspaces`) sit above the registry and never touch a workspace they were not aimed at. `claudart save` is an optional checkpoint anywhere in that loop, not a precondition of `debug`, which gates only on the handoff's status (see [The session state machine](#the-session-state-machine)).
 
 `claudart doctor` sits outside all three layers and reads their inputs rather than any session: which root this process resolves, whether that root's registry is intact, and which provider the environment a spawned `claude` would inherit is configured for. It changes nothing on disk except its own log line.
 

@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/handoff_transition.dart';
+import 'package:claudart/session/invalid_handoff_transition_exception.dart';
+import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 import 'package:claudart/md_io.dart';
 import 'helpers/mocks.dart';
@@ -70,9 +74,123 @@ some content
   group('updateStatus', () {
     test('replaces status value', () {
       const doc = '## Status\n\nsuggest-investigating\n';
+      // The deprecated raw writer is still exported; this pins its behavior.
+      // ignore: deprecated_member_use_from_same_package
       final result = updateStatus(doc, 'ready-for-debug');
       expect(result, contains('ready-for-debug'));
       expect(result, isNot(contains('suggest-investigating')));
+    });
+  });
+
+  group('typed handoff status', () {
+    const doc = '## Status\n\nsuggest-investigating\n';
+    final persisted = HandoffStatus.values.where((s) => s.isPersisted);
+
+    for (final status in persisted) {
+      test('${status.name}: write then read round-trips', () {
+        final written = withHandoffStatus(doc, status);
+        expect(readHandoffStatus(written), status);
+        expect(readStatus(written), status.value);
+      });
+    }
+
+    for (final status in HandoffStatus.values.where((s) => !s.isPersisted)) {
+      test('${status.name}: display-only, refused on write', () {
+        expect(
+          () => withHandoffStatus(doc, status),
+          throwsA(
+            isA<ArgumentError>()
+                .having((e) => e.name, 'name', 'status')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'display-only, never written to disk',
+                ),
+          ),
+        );
+      });
+    }
+
+    test('readHandoffStatus maps a missing status to unknown', () {
+      expect(readHandoffStatus('no status here'), HandoffStatus.unknown);
+    });
+
+    test('isPersisted: exactly noHandoff and unknown are display-only', () {
+      expect(
+        HandoffStatus.values.where((s) => !s.isPersisted).toSet(),
+        {HandoffStatus.noHandoff, HandoffStatus.unknown},
+      );
+    });
+  });
+
+  group('applyHandoffEvent', () {
+    String docIn(HandoffStatus status) => '## Status\n\n${status.value}\n';
+
+    test('applies a legal event: the status becomes the transition target', () {
+      final result = applyHandoffEvent(
+        docIn(HandoffStatus.readyForDebug),
+        HandoffEvent.debugStarted,
+      );
+      expect(readHandoffStatus(result), HandoffStatus.debugInProgress);
+    });
+
+    test('a self-loop event leaves the status as it was', () {
+      final result = applyHandoffEvent(
+        docIn(HandoffStatus.suggestInvestigating),
+        HandoffEvent.saveUnconfirmed,
+      );
+      expect(readHandoffStatus(result), HandoffStatus.suggestInvestigating);
+    });
+
+    test('rejects a move the transition table lacks, naming status and event',
+        () {
+      expect(
+        () => applyHandoffEvent(
+          docIn(HandoffStatus.debugComplete),
+          HandoffEvent.debugStarted,
+        ),
+        throwsA(
+          isA<InvalidHandoffTransitionException>()
+              .having((e) => e.from, 'from', HandoffStatus.debugComplete)
+              .having((e) => e.event, 'event', HandoffEvent.debugStarted),
+        ),
+      );
+    });
+
+    test('reports the transition it applied to onTransition, once', () {
+      final seen = <HandoffTransition>[];
+      applyHandoffEvent(
+        docIn(HandoffStatus.readyForDebug),
+        HandoffEvent.debugStarted,
+        onTransition: seen.add,
+      );
+      expect(seen, [
+        const HandoffTransition(
+          from: HandoffStatus.readyForDebug,
+          event: HandoffEvent.debugStarted,
+          to: HandoffStatus.debugInProgress,
+        ),
+      ]);
+    });
+
+    test('a rejected move reports nothing to onTransition', () {
+      final seen = <HandoffTransition>[];
+      expect(
+        () => applyHandoffEvent(
+          docIn(HandoffStatus.debugComplete),
+          HandoffEvent.debugStarted,
+          onTransition: seen.add,
+        ),
+        throwsA(isA<InvalidHandoffTransitionException>()),
+      );
+      expect(seen, isEmpty);
+    });
+
+    test('an unrecognised status in the file rejects every event', () {
+      expect(
+        () => applyHandoffEvent('## Status\n\nbogus\n', HandoffEvent.setup),
+        throwsA(isA<InvalidHandoffTransitionException>()),
+      );
     });
   });
 

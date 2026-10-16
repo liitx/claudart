@@ -2,13 +2,17 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
-import '../md_io.dart' show confirmOrEof;
+import '../logging/logger.dart';
+import '../md_io.dart' show confirmOrEof, readHandoffStatus;
 import '../paths.dart';
 import '../registry.dart';
+import 'claudart_command.dart';
+import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
 import '../session/session_state.dart';
 import '../session/workspace_guard.dart';
+import '../workspace/workspace_link_state.dart';
 import '../ui/render.dart' as render;
 
 /// Abandons the active session for the current project.
@@ -57,7 +61,7 @@ Future<void> runKill({
   print(render.header('CLAUDART SESSION KILL'));
 
   // 1 — Detect project root.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   if (projectRoot == null) {
     print('\n✗ Not inside a git repository. Cannot detect project.\n');
@@ -90,11 +94,9 @@ Future<void> runKill({
     clearLock(workspace, io: fileIO);
   }
 
-  // 4 — Check for an active session. `.claude` is either a symlink (the
-  // normal case) or a real directory when link.dart couldn't symlink it —
-  // both mean a session is linked. Only warn when neither exists.
-  final claudePath = p.join(projectRoot, IdeIntegration.claudeCode.dirName);
-  if (!fileIO.linkExists(claudePath) && !fileIO.dirExists(claudePath)) {
+  // 4 — Check for an active session: a linked project (symlink or the real
+  // directory fallback). Only warn when it is unlinked.
+  if (!linkStateOf(fileIO, projectRoot).isLinked) {
     print('\n⚠  No active session found for ${entry.name}.');
     if (!decide('Kill anyway and archive the handoff?', headlessAnswer: true)) {
       print('\nKill cancelled.\n');
@@ -141,6 +143,18 @@ Future<void> runKill({
     exit_(1);
   }
 
+  // Record the move only after the close succeeded. Not enforced: kill is
+  // deliberately permissive, so a status the table lacks is logged, not thrown.
+  SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: workspace,
+  ).logHandoffMove(
+    command: ClaudartCommand.kill.name,
+    from: readHandoffStatus(handoff),
+    event: HandoffEvent.killed,
+  );
+
   // 8 — Update registry timestamp.
   registry.touchSession(entry.name).save(io: fileIO);
 
@@ -155,7 +169,7 @@ void _printSessionSummary(String name, SessionState state, String? liveBranch) {
   print('\n───────────────────────────────────────');
   print('  Session: $name');
   print('  Branch : ${liveBranch ?? state.branch}');
-  print('  Status : ${state.status.value}');
+  print('  Status : ${state.effectiveStatus.value}');
   print('  Bug    : ${_truncate(state.bug)}');
   if (state.hasActiveContent) {
     print('\n  Debug progress recorded — this work will be archived.');

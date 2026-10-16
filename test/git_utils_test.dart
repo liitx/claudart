@@ -33,6 +33,42 @@ void main() {
       }
     });
 
+    group('workingDirectory', () {
+      late MockProcessRunner runner;
+      String? usedDirectory;
+
+      setUp(() {
+        runner = MockProcessRunner();
+        usedDirectory = null;
+        when(() => runner.runSync(any(), any(),
+            workingDirectory: any(named: 'workingDirectory'))).thenAnswer((i) {
+          usedDirectory = i.namedArguments[#workingDirectory] as String?;
+          return fakeResult('/projects/other\nfeat/x\n');
+        });
+      });
+
+      test('asks git in the given directory, so another project\'s branch can '
+          'be read from here', () {
+        final context =
+            detectGitContext(runner: runner, workingDirectory: '/projects/other');
+        expect(usedDirectory, '/projects/other');
+        expect(context, (root: '/projects/other', branch: 'feat/x'));
+      });
+
+      test('defaults to the current directory', () {
+        detectGitContext(runner: runner);
+        expect(usedDirectory, Directory.current.path);
+      });
+
+      test('a directory that does not exist is no git context, not an error',
+          () {
+        expect(
+          detectGitContext(workingDirectory: '/no/such/directory/at/all'),
+          isNull,
+        );
+      });
+    });
+
     test('returns null when git rev-parse exits non-zero', () {
       final runner = MockProcessRunner();
       when(() => runner.runSync(any(), any(), workingDirectory: any(named: 'workingDirectory')))

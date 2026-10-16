@@ -5,6 +5,7 @@ import 'package:claudart/commands/save.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
@@ -264,6 +265,34 @@ List<String> _checkpoints(MemoryFileIO io) => io.files.keys
     .toList();
 
 void main() {
+  group('save — report', () {
+    Future<String> report(MemoryFileIO io) async {
+      final output = <String>[];
+      await runZoned(
+        () => runSave(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      return output.join('\n');
+    }
+
+    test('a blank handoff is reported as no-handoff', () async {
+      expect(
+        await report(_io(handoff: blankHandoff)),
+        contains('Status : no-handoff'),
+      );
+    });
+
+    test('a live handoff is reported with its own status', () async {
+      expect(await report(_io()), contains('Status : ready-for-debug'));
+    });
+  });
+
   handoff_matrix.assertNoGaps();
 
   group('save — branch display', () {

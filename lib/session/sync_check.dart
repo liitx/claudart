@@ -119,9 +119,7 @@ SyncCheckResult checkHandoffStatus(
   final state = SessionState.parse(handoffContent);
 
   return switch (operation) {
-    ClaudartOperation.debug
-        when state.status != HandoffStatus.readyForDebug &&
-            state.status != HandoffStatus.debugInProgress =>
+    ClaudartOperation.debug when !state.status.canStartDebug =>
       SyncCheckResult([
         SyncIssue(
           IssueSeverity.error,

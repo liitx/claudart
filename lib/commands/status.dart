@@ -1,6 +1,8 @@
 import 'dart:io';
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import '../pipeline/model_observation.dart' show describeModelRecord;
 import '../paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart';
@@ -18,7 +20,7 @@ Future<void> runStatus({
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
 
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   final currentBranch = gitCtx?.branch;
 
@@ -49,14 +51,16 @@ Future<void> runStatus({
   }
 
   final state = SessionState.parse(content);
+  // What to show: a blank handoff is no-handoff, not its stale Status line.
+  final shown = state.effectiveStatus;
 
   // ── Prompt mode: compact single-line output for shell RPROMPT/PS1 ──────────
   if (prompt) {
     stdout.write(render.statusBar(
       name: entry.name,
-      statusLabel: state.status.value,
-      statusColorCode: _statusColour(state.status),
-      active: state.status != HandoffStatus.unknown,
+      statusLabel: shown.value,
+      statusColorCode: render.statusColour(shown),
+      active: shown.isPersisted,
     ));
     return;
   }
@@ -68,11 +72,12 @@ Future<void> runStatus({
   print(render.header('CLAUDART SESSION STATUS'));
   print('Project  : ${entry.name}');
   print('Branch   : ${currentBranch ?? state.branch}');
-  print('Status   : ${ansi.c(_statusColour(state.status), state.status.value)}');
+  final statusColour = render.statusColour(shown);
+  print('Status   : ${ansi.c(statusColour, shown.value)}');
   print('Bug      : ${_truncate(state.bug)}');
   print('Root cause: ${_truncate(state.rootCause)}');
-  if (state.status == HandoffStatus.debugInProgress ||
-      state.status == HandoffStatus.needsSuggest) {
+  if (shown == HandoffStatus.debugInProgress ||
+      shown == HandoffStatus.needsSuggest) {
     print('Unresolved: ${_truncate(unresolved)}');
   }
 
@@ -99,8 +104,17 @@ Future<void> runStatus({
   print('Handoff  : $handoffFile');
   print('Skills   : ${skillsPathFor(workspace)}');
 
+  final modelRecords =
+      SessionLogger(io: fileIO, workspacePath: workspace).readStepModelRecords();
+  if (modelRecords.isNotEmpty) {
+    print('\nModels (newest per step):');
+    for (final record in modelRecords) {
+      print('  ${describeModelRecord(record)}');
+    }
+  }
+
   print('\nNext step:');
-  switch (state.status) {
+  switch (shown) {
     case HandoffStatus.suggestInvestigating:
       print('  Run /suggest in your editor.');
     case HandoffStatus.readyForSuggest:
@@ -124,13 +138,3 @@ String _truncate(String s, {int max = 80}) {
   return single.length > max ? '${single.substring(0, max)}…' : single;
 }
 
-String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating ||
-      HandoffStatus.readyForSuggest      => ansi.cyan,
-      HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress ||
-      HandoffStatus.debugComplete        => ansi.green,
-      HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown ||
-      HandoffStatus.noHandoff            => ansi.dim,
-    };

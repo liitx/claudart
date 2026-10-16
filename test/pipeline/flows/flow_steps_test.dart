@@ -18,6 +18,15 @@ PipelineContext _ctx({String projectRoot = _projectRoot}) => PipelineContext(
     );
 
 void main() {
+  group('FlowSteps.construct system prompt', () {
+    test('seeds the handoff with the readyForSuggest wire value', () {
+      expect(
+        FlowSteps.construct.systemPrompt,
+        contains('## Status\nready-for-suggest\n\n'),
+      );
+    });
+  });
+
   group('FlowSteps.clarify.postProcess', () {
     test('untagged prose is wrapped in <ANSWER>', () {
       final result = FlowSteps.clarify.postProcess!('the label field is String?', _ctx());

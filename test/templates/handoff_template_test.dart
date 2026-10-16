@@ -1,4 +1,6 @@
 import 'package:test/test.dart';
+import 'package:claudart/md_io.dart' show readHandoffStatus;
+import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart';
 
 void main() {
@@ -56,6 +58,19 @@ void main() {
     test('contains status section', () {
       expect(blankHandoff, contains('## Status'));
       expect(blankHandoff, contains('suggest-investigating'));
+    });
+
+    // The fact docs/topology/handoff_status.md relies on: after kill, teardown
+    // and an empty rotate the file holds this blank handoff, whose Status line
+    // is suggest-investigating, with no active content. The state machine's
+    // noHandoff ("no active session") is therefore a log-level notion; it is
+    // never what the file says.
+    test('reads as suggestInvestigating with no active content', () {
+      expect(
+        readHandoffStatus(blankHandoff),
+        HandoffStatus.suggestInvestigating,
+      );
+      expect(SessionState.parse(blankHandoff).hasActiveContent, isFalse);
     });
 
     test('contains all required sections', () {

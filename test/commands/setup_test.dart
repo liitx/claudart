@@ -2,10 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/setup.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/session_state.dart'
+    show HandoffStatus, SessionState;
+import 'package:claudart/ui/ansi.dart' as ansi;
+import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
@@ -498,6 +504,83 @@ void main() {
       final entry = jsonDecode(raw.trim().split('\n').last) as Map<String, dynamic>;
       expect(entry['command'], equals('setup'));
       expect(entry['outcome'], equals('ok'));
+    });
+  });
+
+  group('setup — transition log', () {
+    Future<void> setup(MemoryFileIO io, {required int menuChoice}) => runSetup(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          promptFn: _prompts([
+            'fix/null-ref',
+            'Some bug.',
+            'Some expected.',
+            'loader.dart',
+            null,
+          ]),
+          pickFn: (_) => menuChoice,
+          exitFn: _throwExit,
+          fileFinderFn: _notFoundFinder,
+        );
+
+    test('a first setup logs setup from noHandoff into suggestInvestigating',
+        () async {
+      final io = _io();
+      await setup(io, menuChoice: _menuStartFresh);
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.setup.name,
+          'from': HandoffStatus.noHandoff.name,
+          'event': HandoffEvent.setup.name,
+          'to': HandoffStatus.suggestInvestigating.name,
+        },
+      ]);
+    });
+
+    test('starting fresh over a live handoff logs setup as a move the table '
+        'lacks, from the status it overwrote', () async {
+      final io = _io(handoff: _activeHandoff);
+      final overwritten = SessionState.parse(_activeHandoff).status;
+      await setup(io, menuChoice: _menuStartFresh);
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.setup.name,
+          'from': overwritten.name,
+          'event': HandoffEvent.setup.name,
+          'rejected': true,
+        },
+      ]);
+    });
+
+    test('the existing-session menu colours the status (cyan while '
+        'exploring)', () async {
+      ansi.colorEnabledOverride = true;
+      addTearDown(() => ansi.colorEnabledOverride = null);
+      final io = _io(handoff: _activeHandoff);
+      final output = <String>[];
+      await expectLater(
+        runZoned(
+          () => setup(io, menuChoice: _menuBack),
+          zoneSpecification: ZoneSpecification(
+            print: (_, __, ___, line) => output.add(line),
+          ),
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(
+        output.join('\n'),
+        contains('Status : ${ansi.cyan}suggest-investigating${ansi.reset}'),
+      );
+    });
+
+    test('backing out of the menu logs nothing', () async {
+      final io = _io(handoff: _activeHandoff);
+      await expectLater(
+        setup(io, menuChoice: _menuBack),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(loggedMoves(io, _workspace), isEmpty);
     });
   });
 

@@ -14,6 +14,9 @@ void main() {
     test('sessionCloseFailed rolls up to session', () {
       expect(FailureType.sessionCloseFailed.errorType, ErrorType.session);
     });
+    test('invalidHandoffTransition rolls up to session', () {
+      expect(FailureType.invalidHandoffTransition.errorType, ErrorType.session);
+    });
     test('workspaceLocked rolls up to workspace', () {
       expect(FailureType.workspaceLocked.errorType, ErrorType.workspace);
     });
@@ -44,6 +47,11 @@ void main() {
     });
     test('sessionCloseFailed uses its subsystem default, unoverridden', () {
       expect(FailureType.sessionCloseFailed.effectiveFaultClass, FaultClass.environmentFault);
+    });
+    test('invalidHandoffTransition uses its subsystem default, unoverridden',
+        () {
+      const failure = FailureType.invalidHandoffTransition;
+      expect(failure.effectiveFaultClass, FaultClass.environmentFault);
     });
     test('providerNotConfigured overrides to configFault, not pipeline\'s default externalServiceFault', () {
       expect(FailureType.providerNotConfigured.faultClass, FaultClass.externalServiceFault);
@@ -97,6 +105,14 @@ void main() {
         FailureType.stepExitedNonzero.suggestedAction,
         'Check the stderr output above for the real cause from `claude` '
         'itself.',
+      );
+    });
+    test('invalidHandoffTransition suggestedAction says where to look', () {
+      expect(
+        FailureType.invalidHandoffTransition.suggestedAction,
+        'Run `claudart status` to see where the session is, then use the '
+        'command that fits that status (docs/design.md lists the moves). '
+        'If the status looks wrong, check handoff.md.',
       );
     });
     test('stepProducedNoResult suggestedAction names the real condition', () {

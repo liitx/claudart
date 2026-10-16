@@ -9,6 +9,7 @@
 
 import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:claudart/pipeline/agent_response.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/ui/ansi.dart' as ansi;
 import 'package:claudart/ui/render.dart' as render;
 import 'package:test/test.dart';
@@ -71,6 +72,30 @@ AgentResponse _sample(ResponseKind kind) => switch (kind) {
 void main() {
   setUpAll(() => ansi.colorEnabledOverride = false);
   tearDownAll(() => ansi.colorEnabledOverride = null);
+
+  group('statusColour — one colour per HandoffStatus', () {
+    // Independent literal table: the colour each status has always shown.
+    const expected = {
+      HandoffStatus.suggestInvestigating: ansi.cyan,
+      HandoffStatus.readyForSuggest: ansi.cyan,
+      HandoffStatus.readyForDebug: ansi.yellow,
+      HandoffStatus.debugInProgress: ansi.green,
+      HandoffStatus.debugComplete: ansi.green,
+      HandoffStatus.needsSuggest: ansi.red,
+      HandoffStatus.noHandoff: ansi.dim,
+      HandoffStatus.unknown: ansi.dim,
+    };
+
+    test('the table covers every variant', () {
+      expect(expected.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final entry in expected.entries) {
+      test(entry.key.name, () {
+        expect(render.statusColour(entry.key), entry.value);
+      });
+    }
+  });
 
   group('render — header first, no ANSI in non-TTY', () {
     for (final kind in ResponseKind.values) {

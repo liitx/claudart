@@ -1,5 +1,7 @@
+import '../session/session_state.dart' show HandoffStatus;
 import '../pipeline/agents/confirmation.dart';
 import 'command_template_marker.dart';
+import 'workspace_scope_note.dart';
 
 String saveCommandTemplate(String workspacePath, String projectName) =>
     '''---
@@ -8,7 +10,10 @@ $claudartCommandMarker
 ---
 
 ''' +
-    r'''You are running **/save** — the session checkpoint command.
+    workspaceScopeNote(projectName) +
+    r'''
+
+You are running **/save** — the session checkpoint command.
 
 Save locks in confirmed knowledge from the current session without ending it.
 It writes a checkpoint snapshot, deposits confirmed facts into pending skills,
@@ -55,7 +60,9 @@ saving?"
 ## Step 3 — Run claudart save
 
 ```
-claudart save
+claudart save --project ''' +
+    projectName +
+    r'''
 ```
 
 This writes:
@@ -75,9 +82,9 @@ After `claudart save` completes, tell the user what is next:
 
 | Status                    | Next step                                        |
 |---------------------------|--------------------------------------------------|
-| `suggest-investigating`   | Continue exploring. Run `/save` when root cause confirmed. |
-| `ready-for-debug`         | Root cause locked. Run `/debug` to implement the fix. |
-| `debug-in-progress`       | Fix in progress. Run `/save` again after fix confirmed. |
+| `''' + HandoffStatus.suggestInvestigating.value + r'''`   | Continue exploring. Run `/save` when root cause confirmed. |
+| `''' + HandoffStatus.readyForDebug.value + r'''`         | Root cause locked. Run `/debug` to implement the fix. |
+| `''' + HandoffStatus.debugInProgress.value + r'''`       | Fix in progress. Run `/save` again after fix confirmed. |
 
 ---
 

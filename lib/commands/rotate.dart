@@ -4,10 +4,13 @@ import 'package:path/path.dart' as p;
 import '../config.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import 'claudart_command.dart';
 import '../templates/handoff_template.dart';
 import '../paths.dart';
 import '../registry.dart';
 import '../session/archive_entry.dart';
+import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
 import '../session/session_state.dart';
@@ -69,7 +72,7 @@ Future<RotateResult>  runRotate({
   print(render.header('CLAUDART ROTATE'));
 
   // 1 — Registry lookup.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   if (projectRoot == null) {
     print('✗ Not inside a git repository. Cannot detect project.');
@@ -159,8 +162,22 @@ Future<RotateResult>  runRotate({
   }
   print('✓ Build passed.\n');
 
+  // Records the move once the build gate has passed and the handoff is about
+  // to change. Not enforced: rotate is deliberately permissive, so a status
+  // the table lacks is logged, not thrown.
+  void recordMove(HandoffEvent event) => SessionLogger(
+        io: fileIO,
+        sensitivityMode: entry.sensitivityMode,
+        workspacePath: workspace,
+      ).logHandoffMove(
+        command: ClaudartCommand.rotate.name,
+        from: state.status,
+        event: event,
+      );
+
   // 7 — Seed next handoff or reset to blank.
   if (pending.isEmpty) {
+    recordMove(HandoffEvent.rotatedEmpty);
     fileIO.write(handoffFile, blankHandoff);
     print('✓ Archived  : ${p.basename(archiveFile)}');
     print('✓ All pending issues cleared. Handoff reset.\n');
@@ -179,6 +196,7 @@ Future<RotateResult>  runRotate({
     projectName: entry.name,
     pendingIssues: remaining,
   );
+  recordMove(HandoffEvent.rotated);
   fileIO.write(handoffFile, newHandoff);
 
   print('✓ Archived  : ${p.basename(archiveFile)}');

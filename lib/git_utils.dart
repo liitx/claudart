@@ -69,14 +69,15 @@ ProcessResult _runGit(
 /// are resolved from a single subprocess call. Returns null when the
 /// working directory is not inside a git repository or in detached HEAD
 /// state where no branch name is available. [runner] is injectable for
-/// tests; production defaults to a real process.
-GitContext? detectGitContext({ProcessRunner? runner}) {
+/// tests; production defaults to a real process. [workingDirectory] asks git
+/// from another directory (a selected project's root), default the current one.
+GitContext? detectGitContext({ProcessRunner? runner, String? workingDirectory}) {
   final proc = runner ?? const RealProcessRunner();
   try {
     final result = _runGit(
       proc,
       ['rev-parse', '--show-toplevel', '--abbrev-ref', _detachedHeadMarker],
-      workingDirectory: Directory.current.path,
+      workingDirectory: workingDirectory ?? Directory.current.path,
     );
     if (result.exitCode != 0) return null;
     final lines = (result.stdout as String).trim().split('\n');

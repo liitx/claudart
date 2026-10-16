@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'pipeline/pipeline_context.dart' show ScopeFile;
+import 'session/handoff_event.dart';
+import 'session/handoff_transition.dart';
+import 'session/invalid_handoff_transition_exception.dart';
+import 'session/session_state.dart' show HandoffStatus;
 import 'ui/line_editor.dart' as editor;
 
 /// Reads a section from a markdown file between `## Header` and the next `## `.
@@ -32,8 +36,50 @@ String readStatus(String content) {
   return match?.group(1)?.trim() ?? 'unknown';
 }
 
-/// Updates the Status line in the handoff.
-String updateStatus(String content, String status) {
+/// Reads the Status line as a typed [HandoffStatus]; a missing or
+/// unrecognised value is [HandoffStatus.unknown].
+HandoffStatus readHandoffStatus(String content) =>
+    HandoffStatus.fromString(readStatus(content));
+
+const String _displayOnlyStatusMessage =
+    'display-only, never written to disk';
+
+/// Writes [status] to the Status line. Refuses the display-only variants
+/// ([HandoffStatus.noHandoff], [HandoffStatus.unknown]) so a bare string can
+/// no longer put a non-status on disk.
+String withHandoffStatus(String content, HandoffStatus status) {
+  if (!status.isPersisted) {
+    throw ArgumentError.value(status, 'status', _displayOnlyStatusMessage);
+  }
+  return _setStatusLine(content, status.value);
+}
+
+/// Applies [event] to the handoff's current status through the transition
+/// table (docs/design.md). Throws [InvalidHandoffTransitionException] when the
+/// table has no such move, so a command can no longer write a status the state
+/// machine forbids. [onTransition] hears the applied move (never a rejected
+/// one), so a caller can log which enum was passed where.
+String applyHandoffEvent(
+  String content,
+  HandoffEvent event, {
+  void Function(HandoffTransition transition)? onTransition,
+}) {
+  final from = readHandoffStatus(content);
+  final to = from.after(event);
+  if (to == null) throw InvalidHandoffTransitionException(from, event);
+  final updated = withHandoffStatus(content, to);
+  onTransition?.call(HandoffTransition(from: from, event: event, to: to));
+  return updated;
+}
+
+/// Updates the Status line in the handoff with a raw string. Kept for
+/// existing external callers; new code uses [applyHandoffEvent], which checks
+/// the move against the transition table and reports it for logging.
+@Deprecated('Use applyHandoffEvent: it validates the move and logs it')
+String updateStatus(String content, String status) =>
+    _setStatusLine(content, status);
+
+String _setStatusLine(String content, String status) {
   return content.replaceFirstMapped(
     RegExp(r'(## Status\n+)(\S[^\n]*)'),
     (m) => '${m.group(1)}$status',

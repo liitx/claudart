@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
+import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/kill.dart';
 import 'package:claudart/file_io.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
+import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/session/workspace_guard.dart';
 import 'package:claudart/workspace/workspace_index.dart';
+import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -115,6 +120,96 @@ MemoryFileIO _io({
 }
 
 void main() {
+  group('kill — transition log', () {
+    test('logs killed from the status the handoff was in', () async {
+      final io = _io();
+      await runKill(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        exitFn: (code) => throw _ExitException(code),
+      );
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.kill.name,
+          'from': HandoffStatus.readyForDebug.name,
+          'event': HandoffEvent.killed.name,
+          'to': HandoffStatus.noHandoff.name,
+        },
+      ]);
+    });
+
+    test('logs nothing when the user declines', () async {
+      final io = _io();
+      await expectLater(
+        runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => false,
+          exitFn: (code) => throw _ExitException(code),
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(loggedMoves(io, _workspace), isEmpty);
+    });
+
+    test('a blank handoff is logged as a move the table lacks', () async {
+      final io = _io(withHandoff: false);
+      await runKill(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        exitFn: (code) => throw _ExitException(code),
+      );
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.kill.name,
+          'from': HandoffStatus.unknown.name,
+          'event': HandoffEvent.killed.name,
+          'rejected': true,
+        },
+      ]);
+    });
+  });
+
+  group('kill — session summary', () {
+    test('a blank handoff is shown as no-handoff, not its stale Status line',
+        () async {
+      final io = _io();
+      io.write(handoffPathFor(_workspace), blankHandoff);
+      final output = <String>[];
+      await runZoned(
+        () => runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          exitFn: (code) => throw _ExitException(code),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      expect(output.join('\n'), contains('Status : no-handoff'));
+    });
+
+    test('a live handoff shows its own status', () async {
+      final io = _io();
+      final output = <String>[];
+      await runZoned(
+        () => runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          exitFn: (code) => throw _ExitException(code),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      expect(output.join('\n'), contains('Status : ready-for-debug'));
+    });
+  });
+
   group('kill — success path', () {
     test('archives handoff', () async {
       final io = _io();

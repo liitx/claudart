@@ -9,6 +9,7 @@
 // anyway. A class with optional named fields grows without breaking anyone
 // who doesn't care about the new fields.
 
+import 'model_observation.dart';
 import 'usage.dart';
 
 class StepResult {
@@ -32,6 +33,10 @@ class StepResult {
   /// Number of agentic turns (tool-call round trips) this call took.
   final int? numTurns;
 
+  /// The models this call actually ran on, from the result line's
+  /// `modelUsage`. Empty when the CLI did not report any.
+  final List<ModelObservation> models;
+
   const StepResult({
     required this.text,
     required this.usage,
@@ -39,5 +44,6 @@ class StepResult {
     this.stopReason,
     this.durationMs,
     this.numTurns,
+    this.models = const [],
   });
 }

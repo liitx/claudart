@@ -2,14 +2,18 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
+import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/teardown.dart' show runTeardown, TeardownCategory;
 import 'package:claudart/md_io.dart' show readSection;
 import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
+import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/file_io.dart';
 import 'package:claudart/session/workspace_guard.dart';
+import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 
 const _projectRoot = '/projects/my-app';
@@ -381,6 +385,85 @@ void main() {
   });
 
   // ── Successful teardown ───────────────────────────────────────────────────
+
+  group('teardown — transition log', () {
+    Future<void> teardown(MemoryFileIO io, {int? kind}) => runTeardown(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          promptFn: _prompts(_richAnswers),
+          pickFn: kind == null
+              ? _pick(TeardownCategory.stateManagement)
+              : _pickKind(TeardownCategory.stateManagement, kind: kind),
+          exitFn: _throwExit,
+        );
+
+    test('a headless debugComplete teardown logs tornDown into noHandoff',
+        () async {
+      final io = _io(
+        handoff:
+            _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+      );
+      await runTeardown(
+        io: io,
+        projectRootOverride: _projectRoot,
+        mode: RunMode.headless,
+        exitFn: _throwExit,
+      );
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.teardown.name,
+          'from': HandoffStatus.debugComplete.name,
+          'event': HandoffEvent.tornDown.name,
+          'to': HandoffStatus.noHandoff.name,
+        },
+      ]);
+    });
+
+    test('confirming resolved from debugInProgress logs tornDown as a move '
+        'the table lacks', () async {
+      final io = _io(handoff: _richHandoff); // status: debug-in-progress
+      await teardown(io);
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.teardown.name,
+          'from': HandoffStatus.debugInProgress.name,
+          'event': HandoffEvent.tornDown.name,
+          'rejected': true,
+        },
+      ]);
+    });
+
+    test('saving a reminder logs reminderSaved into noHandoff', () async {
+      final io = _io(handoff: _richHandoff);
+      await teardown(io, kind: 1);
+      expect(loggedMoves(io, _workspace), [
+        {
+          'command': ClaudartCommand.teardown.name,
+          'from': HandoffStatus.debugInProgress.name,
+          'event': HandoffEvent.reminderSaved.name,
+          'to': HandoffStatus.noHandoff.name,
+        },
+      ]);
+    });
+
+    test('declining "is the bug resolved?" resets nothing and logs nothing',
+        () async {
+      final io = _io(handoff: _richHandoff);
+      await expectLater(
+        runTeardown(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => false,
+          promptFn: _prompts(_richAnswers),
+          pickFn: _pick(TeardownCategory.stateManagement),
+          exitFn: _throwExit,
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(loggedMoves(io, _workspace), isEmpty);
+    });
+  });
 
   group('teardown — archive and reset', () {
     test('writes one archive file', () async {

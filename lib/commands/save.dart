@@ -32,7 +32,7 @@ Future<SkillsUpdateResult> runSave({
   print(render.header('CLAUDART SAVE'));
 
   // 1 — Registry lookup.
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final projectRoot = projectRootOverride ?? gitCtx?.root;
   if (projectRoot == null) {
     print('\n✗ Not inside a git repository. Cannot detect project.\n');
@@ -150,7 +150,9 @@ void _printReport(
 ) {
   print('\n✓ Checkpoint: ${p.basename(checkpointFile)}  (${durationMs}ms)');
   print('  Branch : ${liveBranch ?? state.branch}');
-  print('  Status : ${state.status.value}');
+  // A blank handoff is no-handoff, not its stale Status line.
+  final shown = state.effectiveStatus;
+  print('  Status : ${shown.value}');
 
   if (skillsResult == SkillsUpdateResult.written) {
     print('  Skills : pending entry written (root cause confirmed)');
@@ -159,7 +161,7 @@ void _printReport(
   }
 
   print('');
-  switch (state.status) {
+  switch (shown) {
     case HandoffStatus.suggestInvestigating:
       print('Continue exploring. Run /save again when root cause is confirmed.');
     case HandoffStatus.readyForSuggest:

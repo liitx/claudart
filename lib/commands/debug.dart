@@ -3,6 +3,8 @@ import 'package:path/path.dart' as p;
 import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import 'claudart_command.dart';
 import '../md_io.dart';
 import 'scope_files.dart';
 import '../paths.dart';
@@ -12,6 +14,8 @@ import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../registry.dart';
+import '../session/handoff_event.dart';
+import '../session/invalid_handoff_transition_exception.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../ui/menu.dart';
@@ -22,12 +26,10 @@ Future<void> runDebug({
   String? projectRootOverride,
   Never Function(int code)? exitFn,
   PipelineExecutor? executor,
-  bool Function(String question)? confirmFn,
   int Function(List<String> items)? pickFn,
 }) async {
   final fileIO   = io       ?? const RealFileIO();
   final exit_    = exitFn   ?? exit;
-  final confirm_ = confirmFn ?? confirm;
   final pick_    = pickFn   ?? arrowMenu;
 
   // ── Locate project ──────────────────────────────────────────────────────────
@@ -53,6 +55,10 @@ Future<void> runDebug({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
+        onStepCompleted: (event) => SessionLogger(
+          io: fileIO,
+          workspacePath: workspace,
+        ).logStepModels(command: ClaudartCommand.debug.name, event: event),
       );
   final handoffFile = handoffPathFor(workspace);
 
@@ -62,14 +68,13 @@ Future<void> runDebug({
   }
 
   final handoff = fileIO.read(handoffFile);
-  final status  = readStatus(handoff);
+  final status  = readHandoffStatus(handoff);
 
-  if (status != 'ready-for-debug') {
-    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}$status${ansi.reset} — expected ready-for-debug.');
-    if (!confirm_('Run debug anyway?')) {
-      print('Aborted.');
-      exit_(0);
-    }
+  // Fail before spending any model call when the state machine would reject
+  // the write this run ends with. The old "Run debug anyway?" override could
+  // only end in this rejection, so it is gone.
+  if (status.after(HandoffEvent.fixApplied) == null) {
+    throw InvalidHandoffTransitionException(status, HandoffEvent.fixApplied);
   }
 
   // ── Parse handoff ───────────────────────────────────────────────────────────
@@ -203,7 +208,18 @@ Future<void> runDebug({
   }
 
   var updated = handoff;
-  updated = updateStatus(updated, 'debug-complete');
+  updated = applyHandoffEvent(
+    updated,
+    HandoffEvent.fixApplied,
+    onTransition: (transition) => SessionLogger(
+      io: fileIO,
+      sensitivityMode: entry.sensitivityMode,
+      workspacePath: workspace,
+    ).logTransition(
+      command: ClaudartCommand.debug.name,
+      transition: transition,
+    ),
+  );
   fileIO.write(handoffFile, updated);
 
   stdout.write(

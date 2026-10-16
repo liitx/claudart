@@ -28,6 +28,8 @@ import 'package:claudart/commands/debug.dart';
 import 'package:claudart/commands/flow.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/status.dart';
+import 'package:claudart/commands/project_selector.dart';
+import 'package:claudart/commands/workspaces.dart';
 import 'package:claudart/commands/resume.dart';
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/session/run_mode.dart';
@@ -69,11 +71,14 @@ Commands:
   experiment <name> -- <cmd> [args]  Run a command and tee output to experiments/<name>_<ts>.ansi
   compile                Recompile the claudart binary and install it to ~/bin/claudart
   doctor                 Fresh-machine verification: tools on PATH, git identity, gh auth, provider env
+  workspaces [--json]    List every linked workspace and where its session stands (for you or an agent)
   version                Print the current claudart version
 
 Options:
   -h, --help       Show this help message
   --version        Print the current claudart version
+  --project <name> Act on that linked workspace instead of the current directory's (session
+                   commands only; see `claudart workspaces` for the names)
   --debug          Write per-step trace (system prompt, message, token
                    counts, cost) to \$CLAUDART_DEBUG_PATH (default
                    /tmp/claudart_debug.log). Same effect as setting
@@ -92,6 +97,20 @@ Future<void> main(List<String> rawArgs) async {
     }
     args.add(arg);
   }
+
+  final firstCommand =
+      args.isEmpty ? null : ClaudartCommand.fromString(args.first);
+  final projectOption = firstCommand?.ownsProjectOption ?? false
+      ? (args: List<String>.of(args), name: null, missingValue: false)
+      : extractProjectOption(args);
+  if (projectOption.missingValue) {
+    print('--project needs a project name. '
+        'Run `claudart workspaces` to see the linked ones.');
+    exit(1);
+  }
+  args
+    ..clear()
+    ..addAll(projectOption.args);
 
   if (args.firstOrNull == '-h' || args.firstOrNull == '--help') {
     print(_usage);
@@ -116,6 +135,34 @@ Future<void> main(List<String> rawArgs) async {
     }
   }
 
+  // `--project <name>`: resolve the registered name to its project root once,
+  // here, and hand it to the command as its project override.
+  String? selectedRoot;
+  final projectName = projectOption.name;
+  if (projectName != null) {
+    if (claudartCommand == null) {
+      print('--project needs a command, '
+          'e.g. claudart --project $projectName status');
+      exit(1);
+    }
+    if (!claudartCommand.supportsProjectSelector) {
+      print('--project is not supported by '
+          '`claudart ${claudartCommand.wireName}`.');
+      exit(1);
+    }
+    final selection = selectProject(Registry.load(), projectName);
+    switch (selection) {
+      case ProjectSelected(:final entry):
+        selectedRoot = entry.projectRoot;
+        logProjectTargeted(entry, claudartCommand.wireName);
+      case ProjectNotFound():
+        print(selection.message);
+        exit(1);
+      case NoProjectSelected():
+        break;
+    }
+  }
+
   try {
     if (args.isEmpty) {
       // Covered by the same catch as every other command: the launcher
@@ -126,7 +173,7 @@ Future<void> main(List<String> rawArgs) async {
       await runLauncher();
       exit(0);
     }
-    await _dispatch(claudartCommand!, rest);
+    await _dispatch(claudartCommand!, rest, projectRoot: selectedRoot);
   } on ClaudartException catch (e) {
     // Central catch: every command's ClaudartException lands here exactly
     // once, so error logging doesn't depend on each command file
@@ -140,7 +187,7 @@ Future<void> main(List<String> rawArgs) async {
     // paths/causes even with sensitivityMode on).
     print('\n✗ ${e.toString()}');
     print('  ${e.failureType.suggestedAction}\n');
-    final errorRoot = detectGitContext()?.root;
+    final errorRoot = selectedRoot ?? detectGitContext()?.root;
     final errorEntry = errorRoot != null ? Registry.load().findByProjectRoot(errorRoot) : null;
     final errorTokenMap = errorEntry != null && errorEntry.sensitivityMode
         ? TokenMap.load(tokenMapPathFor(errorEntry.workspacePath))
@@ -162,12 +209,16 @@ Future<void> main(List<String> rawArgs) async {
   }
 }
 
-Future<void> _dispatch(ClaudartCommand claudartCommand, List<String> rest) async {
+Future<void> _dispatch(
+  ClaudartCommand claudartCommand,
+  List<String> rest, {
+  String? projectRoot,
+}) async {
   switch (claudartCommand) {
     case ClaudartCommand.chat:
       await runChatShell();
     case ClaudartCommand.archives:
-      await runArchives();
+      await runArchives(projectRootOverride: projectRoot);
     case ClaudartCommand.add:
       await runAdd();
     case ClaudartCommand.init:
@@ -178,39 +229,46 @@ Future<void> _dispatch(ClaudartCommand claudartCommand, List<String> rest) async
       runUnlink();
     case ClaudartCommand.setup:
       await runSetup(
-        projectRootOverride: rest.isNotEmpty ? rest.first : null,
+        projectRootOverride:
+            projectRoot ?? (rest.isNotEmpty ? rest.first : null),
       );
     case ClaudartCommand.status:
-      await runStatus(prompt: rest.contains('--prompt'));
+      await runStatus(
+        projectRootOverride: projectRoot,
+        prompt: rest.contains('--prompt'),
+      );
     case ClaudartCommand.teardown:
       await runTeardown(
+        projectRootOverride: projectRoot,
         mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
       );
     case ClaudartCommand.suggest:
-      await runSuggest();
+      await runSuggest(projectRootOverride: projectRoot);
     case ClaudartCommand.debug:
-      await runDebug();
+      await runDebug(projectRootOverride: projectRoot);
     case ClaudartCommand.flow:
-      await runFlow();
+      await runFlow(projectRootOverride: projectRoot);
     case ClaudartCommand.save:
-      await runSave();
+      await runSave(projectRootOverride: projectRoot);
     case ClaudartCommand.rotate:
       final rotated = await runRotate(
+        projectRootOverride: projectRoot,
         mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
       );
       // A failed build gate must be visible to scripts (zedup, CI): exit 1.
       if (rotated == RotateResult.buildFailed) exit(1);
     case ClaudartCommand.kill:
       await runKill(
+        projectRootOverride: projectRoot,
         mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
       );
     case ClaudartCommand.resume:
-      await runResume();
+      await runResume(projectRootOverride: projectRoot);
     case ClaudartCommand.confirmPending:
       await runConfirmPending(rest);
     case ClaudartCommand.preflight:
       final op = rest.isNotEmpty ? rest.first : 'test';
-      await runPreflightCmd(op);
+      await runPreflightCmd(op, projectRootOverride: projectRoot);
     case ClaudartCommand.scan:
       String? scope;
       final bool full = rest.contains('--full');
@@ -251,6 +309,11 @@ Future<void> _dispatch(ClaudartCommand claudartCommand, List<String> rest) async
       await runExperiment(rest);
     case ClaudartCommand.compile:
       exit(_compile());
+    case ClaudartCommand.workspaces:
+      await runWorkspaces(
+        projectRootOverride: projectRoot,
+        asJson: rest.contains('--json'),
+      );
     case ClaudartCommand.doctor:
       final doctorRoot = detectGitContext()?.root;
       final doctorEntry = doctorRoot != null

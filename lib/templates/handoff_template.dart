@@ -1,3 +1,5 @@
+import '../session/session_state.dart' show HandoffStatus;
+
 String handoffTemplate({
   required String branch,
   required String date,
@@ -25,7 +27,7 @@ String handoffTemplate({
 
 ## Status
 
-suggest-investigating
+${HandoffStatus.suggestInvestigating.value}
 
 ---
 
@@ -124,7 +126,7 @@ String stampHandoffUpdated(String handoff) {
   return handoff.replaceFirst(RegExp(r'^(> )', multiLine: true), '$updatedLine\n> ');
 }
 
-const String blankHandoff = '''# Agent Handoff
+final String blankHandoff = '''# Agent Handoff
 
 > Source of truth between suggest and debug agents.
 > Run `claudart setup` to begin a new session.
@@ -133,7 +135,7 @@ const String blankHandoff = '''# Agent Handoff
 
 ## Status
 
-suggest-investigating
+${HandoffStatus.suggestInvestigating.value}
 
 ---
 

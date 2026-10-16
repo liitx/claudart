@@ -12,6 +12,7 @@ import 'kill.dart';
 import 'link.dart';
 import 'setup.dart';
 import '../ui/render.dart' as render;
+import '../workspace/workspace_link_state.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
@@ -33,7 +34,7 @@ Future<void> runLauncher({
   // ── Phase 1: Registry load ─────────────────────────────────────────────────
 
   final registry = Registry.load(io: fileIO);
-  final gitCtx = projectRootOverride != null ? null : detectGitContext();
+  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
   final currentRoot = projectRootOverride ?? gitCtx?.root;
   final currentBranch = gitCtx?.branch;
 
@@ -98,8 +99,10 @@ Future<void> runLauncher({
         currentEntry != null && selected.workspacePath == currentEntry.workspacePath;
     final branch = (isCurrentProject ? currentBranch : null) ?? state.branch;
     print('  Branch : $branch');
-    final statusColour = _statusColour(state.status);
-    print('  Status : ${ansi.c(statusColour, state.status.value)}');
+    // A blank handoff is no-handoff, not its stale Status line.
+    final shown = state.effectiveStatus;
+    final statusColour = render.statusColour(shown);
+    print('  Status : ${ansi.c(statusColour, shown.value)}');
     if (state.hasActiveContent) {
       print('  Bug    : ${_truncate(state.bug)}');
     }
@@ -207,11 +210,7 @@ List<String> _buildProjectItems({
   for (final e in entries) {
     final isCurrent = e == currentEntry;
     final locked = isLocked(e.workspacePath, io: fileIO);
-    // .claude is either a symlink (the normal case) or a real directory
-    // when link.dart couldn't symlink it — both mean "linked". Same fix
-    // as link.dart/kill.dart's own symlink-only checks on this branch.
-    final claudePath = p.join(e.projectRoot, IdeIntegration.claudeCode.dirName);
-    final linked = fileIO.linkExists(claudePath) || fileIO.dirExists(claudePath);
+    final linked = linkStateOf(fileIO, e.projectRoot).isLinked;
 
     final dot = locked
         ? ansi.c(ansi.yellow, '⚠')
@@ -257,16 +256,6 @@ void _printResumeInstructions(HandoffStatus status) {
   print('');
 }
 
-String _statusColour(HandoffStatus s) => switch (s) {
-      HandoffStatus.suggestInvestigating ||
-      HandoffStatus.readyForSuggest      => ansi.cyan,
-      HandoffStatus.readyForDebug        => ansi.yellow,
-      HandoffStatus.debugInProgress ||
-      HandoffStatus.debugComplete        => ansi.green,
-      HandoffStatus.needsSuggest         => ansi.red,
-      HandoffStatus.unknown ||
-      HandoffStatus.noHandoff            => ansi.dim,
-    };
 
 String _truncate(String s, {int max = 60}) =>
     s.length > max ? '${s.substring(0, max)}…' : s;

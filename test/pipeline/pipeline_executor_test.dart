@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/agent_step.dart';
 import 'package:claudart/pipeline/debug_mode.dart' show StepDebugTrace;
+import 'package:claudart/pipeline/model_observation.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -151,6 +152,106 @@ void main() {
       );
 
       expect(ctx['a'], equals('unchanged'));
+    });
+  });
+
+  group('PipelineExecutor — per-step model record', () {
+    const observed = ModelObservation(
+      observedModelId: 'claude-haiku-4-5-20251001',
+      inputTokens: 7,
+    );
+    final step = AgentStep(
+      id: 'a',
+      label: 'Step A',
+      model: AgentModel.haiku,
+      systemPrompt: 'sys',
+      buildPrompt: (_) => 'msg',
+    );
+
+    Future<({List<PipelineEvent> events, List<String> calls})> runWith(
+      List<ModelObservation> models,
+    ) async {
+      final calls = <String>[];
+      final exec = PipelineExecutor(
+        runner: ({
+          required model,
+          required systemPrompt,
+          required message,
+          required workingDir,
+          StepMode mode = StepMode.project,
+        }) async {
+          calls.add('${model.alias}|$systemPrompt|$message|$mode');
+          return StepResult(
+            text: 'answer',
+            usage: const Usage(input: 1, output: 1),
+            models: models,
+          );
+        },
+      );
+      final events = await exec
+          .run(steps: [step], ctx: _ctx(), displayStep: 1, displayTotal: 1)
+          .toList();
+      return (events: events, calls: calls);
+    }
+
+    test('the completion event carries the intended and the observed model',
+        () async {
+      final run = await runWith([observed]);
+      final completed = run.events.whereType<AgentCompleted>().single;
+      expect(completed.intendedModel, AgentModel.haiku);
+      expect(completed.models, [observed]);
+    });
+
+    test('with nothing observed the record is the intended model alone',
+        () async {
+      final run = await runWith(const []);
+      final completed = run.events.whereType<AgentCompleted>().single;
+      expect(completed.intendedModel, AgentModel.haiku);
+      expect(completed.models, isEmpty);
+    });
+
+    test('runFuture hands each completed step to onStepCompleted; run does not',
+        () async {
+      final seen = <AgentCompleted>[];
+      PipelineExecutor build() => PipelineExecutor(
+            runner: ({
+              required model,
+              required systemPrompt,
+              required message,
+              required workingDir,
+              StepMode mode = StepMode.project,
+            }) async =>
+                const StepResult(
+                  text: 'answer',
+                  usage: Usage(input: 1, output: 1),
+                  models: [observed],
+                ),
+            onStepCompleted: seen.add,
+          );
+
+      await build()
+          .run(steps: [step], ctx: _ctx(), displayStep: 1, displayTotal: 1)
+          .toList();
+      expect(seen, isEmpty);
+
+      await _capturePrinted(() async {
+        await build().runFuture(
+          steps: [step],
+          ctx: _ctx(),
+          displayStep: 1,
+          displayTotal: 1,
+        );
+      });
+      expect(seen.single.models, [observed]);
+      expect(seen.single.intendedModel, AgentModel.haiku);
+    });
+
+    // Token conservation: observing is read-only on a line already received.
+    test('observing adds no model call and changes no prompt', () async {
+      final without = await runWith(const []);
+      final withModels = await runWith([observed]);
+      expect(withModels.calls.length, 1);
+      expect(withModels.calls, without.calls);
     });
   });
 

@@ -24,6 +24,7 @@
 //   zedup UI       — renders Agents Workflow side pane from the same stream.
 
 import 'agent_model.dart';
+import 'model_observation.dart';
 import 'pipeline_context.dart';
 import 'usage.dart';
 
@@ -84,9 +85,17 @@ final class AgentCompleted extends PipelineEvent {
   /// Number of agentic turns (tool-call round trips) this step's call took.
   final int? numTurns;
 
+  /// The model the step intended, and the models it actually ran on (from the
+  /// stream). Together they are the per-step model record.
+  /// Null only for events built by a consumer that does not know it.
+  final AgentModel? intendedModel;
+  final List<ModelObservation> models;
+
   const AgentCompleted({
     required this.stepId,
     required this.usage,
+    this.intendedModel,
+    this.models = const [],
     this.postProcessRewrote = false,
     this.thinking,
     this.stopReason,

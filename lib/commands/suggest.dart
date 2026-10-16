@@ -2,6 +2,8 @@ import 'dart:io';
 import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import 'claudart_command.dart';
 import '../md_io.dart';
 import 'scope_files.dart';
 import '../paths.dart';
@@ -14,6 +16,9 @@ import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../session/session_ops.dart';
+import '../session/handoff_event.dart';
+import '../session/invalid_handoff_transition_exception.dart';
+import '../session/session_state.dart' show HandoffStatus;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 
@@ -55,6 +60,10 @@ Future<void> runSuggest({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
+        onStepCompleted: (event) => SessionLogger(
+          io: fileIO,
+          workspacePath: workspace,
+        ).logStepModels(command: ClaudartCommand.suggest.name, event: event),
       );
   final handoffFile  = handoffPathFor(workspace);
 
@@ -64,10 +73,23 @@ Future<void> runSuggest({
   }
 
   final handoff = fileIO.read(handoffFile);
-  final status  = readStatus(handoff);
+  final status  = readHandoffStatus(handoff);
 
-  if (status == 'ready-for-debug' || status == 'debug-in-progress') {
-    print('\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is ${ansi.bold}$status${ansi.reset} — suggest already ran.');
+  // Fail before spending any model call when the state machine would reject
+  // the write this run ends with.
+  if (status.after(HandoffEvent.saveConfirmedReady) == null) {
+    throw InvalidHandoffTransitionException(
+      status,
+      HandoffEvent.saveConfirmedReady,
+    );
+  }
+
+  if (status == HandoffStatus.readyForDebug ||
+      status == HandoffStatus.debugInProgress) {
+    print(
+      '\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is '
+      '${ansi.bold}${status.value}${ansi.reset} — suggest already ran.',
+    );
     if (!confirm_('Re-run suggest and overwrite?')) {
       print('Aborted.');
       exit_(0);
@@ -245,7 +267,18 @@ $mustNotTouch''';
   updated = updateSection(updated, 'Root Cause',  rootCause.trim());
   updated = updateSection(updated, 'Scope',        newScope.trim());
   updated = updateSection(updated, 'Constraints',  constraints.trim());
-  updated = updateStatus(updated, 'ready-for-debug');
+  updated = applyHandoffEvent(
+    updated,
+    HandoffEvent.saveConfirmedReady,
+    onTransition: (transition) => SessionLogger(
+      io: fileIO,
+      sensitivityMode: entry.sensitivityMode,
+      workspacePath: workspace,
+    ).logTransition(
+      command: ClaudartCommand.suggest.name,
+      transition: transition,
+    ),
+  );
   updated = updated.replaceFirst(
     RegExp(r'> Updated: [^\n]+'),
     '> Updated: ${DateTime.now().toIso8601String().split('.').first}',

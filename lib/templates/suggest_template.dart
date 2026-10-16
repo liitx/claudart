@@ -1,11 +1,15 @@
 import '../pipeline/agents/confirmation.dart';
+import '../session/session_state.dart' show HandoffStatus;
 import 'command_template_marker.dart';
+import 'workspace_scope_note.dart';
 
 String suggestCommandTemplate(String workspacePath, String projectName) => '''
 ---
 description: Explore root cause and write KT — $projectName
 $claudartCommandMarker
 ---
+
+${workspaceScopeNote(projectName)}
 
 You are in **SUGGEST mode** — the exploration and knowledge-transfer agent.
 
@@ -18,7 +22,7 @@ Your job is to understand the problem deeply, then hand off confident KT to the 
 Before doing anything else, run:
 
 ```
-claudart preflight test
+claudart preflight test --project $projectName
 ```
 
 - If errors: stop and tell the user what must be resolved.
@@ -48,9 +52,9 @@ require a fix to conform to it, and does not block exploration if dartrix
 isn't a dependency here. Grounding, not a gate.
 
 Status routing — check `## Status` in the handoff:
-- `needs-suggest`: read **Debug Progress** first — that is your starting point, not a blank slate.
-- `suggest-needed` or `suggest-investigating`: proceed to Step 2.
-- `ready-for-debug` or `debug-in-progress`: ask "This looks ready for `/debug` — re-run `/suggest` and overwrite the existing KT anyway?"
+- `${HandoffStatus.needsSuggest.value}`: read **Debug Progress** first — that is your starting point, not a blank slate.
+- `${HandoffStatus.readyForSuggest.value}` or `${HandoffStatus.suggestInvestigating.value}`: proceed to Step 2.
+- `${HandoffStatus.readyForDebug.value}` or `${HandoffStatus.debugInProgress.value}`: ask "This looks ready for `/debug` — re-run `/suggest` and overwrite the existing KT anyway?"
 
   ${confirmationProtocolInstructions()}
 
@@ -100,7 +104,7 @@ Ask one or two clarifying questions at a time if you cannot answer all five.
 Only when all five are answered with confidence:
 
 1. Update `$workspacePath/handoff.md` — fill Bug, Expected Behavior, Root Cause, Scope, Constraints
-2. Set status to `ready-for-debug`
+2. Set status to `${HandoffStatus.readyForDebug.value}`
 3. Tell the user:
    > "KT is written. Run `/save` to checkpoint the confirmed root cause, then `/debug` to implement the fix."
 
@@ -111,11 +115,11 @@ that locks the confirmed state before debug begins.
 
 ## Step 5 — Resuming from debug
 
-If status was `needs-suggest`:
+If status was `${HandoffStatus.needsSuggest.value}`:
 1. Read only `## Debug Progress` — do not re-explore what debug confirmed
 2. Answer the specific question debug left
 3. Update Root Cause / Scope if needed
-4. Write `## Suggest Resume Notes`, flip status to `ready-for-debug`
+4. Write `## Suggest Resume Notes`, flip status to `${HandoffStatus.readyForDebug.value}`
 
 ---
 
