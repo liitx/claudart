@@ -60,6 +60,9 @@ void main() {
     expect(summaries, isA<List<api.WorkspaceSummary>>());
     expect(api.HandoffEvent.values, isNotEmpty);
     expect(api.HandoffTransition, isNotNull);
+    expect(api.ClaudartCommand.values, isNotEmpty);
+    expect(api.CommandEntry.values, isNotEmpty);
+    expect(api.SessionLogger, isNotNull);
     expect(
       api.selectProject(api.Registry.load(io: io), 'my-app'),
       isA<api.ProjectSelected>(),
