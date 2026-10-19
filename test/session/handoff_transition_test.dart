@@ -329,4 +329,24 @@ void main() {
       );
     });
   });
+
+  // The persisted keys are the enum names, so renaming a variant would change
+  // what is written: each key is pinned here as a literal.
+  group('HandoffTransitionField keys', () {
+    const keys = <HandoffTransitionField, String>{
+      HandoffTransitionField.from: 'from',
+      HandoffTransitionField.event: 'event',
+      HandoffTransitionField.to: 'to',
+    };
+
+    for (final field in HandoffTransitionField.values) {
+      test('${field.name} is "${keys[field]}"', () {
+        expect(field.name, keys[field]);
+      });
+    }
+
+    test('every variant has a pinned key', () {
+      expect(keys.keys.toSet(), HandoffTransitionField.values.toSet());
+    });
+  });
 }

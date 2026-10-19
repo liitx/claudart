@@ -247,4 +247,35 @@ void main() {
       expect(json[ModelRecordField.drift.name], ['differsFromIntended']);
     });
   });
+
+  group('ModelObservationField keys', () {
+    // (persisted key, key in the stream's modelUsage object or null for the id)
+    const keys = <ModelObservationField, (String, String?)>{
+      ModelObservationField.observedModelId: ('observedModelId', null),
+      ModelObservationField.canonicalModel: ('canonicalModel', 'canonicalModel'),
+      ModelObservationField.provider: ('provider', 'provider'),
+      ModelObservationField.contextWindow: ('contextWindow', 'contextWindow'),
+      ModelObservationField.maxOutputTokens:
+          ('maxOutputTokens', 'maxOutputTokens'),
+      ModelObservationField.inputTokens: ('inputTokens', 'inputTokens'),
+      ModelObservationField.outputTokens: ('outputTokens', 'outputTokens'),
+      ModelObservationField.cacheReadTokens:
+          ('cacheReadTokens', 'cacheReadInputTokens'),
+      ModelObservationField.cacheCreationTokens:
+          ('cacheCreationTokens', 'cacheCreationInputTokens'),
+      ModelObservationField.thinkingTokens:
+          ('thinkingTokens', 'thinkingTokens'),
+      ModelObservationField.costUsd: ('costUsd', 'costUSD'),
+    };
+
+    for (final field in ModelObservationField.values) {
+      test('${field.name}: persisted and stream keys', () {
+        expect((field.jsonKey, field.wireStreamKey), keys[field]);
+      });
+    }
+
+    test('every variant has a pinned key', () {
+      expect(keys.keys.toSet(), ModelObservationField.values.toSet());
+    });
+  });
 }

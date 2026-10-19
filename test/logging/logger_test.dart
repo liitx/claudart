@@ -489,4 +489,198 @@ void main() {
       expect(entries.length, 4 * 25);
     }, timeout: const Timeout(Duration(seconds: 90)));
   });
+
+  // The persisted keys are the enum names, so renaming a variant would change
+  // what is written: each key is pinned here as a literal.
+  group('LogEntryField keys', () {
+    const keys = <LogEntryField, String>{
+      LogEntryField.ts: 'ts',
+      LogEntryField.command: 'command',
+      LogEntryField.outcome: 'outcome',
+      LogEntryField.sensitivityMode: 'sensitivityMode',
+      LogEntryField.scanScope: 'scanScope',
+      LogEntryField.filesScanned: 'filesScanned',
+      LogEntryField.tokensTotal: 'tokensTotal',
+      LogEntryField.tokensNew: 'tokensNew',
+      LogEntryField.scanDuration: 'scanDuration',
+      LogEntryField.durationMs: 'durationMs',
+      LogEntryField.platform: 'platform',
+      LogEntryField.claudartVersion: 'claudartVersion',
+      LogEntryField.fingerprint: 'fingerprint',
+      LogEntryField.reason: 'reason',
+      LogEntryField.suggestion: 'suggestion',
+      LogEntryField.stack: 'stack',
+      LogEntryField.count: 'count',
+      LogEntryField.firstSeen: 'firstSeen',
+      LogEntryField.lastSeen: 'lastSeen',
+      LogEntryField.filed: 'filed',
+      LogEntryField.issueId: 'issueId',
+      LogEntryField.rejected: 'rejected',
+    };
+
+    for (final field in LogEntryField.values) {
+      test('${field.name} is written as "${keys[field]}"', () {
+        expect(field.name, keys[field]);
+      });
+    }
+
+    test('every variant has a pinned key', () {
+      expect(keys.keys.toSet(), LogEntryField.values.toSet());
+    });
+  });
+
+  group('SessionLogger entries: optional fields appear only when passed', () {
+    late MemoryFileIO io;
+    late SessionLogger logger;
+
+    setUp(() {
+      io = MemoryFileIO();
+      logger = SessionLogger(io: io);
+    });
+
+    Map<String, dynamic> lastLine(String path) =>
+        jsonDecode(io.read(path).trim().split('\n').last)
+            as Map<String, dynamic>;
+
+    // logInteraction with a fixed command and outcome and one optional field.
+    void interaction(
+      SessionLogger l, {
+      String? scanScope,
+      int? filesScanned,
+      int? tokensTotal,
+      int? tokensNew,
+      double? scanDuration,
+      int? durationMs,
+      String? platform,
+      String? claudartVersion,
+    }) =>
+        l.logInteraction(
+          command: 'c',
+          outcome: 'o',
+          scanScope: scanScope,
+          filesScanned: filesScanned,
+          tokensTotal: tokensTotal,
+          tokensNew: tokensNew,
+          scanDuration: scanDuration,
+          durationMs: durationMs,
+          platform: platform,
+          claudartVersion: claudartVersion,
+        );
+
+    // One case per optional field of logInteraction: how to pass it, and the
+    // value it must be recorded as.
+    final interactionFields =
+        <LogEntryField, ({void Function(SessionLogger) pass, Object value})>{
+      LogEntryField.scanScope: (
+        pass: (l) => interaction(l, scanScope: 'lib'),
+        value: 'lib',
+      ),
+      LogEntryField.filesScanned: (
+        pass: (l) => interaction(l, filesScanned: 42),
+        value: 42,
+      ),
+      LogEntryField.tokensTotal: (
+        pass: (l) => interaction(l, tokensTotal: 10),
+        value: 10,
+      ),
+      LogEntryField.tokensNew: (
+        pass: (l) => interaction(l, tokensNew: 3),
+        value: 3,
+      ),
+      LogEntryField.scanDuration: (
+        pass: (l) => interaction(l, scanDuration: 1.5),
+        value: 1.5,
+      ),
+      LogEntryField.durationMs: (
+        pass: (l) => interaction(l, durationMs: 99),
+        value: 99,
+      ),
+      LogEntryField.platform: (
+        pass: (l) => interaction(l, platform: 'macos'),
+        value: 'macos',
+      ),
+      LogEntryField.claudartVersion: (
+        pass: (l) => interaction(l, claudartVersion: '1.2.3'),
+        value: '1.2.3',
+      ),
+    };
+
+    interactionFields.forEach((field, how) {
+      test('${field.name} is recorded when passed', () {
+        how.pass(logger);
+        expect(lastLine(_interactionsPath)[field.name], how.value);
+      });
+
+      test('${field.name} is absent when not passed', () {
+        logger.logInteraction(command: 'c', outcome: 'o');
+        expect(lastLine(_interactionsPath).containsKey(field.name), isFalse);
+      });
+    });
+
+    void logAnError({
+      String fingerprint = 'fp',
+      String? suggestion,
+      String? stackTrace,
+      Map<String, dynamic>? extra,
+    }) =>
+        logger.logError(
+          command: 'cmd',
+          errorType: 'boom',
+          fingerprint: fingerprint,
+          reason: 'why',
+          suggestion: suggestion,
+          stackTrace: stackTrace,
+          extra: extra,
+        );
+
+    test('an error records suggestion only when given', () {
+      logAnError(suggestion: 'try again');
+      expect(lastLine(_errorsPath)[LogEntryField.suggestion.name], 'try again');
+      io.delete(_errorsPath);
+      logAnError();
+      expect(
+        lastLine(_errorsPath).containsKey(LogEntryField.suggestion.name),
+        isFalse,
+      );
+    });
+
+    test('an error records the stack only when given', () {
+      logAnError(stackTrace: 'at a.dart:1');
+      expect(lastLine(_errorsPath)[LogEntryField.stack.name], 'at a.dart:1');
+      io.delete(_errorsPath);
+      logAnError();
+      expect(
+        lastLine(_errorsPath).containsKey(LogEntryField.stack.name),
+        isFalse,
+      );
+    });
+
+    test('extra fields are merged into a new error entry', () {
+      logAnError(extra: {'scanned': 7});
+      expect(lastLine(_errorsPath)['scanned'], 7);
+    });
+
+    test('the same fingerprint is one entry with a growing count', () {
+      logAnError();
+      logAnError();
+      logAnError();
+      final lines = io.read(_errorsPath).trim().split('\n');
+      expect(lines.length, 1);
+      expect(jsonDecode(lines.single)[LogEntryField.count.name], 3);
+    });
+
+    test('a different fingerprint is a separate entry', () {
+      logAnError(fingerprint: 'one');
+      logAnError(fingerprint: 'two');
+      expect(io.read(_errorsPath).trim().split('\n').length, 2);
+    });
+
+    test('a new error starts at count 1, unfiled, with no issue', () {
+      logAnError();
+      final entry = lastLine(_errorsPath);
+      expect(entry[LogEntryField.count.name], 1);
+      expect(entry[LogEntryField.filed.name], isFalse);
+      expect(entry[LogEntryField.issueId.name], isNull);
+    });
+  });
 }

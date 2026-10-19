@@ -65,21 +65,24 @@ class WorkspaceSummary {
 }
 
 /// The fields of [WorkspaceSummary.toJson]. The enum owns each key, so the
-/// machine-readable shape is declared once and consumers can enumerate it.
+/// machine-readable shape is declared once and consumers can enumerate it. A
+/// variant's name is its key unless [renamedKey] says otherwise.
 enum WorkspaceField {
-  workspaceName('name'),
-  projectRoot('projectRoot'),
-  workspacePath('workspacePath'),
-  sessionStatus('status'),
-  hasSession('hasSession'),
-  linkState('linkState'),
-  locked('locked'),
-  lastSession('lastSession'),
-  isCurrent('current');
+  workspaceName(renamedKey: 'name'),
+  projectRoot,
+  workspacePath,
+  sessionStatus(renamedKey: 'status'),
+  hasSession,
+  linkState,
+  locked,
+  lastSession,
+  isCurrent(renamedKey: 'current');
 
-  const WorkspaceField(this.jsonKey);
+  const WorkspaceField({this.renamedKey});
 
-  final String jsonKey;
+  final String? renamedKey;
+
+  String get jsonKey => renamedKey ?? name;
 }
 
 /// A column of the text listing; the enum owns its heading and its cell.

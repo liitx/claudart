@@ -259,3 +259,16 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | Valid JSON of the wrong shape threw a `TypeError` out of `Registry.load` (an Error, not an Exception) | fixed with the same shared parse; six unreadable shapes tested for load and save |
 | `WorkspaceConfig.load` had the same escape | fixed earlier (the sensitivity PR), four shapes tested |
 | Tests fail without the guard (8) and the real binary refuses `link` over a corrupt file with the typed message, leaving it untouched | proven |
+
+## Resolution log, paradigm pass on this session's code (2026-10-19)
+
+Audit against dartrix's PARADIGMS (`consts`, enums as the spine) and the claudart self-check: every touched lib file scanned for string literals repeated within the file.
+
+| Item | Status |
+|---|---|
+| Persisted keys written as bare strings in code I wrote: `ModelObservationField` (key repeated its own name), `WorkspaceField`, the transition keys, and every key the session logger writes | fixed: a variant's name is its key (`renamedKey` / `wireStreamKey` where they differ); new `LogEntryField` and `HandoffTransitionField` own the rest |
+| The hook type was a second `'command'` literal beside the settings key of the same name | fixed: `ClaudeHookType` enum |
+| A name-is-the-key design means renaming a variant silently changes persisted data | guarded: every key pinned as an independent literal, one test per variant, plus a no-variant-missing check; golden topology docs unchanged, so the persisted keys are byte-identical |
+| `logInteraction`/`logError` optional fields had no test that a key appears only when passed (6 survivors) | fixed: one test per field, present and absent; logger.dart survivors 16 -> 10 |
+| Older repeated literals, not from this session, left for one dedicated change: the `fromJson`/`toJson` key pairs in `registry.dart`, `archive_entry.dart` and `workspace_config.dart`; the status strings in `session_state.dart`; CLI prompts and divider strings in `commands/`; template prose | open: propose enum-owned keys for the JSON-backed models, then the rest |
+| Process slip: I overwrote an existing test file (`handoff_transition_test.dart`) with a new one; caught from the diff, restored from git, only the new group appended | noted |
