@@ -15,6 +15,11 @@ const int _maxInteractions = 500;
 const int _maxErrors = 200;
 const int _maxTransitions = 500;
 const int _maxPerformance = 50;
+
+/// A jsonl log may run this many lines past its cap before it is trimmed back
+/// to the cap, so the rewrite (the only step concurrent writers can race on)
+/// happens once per this many appends, not on every one.
+const int _trimSlackLines = 50;
 const int _maxModelRecords = 500;
 
 /// Appends structured log entries to workspace log files.
@@ -233,7 +238,7 @@ class SessionLogger {
     if (lines.isEmpty) {
       lines.add(
           '| timestamp | command | filesScanned | duration | tokensNew | outcome |');
-      lines.add('|-----------|---------|-------------|----------|-----------|--------|');
+      
     }
 
     // Data lines start after the 2-line header
@@ -272,9 +277,20 @@ class SessionLogger {
     Map<String, dynamic> entry,
     int maxLines,
   ) {
-    final existing = _readJsonlEntries(path);
-    existing.add(entry);
-    _writeJsonl(path, existing, maxLines);
+    // One appended line: nothing is read back or rewritten, so two processes
+    // logging at once cannot overwrite each other.
+    _io.append(path, '${jsonEncode(entry)}\n');
+    _trimIfOver(path, maxLines);
+  }
+
+  void _trimIfOver(String path, int maxLines) {
+    final lines =
+        _io.read(path).split('\n').where((l) => l.isNotEmpty).toList();
+    if (lines.length <= maxLines + _trimSlackLines) return;
+    _io.write(
+      path,
+      '${lines.sublist(lines.length - maxLines).join('\n')}\n',
+    );
   }
 
   void _writeJsonl(
