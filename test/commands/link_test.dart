@@ -1055,4 +1055,22 @@ dependencies:
       expect(result.printed, isNot(contains('workspace.json marks')));
     });
   });
+
+  group('link — an unreadable registry.json', () {
+    test('refuses to register over it and leaves it untouched', () async {
+      const corrupt = '{"workspaces": [ {"name": "kept"';
+      final io = MemoryFileIO(files: {registryPath: corrupt});
+      await expectLater(
+        runLink(
+          [_projectName, '--no-sensitive'],
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => false,
+          exitFn: _throwExit,
+        ),
+        throwsA(isA<CorruptRegistryException>()),
+      );
+      expect(io.read(registryPath), corrupt);
+    });
+  });
 }

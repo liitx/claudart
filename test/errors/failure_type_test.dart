@@ -85,6 +85,25 @@ void main() {
   // inside providerNotConfigured's and stepProducedNoResult's suggestedAction
   // text survived an isNotEmpty-only check). archiveIndexCorrupt has the
   // same gap but predates this session — filed as an issue, not fixed here.
+  group('FailureType.registryCorrupt', () {
+    test('rolls up to workspace and keeps its default fault class', () {
+      expect(FailureType.registryCorrupt.errorType, ErrorType.workspace);
+      expect(
+        FailureType.registryCorrupt.effectiveFaultClass,
+        FaultClass.environmentFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(FailureType.registryCorrupt.label, 'Registry corrupt');
+      expect(
+        FailureType.registryCorrupt.suggestedAction,
+        'Inspect registry.json by hand, or restore it from a backup -- it '
+        'will not be silently overwritten. `claudart doctor` reports it.',
+      );
+    });
+  });
+
   group('FailureType new-variant exact text', () {
     test('providerNotConfigured suggestedAction says how to supply a provider', () {
       expect(

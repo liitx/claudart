@@ -17,6 +17,7 @@ import 'fault_class.dart';
 enum FailureType {
   scanThresholdExceeded,
   archiveIndexCorrupt,
+  registryCorrupt,
   sessionCloseFailed,
   invalidHandoffTransition,
   workspaceLocked,
@@ -33,7 +34,9 @@ enum FailureType {
         FailureType.sessionCloseFailed ||
         FailureType.invalidHandoffTransition =>
           ErrorType.session,
-        FailureType.workspaceLocked => ErrorType.workspace,
+        FailureType.workspaceLocked ||
+        FailureType.registryCorrupt =>
+          ErrorType.workspace,
         FailureType.providerNotConfigured ||
         FailureType.stepTimedOut ||
         FailureType.stepExitedNonzero ||
@@ -70,6 +73,7 @@ enum FailureType {
   String get label => switch (this) {
         FailureType.scanThresholdExceeded => 'Scan threshold exceeded',
         FailureType.archiveIndexCorrupt => 'Archive index corrupt',
+        FailureType.registryCorrupt => 'Registry corrupt',
         FailureType.sessionCloseFailed => 'Session close failed',
         FailureType.invalidHandoffTransition => 'Invalid handoff transition',
         FailureType.workspaceLocked => 'Workspace locked',
@@ -88,6 +92,10 @@ enum FailureType {
         FailureType.archiveIndexCorrupt =>
           'Inspect archive/index.json by hand, or restore it from a backup '
               '-- it will not be silently overwritten.',
+        FailureType.registryCorrupt =>
+          'Inspect registry.json by hand, or restore it from a backup -- it '
+              'will not be silently overwritten. `claudart doctor` reports '
+              'it.',
         FailureType.sessionCloseFailed =>
           'Check the workspace state has been rolled back correctly, then '
               'retry the operation.',
