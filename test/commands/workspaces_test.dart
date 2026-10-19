@@ -63,6 +63,8 @@ void main() {
     expect(api.ClaudartCommand.values, isNotEmpty);
     expect(api.CommandEntry.values, isNotEmpty);
     expect(api.SessionLogger, isNotNull);
+    expect(api.FaultClass.values, isNotEmpty);
+    expect(api.FaultSeverity.values, isNotEmpty);
     expect(
       api.selectProject(api.Registry.load(io: io), 'my-app'),
       isA<api.ProjectSelected>(),
