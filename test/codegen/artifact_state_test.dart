@@ -5,6 +5,8 @@ import 'package:claudart/codegen/artifact_state.dart';
 import 'package:claudart/codegen/claudart_artifact.dart';
 import 'package:claudart/codegen/dependency_config_codegen.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/registry.dart';
+import 'package:claudart/templates/claude_settings_template.dart';
 import 'package:claudart/templates/claude_template.dart' show generatedMarker;
 import '../helpers/mocks.dart';
 
@@ -37,11 +39,23 @@ Future<MemoryFileIO> _linked() async {
   return io;
 }
 
-ArtifactState _state(ClaudartArtifact artifact, MemoryFileIO io) => stateOf(
+/// The artifact's state as `doctor` asks it: the registry entry, when there is
+/// one, answers whether the debug trace is permitted.
+ArtifactState _state(
+  ClaudartArtifact artifact,
+  MemoryFileIO io, {
+  bool? permitsDebugTrace,
+}) =>
+    stateOf(
       artifact,
       projectRoot: _projectRoot,
       workspace: _workspace,
       projectName: _projectName,
+      permitsDebugTrace: permitsDebugTrace ??
+          Registry.load(io: io)
+              .findByProjectRoot(_projectRoot)
+              ?.permitsDebugTrace ??
+          true,
       io: io,
     );
 
@@ -239,6 +253,56 @@ void main() {
       expect(written, contains('"OTHER": "1"'));
       expect(written, contains('"CLAUDART_DEBUG": "0"'));
       expect(written, contains('claudart hook pre-edit'));
+    });
+
+    Future<MemoryFileIO> linkedSensitive({String? settings}) async {
+      final io = MemoryFileIO(files: {
+        p.join(_projectRoot, 'pubspec.yaml'): 'name: $_projectName\n',
+        if (settings != null) settingsPath(): settings,
+      });
+      await runLink(
+        [_projectName, '--sensitive'],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      return io;
+    }
+
+    // The trace writes full prompts to disk, so a sensitive project must not
+    // have it switched on by the settings claudart writes.
+    test('a sensitive project gets the hook but no debug env var', () async {
+      final io = await linkedSensitive();
+      final written = io.read(settingsPath());
+      expect(written, contains('claudart hook pre-edit'));
+      expect(written, isNot(contains('CLAUDART_DEBUG')));
+      expect(_state(ClaudartArtifact.claudeSettings, io), ArtifactState.fresh);
+    });
+
+    test('link removes the debug var it set earlier from a sensitive project',
+        () async {
+      final io = await linkedSensitive(
+        settings: '{"env":{"CLAUDART_DEBUG":"1","KEEP":"me"}}',
+      );
+      final written = io.read(settingsPath());
+      expect(written, isNot(contains('CLAUDART_DEBUG')));
+      expect(written, contains('"KEEP": "me"'));
+    });
+
+    test('settings that still carry the 1 are stale when the trace is not '
+        'permitted, fresh when it is', () {
+      final io = MemoryFileIO(files: {
+        settingsPath(): mergeClaudeSettings('', debugTrace: true),
+      });
+      expect(
+        _state(ClaudartArtifact.claudeSettings, io, permitsDebugTrace: false),
+        ArtifactState.stale,
+      );
+      expect(
+        _state(ClaudartArtifact.claudeSettings, io, permitsDebugTrace: true),
+        ArtifactState.fresh,
+      );
     });
 
     test('link leaves an unreadable settings.json alone', () async {

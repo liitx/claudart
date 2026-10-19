@@ -93,9 +93,11 @@ Future<void> main(List<String> rawArgs) async {
   // so subcommand arg parsing doesn't see them. `--debug` is repeatable
   // / position-independent — anywhere in argv enables it.
   final args = <String>[];
+  var explicitDebug = false;
   for (final arg in rawArgs) {
     if (arg == '--debug') {
       setDebugEnabled(true);
+      explicitDebug = true;
       continue;
     }
     args.add(arg);
@@ -163,6 +165,22 @@ Future<void> main(List<String> rawArgs) async {
         exit(1);
       case NoProjectSelected():
         break;
+    }
+  }
+
+  // The env var is ambient (the settings artifact sets it for every Claude Code
+  // session), so for a sensitive project it must not write prompts to disk;
+  // only an explicit --debug does. The project is only looked up when it
+  // matters, so no `git` process runs on an ordinary invocation.
+  if (!explicitDebug &&
+      Platform.environment[kClaudartDebugEnvVar] ==
+          kClaudartDebugEnabledValue) {
+    final debugRoot = selectedRoot ?? detectGitContext()?.root;
+    final debugEntry =
+        debugRoot == null ? null : Registry.load().findByProjectRoot(debugRoot);
+    if (debugEntry != null && !debugEntry.permitsDebugTrace) {
+      suppressAmbientDebug(true);
+      stderr.writeln(kAmbientDebugSuppressedNotice);
     }
   }
 

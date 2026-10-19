@@ -619,6 +619,13 @@ literal; `claude_settings_template_test.dart` and `artifact_state_test.dart` pin
 and the fresh/stale/missing states. Gap: a build of claudart on `PATH` without `hook` makes every edit show a non-blocking
 hook error until `claudart compile` is run.
 
+Sensitivity and the trace (the review's C5). The trace writes full prompts to disk, so it must not run for a sensitive
+project. Sensitivity is stored in `registry.json` and in `workspace.json`, and the two can disagree; `link` reconciles
+them once (`reconcileSensitivity`, never weakening) and records the result on the `RegistryEntry`, which is the one place
+anything asks (`permitsDebugTrace`). The settings artifact adds `CLAUDART_DEBUG` only where the entry permits it and
+removes the `1` it set otherwise; the binary ignores an ambient `CLAUDART_DEBUG` for a project that does not permit it,
+while an explicit `--debug` still works.
+
 ### 9.8 Layering (audited, open)
 
 Dependencies are meant to run downward, with `lib/commands/` on top. Audited against the imports:

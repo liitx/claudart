@@ -70,11 +70,29 @@ void setDebugEnabled(bool value) {
   _runtimeDebugEnabled = value;
 }
 
-/// True when either the CLI flag was set or the env var equals
-/// [kClaudartDebugEnabledValue]. [environment] defaults to the
-/// process env; tests inject a clean map.
+bool _ambientDebugSuppressed = false;
+
+/// What the CLI tells the user when the env var is ignored.
+const String kAmbientDebugSuppressedNotice =
+    'CLAUDART_DEBUG is ignored: this project is sensitive, and the trace '
+    'writes prompts to disk. Pass --debug to trace it anyway.';
+
+/// Set by the CLI for a sensitive project. The env var is ambient (the
+/// settings `claudart link` writes set it for every Claude Code session in a
+/// project), so it must not write prompts and messages to disk for a
+/// sensitive project; the explicit `--debug` flag, a deliberate act, still
+/// does.
+void suppressAmbientDebug(bool value) {
+  _ambientDebugSuppressed = value;
+}
+
+/// True when the CLI flag was set, or the env var equals
+/// [kClaudartDebugEnabledValue] and a sensitive project has not suppressed it
+/// ([suppressAmbientDebug]). [environment] defaults to the process env; tests
+/// inject a clean map.
 bool debugEnabled({Map<String, String>? environment}) {
   if (_runtimeDebugEnabled) return true;
+  if (_ambientDebugSuppressed) return false;
   final env = environment ?? Platform.environment;
   return env[kClaudartDebugEnvVar] == kClaudartDebugEnabledValue;
 }

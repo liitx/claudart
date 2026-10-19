@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:test/test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
@@ -957,6 +959,100 @@ dependencies:
       );
       final cfg = WorkspaceConfig.load(workspaceFor(_projectName), io: io)!;
       expect(cfg.owner.strict, isTrue);
+    });
+  });
+
+  // Sensitivity is recorded once, here: the choice made at link time is
+  // reconciled with the owner's workspace.json (never weakened) and stored on
+  // the registry entry, which is the only thing anything else asks.
+  group('link — sensitivity is reconciled once and recorded on the entry', () {
+    WorkspaceConfig ownerConfig({required bool sensitive}) => WorkspaceConfig(
+          owner: const WorkspaceOwner(
+            name: 'n',
+            email: 'e@x.com',
+            handle: 'h',
+          ),
+          project: const WorkspaceProject(
+            name: _projectName,
+            stack: [StackType.dart],
+            role: WorkspaceRole.maintainer,
+          ),
+          session: WorkspaceSession(
+            agents: const [],
+            knowledge: const [],
+            proofNotation: ProofNotation.generic,
+            sensitivityMode: sensitive,
+          ),
+        );
+
+    Future<({MemoryFileIO io, String printed})> linked({
+      required String flag,
+      bool? ownerSensitive,
+    }) async {
+      final io = MemoryFileIO();
+      if (ownerSensitive != null) {
+        ownerConfig(sensitive: ownerSensitive)
+            .write(workspaceFor(_projectName), io: io);
+      }
+      final lines = <String>[];
+      await runZoned(
+        () => runLink(
+          [_projectName, flag],
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => false,
+          exitFn: _throwExit,
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => lines.add(line),
+        ),
+      );
+      return (io: io, printed: lines.join('\n'));
+    }
+
+    RegistryEntry entryOf(MemoryFileIO io) =>
+        Registry.load(io: io).findByProjectRoot(_projectRoot)!;
+
+    String settingsOf(MemoryFileIO io) =>
+        io.read(claudeSettingsPathFor(_projectRoot));
+
+    test('--sensitive records it; the settings carry no debug env', () async {
+      final result = await linked(flag: '--sensitive');
+      expect(entryOf(result.io).sensitivityMode, isTrue);
+      expect(entryOf(result.io).permitsDebugTrace, isFalse);
+      expect(settingsOf(result.io), isNot(contains('CLAUDART_DEBUG')));
+    });
+
+    test('--no-sensitive records it off, and the settings carry the debug env',
+        () async {
+      final result = await linked(flag: '--no-sensitive');
+      expect(entryOf(result.io).sensitivityMode, isFalse);
+      expect(entryOf(result.io).permitsDebugTrace, isTrue);
+      expect(settingsOf(result.io), contains('CLAUDART_DEBUG'));
+    });
+
+    test('--no-sensitive does not weaken what the owner marked sensitive',
+        () async {
+      final result =
+          await linked(flag: '--no-sensitive', ownerSensitive: true);
+      expect(entryOf(result.io).sensitivityMode, isTrue);
+      expect(settingsOf(result.io), isNot(contains('CLAUDART_DEBUG')));
+      expect(
+        result.printed,
+        contains('workspace.json marks this project sensitive'),
+      );
+    });
+
+    test('an owner who did not mark it changes nothing', () async {
+      final result = await linked(flag: '--no-sensitive', ownerSensitive: false);
+      expect(entryOf(result.io).sensitivityMode, isFalse);
+      expect(result.printed, isNot(contains('workspace.json marks')));
+    });
+
+    test('--sensitive with an owner mark says nothing more', () async {
+      final result = await linked(flag: '--sensitive', ownerSensitive: true);
+      expect(entryOf(result.io).sensitivityMode, isTrue);
+      expect(result.printed, isNot(contains('workspace.json marks')));
     });
   });
 }

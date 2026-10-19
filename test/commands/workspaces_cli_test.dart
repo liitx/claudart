@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:claudart/commands/workspaces.dart';
+import 'package:claudart/pipeline/debug_mode.dart'
+    show kAmbientDebugSuppressedNotice;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -68,6 +70,43 @@ void main() {
       expect(r.code, 1);
       expect(_interactionsOf(s.proj, 'proj'), before);
       expect(_interactionsOf(s.proj, 'other'), isEmpty);
+    });
+  });
+
+  // The env var is ambient (the settings link writes set it for every Claude
+  // Code session), and the trace writes full prompts to disk: a sensitive
+  // project must ignore it, and only an explicit --debug overrides that.
+  group('CLAUDART_DEBUG and a sensitive project', () {
+    const debugEnv = {'CLAUDART_DEBUG': '1'};
+
+    test('the env var is ignored, with a notice, for a sensitive project',
+        () async {
+      final s = await _pair();
+      await s.proj.run(['link', '--sensitive']);
+      final r = await s.proj.run(['status'], env: debugEnv);
+      expect(r.out, contains(kAmbientDebugSuppressedNotice));
+    });
+
+    test('an explicit --debug still traces it, without the notice', () async {
+      final s = await _pair();
+      await s.proj.run(['link', '--sensitive']);
+      final r = await s.proj.run(['--debug', 'status'], env: debugEnv);
+      expect(r.out, isNot(contains(kAmbientDebugSuppressedNotice)));
+    });
+
+    test('a project that is not sensitive keeps the env var, with no notice',
+        () async {
+      final s = await _pair();
+      final r = await s.proj.run(['status'], env: debugEnv);
+      expect(r.out, isNot(contains(kAmbientDebugSuppressedNotice)));
+    });
+
+    test('with the env var unset there is no notice for a sensitive project',
+        () async {
+      final s = await _pair();
+      await s.proj.run(['link', '--sensitive']);
+      final r = await s.proj.run(['status']);
+      expect(r.out, isNot(contains(kAmbientDebugSuppressedNotice)));
     });
   });
 
