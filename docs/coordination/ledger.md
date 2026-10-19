@@ -207,3 +207,14 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | `mutation_test` is claudart's wrapper of a third-party package; dartrix has no mutation API (folding it in is undecided); zedup borrows claudart's rules file | open: owner decision |
 | Barrel exports ClaudartCommand, CommandEntry, SessionLogger so consumers need no path imports | done in this PR; zedup to switch to the barrel after merge |
 | Ownership scan: ErrorType, FailureType, FaultClass, FaultSeverity declared in claudart and zedup | open: zedup step 5 |
+
+## Resolution log, Claude Code binding (2026-10-18)
+
+| Item | Status |
+|---|---|
+| `claudart hook pre-edit` (PreToolUse): silent / advise / deny from file kind, session status and `owner.strict`; exits 0 always | built, branch feat/claude-code-binding |
+| `ClaudartArtifact.claudeSettings`: link merges the hook and CLAUDART_DEBUG=1 into `.claude/settings.json`, keeps user content, idempotent; doctor reports stale | built |
+| claudart's own `.claude/settings.json` linked (hook + env added beside the existing PostToolUse) | done |
+| OPEN: run `claudart compile` after merge so the PATH binary has `hook` (until then each edit shows a non-blocking hook error) | open |
+| OPEN: link zedup and dartrix on branches (also writes lib/generated/dependency_config.g.dart there; review that diff) | open |
+| Mutation survivors in `link.dart` cannot be measured: mutation_test hangs on that file (issue #77) | known |
