@@ -65,6 +65,8 @@ void main() {
     expect(api.SessionLogger, isNotNull);
     expect(api.FaultClass.values, isNotEmpty);
     expect(api.FaultSeverity.values, isNotEmpty);
+    expect(api.ModelDriftKind.values, isNotEmpty);
+    expect(api.ModelObservationField.values, isNotEmpty);
     expect(
       api.selectProject(api.Registry.load(io: io), 'my-app'),
       isA<api.ProjectSelected>(),
