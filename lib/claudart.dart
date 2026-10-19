@@ -20,6 +20,9 @@ export 'md_io.dart'
         updateStatus,
         withHandoffStatus;
 export 'commands/claudart_command.dart' show ClaudartCommand, CommandEntry;
+// The shared top layer of the error taxonomy. ErrorType and FailureType stay
+// out: a consumer's own (zedup's) are different enums with the same names.
+export 'errors/fault_class.dart' show FaultClass, FaultSeverity;
 export 'logging/logger.dart' show SessionLogger;
 export 'session/handoff_event.dart' show HandoffEvent;
 export 'session/handoff_transition.dart' show HandoffTransition;
