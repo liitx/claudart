@@ -58,8 +58,16 @@ test-coverage:
 ## at 75.9% too, but with the lesson from zedup's own floor (set at
 ## measured - 0.1, broke immediately on another machine) applied here:
 ## don't set a floor one rounding error away from the actual number.
+##
+## Update (2026-10-19): measured 86.3% on this commit, so the repo-wide floor
+## is 84.0, about two points under it, the same margin rule. The per-directory
+## floors guard the logic layers (session, logging, templates, workspace,
+## codegen, errors), where a dropped line is a dropped test; lib/ui (45%, raw
+## terminal input) and the process-spawning paths are what keep the repo-wide
+## number lower, and are deliberately not floored. A directory with no traced
+## lines fails the check, so a rename cannot turn a floor into a silent pass.
 check-coverage: test-coverage
-	$(DART) run tool/check_coverage.dart 74.0
+	$(DART) run tool/check_coverage.dart 84.0 lib/session=93.0 lib/logging=91.0 lib/templates=97.0 lib/workspace=92.0 lib/codegen=91.0 lib/errors=98.0
 
 ## Static analysis
 analyze:
