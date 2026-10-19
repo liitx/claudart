@@ -138,16 +138,22 @@ Next step:
 
 1181 tests across 81 files. The count includes this page: the README-sync group registers one test per distinct `claudart` subcommand the prose names. `custom_lint` runs this repo's three hand-written paradigm rules over `lib/`, `bin/`, and `test/`. `claudart status` is read-only — safe to run anywhere inside a linked project.
 
-Line coverage has its own gate. `make test-coverage` runs the suite with `--coverage` and formats the result to `coverage/lcov.info` (one-time setup on a fresh machine: `dart pub global activate coverage`). `make check-coverage` depends on it, then hands the tracefile to [`tool/check_coverage.dart`](tool/check_coverage.dart), which sums its `LF:`/`LH:` totals and exits 1 below the floor — no `lcov` system package, no extra pub dependency. Captured 2026-10-02:
+Line coverage has its own gate. `make test-coverage` runs the suite with `--coverage` and formats the result to `coverage/lcov.info` (one-time setup on a fresh machine: `dart pub global activate coverage`). `make check-coverage` depends on it, then hands the tracefile to [`tool/check_coverage.dart`](tool/check_coverage.dart), which sums its `LF:`/`LH:` totals and exits 1 below the repo-wide floor or below any per-directory floor — no `lcov` system package, no extra pub dependency. Captured 2026-10-19:
 
 ```
 $ make check-coverage
 …
-dart run tool/check_coverage.dart 74.0
-Line coverage 76.3% meets the 74.0% floor (3131/4101 lines).
+dart run tool/check_coverage.dart 84.0 lib/session=93.0 lib/logging=91.0 lib/templates=97.0 lib/workspace=92.0 lib/codegen=91.0 lib/errors=98.0
+Line coverage 86.3% meets the 84.0% floor (4417/5120 lines).
+  lib/session 95.6% meets its 93.0% floor (373/390 lines).
+  lib/logging 93.2% meets its 91.0% floor (151/162 lines).
+  lib/templates 99.0% meets its 97.0% floor (193/195 lines).
+  lib/workspace 94.8% meets its 92.0% floor (110/116 lines).
+  lib/codegen 93.2% meets its 91.0% floor (55/59 lines).
+  lib/errors 100.0% meets its 98.0% floor (78/78 lines).
 ```
 
-The floor is a measured baseline with headroom, not a target. 74.0 sits roughly two points under what this repo actually measures on more than one machine; a floor one rounding error below the real number fails on the next machine for reasons that are not regressions. It exists to catch coverage sliding backwards, and moves up only when measured coverage does.
+The floors are measured baselines with headroom, not targets. 84.0 sits about two points under what this repo measures; a floor one rounding error below the real number fails on the next machine for reasons that are not regressions. The per-directory floors guard the logic layers (`lib/session`, `lib/logging`, `lib/templates`, `lib/workspace`, `lib/codegen`, `lib/errors`), where a dropped line is a dropped test; `lib/ui` (raw terminal input, 45%) and the process-spawning paths are what keep the repo-wide number lower, and are deliberately not floored. A directory with no traced lines fails the check, so a rename cannot turn a floor into a silent pass. The floors exist to catch coverage sliding backwards, and move up only when measured coverage does.
 
 ---
 
