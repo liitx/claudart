@@ -110,6 +110,22 @@ void main() {
     });
   });
 
+  // A corrupt registry.json must stop a command that would save over it, with
+  // the typed message, and stay exactly as it was.
+  group('a corrupt registry.json', () {
+    test('link refuses, says why, and leaves the file as it was', () async {
+      final s = await _pair();
+      final registry =
+          File(p.join(s.proj.ws.parent.path, 'ws', 'registry.json'));
+      const corrupt = '{"workspaces": [ {"name": "kept"';
+      registry.writeAsStringSync(corrupt);
+      final r = await s.proj.run(['link', '--no-sensitive']);
+      expect(r.code, isNot(0));
+      expect(r.out, contains('Registry is corrupt'));
+      expect(registry.readAsStringSync(), corrupt);
+    });
+  });
+
   group('claudart workspaces', () {
     test(
         'lists both linked workspaces, marks the current one, and says how '

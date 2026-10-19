@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'helpers/mocks.dart';
@@ -100,6 +101,67 @@ void main() {
       expect(loaded.entries, hasLength(2));
       expect(loaded.findByName('project-a'), isNotNull);
       expect(loaded.findByName('project-b'), isNotNull);
+    });
+  });
+
+  // A registry.json that exists but cannot be read loads as empty (so a
+  // command can still show an empty list), but saving over it would erase every
+  // registered project, so save refuses and leaves the file as it found it.
+  group('an unreadable registry.json', () {
+    const unreadable = <String, String>{
+      'not json': '{not valid json',
+      'a list': '[]',
+      'a string': '"x"',
+      'workspaces of the wrong type': '{"workspaces": 3}',
+      'an entry of the wrong type': '{"workspaces": [1]}',
+      'an entry missing fields': '{"workspaces": [{"name": "x"}]}',
+    };
+
+    unreadable.forEach((name, text) {
+      test('$name: load gives an empty registry, not a crash', () {
+        final io = MemoryFileIO(files: {registryPath: text});
+        expect(Registry.load(io: io).isEmpty, isTrue);
+      });
+
+      test('$name: save throws CorruptRegistryException and writes nothing',
+          () {
+        final io = MemoryFileIO(files: {registryPath: text});
+        expect(
+          () => Registry.empty().add(_entry('new-app')).save(io: io),
+          throwsA(isA<CorruptRegistryException>()),
+        );
+        expect(io.read(registryPath), text);
+      });
+    });
+
+    test('the exception carries the registryCorrupt failure and says why', () {
+      final io = MemoryFileIO(files: {registryPath: '[]'});
+      try {
+        Registry.empty().save(io: io);
+        fail('save should have thrown');
+      } on CorruptRegistryException catch (e) {
+        expect(e.failureType, FailureType.registryCorrupt);
+        expect(e.toString(), startsWith('Registry is corrupt: '));
+      }
+    });
+
+    test('a missing file is not corrupt: save writes it', () {
+      final io = MemoryFileIO();
+      Registry.empty().add(_entry('a')).save(io: io);
+      expect(Registry.load(io: io).findByName('a'), isNotNull);
+    });
+
+    test('an empty file is not corrupt: save writes it', () {
+      final io = MemoryFileIO(files: {registryPath: ''});
+      Registry.empty().add(_entry('a')).save(io: io);
+      expect(Registry.load(io: io).findByName('a'), isNotNull);
+    });
+
+    test('a valid registry is saved over normally', () {
+      final io = MemoryFileIO();
+      Registry.empty().add(_entry('a')).save(io: io);
+      Registry.load(io: io).add(_entry('b')).save(io: io);
+      expect(Registry.load(io: io).entries, hasLength(2));
     });
   });
 

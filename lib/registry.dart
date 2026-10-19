@@ -1,9 +1,23 @@
 import 'dart:convert';
+import 'errors/claudart_exception.dart';
+import 'errors/failure_type.dart';
 import 'file_io.dart';
 import 'paths.dart';
 
 const _warning =
     'Managed by claudart. Do not edit manually — use claudart commands.';
+
+/// Thrown when registry.json exists but can't be read as a registry. Reading
+/// still treats that as "nothing linked" (so a command can show an empty
+/// list), but saving over it would wipe every registered project, so `save`
+/// refuses.
+class CorruptRegistryException extends ClaudartException {
+  final String cause;
+  CorruptRegistryException(this.cause) : super(FailureType.registryCorrupt);
+
+  @override
+  String toString() => 'Registry is corrupt: $cause';
+}
 
 class RegistryEntry {
   final String name;
@@ -77,28 +91,50 @@ class Registry {
 
   bool get isEmpty => _byName.isEmpty;
 
-  /// Loads the registry from disk. Returns empty registry if file missing or corrupt.
+  /// Loads the registry from disk. Returns an empty registry if the file is
+  /// missing or unreadable (corrupt JSON, or valid JSON of the wrong shape);
+  /// [save] will not overwrite an unreadable file.
   static Registry load({FileIO? io}) {
     final fileIO = io ?? const RealFileIO();
     final raw = fileIO.read(registryPath);
     if (raw.isEmpty) return Registry.empty();
     try {
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      final list = json['workspaces'] as List<dynamic>? ?? [];
-      final map = <String, RegistryEntry>{};
-      for (final item in list.cast<Map<String, dynamic>>()) {
-        final entry = RegistryEntry.fromJson(item);
-        map[entry.name] = entry;
-      }
-      return Registry._(map);
-    } on Exception catch (_) {
+      return _parse(raw);
+    } on FormatException catch (_) {
+      return Registry.empty();
+    } on TypeError catch (_) {
       return Registry.empty();
     }
   }
 
-  /// Persists the registry to disk.
+  /// Parses registry.json's text. Throws [FormatException] for text that is
+  /// not JSON and [TypeError] for JSON of the wrong shape.
+  static Registry _parse(String raw) {
+    final json = jsonDecode(raw) as Map<String, dynamic>;
+    final list = json['workspaces'] as List<dynamic>? ?? [];
+    final map = <String, RegistryEntry>{};
+    for (final item in list.cast<Map<String, dynamic>>()) {
+      final entry = RegistryEntry.fromJson(item);
+      map[entry.name] = entry;
+    }
+    return Registry._(map);
+  }
+
+  /// Persists the registry to disk. Throws [CorruptRegistryException] when the
+  /// file there exists but is unreadable: loading it gave an empty registry,
+  /// and writing that back would erase every registered project.
   void save({FileIO? io}) {
     final fileIO = io ?? const RealFileIO();
+    final existing = fileIO.read(registryPath);
+    if (existing.isNotEmpty) {
+      try {
+        _parse(existing);
+      } on FormatException catch (e) {
+        throw CorruptRegistryException(e.message);
+      } on TypeError catch (e) {
+        throw CorruptRegistryException(e.toString());
+      }
+    }
     const encoder = JsonEncoder.withIndent('  ');
     fileIO.write(
       registryPath,

@@ -250,3 +250,12 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | `WorkspaceConfig.load` crashed on valid JSON of the wrong shape (a TypeError is an Error, not an Exception); found by link's own test | fixed, four shapes tested (this is part of #85's loader weakness) |
 | The CLI test helper inherited `CLAUDART_DEBUG=1` from the developer shell (the settings link writes set it for Claude Code sessions), so every real-binary test ran with the trace on | fixed: the helper clears it unless a test sets it |
 | Remaining survivors, all older: debug_mode.dart trace label constants and the append helper, workspace_config.dart `ProofNotation.description` text (#76) | open |
+
+## Resolution log, a corrupt registry no longer gets wiped (issue #85, 2026-10-19)
+
+| Item | Status |
+|---|---|
+| A corrupt `registry.json` loaded as empty, and the next `save` (for example `link`) overwrote it with only the new entry, erasing every registered project | fixed: `Registry.save` refuses to overwrite an unreadable file and throws `CorruptRegistryException` (`FailureType.registryCorrupt`); reads still return an empty registry so commands can show an empty list; `claudart doctor` already reports it |
+| Valid JSON of the wrong shape threw a `TypeError` out of `Registry.load` (an Error, not an Exception) | fixed with the same shared parse; six unreadable shapes tested for load and save |
+| `WorkspaceConfig.load` had the same escape | fixed earlier (the sensitivity PR), four shapes tested |
+| Tests fail without the guard (8) and the real binary refuses `link` over a corrupt file with the typed message, leaving it untouched | proven |
