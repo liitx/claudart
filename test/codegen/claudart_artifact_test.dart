@@ -3,7 +3,7 @@ import 'package:claudart/codegen/claudart_artifact.dart';
 
 void main() {
   group('ClaudartArtifact', () {
-    test('has exactly the 4 real derivations link.dart regenerates', () {
+    test('has exactly the 5 real derivations link.dart regenerates', () {
       expect(
         ClaudartArtifact.values,
         equals([
@@ -11,6 +11,7 @@ void main() {
           ClaudartArtifact.claudeMdTail,
           ClaudartArtifact.readmeRoadmap,
           ClaudartArtifact.dependencyConfig,
+          ClaudartArtifact.claudeSettings,
         ]),
       );
     });

@@ -11,6 +11,7 @@ import '../paths.dart';
 import '../process_runner.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
+import '../templates/claude_settings_template.dart';
 import '../templates/claude_template.dart';
 import '../templates/command_template_marker.dart';
 import '../templates/readme_template.dart';
@@ -163,6 +164,8 @@ Future<void> runLink(
         );
       case ClaudartArtifact.readmeRoadmap:
         _regenerateReadmeRoadmap(projectRoot: projectRoot, fileIO: fileIO);
+      case ClaudartArtifact.claudeSettings:
+        _regenerateClaudeSettings(projectRoot: projectRoot, fileIO: fileIO);
       case ClaudartArtifact.dependencyConfig:
         await _regenerateDependencyConfig(
           projectRoot: projectRoot,
@@ -246,6 +249,27 @@ void _regenerateClaudeMdTail({
     newClaudeMd = '# CLAUDE.md\n\n$generatedSection';
   }
   fileIO.write(claudeMdPath, newClaudeMd);
+}
+
+/// Merges claudart's hook and env entry into the project's
+/// `.claude/settings.json`, keeping everything else the user put there. A file
+/// that is not a JSON object is left untouched and said so: overwriting
+/// someone's settings is worse than a stale hook (`doctor` still reports it).
+void _regenerateClaudeSettings({
+  required String projectRoot,
+  required FileIO fileIO,
+}) {
+  final path = claudeSettingsPathFor(projectRoot);
+  final existing = fileIO.fileExists(path) ? fileIO.read(path) : '';
+  final String merged;
+  try {
+    merged = mergeClaudeSettings(existing);
+  } on FormatException {
+    print('⚠  $path is not a JSON object, so the claudart hook was not added. '
+        'Fix the file and run `claudart link` again.');
+    return;
+  }
+  if (merged != existing) fileIO.write(path, merged);
 }
 
 /// Regenerates README.md's Roadmap table, if the project opted in with

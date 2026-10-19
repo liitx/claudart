@@ -604,6 +604,21 @@ appends `{command: workspaces, outcome: listed N workspaces}` to the *asking* wo
 - Existing workspaces keep their old command files until `claudart link` is re-run (`doctor` reports them stale).
 - zedup should call `summarizeWorkspaces` and `selectProject` (now exported) instead of parsing `registry.json` itself.
 
+### 9.9 Binding Claude Code to the session
+
+A prompt can ask an agent to follow the flow; a hook enforces it at the edit. `ClaudartArtifact.claudeSettings` (written by
+`claudart link`, checked by `doctor` through `artifact_state`) merges a `PreToolUse` hook on `Edit|Write|MultiEdit` and
+`CLAUDART_DEBUG=1` into the project's `.claude/settings.json`, keeping the rest of the file. The hook is `claudart hook
+pre-edit` (`lib/commands/hook.dart`): it matches the edited path to a linked project (no `git` process; the deepest
+project root wins), reads `SessionState.effectiveStatus`, and decides from three facts: Dart source or not,
+`canStartDebug` or not, and `owner.strict`. Silent when it is not Dart, the session can implement, or no project matches;
+otherwise advise (add context Claude sees) or, when strict, deny. `owner.strict` already meant "agents enforce strict
+architectural integrity"; it now also gates edits outside a ready session. A hook that fails exits 0, so it can never
+block work by accident. Proof: `hook_test.dart` pins every status x strict x Dart-or-not cell against an independent
+literal; `claude_settings_template_test.dart` and `artifact_state_test.dart` pin merge, idempotence, user content kept
+and the fresh/stale/missing states. Gap: a build of claudart on `PATH` without `hook` makes every edit show a non-blocking
+hook error until `claudart compile` is run.
+
 ### 9.8 Layering (audited, open)
 
 Dependencies are meant to run downward, with `lib/commands/` on top. Audited against the imports:

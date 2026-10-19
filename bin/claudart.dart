@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:claudart/errors/claudart_exception.dart';
 import 'package:claudart/git_utils.dart';
@@ -13,6 +14,7 @@ import 'package:claudart/commands/chat_shell.dart';
 import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/confirm_pending.dart';
 import 'package:claudart/commands/doctor.dart';
+import 'package:claudart/commands/hook.dart';
 import 'package:claudart/commands/experiment.dart';
 import 'package:claudart/commands/init.dart';
 import 'package:claudart/commands/kill.dart';
@@ -72,6 +74,7 @@ Commands:
   compile                Recompile the claudart binary and install it to ~/bin/claudart
   doctor                 Fresh-machine verification: tools on PATH, git identity, gh auth, provider env
   workspaces [--json]    List every linked workspace and where its session stands (for you or an agent)
+  hook pre-edit          Claude Code PreToolUse hook: reads the tool call on stdin; advises or blocks edits outside a ready session
   version                Print the current claudart version
 
 Options:
@@ -314,6 +317,14 @@ Future<void> _dispatch(
         projectRootOverride: projectRoot,
         asJson: rest.contains('--json'),
       );
+    case ClaudartCommand.hook:
+      if (rest.firstOrNull != HookWire.preEditSubcommand) {
+        stderr.writeln(
+            'Usage: claudart hook ${HookWire.preEditSubcommand} (reads the '
+            'tool call as JSON on stdin)');
+        exit(1);
+      }
+      runHook(stdinText: await utf8.decoder.bind(stdin).join());
     case ClaudartCommand.doctor:
       final doctorRoot = detectGitContext()?.root;
       final doctorEntry = doctorRoot != null

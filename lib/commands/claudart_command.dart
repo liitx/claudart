@@ -49,7 +49,8 @@ enum ClaudartCommand {
   experiment,
   compile,
   doctor,
-  workspaces;
+  workspaces,
+  hook;
 
   /// The entry points that start this command. Every command is a subcommand;
   /// the launcher menu and the chat shell reach only a few. Checked against
@@ -79,7 +80,8 @@ enum ClaudartCommand {
         experiment ||
         compile ||
         doctor ||
-        workspaces =>
+        workspaces ||
+        hook =>
           {CommandEntry.cliSubcommand},
       };
 
@@ -108,7 +110,8 @@ enum ClaudartCommand {
         experiment ||
         compile ||
         doctor ||
-        workspaces =>
+        workspaces ||
+        hook =>
           false,
       };
 
@@ -140,7 +143,8 @@ enum ClaudartCommand {
         experiment ||
         compile ||
         doctor ||
-        workspaces =>
+        workspaces ||
+        hook =>
           const {},
       };
 
@@ -186,7 +190,8 @@ enum ClaudartCommand {
         map ||
         experiment ||
         compile ||
-        doctor =>
+        doctor ||
+        hook =>
           false,
       };
 
@@ -217,6 +222,7 @@ enum ClaudartCommand {
         compile        => 'compile',
         doctor         => 'doctor',
         workspaces     => 'workspaces',
+        hook           => 'hook',
       };
 
   /// Resolves a [ClaudartCommand] from the first CLI argument. Returns null
@@ -248,6 +254,7 @@ enum ClaudartCommand {
         'compile'        => compile,
         'doctor'         => doctor,
         'workspaces'     => workspaces,
+        'hook'           => hook,
         _                => null,
       };
 }

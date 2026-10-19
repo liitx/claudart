@@ -1,4 +1,4 @@
-// claudart_artifact.dart — the 4 config-driven things `claudart link`
+// claudart_artifact.dart — the 5 config-driven things `claudart link`
 // regenerates, as one dispatchable enum.
 //
 // Each variant's actual render/write logic stays exactly where it already
@@ -27,4 +27,9 @@ enum ClaudartArtifact {
   /// `lib/generated/dependency_config.g.dart`, from this project's own
   /// pubspec.yaml.
   dependencyConfig,
+
+  /// `.claude/settings.json`'s claudart-owned entries: the PreToolUse hook
+  /// that binds Claude Code to the session, and CLAUDART_DEBUG in `env`. Merged
+  /// into the file, never overwriting what the user wrote.
+  claudeSettings,
 }

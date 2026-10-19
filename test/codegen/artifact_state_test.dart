@@ -174,6 +174,89 @@ void main() {
     });
   });
 
+  group('ArtifactState.claudeSettings', () {
+    String settingsPath() => claudeSettingsPathFor(_projectRoot);
+
+    test('missing when nothing was ever linked', () {
+      expect(
+        _state(ClaudartArtifact.claudeSettings, MemoryFileIO()),
+        ArtifactState.missing,
+      );
+    });
+
+    test('stale when settings.json exists without claudart\'s hook', () {
+      final io = MemoryFileIO(files: {settingsPath(): '{"permissions":{}}'});
+      expect(_state(ClaudartArtifact.claudeSettings, io), ArtifactState.stale);
+    });
+
+    test('stale when settings.json is not a JSON object', () {
+      final io = MemoryFileIO(files: {settingsPath(): 'not json'});
+      expect(_state(ClaudartArtifact.claudeSettings, io), ArtifactState.stale);
+    });
+
+    test('stale when the hook was hand-edited', () async {
+      final io = await _linked();
+      io.write(
+        settingsPath(),
+        io.read(settingsPath()).replaceFirst('Edit|Write|MultiEdit', 'Edit'),
+      );
+      expect(_state(ClaudartArtifact.claudeSettings, io), ArtifactState.stale);
+    });
+
+    test('fresh immediately after link', () async {
+      final io = await _linked();
+      expect(_state(ClaudartArtifact.claudeSettings, io), ArtifactState.fresh);
+    });
+
+    test('a second link changes nothing', () async {
+      final io = await _linked();
+      final before = io.read(settingsPath());
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      expect(io.read(settingsPath()), before);
+    });
+
+    test('link keeps what the user already had in settings.json', () async {
+      final io = MemoryFileIO(files: {
+        p.join(_projectRoot, 'pubspec.yaml'): 'name: $_projectName\n',
+        settingsPath(): '{"permissions":{"allow":["Bash(ls)"]},'
+            '"env":{"CLAUDART_DEBUG":"0","OTHER":"1"}}',
+      });
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      final written = io.read(settingsPath());
+      expect(written, contains('Bash(ls)'));
+      expect(written, contains('"OTHER": "1"'));
+      expect(written, contains('"CLAUDART_DEBUG": "0"'));
+      expect(written, contains('claudart hook pre-edit'));
+    });
+
+    test('link leaves an unreadable settings.json alone', () async {
+      final io = MemoryFileIO(files: {
+        p.join(_projectRoot, 'pubspec.yaml'): 'name: $_projectName\n',
+        settingsPath(): 'not json',
+      });
+      await runLink(
+        [_projectName],
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => false,
+        exitFn: _throwExit,
+      );
+      expect(io.read(settingsPath()), 'not json');
+    });
+  });
+
   group('self-hosting: a freshly linked project has no drift', () {
     // commandTemplates/claudeMdTail/dependencyConfig's own "fresh
     // immediately after link" cases above already cover this scenario per

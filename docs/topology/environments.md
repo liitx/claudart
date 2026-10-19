@@ -33,6 +33,7 @@ Where each command can be started, whether it takes `--headless`, whether `--pro
 | compile | cliSubcommand | false | false | — |
 | doctor | cliSubcommand | false | false | — |
 | workspaces | cliSubcommand | false | true | — |
+| hook | cliSubcommand | false | false | — |
 
 ## Surfaces
 

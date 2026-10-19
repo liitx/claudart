@@ -218,3 +218,14 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | Cap is now soft: a log may run 50 lines past its cap before it is trimmed back (the rewrite happens once per 50 appends) | by design; tests pin both sides |
 | Pre-existing mutation survivors in `logger.dart` (20: optional interaction fields, `logError`, `logPerformance`, `_writeJsonl` cap) and `file_io.dart` (`listFiles` extension filter, `linkExists`) | open: file as an issue |
 | OPEN: `logError` and `logPerformance` still read-modify-write (they deduplicate or keep a table); now atomic on write, but two processes can still lose an update | open |
+
+## Resolution log, Claude Code binding (2026-10-18)
+
+| Item | Status |
+|---|---|
+| `claudart hook pre-edit` (PreToolUse): silent / advise / deny from file kind, session status and `owner.strict`; exits 0 always | built, branch feat/claude-code-binding |
+| `ClaudartArtifact.claudeSettings`: link merges the hook and CLAUDART_DEBUG=1 into `.claude/settings.json`, keeps user content, idempotent; doctor reports stale | built |
+| claudart's own `.claude/settings.json` linked (hook + env added beside the existing PostToolUse) | done |
+| OPEN: run `claudart compile` after merge so the PATH binary has `hook` (until then each edit shows a non-blocking hook error) | open |
+| OPEN: link zedup and dartrix on branches (also writes lib/generated/dependency_config.g.dart there; review that diff) | open |
+| Mutation survivors in `link.dart` cannot be measured: mutation_test hangs on that file (issue #77) | known |

@@ -12,6 +12,13 @@ each step names its check.
 - 2589 tests pass, coverage 85.8% (floor 74), custom_lint clean, mutation
   survivors only in untouched older code (logger.dart 20, status.dart 27).
 
+Update (2026-10-18): step 2 is built on branch feat/claude-code-binding: `claudart
+hook pre-edit`, `ClaudartArtifact.claudeSettings`, merged into `.claude/settings.json` by
+`claudart link`, checked by doctor. Posture reuses `owner.strict` (advise by default,
+deny when strict) instead of a new config field. The binary on PATH needs
+`claudart compile` after the merge. zedup and dartrix get it by running link on a
+branch (zedup 6, dartrix 4).
+
 ## Steps
 
 1. **Merge the branch to main** (PR; owner opens or says go). Blocks every

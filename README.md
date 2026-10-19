@@ -31,6 +31,7 @@
 **Where you touch it**
 - [CLI surface](#cli-surface) — every command, verified against real `--help` output, plus what `claudart doctor` checks
 - [Workspace on disk](#workspace-on-disk) — the one file startup reads, and everything it points to, including the logs
+- [Binding Claude Code](#binding-claude-code) — a generated hook that keeps edits inside the session
 - [Workspaces and targeting](#workspaces-and-targeting) — one session per workspace; how an agent sees and reaches the others
 - [TUI vs CLI](#tui-vs-cli) — the same typed state, rendered two ways
 - [Authentication](#authentication) — how a pipeline step stays logged in as you
@@ -496,6 +497,7 @@ claudart --project <name> status   # aim a session command at another linked wor
 | `experiment` | run a command and tee its output to `experiments/` | [dispatch](bin/claudart.dart) |
 | `compile` | rebuild the binary and install it to `~/bin/claudart` | [dispatch](bin/claudart.dart) |
 | `workspaces` | list every linked workspace: status, link state, lock, which is current; `--json` for agents | [dispatch](bin/claudart.dart) |
+| `hook` | Claude Code `PreToolUse` hook (`hook pre-edit`): reads the tool call on stdin, advises or, in a strict workspace, blocks Dart edits outside a ready session; `claudart link` writes it into `.claude/settings.json` | [dispatch](bin/claudart.dart) |
 | `doctor` | fresh-machine check: tools, git identity, `gh` auth, provider env, workspace root, registry, PATH | [dispatch](bin/claudart.dart) |
 | `version` | print the version, before dispatch | [dispatch](bin/claudart.dart) |
 
@@ -542,6 +544,7 @@ Commands:
   compile                Recompile the claudart binary and install it to ~/bin/claudart
   doctor                 Fresh-machine verification: tools on PATH, git identity, gh auth, provider env
   workspaces [--json]    List every linked workspace and where its session stands (for you or an agent)
+  hook pre-edit          Claude Code PreToolUse hook: reads the tool call on stdin; advises or blocks edits outside a ready session
   version                Print the current claudart version
 
 Options:
@@ -736,6 +739,17 @@ flowchart LR
 `workspacesRoot` is a getter, not a cached top-level value — it re-reads `CLAUDART_WORKSPACE` on every call, so the answer is whatever *this* process's environment says right now. That has one sharp edge: if your shell exports the override but a process launched outside that shell (a GUI-launched editor, launchd) does not inherit it, that process resolves `~/.claudart` instead, and the two can each grow a registry that silently diverges. `claudart doctor`'s `workspace root` check fails on exactly that condition — override set, and `~/.claudart/registry.json` exists too. It can only see it from a process that has the override; one without it gets `[SKIP]`, the reminder that a second root may exist.
 
 Generic knowledge lives once, at `<root>/knowledge/generic/`, not per project. `claudart link` and `claudart add` list its files into each project's generated `CLAUDE.md` tail, so adding a file there reaches every linked project on its next `link`.
+
+---
+
+## Binding Claude Code
+
+Prose in a `CLAUDE.md` asks Claude Code to follow the claudart flow; a hook makes the session part of the edit itself. `claudart link` merges two entries into the project's `.claude/settings.json` ([`claude_settings_template.dart`](lib/templates/claude_settings_template.dart)), leaving everything else in the file as you wrote it, and `claudart doctor` reports them when they go stale:
+
+- a `PreToolUse` hook on `Edit`, `Write` and `MultiEdit` that runs `claudart hook pre-edit` ([`hook.dart`](lib/commands/hook.dart));
+- `CLAUDART_DEBUG=1` in `env`, so claudart calls made from that project's Claude Code sessions write the per-step trace (set it to something else first and link leaves your value).
+
+The hook reads the tool call on stdin and finds the linked project the file belongs to, without spawning `git`. For a Dart file it answers from that project's session: silent when the session can implement (`ready-for-debug` or `debug-in-progress`), otherwise it tells Claude to go through `/suggest`, `/save`, `/debug`, and in a workspace with `owner.strict` set in `workspace.json` it blocks the edit with the same reason. It always exits 0, and it says nothing for non-Dart files or files outside a linked project, so a failing hook can never block work by accident. The binary on your `PATH` must be current for the hook to run: rebuild with `claudart compile` after updating.
 
 ---
 
