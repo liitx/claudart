@@ -45,3 +45,13 @@ branch (zedup 6, dartrix 4).
 5. **Declared model facts**: decide whether `maxOutputTokens` follows the CLI's
    reported cap; capture sonnet and opus runs.
 6. File the pre-existing mutation survivors as an issue.
+
+Update (2026-10-19): done and merged. 1 (the branch, PR #91), 2 (the Claude Code
+binding: `claudart hook pre-edit` and the settings artifact, PR #94), 3 (coverage floor
+74 -> 84 plus per-directory floors for the logic layers, PR #97). Also merged: safe log
+appends and atomic writes (#93), locked log read-modify-writes and the performance table
+divider I had deleted (#98), barrel exports (#92, #95, #96). Still open: 4 (layering
+restructure, design 9.8), 5 (whether the declared maxOutputTokens follows the CLI's
+reported cap; capture sonnet and opus runs), 6 (file the pre-existing mutation
+survivors as an issue: logger.dart 16, file_io.dart 5), and `claudart compile` on the
+owner's machine so the binary on PATH has `hook`.

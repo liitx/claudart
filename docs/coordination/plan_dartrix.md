@@ -26,3 +26,11 @@ law claudart reads and the law the owner is editing differ.
 4. Bind Claude Code: `claudart link` on a branch (same artifacts as zedup).
 5. Keep the matrix API stable: claudart's test/matrix/* and claudart_lints
    import it; run `dart test test/matrix` in claudart after every dartrix bump.
+
+Update (2026-10-19): step 4 is done and merged (PR #31, link: CLAUDE.md tail and the
+dependency-config constant; the hook is in the gitignored .claude/settings.json). Still
+open, and the owner's: step 1 (review and merge docs/four-roles-testing-paradigm,
+PARADIGMS v0.6.0; claudart reads v0.5.0 from main until then), step 3 (typed values
+instead of the bare BranchType fixture strings), and whether mutation testing belongs in
+dartrix: today it is claudart's wrapper of the third-party `mutation_test` package and
+zedup borrows claudart's rules file.

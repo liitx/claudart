@@ -50,3 +50,15 @@ step 4 (summarizeWorkspaces), the rest of step 5 (AgentCompleted.models in the
 pane, the duplicate error taxonomy), step 6 (link). The coordinators import
 ClaudartCommand and SessionLogger by path because the barrel lacked them; the
 claudart PR exporting both lets zedup switch to the barrel.
+
+Update (2026-10-19): done and merged. PR #79 (effectiveStatus reader, both writers
+through applyHandoffEvent, redundant model test removed; consumer-check 16/16, 0 raw
+writers), #80 (link: CLAUDE.md tail, dependency config), #81 (the CLAUDART panel reads
+the origin owner from .git/config: 7 workspaces 107 ms -> 0.4 ms, same owners as git;
+one shared parser replaced two private copies; reads claudart's Registry instead of
+registry.json), #82 (FaultClass and FaultSeverity were identical copies; claudart's are
+used; ErrorType and FailureType stay, they are zedup's own domain enums), #83 (the pane
+flags a step that ran on a model other than the one it intended). The Claude Code hook
+is in the workspace's .claude/settings.json. Still open: `_loadClaudartHandoffs` has no
+seam for a unit test (older gap); .git/config is read as written, so an insteadOf or
+includeIf is not seen (the git fallback covers a missing config or origin only).
