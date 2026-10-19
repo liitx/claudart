@@ -105,6 +105,10 @@ rebuild: clean build
 ## which then broke unrelated tests in a confusing way until `git diff`
 ## revealed the real cause). Always run `git diff FILE` after any run you
 ## had to interrupt, before trusting anything else in the working tree.
+## Update (2026-10-19): the target now snapshots FILE before the run and restores
+## it if the run leaves it changed (a killed or interrupted run does not revert
+## its mutation, and a mutated line once slipped into a commit that way: the
+## performance table's divider row, restored with a test that pins it).
 mutation-test:
 	@test -n "$(FILE)" || { echo "Usage: make mutation-test FILE=lib/foo.dart TEST_FILE=test/foo_test.dart" >&2; exit 2; }
 	@test -n "$(TEST_FILE)" || { echo "Usage: make mutation-test FILE=lib/foo.dart TEST_FILE=test/foo_test.dart" >&2; exit 2; }
@@ -112,7 +116,12 @@ mutation-test:
 	@printf '<?xml version="1.0" encoding="UTF-8"?>\n<mutations version="1.2">\n' > /tmp/claudart_mutation_test/config.xml
 	@cat tool/dart_mutation_rules.xml >> /tmp/claudart_mutation_test/config.xml
 	@printf '  <files><file>%s</file></files>\n  <commands><command group="test" expected-return="0" timeout="60">dart test %s</command></commands>\n</mutations>\n' "$(FILE)" "$(TEST_FILE)" >> /tmp/claudart_mutation_test/config.xml
-	$(DART) run mutation_test -b -f md /tmp/claudart_mutation_test/config.xml
+	@cp $(FILE) /tmp/claudart_mutation_test/pre_run.snapshot
+	$(DART) run mutation_test -b -f md /tmp/claudart_mutation_test/config.xml; status=$$?; \
+	  cmp -s $(FILE) /tmp/claudart_mutation_test/pre_run.snapshot || { \
+	    echo "!! $(FILE) was left changed by the run; restored from the snapshot" >&2; \
+	    cp /tmp/claudart_mutation_test/pre_run.snapshot $(FILE); }; \
+	exit $$status
 
 ## Runs mutation_test automatically against every changed lib/ file paired
 ## with its mirrored test file (same config content as `mutation-test`

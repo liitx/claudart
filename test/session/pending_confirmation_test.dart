@@ -25,6 +25,9 @@ class _ThrowsOnReadFileIO implements FileIO {
   @override
   void append(String path, String content) => throw UnimplementedError();
   @override
+  T withExclusiveLock<T>(String path, T Function() body) =>
+      throw UnimplementedError();
+  @override
   void delete(String path) => throw UnimplementedError();
   @override
   bool dirExists(String path) => throw UnimplementedError();
