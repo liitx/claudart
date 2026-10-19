@@ -54,6 +54,28 @@ Review of `ledger.md`, `plan.md` and `brief_decomposition.md`. Each concern: wha
   these docs. Nothing committed or pushed. The handoff's Pending Issues tiers are stale vs the brief.
 - Naming collision: Brief P1/P2 vs PLAN.md phases; PLAN.md Phase 2 is already "template system".
 
+## Triage, 2026-10-19 (the claudart rotate session)
+
+Checked against the code as it is now.
+
+| Concern | State |
+|---|---|
+| C1 identity as state | OPEN: `doctor` never compares the workspace.json owner with git and gh identity |
+| C2 write-through hooks | PARTLY: the PreToolUse hook exists (`claudart hook pre-edit`); Stop, SessionStart and PreCompact hooks do not |
+| C3 unverified claims | ongoing; this session re-verified what it built |
+| C4 sealed vs enum | RESOLVED in practice: enums for the matrix spine, sealed for variants carrying data (ProjectSelection); dartrix v0.6.0 documents the pairing (unmerged) |
+| C5 debug vs sensitivity | RESOLVED 2026-10-19: the ambient env var is ignored for a sensitive project, link adds it only where the registry entry permits, sensitivity is reconciled once at link |
+| C6 three logging paths | OPEN: SessionLogger, PlannerLog and the debug trace; not consolidated |
+| C7 templates generated vs getters | OPEN: to pin |
+| C8 cross-repo ordering | RESOLVED: zedup is current; the barrel exports ClaudartCommand, SessionLogger, FaultClass, the model observation types |
+| C9 routeModel ignores category | OPEN (#87, deferred) |
+| C10 housekeeping | RESOLVED: the docs are on main |
+| C11 usesDartrix gating | OPEN: only the plan template and `add` read it; the generated constant in zedup and dartrix is read by nothing |
+| C12 per-env codegen | OPEN: Phase 15 decision (enums are the source of truth), not built |
+
+Next, in order: #85 (a corrupt registry.json becomes empty and the next save wipes entries), C1 (identity gate),
+#81 and #56 (link), then C11, C6.
+
 ## C11. Env gating is claimed, not implemented (claudart)
 - `usesDartrix` doc says it gates dartrix types; only `plan_template.dart` and `add.dart` read it. [V]
 ## C12. A bool cannot gate imports; the claudart-link per-env codegen needs a generated registry/barrel

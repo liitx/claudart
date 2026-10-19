@@ -239,3 +239,14 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | `make mutation-test` now snapshots FILE and restores it if the run leaves it changed (proved with a fake runner that corrupts the file) | done |
 | The lock is per process, not per isolate or thread | documented on the method; tests use real child processes |
 | Pre-existing survivors, unchanged: logger.dart 16 (optional interaction fields, logError sensitivity/dedupe/suggestion branches, performance cell text, the `_writeJsonl` cap), file_io.dart 5 (3 parameter-name swaps on abstract signatures, `listFiles` extension filter, `linkExists`) | open: file as an issue |
+
+## Resolution log, debug trace vs sensitive projects (2026-10-19)
+
+| Item | Status |
+|---|---|
+| The trace writes full prompts to disk with no sensitivity check, and my settings artifact set `CLAUDART_DEBUG=1` for every linked project, including claudart's own (workspace.json: sensitive) | fixed |
+| Sensitivity stored twice (registry.json, workspace.json) and re-derived by reading both on each use (my first version) | fixed: reconciled once at link into `RegistryEntry.sensitivityMode`; readers use `permitsDebugTrace`; the file-reading helper is gone |
+| An ambient `CLAUDART_DEBUG` is ignored for a sensitive project with a notice; `--debug` still traces | built, real-binary tested |
+| `WorkspaceConfig.load` crashed on valid JSON of the wrong shape (a TypeError is an Error, not an Exception); found by link's own test | fixed, four shapes tested (this is part of #85's loader weakness) |
+| The CLI test helper inherited `CLAUDART_DEBUG=1` from the developer shell (the settings link writes set it for Claude Code sessions), so every real-binary test ran with the trace on | fixed: the helper clears it unless a test sets it |
+| Remaining survivors, all older: debug_mode.dart trace label constants and the append helper, workspace_config.dart `ProofNotation.description` text (#76) | open |
