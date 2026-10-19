@@ -22,6 +22,34 @@ const int _maxPerformance = 50;
 const int _trimSlackLines = 50;
 const int _maxModelRecords = 500;
 
+/// The keys of a session log entry; the names are the keys. (The keys of a
+/// transition are [HandoffTransitionField]'s, of a model record
+/// [ModelRecordField]'s.)
+enum LogEntryField {
+  ts,
+  command,
+  outcome,
+  sensitivityMode,
+  scanScope,
+  filesScanned,
+  tokensTotal,
+  tokensNew,
+  scanDuration,
+  durationMs,
+  platform,
+  claudartVersion,
+  fingerprint,
+  reason,
+  suggestion,
+  stack,
+  count,
+  firstSeen,
+  lastSeen,
+  filed,
+  issueId,
+  rejected;
+}
+
 /// Appends structured log entries to workspace log files.
 class SessionLogger {
   final FileIO _io;
@@ -59,18 +87,18 @@ class SessionLogger {
     String? claudartVersion,
   }) {
     final entry = <String, dynamic>{
-      'ts': DateTime.now().toUtc().toIso8601String(),
-      'command': command,
-      'sensitivityMode': sensitivityModeOverride ?? sensitivityMode,
-      if (scanScope != null) 'scanScope': scanScope,
-      if (filesScanned != null) 'filesScanned': filesScanned,
-      if (tokensTotal != null) 'tokensTotal': tokensTotal,
-      if (tokensNew != null) 'tokensNew': tokensNew,
-      if (scanDuration != null) 'scanDuration': scanDuration,
-      if (durationMs != null) 'durationMs': durationMs,
-      if (platform != null) 'platform': platform,
-      if (claudartVersion != null) 'claudartVersion': claudartVersion,
-      'outcome': outcome,
+      LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+      LogEntryField.command.name: command,
+      LogEntryField.sensitivityMode.name: sensitivityModeOverride ?? sensitivityMode,
+      if (scanScope != null) LogEntryField.scanScope.name: scanScope,
+      if (filesScanned != null) LogEntryField.filesScanned.name: filesScanned,
+      if (tokensTotal != null) LogEntryField.tokensTotal.name: tokensTotal,
+      if (tokensNew != null) LogEntryField.tokensNew.name: tokensNew,
+      if (scanDuration != null) LogEntryField.scanDuration.name: scanDuration,
+      if (durationMs != null) LogEntryField.durationMs.name: durationMs,
+      if (platform != null) LogEntryField.platform.name: platform,
+      if (claudartVersion != null) LogEntryField.claudartVersion.name: claudartVersion,
+      LogEntryField.outcome.name: outcome,
     };
     _appendJsonl(_interactionsPath, entry, _maxInteractions);
   }
@@ -84,8 +112,8 @@ class SessionLogger {
     _appendJsonl(
       _transitionsPath,
       {
-        'ts': DateTime.now().toUtc().toIso8601String(),
-        'command': command,
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.command.name: command,
         ...transition.toJson(),
       },
       _maxTransitions,
@@ -113,11 +141,11 @@ class SessionLogger {
     _appendJsonl(
       _transitionsPath,
       {
-        'ts': DateTime.now().toUtc().toIso8601String(),
-        'command': command,
-        'from': from.name,
-        'event': event.name,
-        'rejected': true,
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.command.name: command,
+        HandoffTransitionField.from.name: from.name,
+        HandoffTransitionField.event.name: event.name,
+        LogEntryField.rejected.name: true,
       },
       _maxTransitions,
     );
@@ -138,8 +166,8 @@ class SessionLogger {
       _appendJsonl(
         _modelsPath,
         {
-          'ts': DateTime.now().toUtc().toIso8601String(),
-          'command': command,
+          LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+          LogEntryField.command.name: command,
           ...reconciliation.toRecordJson(stepId: event.stepId),
         },
         _maxModelRecords,
@@ -175,7 +203,7 @@ class SessionLogger {
       // Check existing for deduplication
       final existing = _readJsonlEntries(_errorsPath);
       final matchIdx =
-          existing.indexWhere((e) => e['fingerprint'] == fingerprint);
+          existing.indexWhere((e) => e[LogEntryField.fingerprint.name] == fingerprint);
 
       // Found real while verifying #72: this abstracted stackTrace but not
       // reason, so a sensitive-mode project's error log still leaked raw
@@ -195,23 +223,23 @@ class SessionLogger {
 
       if (matchIdx >= 0) {
         final old = Map<String, dynamic>.from(existing[matchIdx]);
-        old['count'] = ((old['count'] as int?) ?? 1) + 1;
-        old['lastSeen'] = now;
+        old[LogEntryField.count.name] = ((old[LogEntryField.count.name] as int?) ?? 1) + 1;
+        old[LogEntryField.lastSeen.name] = now;
         existing[matchIdx] = old;
       } else {
         final entry = <String, dynamic>{
-          'ts': now,
-          'command': command,
-          'outcome': errorType,
-          'fingerprint': fingerprint,
-          'reason': safeReason,
-          if (suggestion != null) 'suggestion': suggestion,
-          if (safeStack != null) 'stack': safeStack,
-          'count': 1,
-          'firstSeen': now,
-          'lastSeen': now,
-          'filed': false,
-          'issueId': null,
+          LogEntryField.ts.name: now,
+          LogEntryField.command.name: command,
+          LogEntryField.outcome.name: errorType,
+          LogEntryField.fingerprint.name: fingerprint,
+          LogEntryField.reason.name: safeReason,
+          if (suggestion != null) LogEntryField.suggestion.name: suggestion,
+          if (safeStack != null) LogEntryField.stack.name: safeStack,
+          LogEntryField.count.name: 1,
+          LogEntryField.firstSeen.name: now,
+          LogEntryField.lastSeen.name: now,
+          LogEntryField.filed.name: false,
+          LogEntryField.issueId.name: null,
           ...?extra,
         };
         existing.add(entry);

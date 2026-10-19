@@ -131,7 +131,7 @@ String renderModelMetadataTopology(Map<String, String> sources) => [
       '',
       renderTopology<ModelObservationField>(ModelObservationField.values, {
         'jsonKey': (f) => f.jsonKey,
-        'streamKey': (f) => f.streamKey ?? '(the map key)',
+        'streamKey': (f) => f.wireStreamKey ?? '(the map key)',
       }),
       '',
       '## Drift kinds (`reconcileModel`)',

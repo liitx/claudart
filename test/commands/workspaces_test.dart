@@ -307,4 +307,28 @@ void main() {
       );
     });
   });
+
+  group('WorkspaceField keys', () {
+    const keys = <WorkspaceField, String>{
+      WorkspaceField.workspaceName: 'name',
+      WorkspaceField.projectRoot: 'projectRoot',
+      WorkspaceField.workspacePath: 'workspacePath',
+      WorkspaceField.sessionStatus: 'status',
+      WorkspaceField.hasSession: 'hasSession',
+      WorkspaceField.linkState: 'linkState',
+      WorkspaceField.locked: 'locked',
+      WorkspaceField.lastSession: 'lastSession',
+      WorkspaceField.isCurrent: 'current',
+    };
+
+    for (final field in WorkspaceField.values) {
+      test('${field.name} is "${keys[field]}" in the JSON', () {
+        expect(field.jsonKey, keys[field]);
+      });
+    }
+
+    test('every variant has a pinned key', () {
+      expect(keys.keys.toSet(), WorkspaceField.values.toSet());
+    });
+  });
 }

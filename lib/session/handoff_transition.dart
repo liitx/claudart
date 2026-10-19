@@ -7,6 +7,9 @@
 import 'handoff_event.dart';
 import 'session_state.dart';
 
+/// The keys of a transition's JSON; the names are the keys.
+enum HandoffTransitionField { from, event, to }
+
 class HandoffTransition {
   const HandoffTransition({
     required this.from,
@@ -18,8 +21,11 @@ class HandoffTransition {
   final HandoffEvent event;
   final HandoffStatus to;
 
-  Map<String, Object?> toJson() =>
-      {'from': from.name, 'event': event.name, 'to': to.name};
+  Map<String, Object?> toJson() => {
+        HandoffTransitionField.from.name: from.name,
+        HandoffTransitionField.event.name: event.name,
+        HandoffTransitionField.to.name: to.name,
+      };
 
   @override
   bool operator ==(Object other) =>

@@ -34,10 +34,12 @@ enum ClaudeSettingsKey {
   final String wireKey;
 }
 
+/// The kinds of hook Claude Code runs; claudart writes only `command`.
+enum ClaudeHookType { command }
+
 abstract final class ClaudeSettingsWire {
   /// The tools the hook runs before.
   static const editToolsMatcher = 'Edit|Write|MultiEdit';
-  static const commandHookType = 'command';
 
   /// The command claudart owns; also how its entry is found again.
   static const hookCommand = 'claudart hook ${HookWire.preEditSubcommand}';
@@ -47,7 +49,7 @@ Map<String, Object?> _managedHookEntry() => {
       ClaudeSettingsKey.matcher.wireKey: ClaudeSettingsWire.editToolsMatcher,
       ClaudeSettingsKey.hooks.wireKey: [
         {
-          ClaudeSettingsKey.type.wireKey: ClaudeSettingsWire.commandHookType,
+          ClaudeSettingsKey.type.wireKey: ClaudeHookType.command.name,
           ClaudeSettingsKey.command.wireKey: ClaudeSettingsWire.hookCommand,
         },
       ],

@@ -60,33 +60,33 @@ class ModelObservation {
       };
 }
 
-/// The fields of a [ModelObservation] and the `modelUsage` key each is read
-/// from. The enum owns both names, so the mapping is declared once and the
-/// topology doc can list it.
+/// The fields of a [ModelObservation]. The variant's own name is its key in
+/// the persisted record; [streamKey] is the key in the stream's
+/// `modelUsage[<id>]` object where that differs from the name.
 enum ModelObservationField {
-  observedModelId(jsonKey: 'observedModelId', streamKey: null),
-  canonicalModel(jsonKey: 'canonicalModel', streamKey: 'canonicalModel'),
-  provider(jsonKey: 'provider', streamKey: 'provider'),
-  contextWindow(jsonKey: 'contextWindow', streamKey: 'contextWindow'),
-  maxOutputTokens(jsonKey: 'maxOutputTokens', streamKey: 'maxOutputTokens'),
-  inputTokens(jsonKey: 'inputTokens', streamKey: 'inputTokens'),
-  outputTokens(jsonKey: 'outputTokens', streamKey: 'outputTokens'),
-  cacheReadTokens(jsonKey: 'cacheReadTokens', streamKey: 'cacheReadInputTokens'),
-  cacheCreationTokens(
-    jsonKey: 'cacheCreationTokens',
-    streamKey: 'cacheCreationInputTokens',
-  ),
-  thinkingTokens(jsonKey: 'thinkingTokens', streamKey: 'thinkingTokens'),
-  costUsd(jsonKey: 'costUsd', streamKey: 'costUSD');
+  /// The id is the map key itself, not a field of the object.
+  observedModelId(hasStreamKey: false),
+  canonicalModel,
+  provider,
+  contextWindow,
+  maxOutputTokens,
+  inputTokens,
+  outputTokens,
+  cacheReadTokens(streamKey: 'cacheReadInputTokens'),
+  cacheCreationTokens(streamKey: 'cacheCreationInputTokens'),
+  thinkingTokens,
+  costUsd(streamKey: 'costUSD');
 
-  const ModelObservationField({required this.jsonKey, required this.streamKey});
+  const ModelObservationField({this.streamKey, this.hasStreamKey = true});
+
+  final String? streamKey;
+  final bool hasStreamKey;
 
   /// The key in the persisted record.
-  final String jsonKey;
+  String get jsonKey => name;
 
-  /// The key in the stream's `modelUsage[<id>]` object; null for the id, which
-  /// is the map key itself.
-  final String? streamKey;
+  /// The key in `modelUsage[<id>]`, or null for the id.
+  String? get wireStreamKey => hasStreamKey ? (streamKey ?? name) : null;
 }
 
 /// Every model in a result line's `modelUsage`, in the order reported. Empty
@@ -103,12 +103,12 @@ List<ModelObservation> parseModelUsage(Object? modelUsage) {
 
 ModelObservation _observationOf(String id, Map<String, dynamic> usage) {
   int? intOf(ModelObservationField field) {
-    final value = usage[field.streamKey];
+    final value = usage[field.wireStreamKey];
     return value is num ? value.toInt() : null;
   }
 
   String? textOf(ModelObservationField field) {
-    final value = usage[field.streamKey];
+    final value = usage[field.wireStreamKey];
     return value is String ? value : null;
   }
 
@@ -123,7 +123,7 @@ ModelObservation _observationOf(String id, Map<String, dynamic> usage) {
     cacheReadTokens: intOf(ModelObservationField.cacheReadTokens) ?? 0,
     cacheCreationTokens: intOf(ModelObservationField.cacheCreationTokens) ?? 0,
     thinkingTokens: intOf(ModelObservationField.thinkingTokens) ?? 0,
-    costUsd: (usage[ModelObservationField.costUsd.streamKey] as num?)
+    costUsd: (usage[ModelObservationField.costUsd.wireStreamKey] as num?)
             ?.toDouble() ??
         0,
   );
