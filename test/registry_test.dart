@@ -201,4 +201,32 @@ void main() {
       expect(result.entries, hasLength(1));
     });
   });
+
+  group('RegistryEntry.permitsDebugTrace', () {
+    RegistryEntry entry({required bool sensitive}) => RegistryEntry(
+          name: 'p',
+          projectRoot: '/p',
+          workspacePath: '/w',
+          createdAt: 'x',
+          lastSession: 'x',
+          sensitivityMode: sensitive,
+        );
+
+    test('a sensitive project does not permit the trace', () {
+      expect(entry(sensitive: true).permitsDebugTrace, isFalse);
+    });
+
+    test('a project that is not sensitive permits it', () {
+      expect(entry(sensitive: false).permitsDebugTrace, isTrue);
+    });
+
+    test('it follows the stored flag after a save and load', () {
+      final io = MemoryFileIO();
+      Registry.empty().add(entry(sensitive: true)).save(io: io);
+      expect(
+        Registry.load(io: io).findByName('p')!.permitsDebugTrace,
+        isFalse,
+      );
+    });
+  });
 }

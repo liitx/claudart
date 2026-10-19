@@ -16,7 +16,11 @@ class CliSession {
   static final _script = p.join(Directory.current.path, 'bin', 'claudart.dart');
 
   /// Runs `claudart <args>` in the project with [stdin] as its standard input.
-  Future<({int code, String out})> run(List<String> args, {String stdin = ''}) async {
+  Future<({int code, String out})> run(
+    List<String> args, {
+    String stdin = '',
+    Map<String, String> env = const {},
+  }) async {
     final input = File(p.join(ws.parent.path, 'stdin.txt'))..writeAsStringSync(stdin);
     // Same GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE leak risk as `create()`
     // below — claudart itself shells out to git (detectGitContext,
@@ -24,11 +28,20 @@ class CliSession {
     // calls too. `environment:` only merges onto the parent env, it can't
     // un-inherit a var already set there — `unset` inside the shell
     // command is what actually clears it for this subprocess.
+    // CLAUDART_DEBUG is cleared too unless the test sets it: a developer shell
+    // (or a Claude Code session, whose settings link writes set it) may carry
+    // it, and the trace it switches on would leak into every run.
+    final cleared = [
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_INDEX_FILE',
+      if (!env.containsKey('CLAUDART_DEBUG')) 'CLAUDART_DEBUG',
+    ].join(' ');
     final r = await Process.run(
       'sh',
-      ['-c', 'unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; "$_dart" "$_script" ${args.join(' ')} < "${input.path}"'],
+      ['-c', 'unset $cleared; "$_dart" "$_script" ${args.join(' ')} < "${input.path}"'],
       workingDirectory: proj.path,
-      environment: {'CLAUDART_WORKSPACE': ws.path},
+      environment: {'CLAUDART_WORKSPACE': ws.path, ...env},
     );
     return (code: r.exitCode, out: '${r.stdout}${r.stderr}');
   }

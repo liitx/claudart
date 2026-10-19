@@ -47,6 +47,7 @@ ArtifactState stateOf(
   required String projectRoot,
   required String workspace,
   required String projectName,
+  required bool permitsDebugTrace,
   required FileIO io,
 }) => switch (artifact) {
       ClaudartArtifact.commandTemplates => _commandTemplatesState(
@@ -66,7 +67,11 @@ ArtifactState stateOf(
       ClaudartArtifact.dependencyConfig =>
         _dependencyConfigState(projectRoot: projectRoot, io: io),
       ClaudartArtifact.claudeSettings =>
-        _claudeSettingsState(projectRoot: projectRoot, io: io),
+        _claudeSettingsState(
+          projectRoot: projectRoot,
+          permitsDebugTrace: permitsDebugTrace,
+          io: io,
+        ),
     };
 
 ArtifactState _commandTemplatesState({
@@ -143,11 +148,15 @@ ArtifactState _readmeRoadmapState({
 
 ArtifactState _claudeSettingsState({
   required String projectRoot,
+  required bool permitsDebugTrace,
   required FileIO io,
 }) {
   final path = claudeSettingsPathFor(projectRoot);
   if (!io.fileExists(path)) return ArtifactState.missing;
-  return claudeSettingsAreFresh(io.read(path))
+  return claudeSettingsAreFresh(
+    io.read(path),
+    debugTrace: permitsDebugTrace,
+  )
       ? ArtifactState.fresh
       : ArtifactState.stale;
 }

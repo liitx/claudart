@@ -6,10 +6,13 @@
 //   - a PreToolUse hook on Edit, Write and MultiEdit that runs
 //     `claudart hook pre-edit` (what binds Claude Code to the session), and
 //   - CLAUDART_DEBUG=1 in `env`, so claudart calls made from that project's
-//     Claude Code sessions write the per-step trace.
+//     Claude Code sessions write the per-step trace, but only for a project
+//     that is not sensitive: the trace writes full prompts to disk. For a
+//     sensitive project link adds no env var and removes the `1` it set
+//     before.
 // The hook is found again by its command, so re-running link updates it in
-// place instead of adding a second one. A value the user already set for the
-// env var is left alone.
+// place instead of adding a second one. A value other than `1` that the user
+// set for the env var is left alone.
 
 import 'dart:convert';
 
@@ -74,11 +77,13 @@ Map<String, dynamic> _parse(String existing) {
   return decoded;
 }
 
-/// [existing] (a settings.json's text, '' for none) with claudart's hook and
-/// env entry added or updated. Everything else is kept. Throws
+/// [existing] (a settings.json's text, '' for none) with claudart's hook added
+/// or updated, and the debug env var added ([debugTrace]) or, for a sensitive
+/// project, removed if it is the `1` claudart set. Everything else is
+/// kept. Throws
 /// [FormatException] when [existing] is not a JSON object, so the caller can
 /// leave a file it cannot read alone.
-String mergeClaudeSettings(String existing) {
+String mergeClaudeSettings(String existing, {required bool debugTrace}) {
   final settings = _parse(existing);
 
   final hooks = Map<String, dynamic>.from(
@@ -99,15 +104,25 @@ String mergeClaudeSettings(String existing) {
   final env = Map<String, dynamic>.from(
     settings[ClaudeSettingsKey.env.wireKey] as Map? ?? {},
   );
-  env.putIfAbsent(kClaudartDebugEnvVar, () => kClaudartDebugEnabledValue);
-  settings[ClaudeSettingsKey.env.wireKey] = env;
+  if (debugTrace) {
+    env.putIfAbsent(kClaudartDebugEnvVar, () => kClaudartDebugEnabledValue);
+  } else if (env[kClaudartDebugEnvVar] == kClaudartDebugEnabledValue) {
+    env.remove(kClaudartDebugEnvVar);
+  }
+  if (env.isEmpty) {
+    settings.remove(ClaudeSettingsKey.env.wireKey);
+  } else {
+    settings[ClaudeSettingsKey.env.wireKey] = env;
+  }
 
   return '${const JsonEncoder.withIndent('  ').convert(settings)}\n';
 }
 
 /// Whether [existing] already holds claudart's hook exactly as it would be
-/// written and the debug env var. A file that is not a JSON object is stale.
-bool claudeSettingsAreFresh(String existing) {
+/// written, and the env var as [debugTrace] says: present, or (for a sensitive
+/// project) not the `1` claudart sets. A file that is not a JSON object is
+/// stale.
+bool claudeSettingsAreFresh(String existing, {required bool debugTrace}) {
   try {
     final settings = _parse(existing);
     final hooks = settings[ClaudeSettingsKey.hooks.wireKey];
@@ -115,11 +130,14 @@ bool claudeSettingsAreFresh(String existing) {
         ? hooks[ClaudeSettingsKey.preToolUse.wireKey]
         : null;
     final env = settings[ClaudeSettingsKey.env.wireKey];
+    final Map<Object?, Object?> envMap = env is Map ? env : const {};
+    final envOk = debugTrace
+        ? envMap.containsKey(kClaudartDebugEnvVar)
+        : envMap[kClaudartDebugEnvVar] != kClaudartDebugEnabledValue;
     return preToolUse is List &&
         preToolUse.where(_isManagedEntry).length == 1 &&
         preToolUse.where(_isManagedEntry).every(_entryMatchesManaged) &&
-        env is Map &&
-        env.containsKey(kClaudartDebugEnvVar);
+        envOk;
   } on FormatException {
     return false;
   }

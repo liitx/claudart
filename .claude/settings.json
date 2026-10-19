@@ -26,8 +26,5 @@
         ]
       }
     ]
-  },
-  "env": {
-    "CLAUDART_DEBUG": "1"
   }
 }

@@ -12,6 +12,7 @@ import '../process_runner.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
 import '../templates/claude_settings_template.dart';
+import '../workspace/project_sensitivity.dart';
 import '../templates/claude_template.dart';
 import '../templates/command_template_marker.dart';
 import '../templates/readme_template.dart';
@@ -125,7 +126,17 @@ Future<void> runLink(
     print('  Re-run in a terminal, or pass $_sensitiveFlag or $_noSensitiveFlag.\n');
     exit_(1);
   }
-  final sensitivityMode = decided;
+  final ownerMarkedSensitive =
+      WorkspaceConfig.load(workspace, io: fileIO)?.session.sensitivityMode ??
+          false;
+  final sensitivityMode = reconcileSensitivity(
+    chosen: decided,
+    ownerMarkedSensitive: ownerMarkedSensitive,
+  );
+  if (sensitivityMode && !decided) {
+    print('\n  workspace.json marks this project sensitive, so it stays '
+        'sensitive.');
+  }
 
   // 6 — Write or update registry entry.
   final today = DateTime.now().toIso8601String().split('T').first;
@@ -165,7 +176,11 @@ Future<void> runLink(
       case ClaudartArtifact.readmeRoadmap:
         _regenerateReadmeRoadmap(projectRoot: projectRoot, fileIO: fileIO);
       case ClaudartArtifact.claudeSettings:
-        _regenerateClaudeSettings(projectRoot: projectRoot, fileIO: fileIO);
+        _regenerateClaudeSettings(
+          projectRoot: projectRoot,
+          fileIO: fileIO,
+          debugTrace: entry.permitsDebugTrace,
+        );
       case ClaudartArtifact.dependencyConfig:
         await _regenerateDependencyConfig(
           projectRoot: projectRoot,
@@ -258,12 +273,16 @@ void _regenerateClaudeMdTail({
 void _regenerateClaudeSettings({
   required String projectRoot,
   required FileIO fileIO,
+  required bool debugTrace,
 }) {
   final path = claudeSettingsPathFor(projectRoot);
   final existing = fileIO.fileExists(path) ? fileIO.read(path) : '';
   final String merged;
   try {
-    merged = mergeClaudeSettings(existing);
+    merged = mergeClaudeSettings(
+      existing,
+      debugTrace: debugTrace,
+    );
   } on FormatException {
     print('⚠  $path is not a JSON object, so the claudart hook was not added. '
         'Fix the file and run `claudart link` again.');

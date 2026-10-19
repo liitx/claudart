@@ -130,6 +130,7 @@ HarnessCheckOutcome _checkArtifactFreshness(ProcessRunner proc, String root, Fil
         projectRoot: resolvedRoot,
         workspace: entry.workspacePath,
         projectName: entry.name,
+        permitsDebugTrace: entry.permitsDebugTrace,
         io: io,
       )))
         artifact.name,

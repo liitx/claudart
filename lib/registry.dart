@@ -11,7 +11,15 @@ class RegistryEntry {
   final String workspacePath;
   final String createdAt;
   final String lastSession;
+  /// The one record of whether this project is sensitive, set when it is
+  /// linked (`claudart link` reconciles it with the owner's workspace.json
+  /// once, never weakening it). Everything that depends on sensitivity asks
+  /// this entry, not the files.
   final bool sensitivityMode;
+
+  /// Whether the ambient `CLAUDART_DEBUG` trace, which writes full prompts to
+  /// disk, may run for this project.
+  bool get permitsDebugTrace => !sensitivityMode;
 
   const RegistryEntry({
     required this.name,

@@ -229,6 +229,10 @@ class WorkspaceConfig {
       return WorkspaceConfig.fromJson(json);
     } on Exception catch (_) {
       return null;
+    } on TypeError catch (_) {
+      // Valid JSON of the wrong shape (a missing section, a field of the wrong
+      // type) throws a TypeError, which is an Error and not an Exception.
+      return null;
     }
   }
 

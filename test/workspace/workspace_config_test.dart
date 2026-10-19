@@ -86,6 +86,23 @@ void main() {
       expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
     });
 
+    // Valid JSON of the wrong shape throws a TypeError (an Error, not an
+    // Exception); each of these must be "unparseable", not a crash.
+    final wrongShapes = <String, String>{
+      'a missing section': '{"hand": "written"}',
+      'a section of the wrong type':
+          '{"owner": "x", "project": 1, "session": 2}',
+      'a field of the wrong type':
+          '{"owner": {"name": 1, "email": "e", "handle": "h"}}',
+      'a top-level list': '[1, 2]',
+    };
+    wrongShapes.forEach((name, text) {
+      test('returns null for $name', () {
+        final io = MemoryFileIO(files: {_workspaceJsonPath: text});
+        expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
+      });
+    });
+
     test('parses a full workspace.json into typed fields', () {
       final io = MemoryFileIO(files: {
         _workspaceJsonPath: '''

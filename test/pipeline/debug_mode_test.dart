@@ -10,7 +10,10 @@ void main() {
   // Tests reset the runtime flag between cases — it's a process-level
   // global mutated by the CLI, and leaking state between tests would
   // mask bugs.
-  tearDown(() => setDebugEnabled(false));
+  tearDown(() {
+    setDebugEnabled(false);
+    suppressAmbientDebug(false);
+  });
 
   // ── exported constants ────────────────────────────────────────────────────
 
@@ -56,6 +59,50 @@ void main() {
         expect(debugEnabled(environment: env), equals(expected));
       });
     }
+  });
+
+  // ── a sensitive project suppresses the ambient env var, not the flag ─────
+
+  group('debugEnabled — suppressed for a sensitive project', () {
+    final cases = <(bool runtime, String? envValue, bool expected)>[
+      (false, null,                       false), // nothing asked
+      (false, kClaudartDebugEnabledValue, false), // ambient env: ignored
+      (true,  null,                       true),  // explicit flag: still works
+      (true,  kClaudartDebugEnabledValue, true),  // flag wins over suppression
+    ];
+
+    for (final (runtime, envValue, expected) in cases) {
+      test('runtime=$runtime  env="${envValue ?? '<unset>'}" → $expected', () {
+        setDebugEnabled(runtime);
+        suppressAmbientDebug(true);
+        final env = envValue == null
+            ? <String, String>{}
+            : {kClaudartDebugEnvVar: envValue};
+        expect(debugEnabled(environment: env), equals(expected));
+      });
+    }
+
+    test('lifting the suppression restores the env var', () {
+      suppressAmbientDebug(true);
+      suppressAmbientDebug(false);
+      expect(
+        debugEnabled(environment: {kClaudartDebugEnvVar: '1'}),
+        isTrue,
+      );
+    });
+
+    test('the log file follows the same decision', () {
+      suppressAmbientDebug(true);
+      expect(
+        debugLogFile(environment: {kClaudartDebugEnvVar: '1'}),
+        isNull,
+      );
+    });
+
+    test('the notice names the cause and the way around it', () {
+      expect(kAmbientDebugSuppressedNotice, contains('sensitive'));
+      expect(kAmbientDebugSuppressedNotice, contains('--debug'));
+    });
   });
 
   // ── debugLogFile path resolution ─────────────────────────────────────────
