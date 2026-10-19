@@ -666,7 +666,8 @@ void main() {
       logAnError();
       final lines = io.read(_errorsPath).trim().split('\n');
       expect(lines.length, 1);
-      expect(jsonDecode(lines.single)[LogEntryField.count.name], 3);
+      final entry = jsonDecode(lines.single) as Map<String, dynamic>;
+      expect(entry[LogEntryField.count.name], 3);
     });
 
     test('a different fingerprint is a separate entry', () {
