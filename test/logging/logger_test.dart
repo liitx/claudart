@@ -229,24 +229,47 @@ void main() {
       expect(reason, isNot(contains('VolumeBloc')));
     });
 
-    test('logPerformance writes header row', () {
+    const performanceHeader = '| timestamp | command | filesScanned | duration '
+        '| tokensNew | outcome |';
+    const performanceDivider =
+        '|-----------|---------|-------------|----------|-----------|--------|';
+
+    List<String> performanceTable() => io
+        .read(_performancePath)
+        .split('\n')
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    test('logPerformance starts the table with a header and a divider row',
+        () {
       logger.logPerformance(command: 'scan', outcome: 'ok', filesScanned: 10);
-      final content = io.read(_performancePath);
-      expect(content, contains('| command |'));
-      expect(content, contains('scan'));
+      final table = performanceTable();
+      expect(table[0], performanceHeader);
+      expect(table[1], performanceDivider);
+      expect(table.length, 3);
+      expect(table[2], contains('| scan | 10 |'));
     });
 
-    test('logPerformance rotation caps at 50 entries', () {
+    test('logPerformance keeps every row, in order, under the header', () {
+      for (final command in ['one', 'two', 'three']) {
+        logger.logPerformance(command: command, outcome: 'ok');
+      }
+      final table = performanceTable();
+      expect(table.length, 5);
+      expect(table.sublist(2).map((row) => row.split('|')[2].trim()),
+          ['one', 'two', 'three']);
+    });
+
+    test('logPerformance rotation keeps the header and the newest 50 rows', () {
       for (var i = 0; i < 52; i++) {
         logger.logPerformance(command: 'cmd_$i', outcome: 'ok');
       }
-      final content = io.read(_performancePath);
-      final lines = content
-          .split('\n')
-          .where((l) => l.startsWith('|'))
-          .toList();
-      // 2 header lines + max 50 data lines
-      expect(lines.length, lessThanOrEqualTo(52));
+      final table = performanceTable();
+      expect(table.length, 52);
+      expect(table[0], performanceHeader);
+      expect(table[1], performanceDivider);
+      expect(table[2], contains('| cmd_2 |'));
+      expect(table.last, contains('| cmd_51 |'));
     });
   });
 
@@ -400,6 +423,70 @@ void main() {
       for (final line in lines) {
         expect(() => jsonDecode(line), returnsNormally);
       }
+    }, timeout: const Timeout(Duration(seconds: 90)));
+
+    // logError is a read-modify-write (deduplicate by fingerprint, count it):
+    // without a lock around it, two processes read the same state and one
+    // update is lost.
+    Future<List<Map<String, dynamic>>> runErrorWriters(
+      String mode, {
+      int writers = 4,
+      int perWriter = 25,
+    }) async {
+      final dir = Directory.systemTemp.createTempSync('claudart_err_race_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final results = await Future.wait([
+        for (var writer = 0; writer < writers; writer++)
+          Process.run(Platform.resolvedExecutable, [
+            'test/helpers/log_errors.dart',
+            dir.path,
+            '$writer',
+            '$perWriter',
+            mode,
+          ]),
+      ]);
+      for (final result in results) {
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+      }
+      return [
+        for (final line in File(p.join(logsDirFor(dir.path), 'errors.jsonl'))
+            .readAsLinesSync())
+          if (line.isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+      ];
+    }
+
+    test('one fingerprint logged from several processes keeps its full count',
+        () async {
+      final entries = await runErrorWriters('shared');
+      expect(entries.length, 1);
+      expect(entries.single['count'], 4 * 25);
+    }, timeout: const Timeout(Duration(seconds: 90)));
+
+    test('timing rows from several processes all survive', () async {
+      final dir = Directory.systemTemp.createTempSync('claudart_perf_race_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final results = await Future.wait([
+        for (var writer = 0; writer < 4; writer++)
+          Process.run(Platform.resolvedExecutable, [
+            'test/helpers/log_performance_rows.dart',
+            dir.path,
+            '$writer',
+            '10',
+          ]),
+      ]);
+      for (final result in results) {
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+      }
+      final rows = File(p.join(logsDirFor(dir.path), 'performance.md'))
+          .readAsLinesSync()
+          .where((l) => l.startsWith('| ') && !l.contains('timestamp'));
+      expect(rows.length, 4 * 10);
+    }, timeout: const Timeout(Duration(seconds: 90)));
+
+    test('distinct fingerprints from several processes all survive',
+        () async {
+      final entries = await runErrorWriters('distinct');
+      expect(entries.length, 4 * 25);
     }, timeout: const Timeout(Duration(seconds: 90)));
   });
 }

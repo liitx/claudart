@@ -229,3 +229,13 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | OPEN: run `claudart compile` after merge so the PATH binary has `hook` (until then each edit shows a non-blocking hook error) | open |
 | OPEN: link zedup and dartrix on branches (also writes lib/generated/dependency_config.g.dart there; review that diff) | open |
 | Mutation survivors in `link.dart` cannot be measured: mutation_test hangs on that file (issue #77) | known |
+
+## Resolution log, locked log updates and a regression of mine (2026-10-19)
+
+| Item | Status |
+|---|---|
+| `logError` (dedupe + count) and `logPerformance` (table) were read, change, rewrite: two processes lost updates (4 processes x 25: 67 of 100 on a shared fingerprint, 32 of 100 distinct entries) | fixed: `FileIO.withExclusiveLock` (cross-process lock on a sidecar `.lock` file) around those sections and around the append + trim, so a trim's rename cannot orphan another process's append |
+| Regression introduced by me in d115b10 (PR #93), found while wrapping that code: the performance table's divider row was deleted, so `lines.take(2)` made the first data row part of the header and each call dropped a row. Cause not provable now; most likely a killed `mutation-test-changed` run left logger.dart mutated before I edited and committed it | fixed: line restored; three tests pin header, divider, row order and rotation (all fail without the line) |
+| `make mutation-test` now snapshots FILE and restores it if the run leaves it changed (proved with a fake runner that corrupts the file) | done |
+| The lock is per process, not per isolate or thread | documented on the method; tests use real child processes |
+| Pre-existing survivors, unchanged: logger.dart 16 (optional interaction fields, logError sensitivity/dedupe/suggestion branches, performance cell text, the `_writeJsonl` cap), file_io.dart 5 (3 parameter-name swaps on abstract signatures, `listFiles` extension filter, `linkExists`) | open: file as an issue |

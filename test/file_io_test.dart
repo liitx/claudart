@@ -85,4 +85,63 @@ void main() {
       expect(lines.toSet().length, lines.length, reason: 'a line was doubled');
     }, timeout: const Timeout(Duration(seconds: 90)));
   });
+
+  group('RealFileIO.withExclusiveLock', () {
+    const counterScript = 'test/helpers/increment_counter.dart';
+
+    test('returns what the body returns', () {
+      expect(io.withExclusiveLock(p.join(dir.path, 'f'), () => 42), 42);
+    });
+
+    test('runs the body once, with its effects visible after', () {
+      final path = p.join(dir.path, 'f.txt');
+      io.withExclusiveLock(path, () => io.write(path, 'inside'));
+      expect(File(path).readAsStringSync(), 'inside');
+    });
+
+    test('creates the parent directory', () {
+      final path = p.join(dir.path, 'a', 'b', 'f');
+      io.withExclusiveLock(path, () {});
+      expect(Directory(p.join(dir.path, 'a', 'b')).existsSync(), isTrue);
+    });
+
+    test('a throwing body propagates and the lock is released', () {
+      final path = p.join(dir.path, 'f');
+      expect(
+        () => io.withExclusiveLock(path, () => throw StateError('boom')),
+        throwsStateError,
+      );
+      // A held lock would block this forever; it returns.
+      expect(io.withExclusiveLock(path, () => 'again'), 'again');
+    });
+
+    Future<int> countWith(String mode) async {
+      final path = p.join(dir.path, 'counter.txt');
+      const writers = 4;
+      const times = 100;
+      final results = await Future.wait([
+        for (var i = 0; i < writers; i++)
+          Process.run(Platform.resolvedExecutable, [
+            counterScript,
+            path,
+            '$times',
+            mode,
+          ]),
+      ]);
+      for (final result in results) {
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+      }
+      return int.parse(File(path).readAsStringSync().trim());
+    }
+
+    // Separate processes: the lock is per process.
+    test('read-modify-writes from several processes lose no update', () async {
+      expect(await countWith('lock'), 4 * 100);
+    }, timeout: const Timeout(Duration(seconds: 90)));
+
+    test('the same read-modify-writes without the lock do lose updates',
+        () async {
+      expect(await countWith('nolock'), lessThan(4 * 100));
+    }, timeout: const Timeout(Duration(seconds: 90)));
+  });
 }

@@ -235,6 +235,8 @@ class _FailOnWriteIO implements FileIO {
 
   @override void append(String path, String content) =>
       delegate.append(path, content);
+  @override T withExclusiveLock<T>(String path, T Function() body) =>
+      delegate.withExclusiveLock(path, body);
   @override String read(String path) => delegate.read(path);
   @override void delete(String path) => delegate.delete(path);
   @override bool fileExists(String path) => delegate.fileExists(path);

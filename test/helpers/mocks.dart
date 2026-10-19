@@ -36,6 +36,9 @@ class MemoryFileIO implements FileIO {
       files[path] = (files[path] ?? '') + content;
 
   @override
+  T withExclusiveLock<T>(String path, T Function() body) => body();
+
+  @override
   void delete(String path) => files.remove(path);
 
   @override

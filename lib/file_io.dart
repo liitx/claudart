@@ -10,6 +10,12 @@ abstract class FileIO {
   /// rewriting what is there, so concurrent appenders do not lose each other's
   /// lines.
   void append(String path, String content);
+
+  /// Runs [body] holding an exclusive lock tied to [path], across processes:
+  /// a read-modify-write of [path] done inside it cannot interleave with
+  /// another process's. The lock is per process (not per isolate or thread),
+  /// and is released when [body] returns or throws.
+  T withExclusiveLock<T>(String path, T Function() body);
   void delete(String path);
   bool fileExists(String path);
   bool dirExists(String path);
@@ -22,6 +28,10 @@ abstract class FileIO {
 
 /// Staging files are named `<path>.tmp<pid>`, one per writing process.
 const _stagingSuffix = '.tmp';
+
+/// The lock for a path is held on a file beside it, so replacing the path (an
+/// atomic write renames over it) never moves the lock out from under a holder.
+const _lockSuffix = '.lock';
 
 /// Production implementation backed by dart:io.
 class RealFileIO implements FileIO {
@@ -48,6 +58,18 @@ class RealFileIO implements FileIO {
   /// 4 writers x 100 lines kept 209 of 400), so the lock is what serializes
   /// them; the position is re-read after the lock is won, since another writer
   /// may have extended the file while this one waited.
+  @override
+  T withExclusiveLock<T>(String path, T Function() body) {
+    File(path).parent.createSync(recursive: true);
+    final lockFile = File('$path$_lockSuffix').openSync(mode: FileMode.append);
+    try {
+      lockFile.lockSync(FileLock.blockingExclusive);
+      return body();
+    } finally {
+      lockFile.closeSync();
+    }
+  }
+
   @override
   void append(String path, String content) {
     File(path).parent.createSync(recursive: true);

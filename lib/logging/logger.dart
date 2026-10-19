@@ -169,50 +169,56 @@ class SessionLogger {
     Map<String, dynamic>? extra,
   }) {
     final now = DateTime.now().toUtc().toIso8601String();
-    // Check existing for deduplication
-    final existing = _readJsonlEntries(_errorsPath);
-    final matchIdx =
-        existing.indexWhere((e) => e['fingerprint'] == fingerprint);
+    // Deduplicating is read, change, rewrite: held under a lock so two
+    // processes cannot read the same state and lose one's update.
+    _io.withExclusiveLock(_errorsPath, () {
+      // Check existing for deduplication
+      final existing = _readJsonlEntries(_errorsPath);
+      final matchIdx =
+          existing.indexWhere((e) => e['fingerprint'] == fingerprint);
 
-    // Found real while verifying #72: this abstracted stackTrace but not
-    // reason, so a sensitive-mode project's error log still leaked raw
-    // workspace paths/exception causes through `reason` -- the field
-    // every caller actually populates. scan.dart had the identical gap
-    // before this fix; both callers get it fixed here, not patched twice.
-    String safeReason = reason;
-    String? safeStack = stackTrace;
-    if (sensitivityMode && tokenMap != null) {
-      safeReason = abstractor.abstract(safeReason, tokenMap!, defaultDetector);
-      if (safeStack != null) {
-        safeStack = abstractor.abstract(safeStack, tokenMap!, defaultDetector);
+      // Found real while verifying #72: this abstracted stackTrace but not
+      // reason, so a sensitive-mode project's error log still leaked raw
+      // workspace paths/exception causes through `reason` -- the field
+      // every caller actually populates. scan.dart had the identical gap
+      // before this fix; both callers get it fixed here, not patched twice.
+      String safeReason = reason;
+      String? safeStack = stackTrace;
+      if (sensitivityMode && tokenMap != null) {
+        safeReason =
+            abstractor.abstract(safeReason, tokenMap!, defaultDetector);
+        if (safeStack != null) {
+          safeStack =
+              abstractor.abstract(safeStack, tokenMap!, defaultDetector);
+        }
       }
-    }
 
-    if (matchIdx >= 0) {
-      final old = Map<String, dynamic>.from(existing[matchIdx]);
-      old['count'] = ((old['count'] as int?) ?? 1) + 1;
-      old['lastSeen'] = now;
-      existing[matchIdx] = old;
-    } else {
-      final entry = <String, dynamic>{
-        'ts': now,
-        'command': command,
-        'outcome': errorType,
-        'fingerprint': fingerprint,
-        'reason': safeReason,
-        if (suggestion != null) 'suggestion': suggestion,
-        if (safeStack != null) 'stack': safeStack,
-        'count': 1,
-        'firstSeen': now,
-        'lastSeen': now,
-        'filed': false,
-        'issueId': null,
-        ...?extra,
-      };
-      existing.add(entry);
-    }
+      if (matchIdx >= 0) {
+        final old = Map<String, dynamic>.from(existing[matchIdx]);
+        old['count'] = ((old['count'] as int?) ?? 1) + 1;
+        old['lastSeen'] = now;
+        existing[matchIdx] = old;
+      } else {
+        final entry = <String, dynamic>{
+          'ts': now,
+          'command': command,
+          'outcome': errorType,
+          'fingerprint': fingerprint,
+          'reason': safeReason,
+          if (suggestion != null) 'suggestion': suggestion,
+          if (safeStack != null) 'stack': safeStack,
+          'count': 1,
+          'firstSeen': now,
+          'lastSeen': now,
+          'filed': false,
+          'issueId': null,
+          ...?extra,
+        };
+        existing.add(entry);
+      }
 
-    _writeJsonl(_errorsPath, existing, _maxErrors);
+      _writeJsonl(_errorsPath, existing, _maxErrors);
+    });
   }
 
   void logPerformance({
@@ -230,27 +236,30 @@ class SessionLogger {
         '| ${tokensNew ?? '-'} '
         '| $outcome |');
 
-    final current = _io.read(_performancePath);
-    final lines = current.isEmpty
-        ? <String>[]
-        : current.split('\n').where((l) => l.isNotEmpty).toList();
+    // Read, change, rewrite the table: under a lock, so no row is lost.
+    _io.withExclusiveLock(_performancePath, () {
+      final current = _io.read(_performancePath);
+      final lines = current.isEmpty
+          ? <String>[]
+          : current.split('\n').where((l) => l.isNotEmpty).toList();
 
-    if (lines.isEmpty) {
-      lines.add(
-          '| timestamp | command | filesScanned | duration | tokensNew | outcome |');
-      
-    }
+      if (lines.isEmpty) {
+        lines.add(
+            '| timestamp | command | filesScanned | duration | tokensNew | outcome |');
+        lines.add('|-----------|---------|-------------|----------|-----------|--------|');
+      }
 
-    // Data lines start after the 2-line header
-    final header = lines.take(2).toList();
-    var data = lines.skip(2).toList();
-    data.add(entry.toString());
+      // Data lines start after the 2-line header
+      final header = lines.take(2).toList();
+      var data = lines.skip(2).toList();
+      data.add(entry.toString());
 
-    if (data.length > _maxPerformance) {
-      data = data.sublist(data.length - _maxPerformance);
-    }
+      if (data.length > _maxPerformance) {
+        data = data.sublist(data.length - _maxPerformance);
+      }
 
-    _io.write(_performancePath, '${[...header, ...data].join('\n')}\n');
+      _io.write(_performancePath, '${[...header, ...data].join('\n')}\n');
+    });
   }
 
   // ---- private helpers ----
@@ -277,10 +286,13 @@ class SessionLogger {
     Map<String, dynamic> entry,
     int maxLines,
   ) {
-    // One appended line: nothing is read back or rewritten, so two processes
-    // logging at once cannot overwrite each other.
-    _io.append(path, '${jsonEncode(entry)}\n');
-    _trimIfOver(path, maxLines);
+    // One appended line, then (rarely) a trim that rewrites the file. Both
+    // run under one lock: a trim's rename would otherwise orphan an append
+    // another process was making to the file it replaced.
+    _io.withExclusiveLock(path, () {
+      _io.append(path, '${jsonEncode(entry)}\n');
+      _trimIfOver(path, maxLines);
+    });
   }
 
   void _trimIfOver(String path, int maxLines) {
