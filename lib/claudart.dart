@@ -30,6 +30,7 @@ export 'pipeline/agent_model.dart';
 export 'pipeline/agent_flow.dart';
 export 'pipeline/agents/confirmation.dart';
 export 'pipeline/step_status.dart';
+export 'pipeline/model_observation.dart';
 export 'pipeline/pipeline_event.dart';
 export 'pipeline/agent_response.dart';
 export 'pipeline/state_hue.dart';
