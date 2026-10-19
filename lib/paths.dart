@@ -12,6 +12,7 @@ const String flowCheckpointFileName   = 'flow_checkpoint.json';
 const String pendingConfirmationFileName = 'pending_confirmation.json';
 const String knowledgeDirName         = 'knowledge';
 const String claudeMdFileName         = 'CLAUDE.md';
+const String claudeSettingsFileName   = 'settings.json';
 const String registryFileName         = 'registry.json';
 const String configFileName           = 'config.json';
 const String workspaceConfigFileName  = 'workspace.json';
@@ -97,6 +98,14 @@ String workspaceConfigPathFor(String ws) => p.join(ws, workspaceConfigFileName);
 String knowledgeDirFor(String ws) => p.join(ws, knowledgeDirName);
 String genericKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'generic');
 String projectsKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'projects');
+/// The project's Claude Code settings file (hooks, env). Not the workspace's:
+/// settings belong to the checkout Claude Code runs in.
+String claudeSettingsPathFor(String projectRoot) =>
+    p.join(
+      projectRoot,
+      IdeIntegration.claudeCode.dirName,
+      claudeSettingsFileName,
+    );
 String claudeCommandsDirFor(String ws) => p.join(ws, IdeIntegration.claudeCode.dirName, 'commands');
 String tokenMapPathFor(String ws) => p.join(ws, 'token_map.json');
 String logsDirFor(String ws) => p.join(ws, 'logs');

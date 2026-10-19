@@ -17,6 +17,7 @@ import 'dependency_config_codegen.dart';
 import '../file_io.dart';
 import '../paths.dart';
 import '../pipeline/agent_flow.dart';
+import '../templates/claude_settings_template.dart';
 import '../templates/claude_template.dart';
 import '../templates/readme_template.dart';
 
@@ -64,6 +65,8 @@ ArtifactState stateOf(
         _readmeRoadmapState(projectRoot: projectRoot, io: io),
       ClaudartArtifact.dependencyConfig =>
         _dependencyConfigState(projectRoot: projectRoot, io: io),
+      ClaudartArtifact.claudeSettings =>
+        _claudeSettingsState(projectRoot: projectRoot, io: io),
     };
 
 ArtifactState _commandTemplatesState({
@@ -134,6 +137,17 @@ ArtifactState _readmeRoadmapState({
   // leading newline, not `fresh`'s own trailing one. So matched-region
   // substring equality is the right comparison, not a splice-then-compare.
   return existingReadme.substring(match.start, match.end) == fresh
+      ? ArtifactState.fresh
+      : ArtifactState.stale;
+}
+
+ArtifactState _claudeSettingsState({
+  required String projectRoot,
+  required FileIO io,
+}) {
+  final path = claudeSettingsPathFor(projectRoot);
+  if (!io.fileExists(path)) return ArtifactState.missing;
+  return claudeSettingsAreFresh(io.read(path))
       ? ArtifactState.fresh
       : ArtifactState.stale;
 }
