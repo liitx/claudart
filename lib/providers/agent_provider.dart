@@ -33,7 +33,7 @@
 // neither function is wired into gating any real launch.
 
 import 'dart:convert' show jsonDecode;
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, Process, ProcessException;
 
 import 'claude_settings_env.dart';
 import '../file_io.dart';
@@ -63,13 +63,23 @@ enum AgentProvider {
   ]),
 
   /// OpenRouter — unverified against the real `claude` CLI (see file doc).
-  openRouter(requiredEnvVars: ['OPENROUTER_API_KEY']);
+  openRouter(requiredEnvVars: ['OPENROUTER_API_KEY']),
+
+  /// A subscription login through the browser (`claude.ai`) or a
+  /// `CLAUDE_CODE_OAUTH_TOKEN`. It needs no env var, so it is never detected
+  /// from the environment; only `claude auth status` reports it.
+  claudeAi(requiredEnvVars: []);
 
   const AgentProvider({required this.requiredEnvVars});
 
   /// Env var names this provider needs present (and non-empty) to be
   /// considered configured. Order matches how they'd be checked/reported.
   final List<String> requiredEnvVars;
+
+  /// Whether the environment alone can establish this provider. A login
+  /// (`claudeAi`) has no required vars, which would vacuously match every
+  /// environment, so it is excluded from env detection.
+  bool get isEnvConfigured => requiredEnvVars.isNotEmpty;
 
   /// Which vars from [requiredEnvVars] are missing or empty in [env].
   List<String> missingFrom(Map<String, String> env) => [
@@ -93,7 +103,7 @@ enum AgentProvider {
     AgentProvider? explicit,
   }) {
     if (explicit != null) return explicit;
-    for (final provider in AgentProvider.values) {
+    for (final provider in AgentProvider.values.where((p) => p.isEnvConfigured)) {
       if (provider.isSatisfiedBy(env)) return provider;
     }
     return null;
@@ -126,32 +136,124 @@ enum AgentProvider {
   }
 
   /// Resolves which provider the real `claude auth status` itself reports
-  /// as active — ground truth from the CLI's own resolution, not an
-  /// inference from which env vars happen to be present (which [detect]'s
-  /// precedence assumes but has never verified against the real tool).
+  /// as active: ground truth from the CLI's own resolution, not an inference
+  /// from which env vars happen to be present.
   ///
   /// Measured directly (`OAUTH-BEDROCK-FINAL-REPORT.md`): `claude auth
   /// status` prints this JSON on stdout even when it exits 1 (nothing
-  /// configured) — [rawStdout] must be read regardless of exit code.
+  /// configured), so [rawStdout] must be read regardless of exit code.
   ///
-  /// Returns `null` for every state this enum doesn't model as a
-  /// *configured* provider: nothing set up, or a plain first-party
-  /// `claude.ai`/`oauth_token` login — both legitimate, unconfigured
-  /// states, same as [detect] returning `null` for "fine, OAuth login".
-  /// Malformed JSON also returns `null` rather than throwing, since a
-  /// caller's fallback (e.g. env-based [detectEffective]) is always safe
-  /// to use instead.
+  /// Returns `null` when nothing is logged in or configured, and for
+  /// malformed or wrong-shaped JSON (a caller's env-based fallback is always
+  /// safe). A browser or token login is the `claudeAi` provider: the CLI runs
+  /// on it, so the pipeline must be allowed to.
   static AgentProvider? detectFromAuthStatusJson(String rawStdout) {
-    final Map<String, dynamic> status;
-    try {
-      status = jsonDecode(rawStdout) as Map<String, dynamic>;
-    } on FormatException {
-      return null;
+    final status = parseClaudeAuthStatus(rawStdout);
+    if (status == null) return null;
+    for (final provider in _loginPrecedence) {
+      if (provider.isActiveIn(status)) return provider;
     }
-    final apiProvider = status['apiProvider'] as String?;
-    final authMethod = status['authMethod'] as String?;
-    if (apiProvider == 'bedrock') return AgentProvider.bedrock;
-    if (authMethod == 'api_key') return AgentProvider.apiKey;
     return null;
   }
+
+  /// The provider `claude` would use: the environment first (a configured
+  /// key or Bedrock wins), otherwise the login `claude auth status` reports.
+  /// `null` only when neither exists. [authStatusStdout] is injectable; the
+  /// default runs the real `claude auth status` and tolerates its absence.
+  static Future<AgentProvider?> resolve({
+    Map<String, String>? processEnv,
+    FileIO? io,
+    String? settingsPath,
+    AgentProvider? explicit,
+    Future<String> Function()? authStatusStdout,
+  }) async {
+    final fromEnv = detectEffective(
+      processEnv: processEnv,
+      io: io,
+      settingsPath: settingsPath,
+      explicit: explicit,
+    );
+    if (fromEnv != null) return fromEnv;
+    return detectFromAuthStatusJson(
+      await (authStatusStdout ?? _realAuthStatusStdout)(),
+    );
+  }
+
+  static Future<AgentProvider?>? _resolvedOnce;
+
+  /// [resolve] with the real environment, run once per process: a login does
+  /// not change mid-run, and every pipeline step asks.
+  static Future<AgentProvider?> resolveOnce() => _resolvedOnce ??= resolve();
+
+  /// Bedrock before a key before a login, matching how the CLI reports an
+  /// overlap.
+  static const _loginPrecedence = [
+    AgentProvider.bedrock,
+    AgentProvider.apiKey,
+    AgentProvider.claudeAi,
+  ];
+}
+
+Future<String> _realAuthStatusStdout() async {
+  try {
+    final result = await Process.run(
+      ClaudeAuthWire.executable,
+      ClaudeAuthWire.statusArgs,
+    );
+    return result.stdout as String? ?? '';
+  } on ProcessException {
+    return '';
+  }
+}
+
+/// The words of `claude auth status`'s JSON and the logins claudart reads from
+/// it.
+abstract final class ClaudeAuthWire {
+  static const executable = 'claude';
+  static const statusArgs = ['auth', 'status'];
+  static const bedrockProvider = 'bedrock';
+  static const apiKeyMethod = 'api_key';
+  static const claudeAiMethod = 'claude.ai';
+  static const oauthTokenMethod = 'oauth_token';
+}
+
+/// The keys of `claude auth status`'s JSON that claudart reads; the names are
+/// the keys.
+enum ClaudeAuthField { loggedIn, authMethod, apiProvider }
+
+/// What `claude auth status` says about the active login.
+typedef ClaudeAuthStatus = ({
+  bool loggedIn,
+  String? authMethod,
+  String? apiProvider,
+});
+
+/// Reads `claude auth status`'s stdout, or null when it is not a JSON object
+/// of the expected shape.
+ClaudeAuthStatus? parseClaudeAuthStatus(String rawStdout) {
+  try {
+    final json = jsonDecode(rawStdout) as Map<String, dynamic>;
+    return (
+      loggedIn: json[ClaudeAuthField.loggedIn.name] == true,
+      authMethod: json[ClaudeAuthField.authMethod.name] as String?,
+      apiProvider: json[ClaudeAuthField.apiProvider.name] as String?,
+    );
+  } on FormatException {
+    return null;
+  } on TypeError {
+    return null;
+  }
+}
+
+/// Which provider a `claude auth status` reading says is active.
+extension AgentProviderLogin on AgentProvider {
+  bool isActiveIn(ClaudeAuthStatus status) => switch (this) {
+        AgentProvider.bedrock =>
+          status.apiProvider == ClaudeAuthWire.bedrockProvider,
+        AgentProvider.apiKey => status.authMethod == ClaudeAuthWire.apiKeyMethod,
+        AgentProvider.claudeAi => status.loggedIn &&
+            (status.authMethod == ClaudeAuthWire.claudeAiMethod ||
+                status.authMethod == ClaudeAuthWire.oauthTokenMethod),
+        AgentProvider.openRouter => false,
+      };
 }

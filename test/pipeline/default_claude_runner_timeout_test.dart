@@ -184,6 +184,44 @@ void main() {
     expect('$error', contains('claudart doctor'));
   });
 
+  // The owner's login is a browser login: the gate must let a pipeline run on
+  // it (it used to refuse, so no claudart pipeline could start), and must
+  // still refuse when there is nothing, including when the answer is async.
+  group('the provider gate', () {
+    Future<Object?> runWith(FutureOr<AgentProvider?> Function() detector) async {
+      final exe = fakeClaude("printf '%s\\n' '$resultLine'");
+      try {
+        return await defaultClaudeRunner(
+          model: AgentModel.haiku,
+          systemPrompt: 'system',
+          message: 'hello',
+          workingDir: tmp.path,
+          executable: exe,
+          providerDetector: detector,
+        );
+      } on Object catch (e) {
+        return e;
+      }
+    }
+
+    test('a browser login (claudeAi, answered asynchronously) runs the step',
+        () async {
+      final result = await runWith(() async => AgentProvider.claudeAi);
+      expect(result, isA<StepResult>());
+    });
+
+    for (final provider in AgentProvider.values) {
+      test('${provider.name} lets the step run', () async {
+        expect(await runWith(() => provider), isA<StepResult>());
+      });
+    }
+
+    test('nothing, answered asynchronously, is still refused', () async {
+      final result = await runWith(() async => null);
+      expect(result, isA<ProviderNotConfiguredException>());
+    });
+  });
+
   test('the default limit is 15 minutes', () {
     expect(defaultStepTimeout, const Duration(minutes: 15));
   });

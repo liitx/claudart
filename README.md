@@ -853,14 +853,15 @@ Pipeline steps spawn the real `claude` CLI and rely on whatever session you are 
 
 No built-in step uses `bare`. `--bare` never reads OAuth or keychain credentials, by design — a normal OAuth session gets `Not logged in` under it, verified directly against the live CLI. Naming the variant makes that a documented case instead of a hidden trap.
 
-OAuth is not the only way `claude` authenticates, and a spawned step inherits whichever one the environment holds. [`AgentProvider`](lib/providers/agent_provider.dart#L40) names the three non-OAuth shapes by the env vars each needs, all present and non-empty:
+A spawned step inherits whichever login `claude` holds, and the pipeline refuses to start only when there is none. [`AgentProvider`](lib/providers/agent_provider.dart) names the shapes: three by the env vars each needs (all present and non-empty), and `claudeAi`, a browser or token login, which has no env vars and is found only through `claude auth status` (`AgentProvider.resolve` asks the environment first, then that). An environment alone can never establish `claudeAi`, since an empty requirement would match every environment.
 
 | Variant | Required env vars |
 |---|---|
 | `apiKey` | `ANTHROPIC_API_KEY` |
 | `bedrock` | `CLAUDE_CODE_USE_BEDROCK`, `AWS_PROFILE`, `AWS_REGION`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL` |
 | `openRouter` | `OPENROUTER_API_KEY` — not yet verified end to end against the real `claude` CLI |
-| *(none)* | nothing matches — the ambient `claude login` OAuth session is used |
+| `claudeAi` | none: a `claude.ai` browser login or a `CLAUDE_CODE_OAUTH_TOKEN`, reported by `claude auth status` |
+| *(none in the environment)* | the login `claude auth status` reports is used (`claudeAi`); the pipeline refuses to start only when there is none |
 
 ```mermaid
 flowchart LR
@@ -868,7 +869,9 @@ flowchart LR
   Proc[process env]:::state --> Merge
   Merge --> Detect{{first variant satisfied<br/>apiKey → bedrock → openRouter}}:::fn
   Detect -->|match| Prov[AgentProvider]:::cmd
-  Detect -->|none| OAuth[OAuth login · SKIP]:::cmd
+  Detect -->|none| Login{{claude auth status}}:::fn
+  Login -->|logged in| ClaudeAi[claudeAi login]:::cmd
+  Login -->|none| Refuse[pipeline refuses to start]:::cmd
   classDef state fill:#dcfce7,color:#064e3b,stroke:#16a34a
   classDef cmd fill:#e0f2fe,color:#0c4a6e,stroke:#0284c7
   classDef fn fill:#fef3c7,color:#78350f,stroke:#d97706

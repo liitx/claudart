@@ -156,13 +156,20 @@ void main() {
       expect(AgentProvider.detectFromAuthStatusJson(stdout), equals(AgentProvider.apiKey));
     });
 
-    test('CLAUDE_CODE_OAUTH_TOKEN set (oauth_token/firstParty) -> null, not modeled as a configured provider', () {
+    test('CLAUDE_CODE_OAUTH_TOKEN set (oauth_token/firstParty) -> claudeAi', () {
       const stdout = '{"loggedIn": true, "authMethod": "oauth_token", "apiProvider": "firstParty"}';
-      expect(AgentProvider.detectFromAuthStatusJson(stdout), isNull);
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), equals(AgentProvider.claudeAi));
     });
 
-    test('claude.ai OAuth login (claude.ai/firstParty) -> null, fine as unconfigured', () {
-      const stdout = '{"loggedIn": true, "authMethod": "claude.ai", "apiProvider": "firstParty"}';
+    // The exact reading from the owner's machine (team subscription): the CLI
+    // runs on this login, so it must count as a provider.
+    test('claude.ai browser login (claude.ai/firstParty) -> claudeAi', () {
+      const stdout = '{"loggedIn": true, "authMethod": "claude.ai", "apiProvider": "firstParty", "subscriptionType": "team"}';
+      expect(AgentProvider.detectFromAuthStatusJson(stdout), equals(AgentProvider.claudeAi));
+    });
+
+    test('a claude.ai method that is not logged in -> null', () {
+      const stdout = '{"loggedIn": false, "authMethod": "claude.ai", "apiProvider": "firstParty"}';
       expect(AgentProvider.detectFromAuthStatusJson(stdout), isNull);
     });
 
@@ -174,6 +181,174 @@ void main() {
     test('malformed JSON -> null, not a thrown exception', () {
       expect(AgentProvider.detectFromAuthStatusJson('not json'), isNull);
       expect(AgentProvider.detectFromAuthStatusJson(''), isNull);
+    });
+  });
+
+  _loginGroups();
+}
+
+
+// A login has no env vars, so it must never be found by looking at the
+// environment (an empty requirement would match every environment).
+void _loginGroups() {
+  group('AgentProvider.isEnvConfigured', () {
+    // Independent literals: can the environment alone establish it?
+    const envConfigured = {
+      AgentProvider.apiKey: true,
+      AgentProvider.bedrock: true,
+      AgentProvider.openRouter: true,
+      AgentProvider.claudeAi: false,
+    };
+    for (final provider in AgentProvider.values) {
+      test('${provider.name} -> ${envConfigured[provider]}', () {
+        expect(provider.isEnvConfigured, envConfigured[provider]);
+      });
+    }
+
+    test('every provider has a pinned answer', () {
+      expect(envConfigured.keys.toSet(), AgentProvider.values.toSet());
+    });
+
+    test('an empty environment still detects nothing (the login does not '
+        'match vacuously)', () {
+      expect(AgentProvider.detect(const {}), isNull);
+    });
+  });
+
+  group('AgentProvider.isActiveIn: every provider against every reading', () {
+    ClaudeAuthStatus reading(bool loggedIn, String? method, String? api) =>
+        (loggedIn: loggedIn, authMethod: method, apiProvider: api);
+
+    // (name, reading) -> the providers that say they are active in it.
+    final readings = <String, (ClaudeAuthStatus, Set<AgentProvider>)>{
+      'nothing configured': (reading(false, 'none', 'firstParty'), {}),
+      'bedrock': (
+        reading(true, 'third_party', 'bedrock'),
+        {AgentProvider.bedrock},
+      ),
+      'api key': (
+        reading(true, 'api_key', 'firstParty'),
+        {AgentProvider.apiKey},
+      ),
+      'browser login': (
+        reading(true, 'claude.ai', 'firstParty'),
+        {AgentProvider.claudeAi},
+      ),
+      'oauth token': (
+        reading(true, 'oauth_token', 'firstParty'),
+        {AgentProvider.claudeAi},
+      ),
+      'browser login, not logged in': (
+        reading(false, 'claude.ai', 'firstParty'),
+        {},
+      ),
+      'unknown method': (reading(true, 'something_new', 'firstParty'), {}),
+    };
+
+    readings.forEach((name, expected) {
+      final (status, active) = expected;
+      for (final provider in AgentProvider.values) {
+        test('$name: ${provider.name} is ${active.contains(provider)}', () {
+          expect(provider.isActiveIn(status), active.contains(provider));
+        });
+      }
+    });
+
+    test('openRouter is never read from a login', () {
+      expect(
+        AgentProvider.openRouter.isActiveIn(reading(true, 'api_key', 'x')),
+        isFalse,
+      );
+    });
+  });
+
+  group('parseClaudeAuthStatus', () {
+    test('reads the three fields', () {
+      final status = parseClaudeAuthStatus(
+        '{"loggedIn": true, "authMethod": "claude.ai", '
+        '"apiProvider": "firstParty"}',
+      );
+      expect(status, (
+        loggedIn: true,
+        authMethod: 'claude.ai',
+        apiProvider: 'firstParty',
+      ));
+    });
+
+    test('missing fields read as not logged in, with no method', () {
+      expect(parseClaudeAuthStatus('{}'), (
+        loggedIn: false,
+        authMethod: null,
+        apiProvider: null,
+      ));
+    });
+
+    const unreadable = {
+      'not json': 'nope',
+      'a list': '[1]',
+      'empty': '',
+      'fields of the wrong type': '{"authMethod": 3}',
+    };
+    unreadable.forEach((name, text) {
+      test('$name -> null, not a crash', () {
+        expect(parseClaudeAuthStatus(text), isNull);
+      });
+    });
+
+    test('ClaudeAuthField names are the keys of the JSON', () {
+      expect(
+        ClaudeAuthField.values.map((f) => f.name),
+        ['loggedIn', 'authMethod', 'apiProvider'],
+      );
+    });
+  });
+
+  group('AgentProvider.resolve: the environment first, then the login', () {
+    const browserLogin =
+        '{"loggedIn": true, "authMethod": "claude.ai", "apiProvider": "firstParty"}';
+    const nothing = '{"loggedIn": false, "authMethod": "none"}';
+
+    Future<AgentProvider?> resolve(
+      Map<String, String> env,
+      String authStatus,
+    ) =>
+        AgentProvider.resolve(
+          processEnv: env,
+          io: MemoryFileIO(),
+          settingsPath: '/none/settings.json',
+          authStatusStdout: () async => authStatus,
+        );
+
+    test('a key in the environment wins over a login', () async {
+      expect(
+        await resolve(const {'ANTHROPIC_API_KEY': 'sk-ant-test'}, browserLogin),
+        AgentProvider.apiKey,
+      );
+    });
+
+    test('no environment, a browser login: claudeAi (the blocker)', () async {
+      expect(await resolve(const {}, browserLogin), AgentProvider.claudeAi);
+    });
+
+    test('no environment and not logged in: null', () async {
+      expect(await resolve(const {}, nothing), isNull);
+    });
+
+    test('no environment and unreadable status output: null', () async {
+      expect(await resolve(const {}, 'claude: command not found'), isNull);
+    });
+
+    test('an explicit provider wins outright', () async {
+      expect(
+        await AgentProvider.resolve(
+          processEnv: const {},
+          io: MemoryFileIO(),
+          settingsPath: '/none/settings.json',
+          explicit: AgentProvider.bedrock,
+          authStatusStdout: () async => browserLogin,
+        ),
+        AgentProvider.bedrock,
+      );
     });
   });
 }

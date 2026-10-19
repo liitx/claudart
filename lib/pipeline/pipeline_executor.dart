@@ -624,12 +624,13 @@ Future<StepResult?> defaultClaudeRunner({
   Duration? timeout = defaultStepTimeout,
   String executable = 'claude',
   StepDebugTrace? traceOverride,
-  AgentProvider? Function() providerDetector = AgentProvider.detectEffective,
+  FutureOr<AgentProvider?> Function() providerDetector =
+      AgentProvider.resolveOnce,
 }) async {
   // Fails fast with a clear message instead of letting an unconfigured
   // environment reach a mid-pipeline 401 from the `claude` subprocess
   // itself — see portability_gap.dart's providerWiring entry this closes.
-  if (providerDetector() == null) {
+  if (await providerDetector() == null) {
     throw ProviderNotConfiguredException();
   }
 
