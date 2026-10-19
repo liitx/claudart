@@ -554,6 +554,9 @@ class _FailOnResetIO implements FileIO {
   }
 
   @override
+  void append(String path, String content) =>
+      delegate.append(path, content);
+  @override
   String read(String path) => delegate.read(path);
   @override
   void delete(String path) => delegate.delete(path);

@@ -208,6 +208,17 @@ Plans: plan_claudart.md, plan_zedup.md, plan_dartrix.md (same folder).
 | Barrel exports ClaudartCommand, CommandEntry, SessionLogger so consumers need no path imports | done in this PR; zedup to switch to the barrel after merge |
 | Ownership scan: ErrorType, FailureType, FaultClass, FaultSeverity declared in claudart and zedup | open: zedup step 5 |
 
+## Resolution log, safe log writes (2026-10-18)
+
+| Item | Status |
+|---|---|
+| Lost log lines: appends rewrote the whole file, so concurrent processes overwrote each other (4 processes x 100 lines kept 382 of 400) | fixed: `FileIO.append` under an exclusive file lock; the jsonl logs append one line |
+| Torn writes: `RealFileIO.write` truncated before writing, a reader could see a cut-off line that the next rewrite kept | fixed: write to a staging file, rename over |
+| Finding: Dart's plain `FileMode.append` is not safe across processes (370 of 400); the lock is per process, so isolates cannot test it, real child processes do | recorded in the tests |
+| Cap is now soft: a log may run 50 lines past its cap before it is trimmed back (the rewrite happens once per 50 appends) | by design; tests pin both sides |
+| Pre-existing mutation survivors in `logger.dart` (20: optional interaction fields, `logError`, `logPerformance`, `_writeJsonl` cap) and `file_io.dart` (`listFiles` extension filter, `linkExists`) | open: file as an issue |
+| OPEN: `logError` and `logPerformance` still read-modify-write (they deduplicate or keep a table); now atomic on write, but two processes can still lose an update | open |
+
 ## Resolution log, Claude Code binding (2026-10-18)
 
 | Item | Status |
