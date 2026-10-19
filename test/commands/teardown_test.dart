@@ -237,6 +237,8 @@ class _FailOnWriteIO implements FileIO {
     delegate.write(path, content);
   }
 
+  @override void append(String path, String content) =>
+      delegate.append(path, content);
   @override String read(String path) => delegate.read(path);
   @override void delete(String path) => delegate.delete(path);
   @override bool fileExists(String path) => delegate.fileExists(path);

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/pipeline/agent_model.dart';
@@ -154,10 +155,11 @@ void main() {
       expect(entries.first['count'], equals(2));
     });
 
-    test('rotation: interactions exceed max drops oldest', () {
-      // Override with a low-max logger by writing pre-existing entries
+    // The log may run 50 lines past its 500-line cap before it is trimmed back
+    // to 500, so the rewrite happens once per 50 appends, not on every one.
+    test('rotation: past cap plus slack, the newest 500 remain', () {
       final manyEntries = '${List.generate(
-        502,
+        551,
         (i) => jsonEncode({'ts': 'x', 'command': 'setup', 'n': i, 'outcome': 'ok'}),
       ).join('\n')}\n';
       io.write(_interactionsPath, manyEntries);
@@ -167,9 +169,23 @@ void main() {
       l2.logInteraction(command: 'new_cmd', outcome: 'ok');
 
       final entries = readJsonl(_interactionsPath);
-      // Should be capped at 500 (rotation trims to 500)
-      expect(entries.length, lessThanOrEqualTo(500));
+      expect(entries.length, 500);
       expect(entries.last['command'], equals('new_cmd'));
+      expect(entries.first['n'], 52);
+    });
+
+    test('rotation: within the slack nothing is trimmed', () {
+      final within = '${List.generate(
+        549,
+        (i) => jsonEncode(
+          {'ts': 'x', 'command': 'setup', 'n': i, 'outcome': 'ok'},
+        ),
+      ).join('\n')}\n';
+      io.write(_interactionsPath, within);
+      SessionLogger(io: io).logInteraction(command: 'new_cmd', outcome: 'ok');
+      final entries = readJsonl(_interactionsPath);
+      expect(entries.length, 550);
+      expect(entries.first['n'], 0);
     });
 
     test('sensitive mode abstracts stack trace before write', () {
@@ -337,8 +353,9 @@ void main() {
       expect(logger.readStepModelRecords(), isEmpty);
     });
 
-    test('appends across steps and keeps only the newest 500', () {
-      for (var step = 0; step < 501; step++) {
+    test('appends across steps; past the cap plus slack, the newest 500 remain',
+        () {
+      for (var step = 0; step < 551; step++) {
         logger.logStepModels(
           command: 'debug',
           event: completed(
@@ -349,7 +366,40 @@ void main() {
       final written = records();
       expect(written.length, 500);
       final first = written.first[ModelRecordField.observation.name] as Map;
-      expect(first[ModelObservationField.inputTokens.jsonKey], 1);
+      expect(first[ModelObservationField.inputTokens.jsonKey], 51);
     });
+  });
+
+  group('SessionLogger with concurrent writers (real processes)', () {
+    const writers = 4;
+    const entriesPerWriter = 100;
+    const writerScript = 'test/helpers/append_log_lines.dart';
+
+    test('no appended line is lost when several processes log at once',
+        () async {
+      final dir = Directory.systemTemp.createTempSync('claudart_log_race_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+
+      final results = await Future.wait([
+        for (var writer = 0; writer < writers; writer++)
+          Process.run(Platform.resolvedExecutable, [
+            writerScript,
+            dir.path,
+            '$writer',
+            '$entriesPerWriter',
+          ]),
+      ]);
+      for (final result in results) {
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+      }
+
+      final lines = File(p.join(logsDirFor(dir.path), 'interactions.jsonl'))
+          .readAsLinesSync()
+          .where((l) => l.isNotEmpty);
+      expect(lines.length, writers * entriesPerWriter);
+      for (final line in lines) {
+        expect(() => jsonDecode(line), returnsNormally);
+      }
+    }, timeout: const Timeout(Duration(seconds: 90)));
   });
 }

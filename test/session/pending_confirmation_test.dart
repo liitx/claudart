@@ -23,6 +23,8 @@ class _ThrowsOnReadFileIO implements FileIO {
   @override
   void write(String path, String content) => throw UnimplementedError();
   @override
+  void append(String path, String content) => throw UnimplementedError();
+  @override
   void delete(String path) => throw UnimplementedError();
   @override
   bool dirExists(String path) => throw UnimplementedError();
