@@ -115,6 +115,14 @@ move writes a checkpoint with no transition and no log. Status: open (E1).
 | F3 | 24 files reach processes or the terminal and never touch state, among them `flow`, `resume`, `doctor`, `link`, `unlink`: commands that change the session's world with no state record | families doc, `untouched x processBound` | open, review per command |
 | F4 | The classifier matches a name where it is only declared, so a portal's owner (`paths`, `registry`, `config`) sits beside its users | `topology_family.dart` header | accepted: owners are named in the doc |
 
+### Measured by the transition matrix (stage 2)
+
+| Id | Finding | Evidence | Status |
+|---|---|---|---|
+| M1 | 24 of the table's legal moves are driven by no lifecycle scenario, among them every `save` event, `debugBlocked`, `suggestResumed`, `reminderSaved`, and `killed` from four statuses. Other command tests may cover some; none of them checks the logged move against the consumer view. A ratchet fails if the number grows | `docs/topology/transition_matrix.md` | open |
+| M2 | The lifecycle scenarios never make a command try a move the table rejects, so the "setup over a live handoff" rejection is covered only by its own separate test | transition matrix, rejected section | open |
+| M3 | Proven: the logged moves of every scenario are identical in all six link-state x dartrix environments, so those two axes do not change the state machine | `transition_matrix_test.dart`, "identical in every environment" | closed |
+
 ## Stage records
 
 Each entry states the pass condition first, then the observed result.
@@ -205,3 +213,19 @@ now as in the doc.
 Not done here: the import direction check (does a lower layer import a higher
 one) is deferred. It needs resolved usage, not text, to avoid flagging a file
 that imports only a type.
+
+### Stage 2 - use-case matrix (first cut)
+
+Pass condition: every one of the 104 (status, event) cells is classified as
+legal-and-driven, legal-and-undriven, rejected-and-tried, or
+rejected-and-untried, from the moves real commands logged, and the number of
+undriven legal cells cannot grow.
+
+Observed: `test/topology/transition_matrix_test.dart` writes
+`docs/topology/transition_matrix.md`. The legality of a cell comes from
+`HandoffStatus.after`; its independent expectation is the literal table in
+`test/session/handoff_transition_test.dart`, which this matrix does not
+duplicate. 24 legal cells are undriven (M1). The trigger-source axis (command,
+agent edit, pipeline event, external reader) is not yet in the matrix: only
+commands trigger moves today, and agent edits are not observable until the
+working-tree check exists (S4).
