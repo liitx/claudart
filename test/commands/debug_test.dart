@@ -1,17 +1,21 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/debug.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/md_io.dart' show readHandoffStatus, withHandoffStatus;
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/paths.dart';
+import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
+import 'package:claudart/pipeline/xml_tags.dart';
 import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
@@ -73,10 +77,13 @@ Something is broken.
 _Not yet determined._
 ''';
 
-MemoryFileIO _io({String? handoff = _handoffReadyWithScope}) {
-  const entry = RegistryEntry(
+MemoryFileIO _io({
+  String? handoff = _handoffReadyWithScope,
+  String projectRoot = _projectRoot,
+}) {
+  final entry = RegistryEntry(
     name: 'my-app',
-    projectRoot: _projectRoot,
+    projectRoot: projectRoot,
     workspacePath: _workspace,
     createdAt: '2026-01-01',
     lastSession: '2026-03-15',
@@ -98,6 +105,20 @@ PipelineExecutor _executorWithNoOutput() =>
 /// drives the happy path to the handoff write without touching real disk.
 HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
+
+PipelineExecutor _executorWithPlanText(String text) => PipelineExecutor(
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        StepMode mode = StepMode.project,
+      }) async =>
+          StepResult(
+            text: text,
+            usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+          ),
+    );
 
 /// [onCall] counts model calls, so a test can prove none were spent.
 PipelineExecutor _executorWithPlan({void Function()? onCall}) =>
@@ -298,6 +319,111 @@ void main() {
         throwsA(isA<_ExitException>()),
       );
       expect(_statusOf(io), HandoffStatus.readyForDebug);
+    });
+  });
+
+  // The review prints before anything is written: the plan's summary, then one
+  // line per planned file, labeled by whether the file already exists.
+  group('runDebug — review of the plan', () {
+    const summary = 'the review summary';
+    const path = 'lib/foo.dart';
+    const changes = WireTag.changes;
+    const editFile = WireTag.editFile;
+    final plan = '${changes.openPrefix}>$summary${changes.close}\n'
+        '${editFile.openPrefix} path="$path">\nvoid a() {}\n${editFile.close}';
+
+    late Directory root;
+    setUp(() => root = Directory.systemTemp.createTempSync('claudart_review_'));
+    tearDown(() => root.deleteSync(recursive: true));
+
+    Future<String> reviewOutput() async {
+      final output = <String>[];
+      try {
+        await runZoned(
+          () => runDebug(
+            io: _io(projectRoot: root.path),
+            projectRootOverride: root.path,
+            exitFn: _throwExit,
+            executor: _executorWithPlanText(plan),
+            pickFn: (_) => 1,
+          ),
+          zoneSpecification: ZoneSpecification(
+            print: (_, __, ___, line) => output.add(line),
+          ),
+        );
+      } on _ExitException {
+        // choosing exit ends the run after the review is printed
+      }
+      return output.join('\n');
+    }
+
+    test('prints the CHANGES text of the plan', () async {
+      expect(await reviewOutput(), contains(summary));
+    });
+
+    test('labels a file that does not exist NEW', () async {
+      final output = await reviewOutput();
+      expect(output, contains('NEW'));
+      expect(output, isNot(contains('MOD')));
+      expect(output, contains(path));
+    });
+
+    test('labels a file that already exists MOD', () async {
+      File('${root.path}/$path')
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('old');
+      final output = await reviewOutput();
+      expect(output, contains('MOD'));
+      expect(output, isNot(contains('NEW')));
+    });
+  });
+
+  // A malformed plan blocks the apply path: the typed failure surfaces before
+  // any state event, and the plan is parsed before any of the review prints.
+  group('runDebug — malformed plan', () {
+    final truncatedPlan =
+        '${WireTag.editFile.openPrefix} path="lib/foo.dart">\ncut off';
+
+    test('unterminated block: editPlanMalformed, status unchanged', () async {
+      final io = _io();
+      await expectLater(
+        runDebug(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithPlanText(truncatedPlan),
+          pickFn: (_) => 0,
+        ),
+        throwsA(
+          isA<EditPlanException>().having(
+            (e) => e.failure,
+            'failure',
+            FailureType.editPlanMalformed,
+          ),
+        ),
+      );
+      expect(_statusOf(io), HandoffStatus.readyForDebug);
+      expect(loggedMoves(io, _workspace), isEmpty);
+    });
+
+    test('prints none of the review', () async {
+      final output = <String>[];
+      await expectLater(
+        runZoned(
+          () => runDebug(
+            io: _io(),
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            executor: _executorWithPlanText(truncatedPlan),
+            pickFn: (_) => 0,
+          ),
+          zoneSpecification: ZoneSpecification(
+            print: (_, __, ___, line) => output.add(line),
+          ),
+        ),
+        throwsA(isA<EditPlanException>()),
+      );
+      expect(output.join('\n'), isNot(contains('──────')));
     });
   });
 }

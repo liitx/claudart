@@ -1,3 +1,4 @@
+
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../config.dart' show loadWorkspaceConfig;
@@ -8,6 +9,7 @@ import 'claudart_command.dart';
 import '../md_io.dart';
 import 'scope_files.dart';
 import '../paths.dart';
+import '../pipeline/edit_files.dart';
 import '../pipeline/flows/debug_steps.dart';
 import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/pipeline_context.dart';
@@ -27,6 +29,7 @@ Future<void> runDebug({
   Never Function(int code)? exitFn,
   PipelineExecutor? executor,
   int Function(List<String> items)? pickFn,
+  DartFileAnalyzer? dartFileAnalyzer,
 }) async {
   final fileIO   = io       ?? const RealFileIO();
   final exit_    = exitFn   ?? exit;
@@ -165,8 +168,9 @@ Future<void> runDebug({
 
   // ── Review ───────────────────────────────────────────────────────────────────
 
-  final changes  = tagOr(ctx.implementerOut, 'CHANGES');
-  final editTags = _parseEditFiles(ctx.implementerOut);
+  final changes  = tagOr(ctx.implementerOut, WireTag.changes.tagName);
+  // Throws EditPlanException on a malformed plan, before any state change.
+  final editTags = parseEditFiles(ctx.implementerOut);
 
   print('\n  ${ansi.dim}──────────────────────────────────────${ansi.reset}');
   print('  ${ansi.dim}  Total  ${ctx.usage.format()}${ansi.reset}\n');
@@ -200,12 +204,15 @@ Future<void> runDebug({
 
   stdout.write('\n  ${ansi.cyan}·${ansi.reset}  ${ansi.dim}[4/4]${ansi.reset}  Writing files…');
 
-  var written = 0;
-  for (final f in editTags) {
-    final abs = p.join(projectRoot, f.path);
-    writeFile(abs, f.content);
-    written++;
-  }
+  // Write, then verify every file; a failure restores the files and throws
+  // before any state event is applied.
+  applyEditFiles(
+    projectRoot:      projectRoot,
+    planned:          editTags,
+    write:            writeFile,
+    dartFileAnalyzer: dartFileAnalyzer ?? dartAnalyzeClean,
+  );
+  final written = editTags.length;
 
   var updated = handoff;
   updated = applyHandoffEvent(
@@ -228,22 +235,6 @@ Future<void> runDebug({
     '  ${ansi.dim}→${ansi.reset}  status: debug-complete\n\n',
   );
   print('  Next:  ${ansi.bold}claudart save${ansi.reset}  ${ansi.dim}→${ansi.reset}  then run tests\n');
-}
-
-// ── Edit file parsing ──────────────────────────────────────────────────────────
-
-typedef _EditFile = ({String path, String content});
-
-List<_EditFile> _parseEditFiles(String text) {
-  final result  = <_EditFile>[];
-  final pattern = RegExp(
-    r'<EDIT_FILE\s+path="([^"]+)">([\s\S]*?)</EDIT_FILE>',
-    caseSensitive: false,
-  );
-  for (final m in pattern.allMatches(text)) {
-    result.add((path: m.group(1)!.trim(), content: m.group(2)!.trimRight()));
-  }
-  return result;
 }
 
 // ── Display helpers ────────────────────────────────────────────────────────────

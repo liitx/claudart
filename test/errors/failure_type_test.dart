@@ -142,4 +142,49 @@ void main() {
       );
     });
   });
+
+  // The failures of the debug apply path and of a step wired to a model its
+  // role does not permit. One group per variant: where it rolls up, how it is
+  // classified, and the exact words a person sees.
+  group('FailureType.editPlanMalformed', () {
+    test('rolls up to pipeline with its default fault class', () {
+      expect(FailureType.editPlanMalformed.errorType, ErrorType.pipeline);
+      expect(
+        FailureType.editPlanMalformed.effectiveFaultClass,
+        FaultClass.externalServiceFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(FailureType.editPlanMalformed.label, 'Edit plan malformed');
+      expect(
+        FailureType.editPlanMalformed.suggestedAction,
+        'Re-run `claudart debug` -- the implementer output could not be '
+        'split into complete file blocks. Nothing was written.',
+      );
+    });
+  });
+
+  group('FailureType.editVerificationFailed', () {
+    test('rolls up to pipeline with its default fault class', () {
+      expect(FailureType.editVerificationFailed.errorType, ErrorType.pipeline);
+      expect(
+        FailureType.editVerificationFailed.effectiveFaultClass,
+        FaultClass.externalServiceFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(
+        FailureType.editVerificationFailed.label,
+        'Edit verification failed',
+      );
+      expect(
+        FailureType.editVerificationFailed.suggestedAction,
+        'The written files failed verification and were restored. Review '
+        'the reported file and re-run `claudart debug`; the handoff '
+        'status was not changed.',
+      );
+    });
+  });
 }

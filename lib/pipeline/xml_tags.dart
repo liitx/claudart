@@ -1,3 +1,4 @@
+
 // xml_tags.dart — XML tag extraction utilities for agent output parsing.
 //
 // Pipeline steps output structured XML tags. These functions extract
@@ -21,11 +22,36 @@
 // matters because indices found in the folded haystack are reused to
 // slice [text]; a length-changing fold (Dart's `toLowerCase()` can
 // expand chars like Turkish `İ`) would corrupt the slice boundary.
+//
+// Wire tags the pipeline emits and parses are owned by [WireTag]. Its
+// closing delimiter is composed from the tag name, so no source file has
+// to spell a closing tag out literally.
 
 const String _kDefaultFallback = '_Not determined._';
 const int _kCodeUnitA = 0x41;
 const int _kCodeUnitZ = 0x5A;
 const int _kAsciiCaseBit = 0x20;
+
+/// Tag names of the wire format, as consts so const prompt strings can
+/// interpolate them. [WireTag] is built from these — one source of truth.
+const String kChangesTagName = 'CHANGES';
+const String kEditFileTagName = 'EDIT_FILE';
+
+/// Wire tags exchanged with the implementer agent.
+enum WireTag {
+  changes(kChangesTagName),
+  editFile(kEditFileTagName);
+
+  const WireTag(this.tagName);
+
+  final String tagName;
+
+  /// Start of the opening delimiter, without attributes or `>`.
+  String get openPrefix => '<$tagName';
+
+  /// The closing delimiter.
+  String get close => '</$tagName>';
+}
 
 /// Extracts the trimmed content between `<TAG>` and `</TAG>` in [text].
 /// Returns [fallback] when the tag is absent. Case-sensitive.

@@ -1,3 +1,4 @@
+
 // failure_type.dart — bottom layer of claudart's error taxonomy
 //
 // Specific state-of-response. Each variant rolls up to one ErrorType (its
@@ -9,7 +10,8 @@
 // The 4 `pipeline*` variants were added after the original 4 -- confirmed
 // real gap: lib/pipeline/pipeline_executor.dart had 4 live bare
 // `throw Exception(...)` sites that predated and bypassed this taxonomy
-// entirely, not a deliberate exclusion.
+// entirely, not a deliberate exclusion. The 2 `edit*` variants cover the
+// debug apply path (lib/pipeline/edit_files.dart).
 
 import 'error_type.dart';
 import 'fault_class.dart';
@@ -24,7 +26,9 @@ enum FailureType {
   providerNotConfigured,
   stepTimedOut,
   stepExitedNonzero,
-  stepProducedNoResult;
+  stepProducedNoResult,
+  editPlanMalformed,
+  editVerificationFailed;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
   /// `errorType.faultClass`.
@@ -40,7 +44,9 @@ enum FailureType {
         FailureType.providerNotConfigured ||
         FailureType.stepTimedOut ||
         FailureType.stepExitedNonzero ||
-        FailureType.stepProducedNoResult =>
+        FailureType.stepProducedNoResult ||
+        FailureType.editPlanMalformed ||
+        FailureType.editVerificationFailed =>
           ErrorType.pipeline,
       };
 
@@ -81,6 +87,8 @@ enum FailureType {
         FailureType.stepTimedOut => 'Step timed out',
         FailureType.stepExitedNonzero => 'Step exited nonzero',
         FailureType.stepProducedNoResult => 'Step produced no result',
+        FailureType.editPlanMalformed => 'Edit plan malformed',
+        FailureType.editVerificationFailed => 'Edit verification failed',
       };
 
   /// Actionable next step a user can take. Surfaces in caller-facing
@@ -118,5 +126,12 @@ enum FailureType {
         FailureType.stepProducedNoResult =>
           'Re-run the step -- `claude` closed its stream without emitting a '
               'final result line.',
+        FailureType.editPlanMalformed =>
+          'Re-run `claudart debug` -- the implementer output could not be '
+              'split into complete file blocks. Nothing was written.',
+        FailureType.editVerificationFailed =>
+          'The written files failed verification and were restored. Review '
+              'the reported file and re-run `claudart debug`; the handoff '
+              'status was not changed.',
       };
 }
