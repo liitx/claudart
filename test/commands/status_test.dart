@@ -309,9 +309,20 @@ _Nothing yet.
         record('reader', 'claude-new'),
       ]));
       expect(out, contains('Models (newest per step):'));
-      expect(out, contains('reader  haiku -> claude-new  context 25%  drift: none'));
-      expect(out, contains('reasoner  haiku -> claude-b  context 25%  '
-          'drift: maxOutputTokens'));
+      expect(
+        out,
+        contains(
+          'reader  haiku -> claude-new  (no role recorded)  '
+          'context 25%  drift: none',
+        ),
+      );
+      expect(
+        out,
+        contains(
+          'reasoner  haiku -> claude-b  (no role recorded)  context 25%  '
+          'drift: maxOutputTokens',
+        ),
+      );
       expect(out, isNot(contains('claude-old')));
     });
 

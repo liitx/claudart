@@ -181,6 +181,12 @@ class SessionLogger {
   List<Map<String, dynamic>> readStepModelRecords() {
     final latest = <Object?, Map<String, dynamic>>{};
     for (final record in _readJsonlEntries(_modelsPath)) {
+      // A helper call is not what the step ran on, so it never takes the
+      // step's row, whatever order the CLI listed the models in.
+      if (record[ModelRecordField.role.name] ==
+          ObservedModelRole.incidentalHelper.name) {
+        continue;
+      }
       final stepId = record[ModelRecordField.stepId.name];
       latest.remove(stepId);
       latest[stepId] = record;

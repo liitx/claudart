@@ -201,25 +201,56 @@ void main() {
     });
   });
 
+  // The line a person reads in `claudart status` must say what each model was
+  // doing in its step: a helper call next to a reasoning step is not that step
+  // running on the helper's model.
   group('describeModelRecord', () {
     Map<String, dynamic> record({
       Object? fraction = 0.256,
       List<String> drift = const [],
+      String? role,
     }) =>
         {
           ModelRecordField.stepId.name: 'reader',
           ModelRecordField.intended.name: 'haiku',
           ModelRecordField.contextUsedFraction.name: fraction,
           ModelRecordField.drift.name: drift,
+          if (role != null) ModelRecordField.role.name: role,
           ModelRecordField.observation.name: {
             ModelObservationField.observedModelId.jsonKey: _haikuId,
           },
         };
 
-    test('reads step, intended -> observed, rounded context, no drift', () {
+    test('reads step, intended -> observed, role, rounded context, no drift',
+        () {
+      expect(
+        describeModelRecord(
+          record(role: ObservedModelRole.stepModel.name),
+        ),
+        'reader  haiku -> $_haikuId  (step)  context 26%  drift: none',
+      );
+    });
+
+    for (final role in ObservedModelRole.values) {
+      test('names the role: ${role.name}', () {
+        expect(
+          describeModelRecord(record(role: role.name)),
+          contains('(${role.label})'),
+        );
+      });
+    }
+
+    test('a record written before roles existed says so, not "step"', () {
       expect(
         describeModelRecord(record()),
-        'reader  haiku -> $_haikuId  context 26%  drift: none',
+        contains('(no role recorded)'),
+      );
+    });
+
+    test('a role that is not a known variant says it was not recorded', () {
+      expect(
+        describeModelRecord(record(role: 'not-a-role')),
+        contains('(no role recorded)'),
       );
     });
 

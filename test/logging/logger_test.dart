@@ -384,6 +384,34 @@ void main() {
       expect(io.fileExists(_modelsPath), isFalse);
     });
 
+    // The row `claudart status` shows for a step is the model the step ran on.
+    // A helper call is never that row, whichever order the CLI listed them in.
+    test('readStepModelRecords never lets a helper call replace the step model',
+        () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [
+            ModelObservation(observedModelId: AgentModel.sonnet.slug),
+            ModelObservation(observedModelId: AgentModel.haiku.slug),
+          ],
+        ),
+      );
+      final shown = logger.readStepModelRecords().single;
+      final observation = shown[ModelRecordField.observation.name] as Map;
+      expect(
+        observation[ModelObservationField.observedModelId.jsonKey],
+        AgentModel.sonnet.slug,
+      );
+      expect(
+        shown[ModelRecordField.role.name],
+        ObservedModelRole.stepModel.name,
+      );
+    });
+
     test('readStepModelRecords returns the newest record per step, oldest '
         'step first', () {
       void log(String stepId, String observedId) => logger.logStepModels(

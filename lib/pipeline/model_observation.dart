@@ -9,6 +9,7 @@
 // The observation costs nothing extra: it is read from a line claudart already
 // receives and parses, so it adds no model call and no prompt tokens.
 
+import '../util/enum_util.dart';
 import 'agent_model.dart';
 
 /// One model's usage within a step, as `modelUsage[<id>]` reports it.
@@ -157,7 +158,18 @@ enum ObservedModelRole {
   /// A model that ran beside the intended one, such as the CLI's own helper
   /// call. It was not assigned by claudart and is not drift.
   incidentalHelper;
+
+  /// The words a person reads for this role in `claudart status`.
+  String get label => switch (this) {
+        ObservedModelRole.stepModel => 'step',
+        ObservedModelRole.incidentalHelper => 'helper call',
+      };
 }
+
+/// What `claudart status` says for a record that carries no recognizable role,
+/// such as one written before roles existed. A missing role is never shown as
+/// the step model, because that would claim something the record does not say.
+const String _roleNotRecordedLabel = 'no role recorded';
 
 /// One observation set against the model the step intended.
 class ModelReconciliation {
@@ -225,8 +237,13 @@ String describeModelRecord(Map<String, dynamic> record) {
   final observedId =
       observation[ModelObservationField.observedModelId.jsonKey];
   final context = fraction == null ? '-' : '${(fraction * 100).round()}%';
+  final role = enumByName(
+    ObservedModelRole.values,
+    record[ModelRecordField.role.name] as String?,
+  );
   return '${record[ModelRecordField.stepId.name]}  '
       '${record[ModelRecordField.intended.name]} -> $observedId  '
+      '(${role?.label ?? _roleNotRecordedLabel})  '
       'context $context  '
       'drift: ${drift.isEmpty ? 'none' : drift.join(', ')}';
 }
