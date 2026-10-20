@@ -106,6 +106,15 @@ move writes a checkpoint with no transition and no log. Status: open (E1).
 | B1 | Confirmed with real processes: every command spawns `git rev-parse --show-toplevel --abbrev-ref HEAD` twice where once is enough (`status`, `save`, `resume`, `preflight`, `scan`); `doctor` spawns five (three `rev-parse`, `config user.name`, `config user.email`); `status --project` spawns one. The second spawn's call site is not yet attributed | sandbox run, below | open |
 | C2 | The census sees the FileIO seam only; git and `claude` process spawns need a separate measurement | census scope | open |
 
+### Measured by the families (stage 1)
+
+| Id | Finding | Evidence | Status |
+|---|---|---|---|
+| F1 | Exactly seven files drive handoff state, all processBound: `setup`, `suggest`, `debug`, `save`, `kill`, `rotate`, `teardown`. Each emits events itself; no single writer. This is the family the Phase 3 listener replaces. | `docs/topology/families.md`, `drivesState x processBound` | open |
+| F2 | Four files observe state while processBound (`launch`, `status`, `workspaces`, `knowledge_templates`) and three are workspaceBound (`hook`, `session_ops`, `sync_check`): the readers that re-derive behavior per status | families doc | open |
+| F3 | 24 files reach processes or the terminal and never touch state, among them `flow`, `resume`, `doctor`, `link`, `unlink`: commands that change the session's world with no state record | families doc, `untouched x processBound` | open, review per command |
+| F4 | The classifier matches a name where it is only declared, so a portal's owner (`paths`, `registry`, `config`) sits beside its users | `topology_family.dart` header | accepted: owners are named in the doc |
+
 ## Stage records
 
 Each entry states the pass condition first, then the observed result.
@@ -176,3 +185,23 @@ git) is excluded by running the compiled binary.
 
 Not yet measured: `claude` spawns (needs the model call path), `link` itself
 beyond one spawn before its prompts, and the second spawn's call site.
+
+### Stage 1 - families
+
+Pass condition: every file of `lib/` and `bin/` is in exactly one family, the
+family is read from what the code does and not from its name or folder, and a
+file matching no portal is the complement, not an unclassified bucket.
+
+Observed: `test/helpers/topology_family.dart` (`StateRole` x `ReachLayer`,
+`topologyFamilyOf`, `groupByFamily`) and `test/topology/families_topology_test.dart`,
+which writes `docs/topology/families.md` under `make topology`. 139 files
+classified; one test per variant proves each role and layer is found in its own
+code shape, comments are ignored, and the grouping puts every file in exactly
+one family. The first scan counted names in comments and declarations, which
+moved type files such as `failure_type.dart` into the workspace layer; the
+patterns were made call-shaped and the comment lines dropped, and the count is
+now as in the doc.
+
+Not done here: the import direction check (does a lower layer import a higher
+one) is deferred. It needs resolved usage, not text, to avoid flagging a file
+that imports only a type.
