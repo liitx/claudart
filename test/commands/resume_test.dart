@@ -8,6 +8,7 @@ import 'package:claudart/paths.dart';
 import 'package:claudart/session/archive_entry.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
 
 const _projectRoot = '/projects/my-app';
 const _workspace = '/workspaces/my-app';
@@ -96,6 +97,8 @@ void main() {
       final io = _io(withArchive: false);
       await expectLater(
         runResume(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
@@ -108,6 +111,8 @@ void main() {
       final io = MemoryFileIO();
       await expectLater(
         runResume(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,

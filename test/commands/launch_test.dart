@@ -12,6 +12,7 @@ import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
+import '../helpers/unscripted.dart';
 
 const _projectRoot = '/projects/my-app';
 const _workspace = '/workspaces/my-app';
@@ -137,6 +138,8 @@ void main() {
 
       await expectLater(
         runLauncher(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: null,
           pickFn: (_) => 0,
@@ -152,6 +155,8 @@ void main() {
       final io = _io(withHandoff: true, withLink: true);
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: null,
         pickFn: (_) {
@@ -170,6 +175,8 @@ void main() {
       List<String>? capturedItems;
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: null,
         pickFn: (items) {
@@ -190,6 +197,8 @@ void main() {
       final io = _io(withHandoff: false, withLink: false);
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: _projectRoot,
         pickFn: (_) {
@@ -223,6 +232,8 @@ void main() {
       final io = _io(withHandoff: true, withLink: true, withLock: true);
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: null,
         pickFn: (_) {
@@ -258,6 +269,8 @@ void main() {
       final io = _io(withHandoff: true, withLink: true);
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: null,
         pickFn: (_) {
@@ -275,6 +288,8 @@ void main() {
       final io = _io(withHandoff: false, withLink: false);
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: null,
         pickFn: (_) {
@@ -324,6 +339,8 @@ void main() {
 
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: null,
         pickFn: (_) {
@@ -341,6 +358,8 @@ void main() {
       final io = _io(withHandoff: false, withLink: false, sensitivityMode: true);
       var pickCall = 0;
       await runLauncher(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: null,
         pickFn: (_) {
@@ -377,6 +396,8 @@ void main() {
       var pickCall = 0;
       await runZoned(
         () => runLauncher(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: null,
           pickFn: (_) {
@@ -402,6 +423,8 @@ void main() {
       var pickCall = 0;
       await runZoned(
         () => runLauncher(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           // Never matches the real cwd's git root, so this entry is not
           // "the current project" — its stored branch must be shown as-is.
@@ -430,6 +453,8 @@ void main() {
       var pickCall = 0;
       await runZoned(
         () => runLauncher(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: null,
           pickFn: (_) {
@@ -454,6 +479,8 @@ void main() {
       var pickCall = 0;
       await runZoned(
         () => runLauncher(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: null,
           pickFn: (_) {

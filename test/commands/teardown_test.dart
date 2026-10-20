@@ -15,6 +15,7 @@ import 'package:claudart/file_io.dart';
 import 'package:claudart/session/workspace_guard.dart';
 import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
 
 const _projectRoot = '/projects/my-app';
 const _workspace = '/workspaces/my-app';
@@ -409,6 +410,8 @@ void main() {
             _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
       );
       await runTeardown(
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: _projectRoot,
         mode: RunMode.headless,

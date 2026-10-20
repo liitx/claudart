@@ -8,6 +8,7 @@ import 'package:claudart/registry.dart';
 import 'package:claudart/session/archive_entry.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
 
 const _projectRoot = '/projects/my-app';
 const _workspace   = '/workspaces/my-app';
@@ -67,6 +68,8 @@ void main() {
       final io = MemoryFileIO();
       await expectLater(
         runArchives(
+          pickFn: unscriptedPick,
+          
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
@@ -79,6 +82,8 @@ void main() {
       final io = _io();
       await expectLater(
         runArchives(
+          pickFn: unscriptedPick,
+          
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
@@ -93,6 +98,8 @@ void main() {
       await expectLater(
         runZoned(
           () => runArchives(
+            pickFn: unscriptedPick,
+            
             io: io,
             projectRootOverride: _projectRoot,
             exitFn: _throwExit,
