@@ -1,72 +1,89 @@
-// step_roles_test.dart — every real pipeline step declares the role it plays,
+// step_roles_test.dart — every step of every flow declares the role it plays,
 // and the model it runs on is permitted for that role.
 //
-// The expected role of each step is written out here as a spec. A new step
-// without an entry fails the coverage test below, so a role cannot be skipped.
+// Steps come from AgentFlow.steps, so a new step is covered automatically.
+// The role each step is expected to play is a spec below; a step with no entry
+// fails, so a new step cannot skip declaring its role. One test per flow per
+// step.
 
+import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:claudart/pipeline/agent_model.dart';
-import 'package:claudart/pipeline/agent_step.dart';
-import 'package:claudart/pipeline/flows/debug_steps.dart';
-import 'package:claudart/pipeline/flows/flow_steps.dart';
-import 'package:claudart/pipeline/flows/suggest_steps.dart';
-import 'package:claudart/pipeline/flows/teardown_steps.dart';
 import 'package:claudart/pipeline/step_role.dart';
 import 'package:test/test.dart';
 
-/// Every step the pipeline defines, keyed by a unique label, with the role
-/// it is expected to play.
-typedef _StepWithExpectedRole = ({AgentStep step, StepRole role});
-
-final Map<String, _StepWithExpectedRole> _expectedRoleBySteps = {
-  'flow categorize': (
-    step: FlowSteps.categorize,
-    role: StepRole.classification,
-  ),
-  'flow plan': (step: FlowSteps.plan, role: StepRole.reasoning),
-  'flow clarify': (step: FlowSteps.clarify, role: StepRole.reasoning),
-  'flow construct': (step: FlowSteps.construct, role: StepRole.implementation),
-  'suggest reader': (step: SuggestSteps.reader(1), role: StepRole.fileReading),
-  'suggest reasoner': (step: SuggestSteps.reasoner, role: StepRole.reasoning),
-  'suggest planner': (step: SuggestSteps.planner(1), role: StepRole.reasoning),
-  'suggest lookup': (step: SuggestSteps.lookup(1), role: StepRole.reasoning),
-  'suggest applier': (
-    step: SuggestSteps.applier(1),
-    role: StepRole.implementation,
-  ),
-  'debug reader': (step: DebugSteps.reader(1), role: StepRole.fileReading),
-  'debug implementer': (
-    step: DebugSteps.implementer,
-    role: StepRole.implementation,
-  ),
-  'teardown analyzer': (step: TeardownSteps.analyzer, role: StepRole.reasoning),
+/// The role each step of each flow is expected to play, by step id. Written
+/// out by hand so the test is a spec, not a copy of the step definitions.
+const Map<AgentFlow, Map<String, StepRole>> _expectedRoleByFlowStep = {
+  AgentFlow.suggest: {
+    'categorize': StepRole.classification,
+    'reader': StepRole.fileReading,
+    'reasoner': StepRole.reasoning,
+    'planner': StepRole.reasoning,
+    'lookup': StepRole.reasoning,
+    'applier': StepRole.implementation,
+  },
+  AgentFlow.debug: {
+    'categorize': StepRole.classification,
+    'reader': StepRole.fileReading,
+    'implementer': StepRole.implementation,
+  },
+  AgentFlow.teardown: {'teardown-analyzer': StepRole.reasoning},
+  AgentFlow.flow: {
+    'categorize': StepRole.classification,
+    'plan': StepRole.reasoning,
+    'clarify': StepRole.reasoning,
+    'construct': StepRole.implementation,
+  },
 };
 
 void main() {
-  group('every step plays its declared role', () {
-    _expectedRoleBySteps.forEach((label, expected) {
-      test(label, () {
-        expect(expected.step.role, equals(expected.role));
-      });
+  group('every step plays its expected role', () {
+    for (final flow in AgentFlow.values) {
+      for (final step in flow.steps) {
+        test('${flow.name} ${step.id}', () {
+          final expected = _expectedRoleByFlowStep[flow]?[step.id];
+          expect(
+            expected,
+            isNotNull,
+            reason: '${flow.name} ${step.id} has no expected role in the spec',
+          );
+          expect(step.role, expected);
+        });
+      }
+    }
+  });
+
+  group('every expected role is for a step the flow really has', () {
+    _expectedRoleByFlowStep.forEach((flow, rolesByStepId) {
+      for (final stepId in rolesByStepId.keys) {
+        test('${flow.name} $stepId', () {
+          expect(flow.steps.map((step) => step.id), contains(stepId));
+        });
+      }
     });
   });
 
   group('every step runs on a model its role permits', () {
-    _expectedRoleBySteps.forEach((label, expected) {
-      test('$label on ${expected.step.model.name}', () {
-        expect(expected.step.role.permits(expected.step.model), isTrue);
-      });
-    });
+    for (final flow in AgentFlow.values) {
+      for (final step in flow.steps) {
+        test('${flow.name} ${step.id} on ${step.model.name}', () {
+          expect(step.role.permits(step.model), isTrue);
+        });
+      }
+    }
   });
 
   group('haiku only classifies and reads', () {
-    _expectedRoleBySteps.forEach((label, expected) {
-      if (expected.step.model != AgentModel.haiku) return;
-      test(label, () {
-        expect(
-          expected.step.role,
-          isIn([StepRole.classification, StepRole.fileReading]),
-        );
-      });
-    });
+    for (final flow in AgentFlow.values) {
+      for (final step in flow.steps) {
+        if (step.model != AgentModel.haiku) continue;
+        test('${flow.name} ${step.id}', () {
+          expect(
+            step.role,
+            isIn([StepRole.classification, StepRole.fileReading]),
+          );
+        });
+      }
+    }
   });
 }

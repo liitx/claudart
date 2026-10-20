@@ -1,33 +1,19 @@
 import 'package:claudart/pipeline/agent_flow.dart';
-import 'package:claudart/pipeline/agent_model.dart';
 import 'package:test/test.dart';
 
-// claudart owns AgentFlow.preferredModel, so claudart tests it. This literal
-// table pins today's static routing (issue #87 plans to replace it with a
-// benchmarked classification); consumers use it and do not re-assert it.
-
-const _preferred = <AgentFlow, AgentModel?>{
-  AgentFlow.suggest: AgentModel.opus,
-  AgentFlow.debug: AgentModel.sonnet,
-  AgentFlow.setup: AgentModel.haiku,
-  AgentFlow.save: AgentModel.haiku,
-  AgentFlow.teardown: AgentModel.haiku,
-  AgentFlow.flow: AgentModel.sonnet,
-  AgentFlow.research: AgentModel.haiku,
-  AgentFlow.free: AgentModel.sonnet,
-  AgentFlow.cli: null,
-  AgentFlow.guiDesign: AgentModel.opus,
-};
-
 void main() {
-  test('the table covers every flow', () {
-    expect(_preferred.keys.toSet(), AgentFlow.values.toSet());
-  });
+  group('AgentFlow.steps', () {
+    const withSteps = {
+      AgentFlow.suggest,
+      AgentFlow.debug,
+      AgentFlow.teardown,
+      AgentFlow.flow,
+    };
 
-  group('AgentFlow.preferredModel', () {
-    for (final entry in _preferred.entries) {
-      test('${entry.key.name}: ${entry.value?.name ?? 'none (cli)'}', () {
-        expect(entry.key.preferredModel, entry.value);
+    for (final flow in AgentFlow.values) {
+      final has = withSteps.contains(flow);
+      test('${flow.name}: steps are ${has ? 'non-empty' : 'empty'}', () {
+        expect(flow.steps.isNotEmpty, has);
       });
     }
   });
@@ -79,27 +65,34 @@ void main() {
   });
 
   group('fromSlashCommand', () {
-    const slash = {
-      '/suggest': AgentFlow.suggest,
-      '/debug': AgentFlow.debug,
-      '/setup': AgentFlow.setup,
-      '/save': AgentFlow.save,
-      '/teardown': AgentFlow.teardown,
-      '/flow': AgentFlow.flow,
-      '/research': AgentFlow.research,
+    const withSlashCommand = {
+      AgentFlow.suggest,
+      AgentFlow.debug,
+      AgentFlow.setup,
+      AgentFlow.save,
+      AgentFlow.teardown,
+      AgentFlow.flow,
+      AgentFlow.research,
     };
 
-    for (final entry in slash.entries) {
-      test('${entry.key} -> ${entry.value.name}', () {
-        expect(AgentFlow.fromSlashCommand(entry.key), entry.value);
+    for (final flow in AgentFlow.values) {
+      final has = withSlashCommand.contains(flow);
+      test('/${flow.name} -> ${has ? flow.name : 'null'}', () {
+        expect(flow.hasSlashCommand, has);
+        expect(
+          AgentFlow.fromSlashCommand('/${flow.name}'),
+          has ? flow : isNull,
+        );
+      });
+
+      test('${flow.name} without the slash is null', () {
+        expect(AgentFlow.fromSlashCommand(flow.name), isNull);
       });
     }
 
-    test('without the slash, or unknown, is null', () {
-      expect(AgentFlow.fromSlashCommand('suggest'), isNull);
-      expect(AgentFlow.fromSlashCommand('/free'), isNull);
-      expect(AgentFlow.fromSlashCommand('/cli'), isNull);
+    test('an empty or unknown command is null', () {
       expect(AgentFlow.fromSlashCommand(''), isNull);
+      expect(AgentFlow.fromSlashCommand('/nonsense'), isNull);
     });
   });
 }
