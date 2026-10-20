@@ -1046,6 +1046,111 @@ uncalled zedup emitters; the YAML manifests once (1) is done.
 symbols. The review's reading is that users interface with CLI commands, slash-command files
 and hotkeys, so the "dynamic API layer" reduces to filtered rendering of those surfaces.
 
+### Phase 16 — Enforced matrix architecture (TOP PRIORITY, ahead of every other phase)
+Opened 2026-10-19, in progress. Owner directive: the CLI is finished and tight before anything
+else (the TUI is later), and no implementation, by claudart or by an agent, may fail silently.
+Every layer (logs, tests, errors, state, render) is a chain of exhaustive matrices over enums:
+matrix n sets state, that state feeds matrix n+1, and the last enum getter returns the whole
+condition.
+
+**Evidence (2026-10-19 audit, all re-checkable):**
+- `PipelineExecutor.onStepCompleted` is typed to `AgentCompleted`, 1 of 8 `PipelineEvent`
+  variants, so step failures, timeouts, API rejections and network errors reach no log.
+- 5 of 13 `HandoffEvent` variants have no code caller (`saveUnconfirmed`,
+  `saveConfirmedExploring`, `debugStarted`, `debugBlocked`, `suggestResumed`);
+  `debugBlocked` is unreachable because `debugStarted` has no caller.
+- The debug apply path truncated a file that contained its own wire tag and still recorded
+  `fixApplied` (fixed and verified, uncommitted at the time of writing).
+- Every pipeline step runs with `--dangerously-skip-permissions` and the full tool set, so any
+  step can edit files before the owner approves a write.
+- `lib/` has 70 enums and 6 sealed classes; none of the enums implement `AppType` or
+  `FeatureType`; the matrix covers 4 test-only enums, one of which mirrors `HandoffStatus`.
+- 40 injectable-seam locals (`exit_ = exitFn ?? exit`) fake boundaries with lambdas; the
+  repository already has the preferred shape for one boundary (`FileIO`, `RealFileIO`,
+  `MemoryFileIO`).
+- 1 `default:` arm and 12 `_ =>` arms in `lib/`; model identity is decided by string match.
+
+**Rules this phase locks in:**
+- Unknown is the complement of the knowns set by earlier states, never a catch-all bucket.
+- A `default` or wildcard arm over an enum defines a missing variant: write the failing test
+  first, then add the variant.
+- Never match on a string; a string exists once at the wire edge, owned by an enum field.
+- Names are never shortened; every convention, typedef and intent has a doc string.
+- Enforcement at compile time outranks migration cost. Breaking existing code is wanted when
+  it surfaces an undetected gap: a compile error is the list of unfinished work.
+- Errors flow exception, then `ErrorType`, then `FailureType`, in one generic boundary; no
+  silent failure.
+- State changes are published on one typed async `Stream`; the logger, renderer and dashboard
+  subscribe to it.
+
+**Verified in a scratch package (Dart 3, SDK >=3.0.0):** an enum constructor with a required
+named parameter forces every variant to declare its data; a `base class` cannot be implemented
+outside its library and so cannot skip recording; a factory with a private constructor and a
+required cell argument cannot be bypassed; an exhaustive `switch` over an enum fails when a
+variant is missing; an annotation naming a missing enum member fails; `implementation_imports`
+raised to an error blocks importing another package's `src`. Not enforced by the compiler: an
+enum with no proof suite at all (needs a lint or a test over `lib/`), a proof that asserts
+nothing (mutation testing), and a wrong expected trace (review).
+
+**Slices, in dependency order (one claudart session each):**
+1. Apply-path integrity: parse, write, verify, roll back, then record the state event
+   (done, commit 7c3ccb3).
+2. Tool scope: a step role by allowed-tools matrix; read-only roles cannot write.
+3. Event callers: every `HandoffEvent` has a caller; `debugStarted`, then `debugBlocked` on
+   any blocked step; the topology test fails on a missing caller.
+4. Routing: haiku reads and forwards only; a coordinator step assigns `claude-opus-5-5` or
+   `claude-sonnet-5-5` per category, defaulting to sonnet-5-5; the CLI's own helper call is
+   recorded as incidental (done, commit 4374fed: `routeModel` never returns haiku, every step
+   declares a `StepRole`, the guard in `AgentStep.effectiveModel` fails typed, and
+   `reconcileStepModels` records the helper call as `incidentalHelper`).
+5. State-change `Stream` and step logging: start, end, duration and failure for every step.
+6. Seams to real fakes: replace the underscore seam locals with interfaces whose test
+   implementations carry real data, built to the base-class and required-cell design above.
+7. Dartrix enforced layer (dartrix owns it, claudart consumes it): the cell contract with
+   required per-variant data, the recording boundary, the cell-only recording environment, the
+   exhaustive proof table, an expected-versus-recorded deviation result that feeds `cover` and
+   `gaps`, and the forced adoption of the real `lib/` enums in the matrix.
+
+**Proof deliverable:** a per-piece record of what each step was expected to produce next to
+what the logs show, giving a convergence-versus-deviation score per cell, plus an audit that
+lists every cell as proven, gap or deviating. Exit criteria: every cell proven, no wildcard arm
+over an enum in `lib/`, and every enum in `lib/` registered or carrying a documented
+exemption.
+
+**Out of scope:** zedup and the TUI (paused until the CLI is done).
+
+### Phase 17 — Shoelace coverage surfaced from the CLI (planned, after Phase 16)
+Opened 2026-10-19, not started. Not the priority until Phase 16 is done; recorded here so it
+is not lost. Owner's design, restated:
+- A circle is a Feature (the enum name). Its variants are regions on the rim; a zig-zag lacing
+  path links the variants, and region fill shows covered, failing or uncovered.
+- Per-test-file `_touched` segregation is intentional. Each test file runs in its own isolate,
+  so each file reports only the variants it touched; that is what shows which features share a
+  variant. Do not "fix" it into one shared assertion.
+- For an app that is not driven by enums, dartrix works on a mirrored project so coverage is
+  measured without manipulating the real repository, and the visualizer shows gaps, failing
+  tests and covered variants per feature.
+- The visualizer should be reachable from claudart's CLI (opens the browser) now, and from the
+  TUI later.
+
+**Verified findings (2026-10-19):**
+- The producer is zedup's `launchShoelaceViz` (dashboard `[s]`). It writes
+  `~/.zedup/shoelace-coverage.json`, and serves `/coverage.json` from that path only when
+  `ZEDUP_SHOELACE_WEB` points at the Flutter `web` build. claudart has no producer and no
+  browser launch; `lib/`, `bin/`, `tool/`, the Makefile and hooks contain no reference to it.
+- `PARADIGMS.md` says claudart scans the matrix (shoelace) before construction. That scan does
+  not exist in claudart, so the described guard has never run.
+- On this machine `ZEDUP_SHOELACE_WEB` is set to dartrix's `shoelace/build/web`, but
+  `~/.zedup/shoelace-coverage.json` does not exist, and the build's own `coverage.json` is a
+  static file from 2026-05-07 with 6 variants, 1 test and 9 gaps. Either could produce a page
+  body with no coverage drawn; which one the owner saw is not yet isolated.
+- dartrix's `PLAN.md` was last updated 2026-05-07 and predates this work; its roadmap needs a
+  refresh from its own session.
+
+**Scope when it starts:** a claudart producer that registers the real enums through dartrix's
+enforced layer, writes the snapshot, serves the build and opens the browser; implement the
+pre-construction scan or remove the claim from `PARADIGMS.md`. Depends on Phase 16 slice 7.
+
 ---
 
 ## GitHub archive convention
