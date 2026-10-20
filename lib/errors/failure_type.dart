@@ -28,7 +28,8 @@ enum FailureType {
   stepExitedNonzero,
   stepProducedNoResult,
   editPlanMalformed,
-  editVerificationFailed;
+  editVerificationFailed,
+  stepModelNotPermittedForRole;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
   /// `errorType.faultClass`.
@@ -46,7 +47,8 @@ enum FailureType {
         FailureType.stepExitedNonzero ||
         FailureType.stepProducedNoResult ||
         FailureType.editPlanMalformed ||
-        FailureType.editVerificationFailed =>
+        FailureType.editVerificationFailed ||
+        FailureType.stepModelNotPermittedForRole =>
           ErrorType.pipeline,
       };
 
@@ -72,7 +74,9 @@ enum FailureType {
         FailureType.stepTimedOut ||
         FailureType.stepProducedNoResult =>
           FaultClass.transientFault,
-        FailureType.providerNotConfigured => FaultClass.configFault,
+        FailureType.providerNotConfigured ||
+        FailureType.stepModelNotPermittedForRole =>
+          FaultClass.configFault,
         _ => faultClass,
       };
 
@@ -89,6 +93,8 @@ enum FailureType {
         FailureType.stepProducedNoResult => 'Step produced no result',
         FailureType.editPlanMalformed => 'Edit plan malformed',
         FailureType.editVerificationFailed => 'Edit verification failed',
+        FailureType.stepModelNotPermittedForRole =>
+          'Step model not permitted for its role',
       };
 
   /// Actionable next step a user can take. Surfaces in caller-facing
@@ -133,5 +139,9 @@ enum FailureType {
           'The written files failed verification and were restored. Review '
               'the reported file and re-run `claudart debug`; the handoff '
               'status was not changed.',
+        FailureType.stepModelNotPermittedForRole =>
+          'A step was wired to a model its role does not permit (haiku may '
+              'only classify and read). Fix the step or the routing so '
+              'reasoning and implementation run on sonnet or opus.',
       };
 }

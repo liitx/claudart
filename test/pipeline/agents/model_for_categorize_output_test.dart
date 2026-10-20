@@ -29,15 +29,17 @@ void main() {
     // is the authoritative coverage); this is for anchor cases the
     // audit specifically relies on.
 
-    test('atomic explore → haiku (the headline cost win)', () {
+    // The fallback is opus here, so a result of sonnet can only come from
+    // parsing the tags: it proves the route, not the fallback.
+    test('atomic explore → sonnet, never haiku (haiku does not reason)', () {
       final raw = _buildOutput(
         category: AgentCategory.feature.name,
         intent: IntentClass.explore.name,
         complexity: ComplexityTier.atomic.name,
       );
       expect(
-        modelForCategorizeOutput(raw, fallback: _fallback),
-        equals(AgentModel.haiku),
+        modelForCategorizeOutput(raw, fallback: AgentModel.opus),
+        equals(AgentModel.sonnet),
       );
     });
 
@@ -138,10 +140,10 @@ void main() {
       const raw =
           '<category>feature</category>\n'
           '<intent>explore</intent>\n'
-          '<complexity>atomic</complexity>\n';
+          '<complexity>systemic</complexity>\n';
       expect(
         modelForCategorizeOutput(raw, fallback: _fallback),
-        equals(AgentModel.haiku),
+        equals(AgentModel.opus),
       );
     });
 
@@ -149,10 +151,10 @@ void main() {
       const raw =
           '<Category>feature</Category>\n'
           '<Intent>explore</Intent>\n'
-          '<Complexity>atomic</Complexity>\n';
+          '<Complexity>systemic</Complexity>\n';
       expect(
         modelForCategorizeOutput(raw, fallback: _fallback),
-        equals(AgentModel.haiku),
+        equals(AgentModel.opus),
       );
     });
   });
@@ -162,10 +164,10 @@ void main() {
       final raw =
           '<${CategorizeTag.category.wireTag}>Feature</${CategorizeTag.category.wireTag}>\n'
           '<${CategorizeTag.intent.wireTag}>Explore</${CategorizeTag.intent.wireTag}>\n'
-          '<${CategorizeTag.complexity.wireTag}>Atomic</${CategorizeTag.complexity.wireTag}>\n';
+          '<${CategorizeTag.complexity.wireTag}>Systemic</${CategorizeTag.complexity.wireTag}>\n';
       expect(
         modelForCategorizeOutput(raw, fallback: _fallback),
-        equals(AgentModel.haiku),
+        equals(AgentModel.opus),
       );
     });
 
@@ -173,10 +175,10 @@ void main() {
       final raw =
           '<${CategorizeTag.category.wireTag}>FEATURE</${CategorizeTag.category.wireTag}>\n'
           '<${CategorizeTag.intent.wireTag}>EXPLORE</${CategorizeTag.intent.wireTag}>\n'
-          '<${CategorizeTag.complexity.wireTag}>ATOMIC</${CategorizeTag.complexity.wireTag}>\n';
+          '<${CategorizeTag.complexity.wireTag}>SYSTEMIC</${CategorizeTag.complexity.wireTag}>\n';
       expect(
         modelForCategorizeOutput(raw, fallback: _fallback),
-        equals(AgentModel.haiku),
+        equals(AgentModel.opus),
       );
     });
   });

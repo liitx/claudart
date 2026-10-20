@@ -144,6 +144,21 @@ enum ModelDriftKind {
   maxOutputTokens;
 }
 
+/// What an observed model was doing inside a step.
+///
+/// A step's usage can name more than one model, because the CLI makes its own
+/// small helper calls (on haiku) inside a step. Only the step model is the
+/// model claudart assigned.
+enum ObservedModelRole {
+  /// The model the step ran on: the intended one when it ran, otherwise
+  /// whatever ran in its place.
+  stepModel,
+
+  /// A model that ran beside the intended one, such as the CLI's own helper
+  /// call. It was not assigned by claudart and is not drift.
+  incidentalHelper;
+}
+
 /// One observation set against the model the step intended.
 class ModelReconciliation {
   const ModelReconciliation({
@@ -153,6 +168,7 @@ class ModelReconciliation {
     required this.drift,
     required this.contextUsedFraction,
     required this.outputCapReached,
+    this.role = ObservedModelRole.stepModel,
   });
 
   final AgentModel intended;
@@ -170,6 +186,21 @@ class ModelReconciliation {
   /// The step produced as many tokens as the output cap allows.
   final bool outputCapReached;
 
+  /// Whether this was the step's model or an incidental helper call.
+  final ObservedModelRole role;
+
+  /// This observation as an incidental helper: the same facts, without
+  /// [ModelDriftKind.differsFromIntended], because it was never the step model.
+  ModelReconciliation _asIncidentalHelper() => ModelReconciliation(
+        intended: intended,
+        observation: observation,
+        resolved: resolved,
+        drift: {...drift}..remove(ModelDriftKind.differsFromIntended),
+        contextUsedFraction: contextUsedFraction,
+        outputCapReached: outputCapReached,
+        role: ObservedModelRole.incidentalHelper,
+      );
+
   /// The persisted per-step record (keys are [ModelRecordField] names).
   Map<String, Object?> toRecordJson({required String stepId}) => {
         ModelRecordField.stepId.name: stepId,
@@ -178,6 +209,7 @@ class ModelReconciliation {
         ModelRecordField.drift.name: [for (final kind in drift) kind.name],
         ModelRecordField.contextUsedFraction.name: contextUsedFraction,
         ModelRecordField.outputCapReached.name: outputCapReached,
+        ModelRecordField.role.name: role.name,
         ModelRecordField.observation.name: observation.toJson(),
       };
 }
@@ -208,6 +240,7 @@ enum ModelRecordField {
   drift,
   contextUsedFraction,
   outputCapReached,
+  role,
   observation;
 }
 
@@ -241,4 +274,28 @@ ModelReconciliation reconcileModel({
         window == null || window == 0 ? null : observation.contextTokens / window,
     outputCapReached: cap != null && observation.outputTokens >= cap,
   );
+}
+
+/// Reconciles every model a step's usage names with the model the step
+/// intended, in the order they were observed.
+///
+/// If the intended model is among them, it is the step model and every other
+/// observation is an [ObservedModelRole.incidentalHelper]: the CLI's own helper
+/// call, which is not drift and is not shown as the step's model. If the
+/// intended model did not run, each observation is a step model and a known one
+/// that differs is [ModelDriftKind.differsFromIntended].
+List<ModelReconciliation> reconcileStepModels({
+  required AgentModel intended,
+  required List<ModelObservation> observations,
+}) {
+  final reconciliations = [
+    for (final observation in observations)
+      reconcileModel(intended: intended, observation: observation),
+  ];
+  final intendedRan = reconciliations.any((r) => r.resolved == intended);
+  if (!intendedRan) return reconciliations;
+  return [
+    for (final r in reconciliations)
+      r.resolved == intended ? r : r._asIncidentalHelper(),
+  ];
 }

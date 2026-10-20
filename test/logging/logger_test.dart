@@ -336,6 +336,38 @@ void main() {
       );
     });
 
+    test('a helper call beside the intended model is logged as incidental, '
+        'not drift', () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [
+            ModelObservation(observedModelId: AgentModel.haiku.slug),
+            ModelObservation(observedModelId: AgentModel.sonnet.slug),
+          ],
+        ),
+      );
+      final byRole = {
+        for (final record in records())
+          record[ModelRecordField.role.name]: record,
+      };
+      expect(
+        byRole.keys.toSet(),
+        {
+          ObservedModelRole.stepModel.name,
+          ObservedModelRole.incidentalHelper.name,
+        },
+      );
+      final helper = byRole[ObservedModelRole.incidentalHelper.name]!;
+      expect(
+        helper[ModelRecordField.drift.name] as List,
+        isNot(contains(ModelDriftKind.differsFromIntended.name)),
+      );
+    });
+
     test('writes nothing when the stream named no model', () {
       logger.logStepModels(command: 'debug', event: completed());
       expect(io.fileExists(_modelsPath), isFalse);

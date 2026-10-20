@@ -160,9 +160,10 @@ class SessionLogger {
   }) {
     final intended = event.intendedModel;
     if (intended == null) return;
-    for (final observation in event.models) {
-      final reconciliation =
-          reconcileModel(intended: intended, observation: observation);
+    for (final reconciliation in reconcileStepModels(
+      intended: intended,
+      observations: event.models,
+    )) {
       _appendJsonl(
         _modelsPath,
         {

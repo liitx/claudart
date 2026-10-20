@@ -248,6 +248,107 @@ void main() {
     });
   });
 
+  // A step's usage can name more than one model: the CLI makes its own small
+  // helper calls (on haiku) inside a step. When the model the step was meant to
+  // run on is among them, the others are incidental, not drift; they only count
+  // as drift when the intended model did not run at all.
+  group('reconcileStepModels — the CLI helper call is incidental', () {
+    ModelObservation observedModel(AgentModel model) =>
+        ModelObservation(observedModelId: model.slug);
+
+    test('the intended model ran: the model is the step model', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.haiku),
+          observedModel(AgentModel.sonnet),
+        ],
+      );
+      final step = reconciliations
+          .singleWhere((r) => r.resolved == AgentModel.sonnet);
+      expect(step.role, ObservedModelRole.stepModel);
+      expect(step.drift, isNot(contains(ModelDriftKind.differsFromIntended)));
+    });
+
+    test('the intended model ran: the other model is incidental, not drift',
+        () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.haiku),
+          observedModel(AgentModel.sonnet),
+        ],
+      );
+      final helper = reconciliations
+          .singleWhere((r) => r.resolved == AgentModel.haiku);
+      expect(helper.role, ObservedModelRole.incidentalHelper);
+      expect(helper.drift, isNot(contains(ModelDriftKind.differsFromIntended)));
+    });
+
+    test('the intended model did not run: what ran is the step model and '
+        'differs', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [observedModel(AgentModel.haiku)],
+      );
+      final only = reconciliations.single;
+      expect(only.role, ObservedModelRole.stepModel);
+      expect(only.drift, contains(ModelDriftKind.differsFromIntended));
+    });
+
+    test('an unknown id beside the intended model is incidental but still '
+        'unknownModel', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          const ModelObservation(observedModelId: 'not-a-declared-model'),
+          observedModel(AgentModel.sonnet),
+        ],
+      );
+      final unknown = reconciliations.singleWhere((r) => r.resolved == null);
+      expect(unknown.role, ObservedModelRole.incidentalHelper);
+      expect(unknown.drift, contains(ModelDriftKind.unknownModel));
+    });
+
+    test('no observations gives no reconciliations', () {
+      expect(
+        reconcileStepModels(
+          intended: AgentModel.sonnet,
+          observations: const [],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('the order of the observations is kept', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.sonnet),
+          observedModel(AgentModel.haiku),
+        ],
+      );
+      expect(
+        reconciliations.map((r) => r.resolved),
+        [AgentModel.sonnet, AgentModel.haiku],
+      );
+    });
+
+    test('the persisted record carries the role', () {
+      final record = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.haiku),
+          observedModel(AgentModel.sonnet),
+        ],
+      ).first.toRecordJson(stepId: 'reasoner');
+      expect(
+        record[ModelRecordField.role.name],
+        ObservedModelRole.incidentalHelper.name,
+      );
+    });
+  });
+
   group('ModelObservationField keys', () {
     // (persisted key, key in the stream's modelUsage object or null for the id)
     const keys = <ModelObservationField, (String, String?)>{

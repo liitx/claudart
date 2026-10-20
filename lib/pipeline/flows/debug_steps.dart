@@ -13,6 +13,7 @@ import 'package:path/path.dart' as p;
 
 import '../agent_model.dart';
 import '../agent_step.dart';
+import '../step_role.dart';
 import '../agents/categorization.dart';
 import '../pipeline_context.dart';
 import '../xml_tags.dart';
@@ -48,6 +49,7 @@ abstract final class DebugSteps {
   static AgentStep reader(int fileCount) => AgentStep(
     id:           PipelineSlot.reader.key,
     label:        'Reading $fileCount scope file${fileCount == 1 ? '' : 's'} (haiku)…',
+    role:        StepRole.fileReading,
     model:        AgentModel.haiku,
     systemPrompt: _readerSystem,
     buildPrompt:  _readerPrompt,
@@ -57,6 +59,7 @@ abstract final class DebugSteps {
   static const AgentStep implementer = AgentStep(
     id:            'implementer',
     label:         'Implementing fix…',
+    role:         StepRole.implementation,
     model:         AgentModel.sonnet,
     modelSelector: _implementerModelSelector,
     systemPrompt:  _implementerSystem,

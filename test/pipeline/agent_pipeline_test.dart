@@ -140,8 +140,17 @@ void main() {
       const questionXml = '<QUESTION>What is the type of the label field?</QUESTION>';
       const answerXml   = '<ANSWER>label is String? — nullable optional field</ANSWER>';
 
-      // Second planner call produces CHANGES after receiving the answer
-      var plannerCallCount = 0;
+      // Every reasoning and implementation step runs on sonnet now, so the
+      // runner cannot tell the steps apart by model. The responses are
+      // scripted in the order the flow calls its steps: planner (QUESTION),
+      // lookup (ANSWER), planner (CHANGES), applier.
+      final scriptedResponses = <String>[
+        questionXml,
+        answerXml,
+        _plannerXml,
+        answerXml,
+      ];
+      var callCount = 0;
       ClaudeRunner countingRunner = ({
         required AgentModel model,
         required String systemPrompt,
@@ -149,11 +158,7 @@ void main() {
         required String workingDir,
         StepMode mode = StepMode.project,
       }) async {
-        if (model == AgentModel.haiku) {
-          return StepResult(text: answerXml, usage: const Usage(input: 50, output: 20, cost: 0.0005, cacheRead: 0));
-        }
-        plannerCallCount++;
-        final text = plannerCallCount == 1 ? questionXml : _plannerXml;
+        final text = scriptedResponses[callCount++];
         return StepResult(text: text, usage: const Usage(input: 200, output: 80, cost: 0.002, cacheRead: 0));
       };
 
@@ -171,7 +176,7 @@ void main() {
         displayTotal: 3,
       );
 
-      expect(plannerCallCount, equals(2), reason: 'planner should run twice: QUESTION then CHANGES');
+      expect(callCount, equals(4), reason: 'planner, lookup, planner, applier');
       expect(ctx.usage.input, greaterThan(0));
     },
   );

@@ -234,12 +234,13 @@ enum ComplexityTier {
 ///
 /// Total function — exhaustive switch over all 90 cells.
 /// Three-layer rationale:
-///   Theory:  opus excels at broad discovery; sonnet at reasoning + generation;
-///            haiku at fast structured lookup; fable at design specifically.
+///   Theory:  opus excels at broad discovery and design; sonnet at reasoning
+///            and generation. Haiku is not sufficient to reason or implement,
+///            so it is never a result of this function: it only classifies
+///            and reads, outside the coordinator's assignment.
 ///   Rule:    systemic × {explore,analyze} → opus;
-///            * × {analyze,implement} → sonnet (unless systemic);
-///            * × {explore,document} on atomic/compound → haiku;
-///            * × design → fable, at every tier.
+///            * × design → opus, at every tier;
+///            everything else → sonnet, the default.
 ///   Example: "explain how this codebase handles state" =
 ///            research × explore × systemic → opus.
 ///
@@ -262,17 +263,14 @@ AgentModel routeModel(
       (_, IntentClass.analyze, ComplexityTier.systemic) =>
         AgentModel.opus,
 
-      // Any analysis or implementation at compound/atomic tier → balanced.
-      // Compound exploration still benefits from balanced reasoning.
+      // Everything else reasons or generates, so it is sonnet, the default.
+      // Atomic exploration and documentation are included: haiku never
+      // reasons or implements.
       (_, IntentClass.analyze,   _) ||
       (_, IntentClass.implement, _) ||
-      (_, IntentClass.explore,   ComplexityTier.compound) =>
+      (_, IntentClass.explore,   _) ||
+      (_, IntentClass.document,  _) =>
         AgentModel.sonnet,
-
-      // Atomic exploration and all documentation → fast lookup tier.
-      (_, IntentClass.explore,  _) ||
-      (_, IntentClass.document, _) =>
-        AgentModel.haiku,
     };
 
 /// Resolves an [AgentModel] from a categorize step's raw XML output by

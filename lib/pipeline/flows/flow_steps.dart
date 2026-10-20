@@ -10,7 +10,7 @@
 //   [plan]       sonnet — generates a dependency-ordered implementation plan;
 //                         emits <PLAN> (ApprovalGate → construct) or
 //                         <QUESTION> (QuestionBranch → clarify)
-//   [clarify]    haiku  — resolves questions from plan against input context;
+//   [clarify]    sonnet — resolves questions from plan against input context;
 //                         emits <ANSWER> (FeedBackTo → plan) or
 //                         <UNKNOWN> (EscalateUser → plan)
 //   [construct]  sonnet — writes the full handoff structure from the approved
@@ -27,6 +27,7 @@ import 'package:path/path.dart' as p;
 
 import '../agent_model.dart';
 import '../agent_step.dart';
+import '../step_role.dart';
 import '../agents/categorization.dart';
 import '../pipeline_context.dart';
 import '../route_tag.dart';
@@ -81,6 +82,7 @@ abstract final class FlowSteps {
   static final AgentStep categorize = AgentStep(
     id:    'categorize',
     label: 'Categorizing intent',
+    role: StepRole.classification,
     model: AgentModel.haiku,
     systemPrompt: _categorizeSystem,
     buildPrompt: (PipelineContext ctx) =>
@@ -88,10 +90,9 @@ abstract final class FlowSteps {
     routes: const {},
   );
 
-  /// Sonnet is the fallback when the categorize step's output is
-  /// missing or ambiguous — per the audit constraint "degrade to
-  /// sonnet on ambiguity, the cost win comes from confident haiku
-  /// routing on atomic tasks."
+  /// Sonnet is the default: the fallback when the categorize step's output
+  /// is missing or ambiguous. Haiku never reasons, so it is never the
+  /// fallback.
   static const AgentModel _planFallbackModel = AgentModel.sonnet;
 
   /// Reads `<CATEGORY>` / `<INTENT>` / `<COMPLEXITY>` from the
@@ -107,6 +108,7 @@ abstract final class FlowSteps {
   static final AgentStep plan = AgentStep(
     id:    'plan',
     label: 'Generating plan',
+    role: StepRole.reasoning,
     model: _planFallbackModel,
     modelSelector: _planModelSelector,
     systemPrompt: _planSystem,
@@ -133,7 +135,8 @@ abstract final class FlowSteps {
   static final AgentStep clarify = AgentStep(
     id:    'clarify',
     label: 'Resolving question',
-    model: AgentModel.haiku,
+    role: StepRole.reasoning,
+    model: AgentModel.sonnet,
     systemPrompt: _clarifySystem,
     buildPrompt: (PipelineContext ctx) =>
         'Question: ${ctx[PipelineSlot.question] ?? ''}\n\nOriginal input: ${ctx.bug}',
@@ -155,6 +158,7 @@ abstract final class FlowSteps {
   static final AgentStep construct = AgentStep(
     id:    'construct',
     label: 'Constructing handoff',
+    role: StepRole.implementation,
     model: _planFallbackModel,
     // Reuses the same modelSelector as [plan] — same categorize slot,
     // same τ classification, same reasoning: a gui × design task should

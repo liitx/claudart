@@ -187,4 +187,30 @@ void main() {
       );
     });
   });
+
+  group('FailureType.stepModelNotPermittedForRole', () {
+    test('rolls up to pipeline and classifies as a config fault', () {
+      expect(
+        FailureType.stepModelNotPermittedForRole.errorType,
+        ErrorType.pipeline,
+      );
+      expect(
+        FailureType.stepModelNotPermittedForRole.effectiveFaultClass,
+        FaultClass.configFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(
+        FailureType.stepModelNotPermittedForRole.label,
+        'Step model not permitted for its role',
+      );
+      expect(
+        FailureType.stepModelNotPermittedForRole.suggestedAction,
+        'A step was wired to a model its role does not permit (haiku may '
+        'only classify and read). Fix the step or the routing so '
+        'reasoning and implementation run on sonnet or opus.',
+      );
+    });
+  });
 }

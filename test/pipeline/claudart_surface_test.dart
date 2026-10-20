@@ -20,6 +20,7 @@
 
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/agent_step.dart';
+import 'package:claudart/pipeline/step_role.dart';
 import 'package:claudart/pipeline/claudart_surface.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -59,6 +60,7 @@ PipelineContext _ctx() => const PipelineContext(
 AgentStep _echoStep({required String id}) => AgentStep(
       id: id,
       label: 'Step $id',
+      role: StepRole.classification,
       model: AgentModel.haiku,
       systemPrompt: 'sys',
       buildPrompt: (_) => 'msg',

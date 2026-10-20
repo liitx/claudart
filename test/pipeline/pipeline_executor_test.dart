@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/agent_step.dart';
+import 'package:claudart/pipeline/step_role.dart';
 import 'package:claudart/pipeline/debug_mode.dart' show StepDebugTrace;
 import 'package:claudart/pipeline/model_observation.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
@@ -48,6 +49,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -80,6 +82,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -93,6 +96,7 @@ void main() {
       final decoy = AgentStep(
         id: 'decoy',
         label: 'Decoy',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -128,6 +132,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -163,6 +168,7 @@ void main() {
     final step = AgentStep(
       id: 'a',
       label: 'Step A',
+      role: StepRole.classification,
       model: AgentModel.haiku,
       systemPrompt: 'sys',
       buildPrompt: (_) => 'msg',
@@ -261,6 +267,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -300,6 +307,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -335,6 +343,7 @@ void main() {
     final step = AgentStep(
       id: 'a',
       label: 'Step A',
+      role: StepRole.classification,
       model: AgentModel.haiku,
       systemPrompt: 'sys',
       buildPrompt: (_) => 'msg',
@@ -399,6 +408,7 @@ void main() {
       final plan = AgentStep(
         id:    'plan',
         label: 'Plan',
+        role: StepRole.classification,
         model: AgentModel.sonnet,
         systemPrompt: 'sys',
         buildPrompt:  (_) => 'msg',
@@ -410,6 +420,7 @@ void main() {
       final clarify = AgentStep(
         id:    'clarify',
         label: 'Clarify',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt:  (_) => 'msg',
@@ -464,6 +475,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -493,6 +505,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -521,6 +534,7 @@ void main() {
     AgentStep rewritingStep() => AgentStep(
           id: 'a',
           label: 'Step A',
+          role: StepRole.classification,
           model: AgentModel.haiku,
           systemPrompt: 'sys',
           buildPrompt: (_) => 'msg',
@@ -566,6 +580,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',

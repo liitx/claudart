@@ -1,6 +1,6 @@
 // teardown_steps.dart — AgentStep for the teardown analyzer pipeline
 //
-// One step: analyzer (haiku) reads the completed handoff and extracts
+// One step: analyzer (sonnet) reads the completed handoff and extracts
 // structured teardown metadata as XML tags.
 //
 // On PipelineCompleted, the caller parses the XML tags and writes to
@@ -8,6 +8,7 @@
 
 import '../agent_model.dart';
 import '../agent_step.dart';
+import '../step_role.dart';
 import '../pipeline_context.dart';
 
 abstract final class TeardownSteps {
@@ -32,8 +33,9 @@ abstract final class TeardownSteps {
 
   static const AgentStep analyzer = AgentStep(
     id:           slotKey,
-    label:        'Analyzing session (haiku)…',
-    model:        AgentModel.haiku,
+    label:        'Analyzing session…',
+    role:        StepRole.reasoning,
+    model:        AgentModel.sonnet,
     systemPrompt: _analyzerSystem,
     buildPrompt:  _buildPrompt,
     routes:       {},
