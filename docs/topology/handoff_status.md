@@ -50,12 +50,12 @@ Files in `lib/` that mention the event, other than the table itself. "— no cod
 | event | passed by |
 |---|---|
 | setup | lib/commands/setup.dart |
-| saveUnconfirmed | — no code caller |
-| saveConfirmedExploring | — no code caller |
+| saveUnconfirmed | lib/commands/save.dart |
+| saveConfirmedExploring | lib/commands/save.dart |
 | saveConfirmedReady | lib/commands/suggest.dart |
-| debugStarted | — no code caller |
-| debugBlocked | — no code caller |
-| suggestResumed | — no code caller |
+| debugStarted | lib/commands/debug.dart |
+| debugBlocked | lib/commands/debug.dart |
+| suggestResumed | lib/commands/suggest.dart |
 | fixApplied | lib/commands/debug.dart |
 | rotated | lib/commands/rotate.dart |
 | rotatedEmpty | lib/commands/rotate.dart |

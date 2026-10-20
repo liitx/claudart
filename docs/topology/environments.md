@@ -17,10 +17,10 @@ Where each command can be started, whether it takes `--headless`, whether `--pro
 | setup | cliSubcommand, launcherMenu | false | true | setup |
 | status | cliSubcommand | false | true | — |
 | teardown | cliSubcommand | true | true | tornDown, reminderSaved |
-| suggest | cliSubcommand, chatShell | false | true | saveConfirmedReady |
-| debug | cliSubcommand | false | true | fixApplied |
+| suggest | cliSubcommand, chatShell | false | true | saveConfirmedReady, suggestResumed |
+| debug | cliSubcommand | false | true | debugStarted, debugBlocked, fixApplied |
 | flow | cliSubcommand, chatShell | false | true | — |
-| save | cliSubcommand | false | true | — |
+| save | cliSubcommand | false | true | saveUnconfirmed, saveConfirmedExploring |
 | rotate | cliSubcommand | true | true | rotated, rotatedEmpty |
 | kill | cliSubcommand, launcherMenu | true | true | killed |
 | resume | cliSubcommand | false | true | — |

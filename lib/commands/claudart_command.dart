@@ -1,3 +1,4 @@
+
 // claudart_command.dart — typed enum of every top-level CLI subcommand
 //
 // Single source of truth for bin/claudart.dart's dispatch. `version` is
@@ -120,8 +121,19 @@ enum ClaudartCommand {
   /// claudart_command_test.dart, which scans lib/ for each event.
   Set<HandoffEvent> get handoffEvents => switch (this) {
         setup => {HandoffEvent.setup},
-        suggest => {HandoffEvent.saveConfirmedReady},
-        debug => {HandoffEvent.fixApplied},
+        suggest => {
+            HandoffEvent.saveConfirmedReady,
+            HandoffEvent.suggestResumed,
+          },
+        debug => {
+            HandoffEvent.debugStarted,
+            HandoffEvent.debugBlocked,
+            HandoffEvent.fixApplied,
+          },
+        save => {
+            HandoffEvent.saveUnconfirmed,
+            HandoffEvent.saveConfirmedExploring,
+          },
         rotate => {HandoffEvent.rotated, HandoffEvent.rotatedEmpty},
         teardown => {HandoffEvent.tornDown, HandoffEvent.reminderSaved},
         kill => {HandoffEvent.killed},
@@ -133,7 +145,6 @@ enum ClaudartCommand {
         unlink ||
         status ||
         flow ||
-        save ||
         resume ||
         confirmPending ||
         preflight ||

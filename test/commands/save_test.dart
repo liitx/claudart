@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
+import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/save.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
+import 'package:claudart/md_io.dart' show readHandoffStatus;
 import 'package:claudart/paths.dart';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
+import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
@@ -290,6 +295,94 @@ void main() {
 
     test('a live handoff is reported with its own status', () async {
       expect(await report(_io()), contains('Status : ready-for-debug'));
+    });
+  });
+
+  // A save is a checkpoint. Where the table has a move for it, the save also
+  // moves the handoff: unconfirmed while the root cause is open, confirmed once
+  // it is. Where the table has no move, the save changes nothing.
+  group('save — handoff events', () {
+    final investigatingWithRootCause =
+        _fullHandoff.replaceFirst('ready-for-debug', 'suggest-investigating');
+    final debuggingWithoutRootCause = _unconfirmedHandoff.replaceFirst(
+      'suggest-investigating',
+      'debug-in-progress',
+    );
+
+    Future<MemoryFileIO> savedFrom(String handoff) async {
+      final io = _io(handoff: handoff);
+      await runZoned(
+        () => runSave(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+        ),
+        zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+      );
+      return io;
+    }
+
+    HandoffStatus statusOf(MemoryFileIO io) =>
+        readHandoffStatus(io.read(handoffPathFor(_workspace)));
+
+    Map<String, String> move(
+      HandoffStatus from,
+      HandoffEvent event,
+      HandoffStatus to,
+    ) =>
+        {
+          'command': ClaudartCommand.save.name,
+          'from': from.name,
+          'event': event.name,
+          'to': to.name,
+        };
+
+    test('an open root cause, investigating: saveUnconfirmed', () async {
+      final io = await savedFrom(_unconfirmedHandoff);
+      expect(statusOf(io), HandoffStatus.suggestInvestigating);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.suggestInvestigating,
+          HandoffEvent.saveUnconfirmed,
+          HandoffStatus.suggestInvestigating,
+        ),
+      ]);
+    });
+
+    test('a confirmed root cause, investigating: saveConfirmedExploring',
+        () async {
+      final io = await savedFrom(investigatingWithRootCause);
+      expect(statusOf(io), HandoffStatus.readyForSuggest);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.suggestInvestigating,
+          HandoffEvent.saveConfirmedExploring,
+          HandoffStatus.readyForSuggest,
+        ),
+      ]);
+    });
+
+    test('an open root cause, debugging: saveUnconfirmed', () async {
+      final io = await savedFrom(debuggingWithoutRootCause);
+      expect(statusOf(io), HandoffStatus.debugInProgress);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.debugInProgress,
+          HandoffEvent.saveUnconfirmed,
+          HandoffStatus.debugInProgress,
+        ),
+      ]);
+    });
+
+    test('where the table has no move the save changes nothing', () async {
+      final io = await savedFrom(_fullHandoff);
+      expect(statusOf(io), HandoffStatus.readyForDebug);
+      expect(loggedMoves(io, _workspace), isEmpty);
+    });
+
+    test('a blank handoff logs no move', () async {
+      final io = await savedFrom(blankHandoff);
+      expect(loggedMoves(io, _workspace), isEmpty);
     });
   });
 

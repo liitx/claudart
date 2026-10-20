@@ -44,35 +44,145 @@ enum HandoffStatus {
 
   /// The status after [event] happens in this status, or null when
   /// docs/design.md's delta table has no such move (the move is rejected).
-  HandoffStatus? after(HandoffEvent event) => switch ((event, this)) {
-        (HandoffEvent.setup, noHandoff) ||
-        (HandoffEvent.saveUnconfirmed, suggestInvestigating) ||
-        (HandoffEvent.suggestResumed, needsSuggest) ||
-        (HandoffEvent.rotated,
-              suggestInvestigating || readyForDebug || debugInProgress) =>
-          suggestInvestigating,
-        (HandoffEvent.saveConfirmedExploring, suggestInvestigating) =>
-          readyForSuggest,
-        (HandoffEvent.saveConfirmedReady,
-              suggestInvestigating ||
-              readyForSuggest ||
-              readyForDebug ||
-              debugInProgress ||
-              needsSuggest) =>
-          readyForDebug,
-        (HandoffEvent.saveUnconfirmed, debugInProgress) ||
-        (HandoffEvent.debugStarted, readyForDebug) =>
-          debugInProgress,
-        (HandoffEvent.debugBlocked, debugInProgress) => needsSuggest,
-        (HandoffEvent.fixApplied, readyForDebug || debugInProgress) =>
-          debugComplete,
-        (HandoffEvent.tornDown, debugComplete) ||
-        (HandoffEvent.rotatedEmpty,
-              suggestInvestigating || readyForDebug || debugInProgress) ||
-        (HandoffEvent.reminderSaved, _) ||
-        (HandoffEvent.killed, _) when isPersisted =>
-          noHandoff,
-        _ => null,
+  /// Exhaustive over event and status: every illegal cell is an explicit null.
+  HandoffStatus? after(HandoffEvent event) => switch (event) {
+        HandoffEvent.setup => switch (this) {
+            noHandoff => suggestInvestigating,
+            suggestInvestigating ||
+            readyForSuggest ||
+            readyForDebug ||
+            debugInProgress ||
+            debugComplete ||
+            needsSuggest ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.saveUnconfirmed => switch (this) {
+            suggestInvestigating => suggestInvestigating,
+            debugInProgress => debugInProgress,
+            readyForSuggest ||
+            readyForDebug ||
+            debugComplete ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.saveConfirmedExploring => switch (this) {
+            suggestInvestigating => readyForSuggest,
+            readyForSuggest ||
+            readyForDebug ||
+            debugInProgress ||
+            debugComplete ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.saveConfirmedReady => switch (this) {
+            suggestInvestigating ||
+            readyForSuggest ||
+            readyForDebug ||
+            debugInProgress ||
+            needsSuggest =>
+              readyForDebug,
+            debugComplete ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.debugStarted => switch (this) {
+            readyForDebug => debugInProgress,
+            suggestInvestigating ||
+            readyForSuggest ||
+            debugInProgress ||
+            debugComplete ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.debugBlocked => switch (this) {
+            debugInProgress => needsSuggest,
+            suggestInvestigating ||
+            readyForSuggest ||
+            readyForDebug ||
+            debugComplete ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.suggestResumed => switch (this) {
+            needsSuggest => suggestInvestigating,
+            suggestInvestigating ||
+            readyForSuggest ||
+            readyForDebug ||
+            debugInProgress ||
+            debugComplete ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.fixApplied => switch (this) {
+            readyForDebug ||
+            debugInProgress =>
+              debugComplete,
+            suggestInvestigating ||
+            readyForSuggest ||
+            debugComplete ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.rotated => switch (this) {
+            suggestInvestigating ||
+            readyForDebug ||
+            debugInProgress =>
+              suggestInvestigating,
+            readyForSuggest ||
+            debugComplete ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.rotatedEmpty => switch (this) {
+            suggestInvestigating ||
+            readyForDebug ||
+            debugInProgress =>
+              noHandoff,
+            readyForSuggest ||
+            debugComplete ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.tornDown => switch (this) {
+            debugComplete => noHandoff,
+            suggestInvestigating ||
+            readyForSuggest ||
+            readyForDebug ||
+            debugInProgress ||
+            needsSuggest ||
+            noHandoff ||
+            unknown =>
+              null,
+          },
+        HandoffEvent.reminderSaved || HandoffEvent.killed => switch (this) {
+            suggestInvestigating ||
+            readyForSuggest ||
+            readyForDebug ||
+            debugInProgress ||
+            debugComplete ||
+            needsSuggest =>
+              noHandoff,
+            noHandoff ||
+            unknown =>
+              null,
+          },
       };
 
   /// True when `/debug` may start without an override: the root cause is

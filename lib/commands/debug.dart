@@ -96,6 +96,49 @@ Future<void> runDebug({
     exit_(1);
   }
 
+  // ── Session state moves ─────────────────────────────────────────────────────
+  //
+  // Debug begins (debugStarted) before any model call; a step that fails
+  // after that blocks the session (debugBlocked) and rethrows, so the failure
+  // is never silent and the handoff never stays at ready-for-debug.
+
+  final logger = SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: workspace,
+  );
+
+  String applyDebugEvent(String text, HandoffEvent event) => applyHandoffEvent(
+        text,
+        event,
+        onTransition: (transition) => logger.logTransition(
+          command: ClaudartCommand.debug.name,
+          transition: transition,
+        ),
+      );
+
+  void blockDebug() => fileIO.write(
+        handoffFile,
+        applyDebugEvent(fileIO.read(handoffFile), HandoffEvent.debugBlocked),
+      );
+
+  Future<T> blockOnFailure<T>(Future<T> Function() step) async {
+    try {
+      return await step();
+    } catch (_) {
+      blockDebug();
+      rethrow;
+    }
+  }
+
+  // A run resuming from debugInProgress has no debugStarted move to make.
+  if (status.after(HandoffEvent.debugStarted) != null) {
+    fileIO.write(
+      handoffFile,
+      applyDebugEvent(handoff, HandoffEvent.debugStarted),
+    );
+  }
+
   // ── Header ──────────────────────────────────────────────────────────────────
 
   print(render.header('CLAUDART DEBUG'));
@@ -132,45 +175,56 @@ Future<void> runDebug({
     files:       files,
   );
 
-  ctx = await exec.runFuture(
-    steps:        [FlowSteps.categorize],
-    ctx:          ctx,
-    displayStep:  1,
-    displayTotal: 4,
+  ctx = await blockOnFailure(
+    () => exec.runFuture(
+      steps:        [FlowSteps.categorize],
+      ctx:          ctx,
+      displayStep:  1,
+      displayTotal: 4,
+    ),
   );
 
   // ── Phase 1: reader ─────────────────────────────────────────────────────────
 
-  ctx = await exec.runFuture(
-    steps:        [DebugSteps.reader(files.length)],
-    ctx:          ctx,
-    displayStep:  2,
-    displayTotal: 4,
+  ctx = await blockOnFailure(
+    () => exec.runFuture(
+      steps:        [DebugSteps.reader(files.length)],
+      ctx:          ctx,
+      displayStep:  2,
+      displayTotal: 4,
+    ),
   );
 
   if (ctx.readerOut.isEmpty) {
+    blockDebug();
     print('     Is claude CLI installed and authenticated?');
     exit_(1);
   }
 
   // ── Phase 2: implementer ─────────────────────────────────────────────────────
 
-  ctx = await exec.runFuture(
-    steps:        [DebugSteps.implementer],
-    ctx:          ctx,
-    displayStep:  3,
-    displayTotal: 4,
+  ctx = await blockOnFailure(
+    () => exec.runFuture(
+      steps:        [DebugSteps.implementer],
+      ctx:          ctx,
+      displayStep:  3,
+      displayTotal: 4,
+    ),
   );
 
   if (ctx.implementerOut.isEmpty) {
+    blockDebug();
     exit_(1);
   }
 
   // ── Review ───────────────────────────────────────────────────────────────────
 
   final changes  = tagOr(ctx.implementerOut, WireTag.changes.tagName);
-  // Throws EditPlanException on a malformed plan, before any state change.
-  final editTags = parseEditFiles(ctx.implementerOut);
+  // Throws EditPlanException on a malformed plan, before any fix is applied;
+  // the failure blocks the session.
+  final editTags = await blockOnFailure(
+    () async => parseEditFiles(ctx.implementerOut),
+  );
 
   print('\n  ${ansi.dim}──────────────────────────────────────${ansi.reset}');
   print('  ${ansi.dim}  Total  ${ctx.usage.format()}${ansi.reset}\n');
@@ -204,30 +258,22 @@ Future<void> runDebug({
 
   stdout.write('\n  ${ansi.cyan}·${ansi.reset}  ${ansi.dim}[4/4]${ansi.reset}  Writing files…');
 
-  // Write, then verify every file; a failure restores the files and throws
-  // before any state event is applied.
-  applyEditFiles(
-    projectRoot:      projectRoot,
-    planned:          editTags,
-    write:            writeFile,
-    dartFileAnalyzer: dartFileAnalyzer ?? dartAnalyzeClean,
-  );
+  // Write, then verify every file; a failure restores the files, blocks the
+  // session and throws before fixApplied is applied.
+  await blockOnFailure(() async {
+    applyEditFiles(
+      projectRoot:      projectRoot,
+      planned:          editTags,
+      write:            writeFile,
+      dartFileAnalyzer: dartFileAnalyzer ?? dartAnalyzeClean,
+    );
+  });
   final written = editTags.length;
 
-  var updated = handoff;
-  updated = applyHandoffEvent(
-    updated,
-    HandoffEvent.fixApplied,
-    onTransition: (transition) => SessionLogger(
-      io: fileIO,
-      sensitivityMode: entry.sensitivityMode,
-      workspacePath: workspace,
-    ).logTransition(
-      command: ClaudartCommand.debug.name,
-      transition: transition,
-    ),
+  fileIO.write(
+    handoffFile,
+    applyDebugEvent(fileIO.read(handoffFile), HandoffEvent.fixApplied),
   );
-  fileIO.write(handoffFile, updated);
 
   stdout.write(
     '\x1B[2K\r  ${ansi.green}✓${ansi.reset}  ${ansi.dim}[4/4]${ansi.reset}'

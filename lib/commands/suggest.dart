@@ -1,3 +1,4 @@
+
 import 'dart:io';
 import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
@@ -72,7 +73,7 @@ Future<void> runSuggest({
     exit_(1);
   }
 
-  final handoff = fileIO.read(handoffFile);
+  var handoff = fileIO.read(handoffFile);
   final status  = readHandoffStatus(handoff);
 
   // Fail before spending any model call when the state machine would reject
@@ -111,6 +112,24 @@ Future<void> runSuggest({
       '  Add file paths to the handoff via `claudart setup`, then re-run.\n',
     );
     exit_(1);
+  }
+
+  // Picking up a blocked handoff (needs-suggest) moves it back to
+  // investigating before any model call.
+  if (status.after(HandoffEvent.suggestResumed) != null) {
+    handoff = applyHandoffEvent(
+      handoff,
+      HandoffEvent.suggestResumed,
+      onTransition: (transition) => SessionLogger(
+        io: fileIO,
+        sensitivityMode: entry.sensitivityMode,
+        workspacePath: workspace,
+      ).logTransition(
+        command: ClaudartCommand.suggest.name,
+        transition: transition,
+      ),
+    );
+    fileIO.write(handoffFile, handoff);
   }
 
   // ── Header ─────────────────────────────────────────────────────────────────
@@ -301,4 +320,3 @@ void _printSection(String title, String body) {
   }
   print('');
 }
-

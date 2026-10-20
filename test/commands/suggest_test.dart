@@ -266,6 +266,8 @@ void main() {
         projectRootOverride: _projectRoot,
         exitFn: _throwExit,
         executor: _executorWithAnalysis(),
+        confirmFn: unscriptedConfirm,
+        promptFn: unscriptedPrompt,
         pickFn: (_) => 0,
       );
       expect(loggedMoves(io, _workspace), [
@@ -293,6 +295,93 @@ void main() {
         throwsA(isA<_ExitException>()),
       );
       expect(_statusOf(io), HandoffStatus.suggestInvestigating);
+    });
+  });
+
+  // Debug hands a blocked session back as needs-suggest. Picking it up moves it
+  // back to investigating (suggestResumed) before any model call, then the
+  // approval locks it as usual.
+  group('runSuggest — resuming from needs-suggest', () {
+    String blockedHandoff() =>
+        withHandoffStatus(_handoffWithScope, HandoffStatus.needsSuggest);
+
+    Map<String, String> move(
+      HandoffStatus from,
+      HandoffEvent event,
+      HandoffStatus to,
+    ) =>
+        {
+          'command': ClaudartCommand.suggest.name,
+          'from': from.name,
+          'event': event.name,
+          'to': to.name,
+        };
+
+    test('logs suggestResumed, then saveConfirmedReady on approval', () async {
+      final io = _io(handoff: blockedHandoff());
+      await runSuggest(
+        io: io,
+        projectRootOverride: _projectRoot,
+        exitFn: _throwExit,
+        executor: _executorWithAnalysis(),
+        confirmFn: unscriptedConfirm,
+        promptFn: unscriptedPrompt,
+        pickFn: (_) => 0,
+      );
+      expect(_statusOf(io), HandoffStatus.readyForDebug);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.needsSuggest,
+          HandoffEvent.suggestResumed,
+          HandoffStatus.suggestInvestigating,
+        ),
+        move(
+          HandoffStatus.suggestInvestigating,
+          HandoffEvent.saveConfirmedReady,
+          HandoffStatus.readyForDebug,
+        ),
+      ]);
+    });
+
+    test('the resume is kept when the run exits without approving', () async {
+      final io = _io(handoff: blockedHandoff());
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithAnalysis(),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: (_) => 2,
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(_statusOf(io), HandoffStatus.suggestInvestigating);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.needsSuggest,
+          HandoffEvent.suggestResumed,
+          HandoffStatus.suggestInvestigating,
+        ),
+      ]);
+    });
+
+    test('a session that is not blocked logs no suggestResumed', () async {
+      final io = _io();
+      await runSuggest(
+        io: io,
+        projectRootOverride: _projectRoot,
+        exitFn: _throwExit,
+        executor: _executorWithAnalysis(),
+        confirmFn: unscriptedConfirm,
+        promptFn: unscriptedPrompt,
+        pickFn: (_) => 0,
+      );
+      expect(
+        loggedMoves(io, _workspace).map((m) => m['event']),
+        isNot(contains(HandoffEvent.suggestResumed.name)),
+      );
     });
   });
 

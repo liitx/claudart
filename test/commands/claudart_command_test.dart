@@ -110,8 +110,19 @@ void main() {
   group('handoffEvents', () {
     const expected = <ClaudartCommand, Set<HandoffEvent>>{
       ClaudartCommand.setup: {HandoffEvent.setup},
-      ClaudartCommand.suggest: {HandoffEvent.saveConfirmedReady},
-      ClaudartCommand.debug: {HandoffEvent.fixApplied},
+      ClaudartCommand.suggest: {
+        HandoffEvent.saveConfirmedReady,
+        HandoffEvent.suggestResumed,
+      },
+      ClaudartCommand.debug: {
+        HandoffEvent.debugStarted,
+        HandoffEvent.debugBlocked,
+        HandoffEvent.fixApplied,
+      },
+      ClaudartCommand.save: {
+        HandoffEvent.saveUnconfirmed,
+        HandoffEvent.saveConfirmedExploring,
+      },
       ClaudartCommand.rotate: {
         HandoffEvent.rotated,
         HandoffEvent.rotatedEmpty,

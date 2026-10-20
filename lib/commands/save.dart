@@ -1,16 +1,21 @@
+
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
+import '../logging/logger.dart';
+import '../md_io.dart' show applyHandoffEvent;
 import '../paths.dart';
 import '../registry.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../sensitivity/token_map.dart';
 import '../templates/handoff_template.dart' show stampHandoffUpdated;
+import '../session/handoff_event.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
 import '../ui/render.dart' as render;
+import 'claudart_command.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }
@@ -60,6 +65,26 @@ Future<SkillsUpdateResult> runSave({
   var handoff = fileIO.read(handoffFile);
   final state = SessionState.parse(handoff);
 
+  // 2b — Apply the save event: root cause confirmed or not. A save from a
+  // status with no such move (or no session) is a plain checkpoint.
+  final saveEvent = _isBlank(state.rootCause)
+      ? HandoffEvent.saveUnconfirmed
+      : HandoffEvent.saveConfirmedExploring;
+  if (state.effectiveStatus.after(saveEvent) != null) {
+    handoff = applyHandoffEvent(
+      handoff,
+      saveEvent,
+      onTransition: (transition) => SessionLogger(
+        io: fileIO,
+        sensitivityMode: entry.sensitivityMode,
+        workspacePath: workspace,
+      ).logTransition(
+        command: ClaudartCommand.save.name,
+        transition: transition,
+      ),
+    );
+  }
+
   // 3 — Stamp updated timestamp and persist.
   handoff = stampHandoffUpdated(handoff);
   fileIO.write(handoffFile, handoff);
@@ -85,7 +110,7 @@ Future<SkillsUpdateResult> runSave({
 
   // 6 — Report.
   sw.stop();
-  _printReport(entry.name, state, gitCtx?.branch, checkpointFile, skillsResult, sw.elapsedMilliseconds);
+  _printReport(entry.name, SessionState.parse(handoff), gitCtx?.branch, checkpointFile, skillsResult, sw.elapsedMilliseconds);
 
   return skillsResult;
 }

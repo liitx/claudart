@@ -10,6 +10,7 @@ import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/paths.dart';
+import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
@@ -138,6 +139,18 @@ PipelineExecutor _executorWithPlan({void Function()? onCall}) =>
       },
     );
 
+Map<String, String> _move(
+  HandoffStatus from,
+  HandoffEvent event,
+  HandoffStatus to,
+) =>
+    {
+      'command': ClaudartCommand.debug.name,
+      'from': from.name,
+      'event': event.name,
+      'to': to.name,
+    };
+
 void main() {
   group('runDebug — validation', () {
     test('exits 1 when project is not registered', () async {
@@ -195,7 +208,7 @@ void main() {
       );
     });
 
-    test('handoff is left untouched — no partial write on reader failure', () async {
+    test('a failed step blocks the session: needsSuggest', () async {
       final io = _io();
       try {
         await runDebug(
@@ -208,7 +221,86 @@ void main() {
       } on _ExitException {
         // expected
       }
-      expect(io.read(handoffPathFor(_workspace)), equals(_handoffReadyWithScope));
+      expect(_statusOf(io), HandoffStatus.needsSuggest);
+      expect(loggedMoves(io, _workspace), [
+        _move(
+          HandoffStatus.readyForDebug,
+          HandoffEvent.debugStarted,
+          HandoffStatus.debugInProgress,
+        ),
+        _move(
+          HandoffStatus.debugInProgress,
+          HandoffEvent.debugBlocked,
+          HandoffStatus.needsSuggest,
+        ),
+      ]);
+    });
+
+    test('tells the owner to check the CLI when the reader gives nothing',
+        () async {
+      final output = <String>[];
+      try {
+        await runZoned(
+          () => runDebug(
+            io: _io(),
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            pickFn: unscriptedPick,
+            executor: _executorWithNoOutput(),
+          ),
+          zoneSpecification: ZoneSpecification(
+            print: (_, __, ___, line) => output.add(line),
+          ),
+        );
+      } on _ExitException {
+        // expected
+      }
+      expect(
+        output.join('\n'),
+        contains('Is claude CLI installed and authenticated?'),
+      );
+    });
+
+    test('an implementer that produces nothing blocks the session', () async {
+      final io = _io();
+      // Haiku classifies and reads, so it answers; the implementer (sonnet or
+      // opus) answers with nothing.
+      final executor = PipelineExecutor(
+        runner: ({
+          required model,
+          required systemPrompt,
+          required message,
+          required workingDir,
+          StepMode mode = StepMode.project,
+        }) async =>
+            StepResult(
+              text: model == AgentModel.haiku ? 'file contents' : '',
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            ),
+      );
+      await expectLater(
+        runDebug(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          pickFn: unscriptedPick,
+          executor: executor,
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(_statusOf(io), HandoffStatus.needsSuggest);
+      expect(loggedMoves(io, _workspace), [
+        _move(
+          HandoffStatus.readyForDebug,
+          HandoffEvent.debugStarted,
+          HandoffStatus.debugInProgress,
+        ),
+        _move(
+          HandoffStatus.debugInProgress,
+          HandoffEvent.debugBlocked,
+          HandoffStatus.needsSuggest,
+        ),
+      ]);
     });
 
     test('prints which project it resolved before doing anything', () async {
@@ -287,7 +379,7 @@ void main() {
       expect(_statusOf(io), HandoffStatus.debugComplete);
     });
 
-    test('logs the transition it applied: command, from, event, to', () async {
+    test('logs the transitions it applied: command, from, event, to', () async {
       final io = _io();
       await runDebug(
         io: io,
@@ -297,16 +389,20 @@ void main() {
         pickFn: (_) => 0,
       );
       expect(loggedMoves(io, _workspace), [
-        {
-          'command': ClaudartCommand.debug.name,
-          'from': HandoffStatus.readyForDebug.name,
-          'event': HandoffEvent.fixApplied.name,
-          'to': HandoffStatus.debugComplete.name,
-        },
+        _move(
+          HandoffStatus.readyForDebug,
+          HandoffEvent.debugStarted,
+          HandoffStatus.debugInProgress,
+        ),
+        _move(
+          HandoffStatus.debugInProgress,
+          HandoffEvent.fixApplied,
+          HandoffStatus.debugComplete,
+        ),
       ]);
     });
 
-    test('choosing exit leaves the status readyForDebug', () async {
+    test('choosing exit leaves the status debugInProgress', () async {
       final io = _io();
       await expectLater(
         runDebug(
@@ -318,7 +414,7 @@ void main() {
         ),
         throwsA(isA<_ExitException>()),
       );
-      expect(_statusOf(io), HandoffStatus.readyForDebug);
+      expect(_statusOf(io), HandoffStatus.debugInProgress);
     });
   });
 
@@ -361,6 +457,18 @@ void main() {
       expect(await reviewOutput(), contains(summary));
     });
 
+    // The later divider is 44 wide and the files underline 13, so a line of
+    // exactly 38 is the one above the total.
+    test('prints the usage total under a divider', () async {
+      final output = await reviewOutput();
+      final lines = [
+        for (final line in output.split('\n'))
+          line.replaceAll(RegExp('\x1B\\[[0-9;]*m'), '').trim(),
+      ];
+      expect(lines, contains('─' * 38));
+      expect(output, contains('Total'));
+    });
+
     test('labels a file that does not exist NEW', () async {
       final output = await reviewOutput();
       expect(output, contains('NEW'));
@@ -378,13 +486,14 @@ void main() {
     });
   });
 
-  // A malformed plan blocks the apply path: the typed failure surfaces before
-  // any state event, and the plan is parsed before any of the review prints.
+  // A malformed plan blocks the apply path: the typed failure surfaces, the
+  // session is blocked (debugBlocked) before any fix event, and the plan is
+  // parsed before any of the review prints.
   group('runDebug — malformed plan', () {
     final truncatedPlan =
         '${WireTag.editFile.openPrefix} path="lib/foo.dart">\ncut off';
 
-    test('unterminated block: editPlanMalformed, status unchanged', () async {
+    test('an unterminated block blocks the session', () async {
       final io = _io();
       await expectLater(
         runDebug(
@@ -402,8 +511,19 @@ void main() {
           ),
         ),
       );
-      expect(_statusOf(io), HandoffStatus.readyForDebug);
-      expect(loggedMoves(io, _workspace), isEmpty);
+      expect(_statusOf(io), HandoffStatus.needsSuggest);
+      expect(loggedMoves(io, _workspace), [
+        _move(
+          HandoffStatus.readyForDebug,
+          HandoffEvent.debugStarted,
+          HandoffStatus.debugInProgress,
+        ),
+        _move(
+          HandoffStatus.debugInProgress,
+          HandoffEvent.debugBlocked,
+          HandoffStatus.needsSuggest,
+        ),
+      ]);
     });
 
     test('prints none of the review', () async {
@@ -424,6 +544,43 @@ void main() {
         throwsA(isA<EditPlanException>()),
       );
       expect(output.join('\n'), isNot(contains('──────')));
+    });
+  });
+
+  // A plan that parses but fails verification restores the files, blocks the
+  // session and never records fixApplied.
+  group('runDebug — failed verification', () {
+    late Directory root;
+    setUp(() => root = Directory.systemTemp.createTempSync('claudart_verify_'));
+    tearDown(() => root.deleteSync(recursive: true));
+
+    test('restores the files and blocks the session', () async {
+      final io = _io(projectRoot: root.path);
+      final plan = '${WireTag.editFile.openPrefix} path="lib/foo.dart">\n'
+          'void a() {}\n${WireTag.editFile.close}';
+      await expectLater(
+        runDebug(
+          io: io,
+          projectRootOverride: root.path,
+          exitFn: _throwExit,
+          executor: _executorWithPlanText(plan),
+          pickFn: (_) => 0,
+          dartFileAnalyzer: (_, __) => false,
+        ),
+        throwsA(
+          isA<EditPlanException>().having(
+            (e) => e.failure,
+            'failure',
+            FailureType.editVerificationFailed,
+          ),
+        ),
+      );
+      expect(File('${root.path}/lib/foo.dart').existsSync(), isFalse);
+      expect(_statusOf(io), HandoffStatus.needsSuggest);
+      expect(
+        loggedMoves(io, _workspace).map((move) => move['event']),
+        [HandoffEvent.debugStarted.name, HandoffEvent.debugBlocked.name],
+      );
     });
   });
 }
