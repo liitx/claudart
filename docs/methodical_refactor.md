@@ -114,10 +114,11 @@ Each entry states the pass condition first, then the observed result.
 
 Pass condition: for every tool and every defect shape it claims to catch, a
 seeded defect in a scratch copy of the repo is reported. A defect it does not
-report is a finding. The working tree is never seeded; the harness lives in
-`/tmp/liveness/run.sh` and copies the repo first.
+report is a finding. The working tree is never seeded; the harness is
+`tool/refactor_audit/liveness.sh` (`make liveness`) and copies the repo first.
 
-Observed (17 seeds): 14 caught, 3 missed.
+Observed (18 seeds): 15 caught, 3 missed. The 18th seed (T7) is the call
+census doc drifting, added when the script moved into `tool/`.
 
 | Seed | Tool | Defect | Result |
 |---|---|---|---|
@@ -136,6 +137,7 @@ Observed (17 seeds): 14 caught, 3 missed.
 | T3 | handoff topology test | generated doc drift | caught |
 | T4 | model metadata guard | model id literal in `lib/` | caught |
 | T5 | environment topology test | generated doc drift | caught |
+| T7 | call census test | generated doc drift | caught |
 | T6 | literal ownership guard | log name literal not yet in `LogFile` | **missed** |
 | R1 | random-order suite | order-dependent test (passes in declared order) | caught |
 
@@ -156,7 +158,7 @@ and `test/topology/call_census_test.dart`, which writes
 B2 and found P1. Both are recorded above, not yet fixed.
 
 Process spawns, measured with the real compiled CLI in a throwaway git
-project (`/tmp/census_cli`, a `git` shim on `PATH` that logs each call and
+project (`tool/refactor_audit/spawn_census.sh`, `make spawn-census`, a `git` shim on `PATH` that logs each call and
 delegates), `CLAUDART_WORKSPACE` pointed at a temp directory, project linked
 with `claudart link --no-sensitive`. Wrapper noise (`dart run` itself calls
 git) is excluded by running the compiled binary.

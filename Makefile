@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership
+.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census
 
 ## Compile native binary to ~/bin/claudart
 build:
@@ -24,6 +24,16 @@ topology:
 ## tests that assert another repo's component behavior. Read only.
 ownership:
 	$(DART) run tool/ownership/ownership_scan.dart > docs/topology/ownership.md
+
+## Seed one known defect per shape in a scratch copy and report which tools
+## catch it (CAUGHT / MISSED). Read only: the working tree is never touched.
+liveness:
+	tool/refactor_audit/liveness.sh
+
+## Count git spawns per real command, using the compiled CLI in a throwaway
+## project. Read only.
+spawn-census:
+	tool/refactor_audit/spawn_census.sh
 
 ## Replay claudart's lifecycle scenarios against zedup's REAL reader, in a
 ## throwaway copy of zedup wired to this checkout (neither repo is modified).
