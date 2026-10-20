@@ -232,3 +232,42 @@ duplicate. 24 legal cells are undriven (M1). The trigger-source axis (command,
 agent edit, pipeline event, external reader) is not yet in the matrix: only
 commands trigger moves today, and agent edits are not observable until the
 working-tree check exists (S4).
+
+### Stage 3 - listener design (for review, no code yet)
+
+Computed from `HandoffStatus.after` (all 104 cells), not assumed:
+
+- Seven statuses form one strongly connected component: every status except
+  `unknown` reaches every other. `unknown` has no outgoing move and no move
+  reaches it. Self-loops: `suggestInvestigating`, `readyForDebug`,
+  `debugInProgress`.
+- So no argument over statuses can prove a listener chain ends: sessions
+  repeat by design. Termination has to be proven over events, per chain.
+
+Proposed shape (one writer, one stream, listeners chosen by an exhaustive switch):
+
+1. `applyHandoffEvent` stays the only place a status changes (closes S2, S3);
+   it publishes each `HandoffTransition` on a sync broadcast
+   `Stream<HandoffTransition>`, the way `PipelineExecutor.events` already does.
+2. A `HandoffListenerKind` enum names every reaction; a `listenersFor` switch
+   over the transition's (status, event) cell returns the kinds that run, with
+   no default arm, so a new event or status fails to compile until it is
+   decided. The first kind is the logger (replaces the `onTransition`
+   callbacks, closes S7's logging half).
+3. A listener that must start the next sequence returns the next
+   `HandoffEvent`, never applies it itself; the writer applies it, so every
+   hop is a transition on the same stream and in the same log.
+
+Proof obligations, each a test written before the code:
+
+| Obligation | Check |
+|---|---|
+| Totality | `listenersFor` is an exhaustive switch over every cell, no wildcard |
+| Safety | for every cell and every next event a listener can return, the event is legal from the status the cell lands in (checked over all 104 cells) |
+| Termination | the relation event -> events a listener may return is acyclic (checked by topological sort over the 13 events); a chain is therefore at most 13 hops |
+| Record | each hop is one line in `transitions.jsonl`, and the matrix test reads them |
+
+Decisions that are yours, not derivable from the data: which sequences should
+start automatically after which state (for example, after `fixApplied` run
+analyze and the tests; after `debugBlocked` open the suggest step), and whether
+a listener may ever be asynchronous (the stream is synchronous today).
