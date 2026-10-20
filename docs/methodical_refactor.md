@@ -86,6 +86,8 @@ move writes a checkpoint with no transition and no log. Status: open (E1).
 | X4 | `HandoffStatusType` is a hand-kept mirror; `PipelineComponent` unused as an axis | `test/matrix/` | open |
 | X5 | claudart has no shoelace snapshot producer | zedup `launcher.dart:50` | open |
 | X6 | Contradictions between the three PLAN files; claudart PLAN Phase 16 evidence stale | see stage 5 | open |
+| X8 | zedup does not compile against this checkout: `claudart_runner.dart:246` reads `AgentFlow.preferredModel`, removed by the flow-link commit. `make consumer-check` therefore fails at compile time, before it reaches the status comparison. zedup's pinned claudart is older, so zedup itself is unaffected until it bumps. zedup is paused: recorded, not fixed | `make consumer-check` output | open |
+| X9 | `consumer-check` copied only two helper files and had been broken since the scenarios began importing `ProjectFixture` and the unscripted helpers; it now copies them | `tool/consumer_check/run.sh` | closed |
 
 ### Tools that cannot see (found by stage 0.2)
 
@@ -123,8 +125,6 @@ move writes a checkpoint with no transition and no log. Status: open (E1).
 | M2 | The lifecycle scenarios never make a command try a move the table rejects, so the "setup over a live handoff" rejection is covered only by its own separate test | transition matrix, rejected section | open |
 | M3 | Proven: the logged moves of every scenario are identical in all six link-state x dartrix environments, so those two axes do not change the state machine | `transition_matrix_test.dart`, "identical in every environment" | closed |
 
-| X8 | zedup does not compile against this checkout: `claudart_runner.dart:246` reads `AgentFlow.preferredModel`, removed by the flow-link commit. `make consumer-check` therefore fails at compile time, before it reaches the status comparison. zedup's pinned claudart is older, so zedup itself is unaffected until it bumps. zedup is paused: recorded, not fixed | `make consumer-check` output | open |
-| X9 | `consumer-check` copied only two helper files and had been broken since the scenarios began importing `ProjectFixture` and the unscripted helpers; it now copies them | `tool/consumer_check/run.sh` | closed |
 
 ## Stage records
 
@@ -266,6 +266,33 @@ Proof obligations, each a test written before the code:
 | Safety | for every cell and every next event a listener can return, the event is legal from the status the cell lands in (checked over all 104 cells) |
 | Termination | the relation event -> events a listener may return is acyclic (checked by topological sort over the 13 events); a chain is therefore at most 13 hops |
 | Record | each hop is one line in `transitions.jsonl`, and the matrix test reads them |
+
+What happens today, per event (read from the code and the matrix; "next" is
+what runs automatically after the move, which is nothing in every row except
+the analyze gate):
+
+| Event | Moves (from -> to) | Emitted by | What the command does around it | Logged as | Runs next, automatically |
+|---|---|---|---|---|---|
+| `setup` | noHandoff -> suggestInvestigating | `setup.dart:210` | writes `handoff.md` (archives a live one first); with sensitivity runs a scan | `logHandoffMove` (permissive: a move the table lacks is logged `rejected`, the command continues) | nothing |
+| `saveUnconfirmed` | suggestInvestigating, debugInProgress -> same | `save.dart:71` | checkpoint to `archive/`, stamps the handoff | `logTransition` | nothing |
+| `saveConfirmedExploring` | suggestInvestigating -> readyForSuggest | `save.dart:74` | same, plus appends the root cause to `skills.md` pending | `logTransition` | nothing |
+| `saveConfirmedReady` | suggestInvestigating, readyForSuggest, readyForDebug, debugInProgress, needsSuggest -> readyForDebug | `suggest.dart:296` | after the model run, writes the handoff | `logTransition` | nothing |
+| `debugStarted` | readyForDebug -> debugInProgress | `debug.dart:195` | written before any model call | `logTransition` | the debug pipeline itself |
+| `debugBlocked` | debugInProgress -> needsSuggest | `debug.dart:182` | any failing debug step (including a plan that does not apply) writes it, then rethrows | `logTransition` | nothing; the user is told to run suggest |
+| `suggestResumed` | needsSuggest -> suggestInvestigating | `suggest.dart:124` | suggest reads the debug notes first | `logTransition` | the suggest pipeline |
+| `fixApplied` | readyForDebug, debugInProgress -> debugComplete | `debug.dart:335` | only after every planned file was written and each `.dart` file passed `dart analyze`; a failure restores the files and blocks instead | `logTransition` | nothing: it prints "run `claudart save`, then run tests"; no tests run |
+| `rotated` | suggestInvestigating, readyForDebug, debugInProgress -> suggestInvestigating | `rotate.dart:199` | archives, runs the workspace after-fix build gate, seeds the next pending issue | `logHandoffMove` | the build gate (the one automatic check) |
+| `rotatedEmpty` | same three -> noHandoff | `rotate.dart:180` | archives, resets to blank | `logHandoffMove` | nothing |
+| `tornDown` | debugComplete -> noHandoff | `teardown.dart:336` | runs the analyzer model step, updates `skills.md`, archives, resets | `logHandoffMove` | nothing |
+| `reminderSaved` | any live status -> noHandoff | `teardown.dart:339` | teardown from a status other than debugComplete: archives as a reminder | `logHandoffMove` | nothing |
+| `killed` | any live status -> noHandoff | `kill.dart:155` | archives, does not touch `skills.md`, clears the lock | `logHandoffMove` | nothing |
+
+`fixApplied` is an event, not a flag. The flag-like thing is the status it
+lands in, `debugComplete`, which means "files written and analyze-clean, tests
+not run"; `teardown` reads it to choose between `tornDown` and `reminderSaved`.
+Because `debug` writes `debugStarted` first, it always applies `fixApplied`
+from `debugInProgress`: the table's `readyForDebug --fixApplied` cell is never
+produced by any command.
 
 Decisions that are yours, not derivable from the data: which sequences should
 start automatically after which state (for example, after `fixApplied` run
