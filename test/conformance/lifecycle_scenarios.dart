@@ -28,6 +28,7 @@ import 'package:claudart/workspace/workspace_link_state.dart';
 import 'package:path/path.dart' as p;
 
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
 
 /// A linked project: its registry name, repo root and claudart workspace.
 typedef LifecycleProject = ({String name, String root, String workspace});
@@ -127,11 +128,16 @@ MemoryFileIO freshLifecycleIo([
 }
 
 PipelineExecutor _exec(String text) => PipelineExecutor(
+  prompter: unscriptedUserPrompter,
+  approvalSelector: unscriptedApprovalSelector,
+  
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
+        required allowedTools,
+        required helperModel,
         StepMode mode = StepMode.project,
       }) async =>
           StepResult(

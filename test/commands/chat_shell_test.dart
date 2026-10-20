@@ -3,6 +3,11 @@
 // a message, only slash commands invoke.
 
 import 'package:claudart/commands/chat_shell.dart';
+import 'package:claudart/pipeline/agent_model.dart';
+import 'package:claudart/pipeline/step_mode.dart';
+import 'package:claudart/pipeline/step_result.dart';
+import 'package:claudart/pipeline/step_role.dart';
+import 'package:claudart/pipeline/usage.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -28,6 +33,86 @@ void main() {
       test('"$input" → ${expected.name}', () {
         expect(ChatCommand.parse(input), equals(expected));
       });
+    });
+  });
+
+  // Answering a person's message is reasoning, so it runs on sonnet and may
+  // only read, never on haiku and never with a tool that writes.
+  group('answerChatMessage', () {
+    AgentModel? receivedModel;
+    Set<ClaudeTool>? receivedTools;
+    AgentModel? receivedHelperModel;
+    String? receivedMessage;
+    String? receivedSystemPrompt;
+    String? receivedWorkingDir;
+
+    setUp(() {
+      receivedModel = receivedHelperModel = null;
+      receivedTools = null;
+      receivedMessage = receivedSystemPrompt = receivedWorkingDir = null;
+    });
+
+    Future<StepResult?> answer({StepResult? reply}) => answerChatMessage(
+          run: ({
+            required model,
+            required systemPrompt,
+            required message,
+            required workingDir,
+            required allowedTools,
+            required helperModel,
+            StepMode mode = StepMode.project,
+          }) async {
+            receivedModel = model;
+            receivedSystemPrompt = systemPrompt;
+            receivedMessage = message;
+            receivedWorkingDir = workingDir;
+            receivedTools = allowedTools;
+            receivedHelperModel = helperModel;
+            return reply;
+          },
+          systemPrompt: 'the system prompt',
+          history: ['you: hello', 'claudart: hi', 'you: and now?'],
+          workingDir: '/projects/my-app',
+        );
+
+    const reply = StepResult(
+      text: 'the reply',
+      usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+    );
+
+    test('runs on sonnet, never haiku', () async {
+      await answer(reply: reply);
+      expect(receivedModel, AgentModel.sonnet);
+    });
+
+    test('may only use the reasoning role\'s tools', () async {
+      await answer(reply: reply);
+      expect(receivedTools, StepRole.reasoning.allowedTools);
+    });
+
+    test('runs the CLI\'s helper calls on the reasoning role\'s helper model',
+        () async {
+      await answer(reply: reply);
+      expect(receivedHelperModel, StepRole.reasoning.helperModel);
+    });
+
+    test('sends the whole history, oldest first, as the message', () async {
+      await answer(reply: reply);
+      expect(receivedMessage, 'you: hello\n\nclaudart: hi\n\nyou: and now?');
+    });
+
+    test('passes the system prompt and the project directory', () async {
+      await answer(reply: reply);
+      expect(receivedSystemPrompt, 'the system prompt');
+      expect(receivedWorkingDir, '/projects/my-app');
+    });
+
+    test('returns the runner\'s reply', () async {
+      expect(await answer(reply: reply), same(reply));
+    });
+
+    test('returns null when the runner gives nothing', () async {
+      expect(await answer(), isNull);
     });
   });
 

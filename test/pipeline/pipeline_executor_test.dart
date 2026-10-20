@@ -22,6 +22,7 @@ import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/step_route.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:test/test.dart';
+import '../helpers/unscripted.dart';
 
 const _projectRoot = '/tmp/test-project';
 
@@ -44,6 +45,55 @@ PipelineContext _ctx() => const PipelineContext(
     );
 
 void main() {
+  // A step's role decides its tools and the CLI's helper model, so the executor
+  // must hand the runner exactly what the role says, for every role.
+  group('PipelineExecutor — the step role reaches the runner', () {
+    for (final role in StepRole.values) {
+      test(role.name, () async {
+        Set<ClaudeTool>? receivedTools;
+        AgentModel? receivedHelperModel;
+        final exec = PipelineExecutor(
+          prompter: unscriptedUserPrompter,
+          approvalSelector: unscriptedApprovalSelector,
+          
+          runner: ({
+            required model,
+            required systemPrompt,
+            required message,
+            required workingDir,
+            required allowedTools,
+            required helperModel,
+            StepMode mode = StepMode.project,
+          }) async {
+            receivedTools = allowedTools;
+            receivedHelperModel = helperModel;
+            return const StepResult(
+              text: 'ok',
+              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            );
+          },
+        );
+        await exec.runFuture(
+          steps: [
+            AgentStep(
+              id: 'a',
+              label: 'Step A',
+              role: role,
+              model: AgentModel.sonnet,
+              systemPrompt: 'sys',
+              buildPrompt: (_) => 'msg',
+            ),
+          ],
+          ctx: _ctx(),
+          displayStep: 1,
+          displayTotal: 1,
+        );
+        expect(receivedTools, role.allowedTools);
+        expect(receivedHelperModel, role.helperModel);
+      });
+    }
+  });
+
   group('PipelineExecutor — postProcess', () {
     test('stores the postProcess result, not the raw runner output', () async {
       final step = AgentStep(
@@ -57,11 +107,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: 'raw output', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
@@ -103,11 +158,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: 'no tags here', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
@@ -139,11 +199,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: 'unchanged', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
@@ -179,11 +244,16 @@ void main() {
     ) async {
       final calls = <String>[];
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           calls.add('${model.alias}|$systemPrompt|$message|$mode');
@@ -220,11 +290,16 @@ void main() {
         () async {
       final seen = <AgentCompleted>[];
       PipelineExecutor build() => PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
             runner: ({
               required model,
               required systemPrompt,
               required message,
               required workingDir,
+              required allowedTools,
+              required helperModel,
               StepMode mode = StepMode.project,
             }) async =>
                 const StepResult(
@@ -274,11 +349,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             const StepResult(
@@ -314,11 +394,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             const StepResult(
@@ -352,11 +437,16 @@ void main() {
     test('a thrown Exception from the runner surfaces as AgentFailed.reason',
         () async {
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             throw Exception('claude exited 1: boom'),
@@ -373,11 +463,16 @@ void main() {
     test('a runner returning null with no thrown exception leaves reason '
         'null, not a synthesized message', () async {
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             null,
@@ -430,11 +525,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           if (model == plan.model) {
@@ -483,11 +583,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           capturedMode = mode;
@@ -512,11 +617,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           capturedMode = mode;
@@ -546,12 +656,17 @@ void main() {
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: text, usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0));
 
     test('verbose: true prints the trace line when postProcess rewrites output', () async {
-      final exec = PipelineExecutor(runner: staticRunner('raw'), verbose: true);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: staticRunner('raw'), verbose: true);
 
       final printed = await _capturePrinted(() => exec.runFuture(
             steps: [rewritingStep()],
@@ -564,7 +679,10 @@ void main() {
     });
 
     test('verbose: false never prints the trace line, even when postProcess rewrites', () async {
-      final exec = PipelineExecutor(runner: staticRunner('raw'));
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: staticRunner('raw'));
 
       final printed = await _capturePrinted(() => exec.runFuture(
             steps: [rewritingStep()],
@@ -586,7 +704,10 @@ void main() {
         buildPrompt: (_) => 'msg',
         postProcess: (raw, ctx) => raw, // identity — never "rewrites"
       );
-      final exec = PipelineExecutor(runner: staticRunner('raw'), verbose: true);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: staticRunner('raw'), verbose: true);
 
       final printed = await _capturePrinted(() => exec.runFuture(
             steps: [step],

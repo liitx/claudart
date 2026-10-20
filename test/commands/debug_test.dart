@@ -100,7 +100,21 @@ MemoryFileIO _io({
 }
 
 PipelineExecutor _executorWithNoOutput() =>
-    PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
+    PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        required allowedTools,
+        required helperModel,
+        StepMode mode = StepMode.project,
+      }) async =>
+          null,
+    );
 
 /// Answers every step with a plan that has CHANGES but no EDIT_FILE tags:
 /// drives the happy path to the handoff write without touching real disk.
@@ -108,11 +122,16 @@ HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
 
 PipelineExecutor _executorWithPlanText(String text) => PipelineExecutor(
+  prompter: unscriptedUserPrompter,
+  approvalSelector: unscriptedApprovalSelector,
+  
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
+        required allowedTools,
+        required helperModel,
         StepMode mode = StepMode.project,
       }) async =>
           StepResult(
@@ -124,11 +143,16 @@ PipelineExecutor _executorWithPlanText(String text) => PipelineExecutor(
 /// [onCall] counts model calls, so a test can prove none were spent.
 PipelineExecutor _executorWithPlan({void Function()? onCall}) =>
     PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
+        required allowedTools,
+        required helperModel,
         StepMode mode = StepMode.project,
       }) async {
         onCall?.call();
@@ -266,11 +290,16 @@ void main() {
       // Haiku classifies and reads, so it answers; the implementer (sonnet or
       // opus) answers with nothing.
       final executor = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(

@@ -98,7 +98,21 @@ MemoryFileIO _io({String? handoff = _handoffWithScope}) {
 /// producing nothing (e.g. claude CLI not installed/authenticated),
 /// without ever reaching the interactive review loop.
 PipelineExecutor _executorWithNoOutput() =>
-    PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
+    PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        required allowedTools,
+        required helperModel,
+        StepMode mode = StepMode.project,
+      }) async =>
+          null,
+    );
 
 const _rootCause = 'Off-by-one in foo()';
 
@@ -110,11 +124,16 @@ HandoffStatus _statusOf(MemoryFileIO io) =>
 /// [onCall] counts model calls, so a test can prove none were spent.
 PipelineExecutor _executorWithAnalysis({void Function()? onCall}) =>
     PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
+        required allowedTools,
+        required helperModel,
         StepMode mode = StepMode.project,
       }) async {
         onCall?.call();

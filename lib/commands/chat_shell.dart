@@ -17,6 +17,8 @@ import '../git_utils.dart';
 import '../md_io.dart' show readSection;
 import '../paths.dart';
 import '../pipeline/agent_model.dart';
+import '../pipeline/step_result.dart' show StepResult;
+import '../pipeline/step_role.dart';
 import '../pipeline/pipeline_executor.dart' show ClaudeRunner, defaultClaudeRunner;
 import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
@@ -80,6 +82,26 @@ Future<void> runChatLoop({
   }
 }
 
+/// Answers the latest chat message through [run], with the whole [history] as
+/// the message. Answering a person is reasoning, so it runs on sonnet, never
+/// haiku, and may only use the reasoning role's read-only tools.
+Future<StepResult?> answerChatMessage({
+  required ClaudeRunner run,
+  required String systemPrompt,
+  required List<String> history,
+  required String workingDir,
+}) {
+  const role = StepRole.reasoning;
+  return run(
+    model:        AgentModel.sonnet,
+    systemPrompt: systemPrompt,
+    message:      history.join('\n\n'),
+    workingDir:   workingDir,
+    allowedTools: role.allowedTools,
+    helperModel:  role.helperModel,
+  );
+}
+
 /// Opens the chat shell: greet, resolve the current workspace, then converse.
 /// Plain messages are answered by [runner] (defaults to the real `claude` call)
 /// using the session's handoff + skills as context.
@@ -116,10 +138,10 @@ Future<void> runChatShell({
     onSuggest: () => runSuggest(),
     onMessage: (text) async {
       history.add('you: $text');
-      final reply = await run(
-        model:        AgentModel.haiku,
+      final reply = await answerChatMessage(
+        run:          run,
         systemPrompt: systemPrompt,
-        message:      history.join('\n\n'),
+        history:      history,
         workingDir:   entry.projectRoot,
       );
       if (reply == null) {

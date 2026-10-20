@@ -89,6 +89,8 @@ void main() {
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           calls++;
@@ -146,6 +148,8 @@ void main() {
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           calls++;

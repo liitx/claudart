@@ -36,6 +36,7 @@ import 'pipeline_step_exception.dart';
 import 'route_tag.dart';
 import 'step_mode.dart';
 import 'step_result.dart';
+import 'step_role.dart' show ClaudeHelperModelVariable, ClaudeTool;
 import 'step_route.dart';
 import 'usage.dart';
 import 'xml_tags.dart';
@@ -47,6 +48,8 @@ typedef ClaudeRunner = Future<StepResult?> Function({
   required String systemPrompt,
   required String message,
   required String workingDir,
+  required Set<ClaudeTool> allowedTools,
+  required AgentModel helperModel,
   StepMode mode,
 });
 
@@ -145,6 +148,8 @@ class PipelineExecutor {
           systemPrompt: current.systemPrompt,
           message:      current.buildPrompt(ctx),
           workingDir:   ctx.projectRoot,
+          allowedTools: current.role.allowedTools,
+          helperModel:  current.role.helperModel,
           mode:         current.mode,
         );
       } on Exception catch (e) {
@@ -592,6 +597,8 @@ ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
       required String systemPrompt,
       required String message,
       required String workingDir,
+      required Set<ClaudeTool> allowedTools,
+      required AgentModel helperModel,
       StepMode mode = StepMode.project,
     }) =>
         defaultClaudeRunner(
@@ -599,6 +606,8 @@ ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
           systemPrompt: systemPrompt,
           message: message,
           workingDir: workingDir,
+          allowedTools: allowedTools,
+          helperModel: helperModel,
           mode: mode,
           timeout: timeout,
         );
@@ -615,6 +624,11 @@ ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
 /// so there these now reach bin/claudart.dart's central handler. The step id is
 /// attached by the executor's `AgentFailed` event. [executable] and
 /// [traceOverride] are seams for tests.
+///
+/// [allowedTools] is the complete set of built-in tools the step may use,
+/// passed to the CLI as `--tools`. It defaults to [readOnlyTools], so no step
+/// can write a file or run a command; changes reach disk only through the
+/// owner-approved apply path.
 Future<StepResult?> defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
@@ -626,6 +640,8 @@ Future<StepResult?> defaultClaudeRunner({
   StepDebugTrace? traceOverride,
   FutureOr<AgentProvider?> Function() providerDetector =
       AgentProvider.resolveOnce,
+  required Set<ClaudeTool> allowedTools,
+  required AgentModel helperModel,
 }) async {
   // Fails fast with a clear message instead of letting an unconfigured
   // environment reach a mid-pipeline 401 from the `claude` subprocess
@@ -661,10 +677,17 @@ Future<StepResult?> defaultClaudeRunner({
         '--session-id',    newClaudeSessionId(),
         '--model',         model.alias,
         '--system-prompt', systemPrompt,
+        '--tools',         allowedTools.map((t) => t.wire).join(','),
         '--dangerously-skip-permissions',
         if (mode == StepMode.bare) '--bare',
       ],
       workingDirectory: workingDir,
+      // The CLI's own helper calls default to haiku; pin them to the step's
+      // helper model so a step that forbids haiku never shows it.
+      environment: {
+        for (final variable in ClaudeHelperModelVariable.values)
+          variable.wire: helperModel.slug,
+      },
     );
     process.stdin.writeln(message);
     await process.stdin.close();
