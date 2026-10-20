@@ -9,6 +9,7 @@ import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/step_role.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:test/test.dart';
+import '../helpers/project_fixture.dart';
 
 void main() {
   group('ChatCommand.parse — conversation is the default', () {
@@ -72,7 +73,7 @@ void main() {
           },
           systemPrompt: 'the system prompt',
           history: ['you: hello', 'claudart: hi', 'you: and now?'],
-          workingDir: '/projects/my-app',
+          workingDir: ProjectFixture.root,
         );
 
     const reply = StepResult(
@@ -104,7 +105,7 @@ void main() {
     test('passes the system prompt and the project directory', () async {
       await answer(reply: reply);
       expect(receivedSystemPrompt, 'the system prompt');
-      expect(receivedWorkingDir, '/projects/my-app');
+      expect(receivedWorkingDir, ProjectFixture.root);
     });
 
     test('returns the runner\'s reply', () async {

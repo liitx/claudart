@@ -19,6 +19,9 @@ void main() {
     test('pipeline rolls up to externalServiceFault', () {
       expect(ErrorType.pipeline.faultClass, FaultClass.externalServiceFault);
     });
+    test('unclassified rolls up to programmerFault', () {
+      expect(ErrorType.unclassified.faultClass, FaultClass.programmerFault);
+    });
   });
 
   group('ErrorType.label', () {

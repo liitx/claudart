@@ -1,11 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:claudart/errors/claudart_exception.dart';
+import 'package:claudart/commands/failure_boundary.dart';
 import 'package:claudart/git_utils.dart';
-import 'package:claudart/logging/logger.dart';
-import 'package:claudart/paths.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
-import 'package:claudart/sensitivity/token_map.dart';
 import 'package:claudart/version.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/commands/add.dart';
@@ -195,37 +192,19 @@ Future<void> main(List<String> rawArgs) async {
       exit(0);
     }
     await _dispatch(claudartCommand!, rest, projectRoot: selectedRoot);
-  } on ClaudartException catch (e) {
-    // Central catch: every command's ClaudartException lands here exactly
-    // once, so error logging doesn't depend on each command file
-    // remembering to call it -- SessionLogger.logError was only ever
-    // wired into 2 of many command files before this. Resolves the same
-    // registry entry every command resolves its own sensitivityMode
-    // from, and loads its real TokenMap, so a sensitive-mode project's
-    // error log is actually abstracted here (logError itself now
-    // abstracts `reason`, not just `stackTrace` -- found and fixed as a
-    // real gap while verifying this, previously leaked raw workspace
-    // paths/causes even with sensitivityMode on).
-    print('\n✗ ${e.toString()}');
-    print('  ${e.failureType.suggestedAction}\n');
-    final errorRoot = selectedRoot ?? detectGitContext()?.root;
-    final errorEntry = errorRoot != null ? Registry.load().findByProjectRoot(errorRoot) : null;
-    final errorTokenMap = errorEntry != null && errorEntry.sensitivityMode
-        ? TokenMap.load(tokenMapPathFor(errorEntry.workspacePath))
-        : null;
-    SessionLogger(
-      sensitivityMode: errorEntry?.sensitivityMode ?? false,
-      tokenMap: errorTokenMap,
-      workspacePath: errorEntry?.workspacePath,
-    ).logError(
+  } on Object catch (error, stackTrace) {
+    // The one boundary: every command's failure, typed or not, lands here
+    // exactly once and is logged by reportFailure before the process exits, so
+    // logging never depends on a command file remembering to do it and no
+    // failure is dropped for lacking a FailureType (see failure_boundary.dart).
+    final failure = reportFailure(
       command: command,
-      // Machine-keyed, not e.errorType.label's display text -- matches
-      // the existing snake_case/name convention other logError callers
-      // already write (e.g. scan.dart's 'threshold_hit').
-      errorType: e.errorType.name,
-      fingerprint: '$command.${e.failureType.name}',
-      reason: e.toString(),
+      error: error,
+      stackTrace: stackTrace,
+      projectRoot: selectedRoot,
     );
+    print('\n✗ ${failure.toString()}');
+    print('  ${failure.failureType.suggestedAction}\n');
     exit(1);
   }
 }
@@ -384,12 +363,18 @@ int _compile() {
   return 0;
 }
 
+/// Where the path of the claudart source is remembered after a compile. The
+/// one place its location is spelled out; saving and reading both use it.
+File get _savedSourceFile =>
+    File('${Platform.environment['HOME']}/.config/claudart/source');
+
 void _saveSourcePath(String repoRoot) {
   try {
-    final dir = Directory('${Platform.environment['HOME']}/.config/claudart');
-    dir.createSync(recursive: true);
-    File('${dir.path}/source').writeAsStringSync(repoRoot);
-  } on Exception catch (_) {}
+    _savedSourceFile.parent.createSync(recursive: true);
+    _savedSourceFile.writeAsStringSync(repoRoot);
+  } on Exception catch (error) {
+    stderr.writeln('warning: could not save the claudart source path: $error');
+  }
 }
 
 /// Locates bin/claudart.dart by walking up from the running executable,
@@ -427,18 +412,28 @@ String? _resolveClaudartSource() {
         }
       }
     }
-  } on Exception catch (_) {}
+  } on Exception catch (error) {
+    stderr.writeln(
+      'warning: could not read .dart_tool/package_config.json to find the '
+      'claudart source: $error',
+    );
+  }
 
-  // 3. Persisted path from last successful compile.
-  try {
-    final saved = File('${Platform.environment['HOME']}/.config/claudart/source')
-        .readAsStringSync()
-        .trim();
-    if (saved.isNotEmpty) {
-      final candidate = File('$saved/bin/claudart.dart');
-      if (candidate.existsSync()) return candidate.path;
+  // 3. Persisted path from last successful compile. A missing file is the
+  // normal first run, not a failure; only a file that cannot be read warns.
+  if (_savedSourceFile.existsSync()) {
+    try {
+      final saved = _savedSourceFile.readAsStringSync().trim();
+      if (saved.isNotEmpty) {
+        final candidate = File('$saved/bin/claudart.dart');
+        if (candidate.existsSync()) return candidate.path;
+      }
+    } on Exception catch (error) {
+      stderr.writeln(
+        'warning: could not read the saved claudart source path: $error',
+      );
     }
-  } on Exception catch (_) {}
+  }
 
   return null;
 }

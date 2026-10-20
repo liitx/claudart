@@ -15,9 +15,10 @@ import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 // Handoff with root cause confirmed and files changed.
 const _fullHandoff = '''# Agent Handoff — my-app

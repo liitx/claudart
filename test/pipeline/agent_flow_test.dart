@@ -2,7 +2,7 @@ import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('AgentFlow.steps', () {
+  group('$AgentFlow.steps', () {
     const withSteps = {
       AgentFlow.suggest,
       AgentFlow.debug,

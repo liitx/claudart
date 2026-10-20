@@ -8,6 +8,8 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../helpers/cli_session.dart';
+import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/paths.dart';
 
 // The real binary, two linked projects in one registry. `proj` has a live
 // session; `other` is linked with none. Everything is run from proj's
@@ -24,8 +26,12 @@ String _handoffOf(CliSession session, String name) =>
 
 /// The interactions.jsonl entries a workspace has logged, oldest first.
 List<Map<String, dynamic>> _interactionsOf(CliSession session, String name) {
-  final file =
-      File(p.join(session.ws.path, name, 'logs', 'interactions.jsonl'));
+  final file = File(
+    logFilePath(
+      logsDirFor(p.join(session.ws.path, name)),
+      LogFile.interactions,
+    ),
+  );
   if (!file.existsSync()) return [];
   return [
     for (final line in file.readAsLinesSync())
@@ -239,9 +245,19 @@ void main() {
       expect(r.out, contains('Archive index is corrupt'));
 
       final otherLog =
-          File(p.join(s.proj.ws.path, 'other', 'logs', 'errors.jsonl'));
+          File(
+            logFilePath(
+              logsDirFor(p.join(s.proj.ws.path, 'other')),
+              LogFile.errors,
+            ),
+          );
       final projLog =
-          File(p.join(s.proj.ws.path, 'proj', 'logs', 'errors.jsonl'));
+          File(
+            logFilePath(
+              logsDirFor(p.join(s.proj.ws.path, 'proj')),
+              LogFile.errors,
+            ),
+          );
       expect(otherLog.readAsStringSync(),
           contains('archives.archiveIndexCorrupt'));
       expect(projLog.existsSync(), isFalse);

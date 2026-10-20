@@ -73,7 +73,7 @@ void main() {
   });
   // The role decides which models a step may run on. Haiku only classifies and
   // reads, so a reasoning or implementation step can never run on it.
-  group('AgentStep role guard', () {
+  group('$AgentStep role guard', () {
     AgentStep stepWith({
       required StepRole role,
       required AgentModel model,

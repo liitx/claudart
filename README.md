@@ -690,6 +690,7 @@ $ find <workspace> -maxdepth 2
 ./logs/transitions.jsonl   # every handoff move: command, from, event, to
 ./logs/errors.jsonl        # deduplicated errors with fingerprint and count
 ./logs/models.jsonl        # per step: intended model, observed model, drift
+./logs/steps.jsonl         # every pipeline event: step start, end, failure
 ./logs/performance.md      # per-command timing table
 ./experiments/          # claudart experiment output
 ./.claude/              # slash commands symlinked into the project
@@ -703,6 +704,7 @@ Each workspace keeps its own logs under `logs/`, all written by [`SessionLogger`
 | `transitions.jsonl` | handoff move: `command`, `from`, `event`, `to` (enum names); `rejected: true` for a move the table lacks | 500 |
 | `errors.jsonl` | distinct error, deduplicated by fingerprint with a count | 200 |
 | `models.jsonl` | model a step ran on: intended alias, the id the `claude` stream reported, context used, drift from the declared `AgentModel` (shown by `claudart status`) | 500 |
+| `steps.jsonl` | pipeline event: `kind`, `stepId`, `detail` (a failure's reason, a completed step's duration), `failureType` for a failed step; a failed step is also written to `errors.jsonl` by its type | 2000 |
 | `performance.md` | timed command, as a markdown table row | 50 |
 
 `--project` and `claudart workspaces` write to `interactions.jsonl` too: the first records `targeted-by-project` in the workspace it aimed at, the second records `listed N workspaces` in the workspace that asked.

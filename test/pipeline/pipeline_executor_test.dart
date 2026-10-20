@@ -8,6 +8,7 @@
 
 import 'dart:async';
 
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/agent_step.dart';
 import 'package:claudart/pipeline/step_role.dart';
@@ -16,6 +17,7 @@ import 'package:claudart/pipeline/model_observation.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
+import 'package:claudart/pipeline/pipeline_step_exception.dart';
 import 'package:claudart/pipeline/route_tag.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import 'package:claudart/pipeline/step_result.dart';
@@ -45,9 +47,78 @@ PipelineContext _ctx() => const PipelineContext(
     );
 
 void main() {
+  // A failed step says which FailureType it was, so the log can name it. A
+  // typed failure keeps its type; anything else is the boundary's
+  // unexpectedFailure, a marker that a type is missing, never silently dropped.
+  group('$PipelineExecutor — a failed step names its failure type', () {
+    Future<AgentFailed> failureOf(
+      Future<StepResult?> Function() runner,
+    ) async {
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: ({
+          required model,
+          required systemPrompt,
+          required message,
+          required workingDir,
+          required allowedTools,
+          required helperModel,
+          StepMode mode = StepMode.project,
+        }) =>
+            runner(),
+      );
+      final events = await exec
+          .run(
+            steps: [
+              AgentStep(
+                id: 'a',
+                label: 'Step A',
+                role: StepRole.classification,
+                model: AgentModel.haiku,
+                systemPrompt: 'sys',
+                buildPrompt: (_) => 'msg',
+              ),
+            ],
+            ctx: _ctx(),
+            displayStep: 1,
+            displayTotal: 1,
+          )
+          .toList();
+      return events.whereType<AgentFailed>().single;
+    }
+
+    test('a typed exception keeps its FailureType: stepTimedOut', () async {
+      final failed = await failureOf(
+        () async => throw StepTimedOutException(const Duration(minutes: 1)),
+      );
+      expect(failed.failureType, FailureType.stepTimedOut);
+    });
+
+    test('a typed exception keeps its FailureType: providerNotConfigured',
+        () async {
+      final failed = await failureOf(
+        () async => throw ProviderNotConfiguredException(),
+      );
+      expect(failed.failureType, FailureType.providerNotConfigured);
+    });
+
+    test('an untyped exception is unexpectedFailure, with its message',
+        () async {
+      final failed = await failureOf(() async => throw Exception('boom'));
+      expect(failed.failureType, FailureType.unexpectedFailure);
+      expect(failed.reason, contains('boom'));
+    });
+
+    test('a runner that returns nothing is stepProducedNoResult', () async {
+      final failed = await failureOf(() async => null);
+      expect(failed.failureType, FailureType.stepProducedNoResult);
+    });
+  });
+
   // A step's role decides its tools and the CLI's helper model, so the executor
   // must hand the runner exactly what the role says, for every role.
-  group('PipelineExecutor — the step role reaches the runner', () {
+  group('$PipelineExecutor — the step role reaches the runner', () {
     for (final role in StepRole.values) {
       test(role.name, () async {
         Set<ClaudeTool>? receivedTools;
@@ -286,13 +357,12 @@ void main() {
       expect(completed.models, isEmpty);
     });
 
-    test('runFuture hands each completed step to onStepCompleted; run does not',
-        () async {
-      final seen = <AgentCompleted>[];
-      PipelineExecutor build() => PipelineExecutor(
-        prompter: unscriptedUserPrompter,
-        approvalSelector: unscriptedApprovalSelector,
-        
+    // One stream carries every event of every run, so a logger or a dashboard
+    // subscribes once instead of the executor taking a callback per consumer.
+    group('events — one stream of every event', () {
+      PipelineExecutor build({StepResult? result}) => PipelineExecutor(
+            prompter: unscriptedUserPrompter,
+            approvalSelector: unscriptedApprovalSelector,
             runner: ({
               required model,
               required systemPrompt,
@@ -302,29 +372,90 @@ void main() {
               required helperModel,
               StepMode mode = StepMode.project,
             }) async =>
-                const StepResult(
-                  text: 'answer',
-                  usage: Usage(input: 1, output: 1),
-                  models: [observed],
-                ),
-            onStepCompleted: seen.add,
+                result,
           );
 
-      await build()
-          .run(steps: [step], ctx: _ctx(), displayStep: 1, displayTotal: 1)
-          .toList();
-      expect(seen, isEmpty);
+      const answer = StepResult(
+        text: 'answer',
+        usage: Usage(input: 1, output: 1),
+        models: [observed],
+      );
 
-      await _capturePrinted(() async {
-        await build().runFuture(
-          steps: [step],
-          ctx: _ctx(),
-          displayStep: 1,
-          displayTotal: 1,
-        );
+      Future<List<PipelineEvent>> seenFrom(
+        PipelineExecutor exec,
+        Future<void> Function() drive,
+      ) async {
+        final seen = <PipelineEvent>[];
+        exec.events.listen(seen.add);
+        await drive();
+        return seen;
+      }
+
+      Future<void> Function() viaRun(PipelineExecutor exec) => () async {
+            await exec
+                .run(
+                  steps: [step],
+                  ctx: _ctx(),
+                  displayStep: 1,
+                  displayTotal: 1,
+                )
+                .toList();
+          };
+
+      test('run publishes every event, in order', () async {
+        final exec = build(result: answer);
+        final seen = await seenFrom(exec, viaRun(exec));
+        expect(seen.map((event) => event.kind), [
+          PipelineEventKind.agentStarted,
+          PipelineEventKind.agentCompleted,
+          PipelineEventKind.pipelineCompleted,
+        ]);
       });
-      expect(seen.single.models, [observed]);
-      expect(seen.single.intendedModel, AgentModel.haiku);
+
+      test('runFuture publishes the same events', () async {
+        final exec = build(result: answer);
+        final seen = await seenFrom(exec, () async {
+          await _capturePrinted(() async {
+            await exec.runFuture(
+              steps: [step],
+              ctx: _ctx(),
+              displayStep: 1,
+              displayTotal: 1,
+            );
+          });
+        });
+        expect(seen.map((event) => event.kind), [
+          PipelineEventKind.agentStarted,
+          PipelineEventKind.agentCompleted,
+          PipelineEventKind.pipelineCompleted,
+        ]);
+      });
+
+      test('a completed step carries the models it ran on', () async {
+        final exec = build(result: answer);
+        final seen = await seenFrom(exec, viaRun(exec));
+        final completed = seen.whereType<AgentCompleted>().single;
+        expect(completed.models, [observed]);
+        expect(completed.intendedModel, AgentModel.haiku);
+      });
+
+      test('a failed step is published too', () async {
+        final exec = build();
+        final seen = await seenFrom(exec, viaRun(exec));
+        expect(seen.map((event) => event.kind), [
+          PipelineEventKind.agentStarted,
+          PipelineEventKind.agentFailed,
+          PipelineEventKind.pipelineCompleted,
+        ]);
+      });
+
+      test('every listener receives every event', () async {
+        final exec = build(result: answer);
+        final second = <PipelineEvent>[];
+        exec.events.listen(second.add);
+        final first = await seenFrom(exec, viaRun(exec));
+        expect(second.length, first.length);
+      });
     });
 
     // Token conservation: observing is read-only on a line already received.

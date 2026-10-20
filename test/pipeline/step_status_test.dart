@@ -10,6 +10,7 @@ import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/state_hue.dart';
 import 'package:claudart/pipeline/step_status.dart';
 import 'package:claudart/pipeline/usage.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -31,7 +32,10 @@ void main() {
     });
 
     test('AgentFailed maps to failed', () {
-      const event = AgentFailed(stepId: 'a');
+      const event = AgentFailed(
+        stepId: 'a',
+        failureType: FailureType.stepProducedNoResult,
+      );
       expect(StepStatusFromEvent.fromEvent(event), equals(StepStatus.failed));
     });
 

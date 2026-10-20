@@ -1,15 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
+import '../errors/failure_type.dart';
 import '../file_io.dart';
 import '../session/handoff_event.dart';
 import '../session/handoff_transition.dart';
 import '../session/session_state.dart' show HandoffStatus;
 import '../paths.dart';
 import '../pipeline/model_observation.dart';
-import '../pipeline/pipeline_event.dart' show AgentCompleted;
+import '../pipeline/pipeline_event.dart'
+    show AgentCompleted, AgentFailed, PipelineEvent;
 import '../sensitivity/token_map.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
+import '../logging/log_file.dart';
 
 const int _maxInteractions = 500;
 const int _maxErrors = 200;
@@ -21,6 +25,7 @@ const int _maxPerformance = 50;
 /// happens once per this many appends, not on every one.
 const int _trimSlackLines = 50;
 const int _maxModelRecords = 500;
+const int _maxStepRecords = 2000;
 
 /// The keys of a session log entry; the names are the keys. (The keys of a
 /// transition are [HandoffTransitionField]'s, of a model record
@@ -47,7 +52,11 @@ enum LogEntryField {
   lastSeen,
   filed,
   issueId,
-  rejected;
+  rejected,
+  kind,
+  stepId,
+  detail,
+  failureType;
 }
 
 /// Appends structured log entries to workspace log files.
@@ -67,11 +76,12 @@ class SessionLogger {
             ? logsDirFor(workspacePath)
             : p.join(claudeDir, 'logs');
 
-  String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
-  String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-  String get _transitionsPath => p.join(_logsDir, 'transitions.jsonl');
-  String get _modelsPath => p.join(_logsDir, 'models.jsonl');
-  String get _performancePath => p.join(_logsDir, 'performance.md');
+  String get _interactionsPath => logFilePath(_logsDir, LogFile.interactions);
+  String get _errorsPath => logFilePath(_logsDir, LogFile.errors);
+  String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
+  String get _modelsPath => logFilePath(_logsDir, LogFile.models);
+  String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
+  String get _performancePath => logFilePath(_logsDir, LogFile.performance);
 
   void logInteraction({
     required String command,
@@ -150,6 +160,63 @@ class SessionLogger {
       _maxTransitions,
     );
   }
+
+  /// One line for a pipeline event: its kind, the step it belongs to, and a
+  /// detail (a failure's reason, a completed step's duration). A failed step is
+  /// also written to the error log, by its [FailureType], so the error log
+  /// names what failed. Whichever kind the event is, it leaves a record.
+  void logPipelineEvent({
+    required String command,
+    required PipelineEvent event,
+  }) {
+    final record = event.logRecord;
+    final detail = record.detail;
+    _appendJsonl(
+      _stepsPath,
+      {
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.command.name: command,
+        LogEntryField.kind.name: record.kind.name,
+        if (record.stepId != null) LogEntryField.stepId.name: record.stepId,
+        if (detail != null) LogEntryField.detail.name: _safe(detail),
+        if (record.failureType != null)
+          LogEntryField.failureType.name: record.failureType!.name,
+      },
+      _maxStepRecords,
+    );
+    if (event is AgentFailed) {
+      final failure = event.failureType;
+      logError(
+        command: command,
+        errorType: failure.errorType.name,
+        fingerprint:
+            '${failure.errorType.name}.${event.stepId}.${failure.name}',
+        reason: event.reason ?? failure.label,
+        suggestion: failure.suggestedAction,
+      );
+    }
+  }
+
+  /// Logs every event of [events]: each through [logPipelineEvent], and each
+  /// completed step's models through [logStepModels]. Returns the subscription
+  /// so a caller can cancel it; a stream that closes ends it.
+  StreamSubscription<PipelineEvent> logPipelineEvents(
+    Stream<PipelineEvent> events, {
+    required String command,
+  }) =>
+      events.listen((event) {
+        logPipelineEvent(command: command, event: event);
+        if (event is AgentCompleted) {
+          logStepModels(command: command, event: event);
+        }
+      });
+
+  /// A detail value with its text abstracted in sensitive mode, so a reason
+  /// that names a workspace path does not reach the log.
+  Object _safe(Object detail) =>
+      detail is String && sensitivityMode && tokenMap != null
+          ? abstractor.abstract(detail, tokenMap!, defaultDetector)
+          : detail;
 
   /// One line per model a step ran on: the intended model, what the stream
   /// reported, and how they differ. Read from the completion event, so it

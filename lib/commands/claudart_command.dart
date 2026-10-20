@@ -161,7 +161,8 @@ enum ClaudartCommand {
 
   /// Whether the command runs model steps and records, per step, which model
   /// ran (`logs/models.jsonl`). Checked against each command's source (it must
-  /// build its executor with the recording sink) by claudart_command_test.dart.
+  /// log its executor's events through logPipelineEvents) by
+  /// claudart_command_test.dart.
   bool get recordsStepModels => switch (this) {
         suggest || debug || flow => true,
         _ => false,

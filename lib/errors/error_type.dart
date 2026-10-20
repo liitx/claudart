@@ -23,7 +23,11 @@ enum ErrorType {
   archive,
   session,
   workspace,
-  pipeline;
+  pipeline,
+
+  /// A failure no other subsystem claims. It marks a gap in the taxonomy, so
+  /// every occurrence should be given a real [FailureType] and subsystem.
+  unclassified;
 
   /// Parent fault class for this subsystem. The chain rolls bottom-up so
   /// `FailureType.x.errorType.faultClass` resolves to the broadest category.
@@ -39,6 +43,8 @@ enum ErrorType {
         // the 2 variants that are genuinely config/transient instead (see
         // failure_type.dart's effectiveFaultClass).
         ErrorType.pipeline => FaultClass.externalServiceFault,
+        // A gap in claudart's own taxonomy, not an outside failure.
+        ErrorType.unclassified => FaultClass.programmerFault,
       };
 
   String get label => switch (this) {
@@ -47,5 +53,6 @@ enum ErrorType {
         ErrorType.session => 'Session',
         ErrorType.workspace => 'Workspace',
         ErrorType.pipeline => 'Pipeline',
+        ErrorType.unclassified => 'Unclassified',
       };
 }

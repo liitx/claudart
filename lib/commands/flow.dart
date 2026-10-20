@@ -72,11 +72,16 @@ Future<void> runFlow({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
-        onStepCompleted: (event) => SessionLogger(
-          io: fileIO,
-          workspacePath: workspace,
-        ).logStepModels(command: ClaudartCommand.flow.name, event: event),
       );
+
+  // Every pipeline event the executor publishes is logged for as long as the
+  // executor lives, so a failure, a timeout or a step that never finished
+  // leaves a record.
+  SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: workspace,
+  ).logPipelineEvents(resolvedExec.events, command: ClaudartCommand.flow.name);
 
   // ── Check for saved checkpoint ─────────────────────────────────────────────
 

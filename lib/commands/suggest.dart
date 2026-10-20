@@ -61,11 +61,16 @@ Future<void> runSuggest({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
-        onStepCompleted: (event) => SessionLogger(
-          io: fileIO,
-          workspacePath: workspace,
-        ).logStepModels(command: ClaudartCommand.suggest.name, event: event),
       );
+
+  // Every pipeline event the executor publishes is logged for as long as the
+  // executor lives, so a failure, a timeout or a step that never finished
+  // leaves a record.
+  SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: workspace,
+  ).logPipelineEvents(exec.events, command: ClaudartCommand.suggest.name);
   final handoffFile  = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {

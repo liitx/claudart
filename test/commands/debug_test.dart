@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/debug.dart';
@@ -21,6 +23,8 @@ import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import '../helpers/variant_topology.dart';
+import 'package:claudart/logging/log_file.dart';
+import '../helpers/project_fixture.dart';
 
 // debug_test.dart — coverage for runDebug.
 //
@@ -32,8 +36,8 @@ import '../helpers/variant_topology.dart';
 // Interaction seams that a test does not script are the throwing
 // `unscripted*` helpers, so a regression fails instead of blocking on stdin.
 
-const _projectRoot = '/projects/my-app';
-const _workspace   = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace   = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;
@@ -610,6 +614,127 @@ void main() {
         loggedMoves(io, _workspace).map((move) => move['event']),
         [HandoffEvent.debugStarted.name, HandoffEvent.debugBlocked.name],
       );
+    });
+  });
+
+  // Every way a debug run can end is one DebugExitKind, and each one is logged
+  // as the outcome of the run, so a run that stopped leaves a record of why.
+  group('$DebugExitKind', () {
+    const exitCodeByKind = <DebugExitKind, int>{
+      DebugExitKind.notInGitRepository: 1,
+      DebugExitKind.projectNotRegistered: 1,
+      DebugExitKind.noHandoff: 1,
+      DebugExitKind.emptyScope: 1,
+      DebugExitKind.readerProducedNothing: 1,
+      DebugExitKind.implementerProducedNothing: 1,
+      DebugExitKind.ownerDeclinedWrite: 0,
+    };
+    for (final kind in DebugExitKind.values) {
+      test('${kind.name} exits with ${exitCodeByKind[kind]}', () {
+        expect(kind.exitCode, exitCodeByKind[kind]);
+      });
+    }
+  });
+
+  group('runDebug — every exit is logged', () {
+    List<String> outcomes(MemoryFileIO io, String logsDir) {
+      final raw = io.read(logFilePath(logsDir, LogFile.interactions));
+      return [
+        for (final line in raw.split('\n'))
+          if (line.isNotEmpty)
+            (jsonDecode(line) as Map<String, dynamic>)['outcome'] as String,
+      ];
+    }
+
+    Future<void> endedBy(
+      MemoryFileIO io, {
+      PipelineExecutor? executor,
+      int Function(List<String>)? pickFn,
+    }) async {
+      try {
+        await runDebug(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          pickFn: pickFn ?? unscriptedPick,
+          executor: executor,
+        );
+      } on _ExitException {
+        // every scenario here ends in an exit
+      }
+    }
+
+    PipelineExecutor haikuAnswersImplementerSilent() => PipelineExecutor(
+          prompter: unscriptedUserPrompter,
+          approvalSelector: unscriptedApprovalSelector,
+          runner: ({
+            required model,
+            required systemPrompt,
+            required message,
+            required workingDir,
+            required allowedTools,
+            required helperModel,
+            StepMode mode = StepMode.project,
+          }) async =>
+              StepResult(
+                text: model == AgentModel.haiku ? 'file contents' : '',
+                usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+              ),
+        );
+
+    // Each scenario ends the run one way and names where its log is written:
+    // before a project is known there is no workspace, so the global one.
+    final scenarios = <DebugExitKind, Future<List<String>> Function()>{
+      DebugExitKind.projectNotRegistered: () async {
+        final io = MemoryFileIO();
+        await endedBy(io);
+        return outcomes(io, p.join(claudeDir, 'logs'));
+      },
+      DebugExitKind.noHandoff: () async {
+        final io = _io(handoff: null);
+        await endedBy(io);
+        return outcomes(io, logsDirFor(_workspace));
+      },
+      DebugExitKind.emptyScope: () async {
+        final io = _io(handoff: _handoffReadyWithoutScope);
+        await endedBy(io);
+        return outcomes(io, logsDirFor(_workspace));
+      },
+      DebugExitKind.readerProducedNothing: () async {
+        final io = _io();
+        await endedBy(io, executor: _executorWithNoOutput());
+        return outcomes(io, logsDirFor(_workspace));
+      },
+      DebugExitKind.implementerProducedNothing: () async {
+        final io = _io();
+        await endedBy(io, executor: haikuAnswersImplementerSilent());
+        return outcomes(io, logsDirFor(_workspace));
+      },
+      DebugExitKind.ownerDeclinedWrite: () async {
+        final io = _io();
+        await endedBy(
+          io,
+          executor: _executorWithPlan(),
+          pickFn: (_) => 1,
+        );
+        return outcomes(io, logsDirFor(_workspace));
+      },
+    };
+
+    // Not being inside a git repository cannot be reached from a test without
+    // changing the process's working directory, which every parallel test
+    // shares, so only its exit code is pinned above.
+    test('every other kind has a scenario here', () {
+      expect(
+        {...scenarios.keys, DebugExitKind.notInGitRepository},
+        DebugExitKind.values.toSet(),
+      );
+    });
+
+    scenarios.forEach((kind, scenario) {
+      test('${kind.name} is logged as the outcome', () async {
+        expect(await scenario(), contains(kind.name));
+      });
     });
   });
 }

@@ -7,6 +7,7 @@ import 'package:claudart/pipeline/event_response_map.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/usage.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -38,20 +39,30 @@ void main() {
     });
 
     test('AgentFailed → Blocker', () {
-      const event = AgentFailed(stepId: 'plan');
+      const event = AgentFailed(
+        stepId: 'plan',
+        failureType: FailureType.stepProducedNoResult,
+      );
       final r = toResponse(event, speaker: speaker, workspace: ws);
       expect(r, isA<Blocker>());
       expect((r! as Blocker).step, equals('plan'));
     });
 
     test('AgentFailed with a reason forwards it as errorType', () {
-      const event = AgentFailed(stepId: 'plan', reason: 'claude exited 1: boom');
+      const event = AgentFailed(
+        stepId: 'plan',
+        failureType: FailureType.stepExitedNonzero,
+        reason: 'claude exited 1: boom',
+      );
       final r = toResponse(event, speaker: speaker, workspace: ws);
       expect((r! as Blocker).errorType, equals('claude exited 1: boom'));
     });
 
     test('AgentFailed with no reason falls back to the generic literal', () {
-      const event = AgentFailed(stepId: 'plan');
+      const event = AgentFailed(
+        stepId: 'plan',
+        failureType: FailureType.stepProducedNoResult,
+      );
       final r = toResponse(event, speaker: speaker, workspace: ws);
       expect((r! as Blocker).errorType, equals('step failed'));
     });

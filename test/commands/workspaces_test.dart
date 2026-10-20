@@ -11,6 +11,7 @@ import 'package:test/test.dart';
 
 import '../conformance/lifecycle_scenarios.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
 const _primaryProject = defaultLifecycleProject;
 const _siblingProject = siblingLifecycleProject;
@@ -192,8 +193,8 @@ void main() {
       ).first.toJson();
       expect(json, {
         'name': 'my-app',
-        'projectRoot': '/projects/my-app',
-        'workspacePath': '/workspaces/my-app',
+        'projectRoot': ProjectFixture.root,
+        'workspacePath': ProjectFixture.workspace,
         'status': 'readyForDebug',
         'hasSession': true,
         'linkState': 'symlinked',

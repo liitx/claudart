@@ -13,9 +13,10 @@ import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
 import '../helpers/unscripted.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 const _claudeLink = '/projects/my-app/.claude';
 
 const _activeHandoff = '''# Agent Handoff — my-app

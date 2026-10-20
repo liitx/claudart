@@ -6,6 +6,7 @@ import 'package:claudart/templates/readme_template.dart';
 import 'package:test/test.dart';
 
 import 'topology/handoff_topology_test.dart' show renderStateDiagram;
+import 'package:claudart/logging/log_file.dart';
 
 /// Verifies README.md stays 1:1 with the codebase.
 ///
@@ -140,13 +141,7 @@ void main() {
   group('Architecture sync (code to README)', () {
     const diagramOpen = '<!-- claudart:topology:handoff-diagram -->';
     const diagramClose = '<!-- /claudart:topology:handoff-diagram -->';
-    const logFiles = [
-      'interactions.jsonl',
-      'transitions.jsonl',
-      'errors.jsonl',
-      'models.jsonl',
-      'performance.md',
-    ];
+    final logFiles = [for (final file in LogFile.values) file.fileName];
 
     test('the state diagram is the one HandoffStatus.after generates', () {
       final start = readme.indexOf(diagramOpen) + diagramOpen.length;

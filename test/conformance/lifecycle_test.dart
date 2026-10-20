@@ -12,6 +12,7 @@ import 'package:claudart/workspace/workspace_link_state.dart';
 import 'package:test/test.dart';
 
 import 'lifecycle_scenarios.dart';
+import '../helpers/project_fixture.dart';
 
 void main() {
   // The lifecycle must not depend on how the project is linked or whether it
@@ -54,7 +55,7 @@ void main() {
     for (final environment in lifecycleEnvironments()) {
       test('${describeEnvironment(environment)}: builds what it names', () {
         final io = freshLifecycleIo(environment);
-        expect(linkStateOf(io, '/projects/my-app'), environment.link);
+        expect(linkStateOf(io, ProjectFixture.root), environment.link);
         expect(
           io.fileExists('/projects/my-app/pubspec.yaml'),
           environment.usesDartrix,

@@ -225,7 +225,7 @@ void main() {
         final path = _sourceFor(command);
         if (path == null) return;
         expect(
-          File(path).readAsStringSync().contains('logStepModels'),
+          File(path).readAsStringSync().contains('logPipelineEvents'),
           command.recordsStepModels,
         );
       });

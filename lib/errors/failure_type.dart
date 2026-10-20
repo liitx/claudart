@@ -29,7 +29,8 @@ enum FailureType {
   stepProducedNoResult,
   editPlanMalformed,
   editVerificationFailed,
-  stepModelNotPermittedForRole;
+  stepModelNotPermittedForRole,
+  unexpectedFailure;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
   /// `errorType.faultClass`.
@@ -50,6 +51,7 @@ enum FailureType {
         FailureType.editVerificationFailed ||
         FailureType.stepModelNotPermittedForRole =>
           ErrorType.pipeline,
+        FailureType.unexpectedFailure => ErrorType.unclassified,
       };
 
   /// Convenience getter — walks errorType → faultClass.
@@ -95,6 +97,7 @@ enum FailureType {
         FailureType.editVerificationFailed => 'Edit verification failed',
         FailureType.stepModelNotPermittedForRole =>
           'Step model not permitted for its role',
+        FailureType.unexpectedFailure => 'Unexpected failure',
       };
 
   /// Actionable next step a user can take. Surfaces in caller-facing
@@ -143,5 +146,9 @@ enum FailureType {
           'A step was wired to a model its role does not permit (haiku may '
               'only classify and read). Fix the step or the routing so '
               'reasoning and implementation run on sonnet or opus.',
+        FailureType.unexpectedFailure =>
+          'No failure type describes this yet, so it is a gap in the failure '
+              'taxonomy: define a FailureType for it. The reason above is the '
+              'original error.',
       };
 }

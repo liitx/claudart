@@ -5,8 +5,9 @@ import 'package:claudart/commands/add.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
+const _projectRoot = ProjectFixture.root;
 const _memoryRoot = '/fake-home/.claude/projects';
 
 class _ExitException implements Exception {

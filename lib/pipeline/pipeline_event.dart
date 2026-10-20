@@ -23,13 +23,120 @@
 //   CLI (runFuture) — renders spinners and prompts based on events.
 //   zedup UI       — renders Agents Workflow side pane from the same stream.
 
+import '../errors/failure_type.dart';
 import 'agent_model.dart';
 import 'model_observation.dart';
 import 'pipeline_context.dart';
 import 'usage.dart';
 
+/// One value per [PipelineEvent] variant — the closed set a matrix over the
+/// events enumerates. Adding a variant to [PipelineEvent] without adding its
+/// value here fails to compile, because [PipelineEvent.kind] switches
+/// exhaustively with no default arm.
+enum PipelineEventKind {
+  /// Maps to [AgentStarted].
+  agentStarted,
+
+  /// Maps to [AgentCompleted].
+  agentCompleted,
+
+  /// Maps to [AgentFailed].
+  agentFailed,
+
+  /// Maps to [AgentEscalating].
+  agentEscalating,
+
+  /// Maps to [AgentResumed].
+  agentResumed,
+
+  /// Maps to [PlanDraft].
+  planDraft,
+
+  /// Maps to [AwaitingApproval].
+  awaitingApproval,
+
+  /// Maps to [PipelineCompleted].
+  pipelineCompleted,
+}
+
+/// The logged projection of one [PipelineEvent]: its [kind], the step it
+/// belongs to (null for events that belong to no single step), a detail value
+/// (the failure reason, the duration in milliseconds, or null), and the
+/// [FailureType] (set only for a failed step).
+typedef PipelineEventLogRecord = ({
+  PipelineEventKind kind,
+  String? stepId,
+  Object? detail,
+  FailureType? failureType,
+});
+
 sealed class PipelineEvent {
   const PipelineEvent();
+
+  /// The [PipelineEventKind] of this event. Exhaustive: no wildcard arm.
+  PipelineEventKind get kind => switch (this) {
+        AgentStarted() => PipelineEventKind.agentStarted,
+        AgentCompleted() => PipelineEventKind.agentCompleted,
+        AgentFailed() => PipelineEventKind.agentFailed,
+        AgentEscalating() => PipelineEventKind.agentEscalating,
+        AgentResumed() => PipelineEventKind.agentResumed,
+        PlanDraft() => PipelineEventKind.planDraft,
+        AwaitingApproval() => PipelineEventKind.awaitingApproval,
+        PipelineCompleted() => PipelineEventKind.pipelineCompleted,
+      };
+
+  /// The logged projection of this event. Exhaustive: every variant has one,
+  /// and a new variant fails to compile until it declares its projection.
+  PipelineEventLogRecord get logRecord => switch (this) {
+        final AgentStarted event => (
+            kind: PipelineEventKind.agentStarted,
+            stepId: event.stepId,
+            detail: null,
+            failureType: null,
+          ),
+        final AgentCompleted event => (
+            kind: PipelineEventKind.agentCompleted,
+            stepId: event.stepId,
+            detail: event.durationMs,
+            failureType: null,
+          ),
+        final AgentFailed event => (
+            kind: PipelineEventKind.agentFailed,
+            stepId: event.stepId,
+            detail: event.reason,
+            failureType: event.failureType,
+          ),
+        final AgentEscalating event => (
+            kind: PipelineEventKind.agentEscalating,
+            stepId: event.stepId,
+            detail: event.question,
+            failureType: null,
+          ),
+        final AgentResumed event => (
+            kind: PipelineEventKind.agentResumed,
+            stepId: event.stepId,
+            detail: null,
+            failureType: null,
+          ),
+        PlanDraft() => (
+            kind: PipelineEventKind.planDraft,
+            stepId: null,
+            detail: null,
+            failureType: null,
+          ),
+        AwaitingApproval() => (
+            kind: PipelineEventKind.awaitingApproval,
+            stepId: null,
+            detail: null,
+            failureType: null,
+          ),
+        PipelineCompleted() => (
+            kind: PipelineEventKind.pipelineCompleted,
+            stepId: null,
+            detail: null,
+            failureType: null,
+          ),
+      };
 }
 
 // ── Agent lifecycle ───────────────────────────────────────────────────────────
@@ -113,7 +220,15 @@ final class AgentFailed extends PipelineEvent {
   final String stepId;
   final String? reason;
 
-  const AgentFailed({required this.stepId, this.reason});
+  /// Which failure this was. A typed exception keeps its own type; anything
+  /// else is [FailureType.unexpectedFailure], a marker that a type is missing.
+  final FailureType failureType;
+
+  const AgentFailed({
+    required this.stepId,
+    required this.failureType,
+    this.reason,
+  });
 }
 
 // ── Escalation ────────────────────────────────────────────────────────────────

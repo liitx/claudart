@@ -10,6 +10,7 @@ import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
+import '../helpers/project_fixture.dart';
 
 // flow_test.dart — validation-path coverage for runFlow (experimental).
 //
@@ -22,8 +23,8 @@ import '../helpers/unscripted.dart';
 // its tests use a temp directory as the workspace. Not covered: the full
 // plan-review loop past a successful reader+plan step.
 
-const _projectRoot = '/projects/my-app';
-const _workspace   = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace   = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;

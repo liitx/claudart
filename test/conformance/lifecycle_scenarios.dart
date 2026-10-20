@@ -25,18 +25,19 @@ import 'package:claudart/registry.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';
-import 'package:path/path.dart' as p;
 
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
+import 'package:claudart/logging/log_file.dart';
+import '../helpers/project_fixture.dart';
 
 /// A linked project: its registry name, repo root and claudart workspace.
 typedef LifecycleProject = ({String name, String root, String workspace});
 
 const defaultLifecycleProject = (
   name: 'my-app',
-  root: '/projects/my-app',
-  workspace: '/workspaces/my-app',
+  root: ProjectFixture.root,
+  workspace: ProjectFixture.workspace,
 );
 
 /// A second linked project, for scoping tests across workspaces.
@@ -271,7 +272,7 @@ String? loggedTo(
   LifecycleProject project = defaultLifecycleProject,
 ]) {
   final raw =
-      io.read(p.join(logsDirFor(project.workspace), 'transitions.jsonl'));
+      io.read(logFilePath(logsDirFor(project.workspace), LogFile.transitions));
   final last = raw.split('\n').where((l) => l.isNotEmpty).lastOrNull;
   if (last == null) return null;
   final entry = jsonDecode(last) as Map<String, dynamic>;

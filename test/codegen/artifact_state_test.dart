@@ -9,8 +9,9 @@ import 'package:claudart/registry.dart';
 import 'package:claudart/templates/claude_settings_template.dart';
 import 'package:claudart/templates/claude_template.dart' show generatedMarker;
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
+const _projectRoot = ProjectFixture.root;
 const _projectName = 'my-app';
 
 Never _throwExit(int code) => throw _ExitException(code);

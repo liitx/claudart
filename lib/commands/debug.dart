@@ -23,6 +23,45 @@ import '../ui/render.dart' as render;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 
+/// Every way a `claudart debug` run can end before it applies a fix. Each is
+/// logged as the run's outcome, so a run that stopped leaves a record of why.
+enum DebugExitKind {
+  /// The command ran outside a git repository, so no project could be found.
+  notInGitRepository,
+
+  /// The project is not linked, so it has no workspace.
+  projectNotRegistered,
+
+  /// The workspace has no handoff to debug from.
+  noHandoff,
+
+  /// The handoff lists no files in play, so there is nothing to read.
+  emptyScope,
+
+  /// The reader step gave no output, usually because the `claude` CLI is not
+  /// installed or not signed in.
+  readerProducedNothing,
+
+  /// The implementer step gave no output.
+  implementerProducedNothing,
+
+  /// The owner reviewed the plan and chose not to write the files.
+  ownerDeclinedWrite;
+
+  /// The process exit code for this ending. Declining the write is a normal
+  /// ending; every other kind is a failure.
+  int get exitCode => switch (this) {
+        DebugExitKind.ownerDeclinedWrite => 0,
+        DebugExitKind.notInGitRepository ||
+        DebugExitKind.projectNotRegistered ||
+        DebugExitKind.noHandoff ||
+        DebugExitKind.emptyScope ||
+        DebugExitKind.readerProducedNothing ||
+        DebugExitKind.implementerProducedNothing =>
+          1,
+      };
+}
+
 Future<void> runDebug({
   FileIO? io,
   String? projectRootOverride,
@@ -35,21 +74,37 @@ Future<void> runDebug({
   final exit_    = exitFn   ?? exit;
   final pick_    = pickFn   ?? arrowMenu;
 
+  // Logs the kind as the run's outcome, then exits with the kind's code. Until
+  // the project is known there is no workspace, so it is the global log.
+  var exitLogger = SessionLogger(io: fileIO);
+  Never leave(DebugExitKind kind) {
+    exitLogger.logInteraction(
+      command: ClaudartCommand.debug.name,
+      outcome: kind.name,
+    );
+    exit_(kind.exitCode);
+  }
+
   // ── Locate project ──────────────────────────────────────────────────────────
 
   final projectRoot = projectRootOverride ?? detectGitContext()?.root;
   if (projectRoot == null) {
     print('✗ Not inside a git repository.');
-    exit_(1);
+    leave(DebugExitKind.notInGitRepository);
   }
 
   final registry = Registry.load(io: fileIO);
   final entry    = registry.findByProjectRoot(projectRoot);
   if (entry == null) {
     print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
+    leave(DebugExitKind.projectNotRegistered);
   }
   print('Project  : ${entry.name}');
+  exitLogger = SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: entry.workspacePath,
+  );
 
   final workspace   = entry.workspacePath;
   final wsConfig    = WorkspaceConfig.load(workspace, io: fileIO);
@@ -58,16 +113,21 @@ Future<void> runDebug({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
-        onStepCompleted: (event) => SessionLogger(
-          io: fileIO,
-          workspacePath: workspace,
-        ).logStepModels(command: ClaudartCommand.debug.name, event: event),
       );
+
+  // Every pipeline event the executor publishes is logged for as long as the
+  // executor lives, so a failure, a timeout or a step that never finished
+  // leaves a record.
+  SessionLogger(
+    io: fileIO,
+    sensitivityMode: entry.sensitivityMode,
+    workspacePath: workspace,
+  ).logPipelineEvents(exec.events, command: ClaudartCommand.debug.name);
   final handoffFile = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
     print('✗ No handoff found. Run `claudart suggest` first.');
-    exit_(1);
+    leave(DebugExitKind.noHandoff);
   }
 
   final handoff = fileIO.read(handoffFile);
@@ -93,7 +153,7 @@ Future<void> runDebug({
       '\n✗ No files listed in ## Scope / Files in play.\n'
       '  Run `claudart suggest` first to populate the scope.\n',
     );
-    exit_(1);
+    leave(DebugExitKind.emptyScope);
   }
 
   // ── Session state moves ─────────────────────────────────────────────────────
@@ -198,7 +258,7 @@ Future<void> runDebug({
   if (ctx.readerOut.isEmpty) {
     blockDebug();
     print('     Is claude CLI installed and authenticated?');
-    exit_(1);
+    leave(DebugExitKind.readerProducedNothing);
   }
 
   // ── Phase 2: implementer ─────────────────────────────────────────────────────
@@ -214,7 +274,7 @@ Future<void> runDebug({
 
   if (ctx.implementerOut.isEmpty) {
     blockDebug();
-    exit_(1);
+    leave(DebugExitKind.implementerProducedNothing);
   }
 
   // ── Review ───────────────────────────────────────────────────────────────────
@@ -251,7 +311,7 @@ Future<void> runDebug({
 
   if (choice == 1) {
     print('\n  Exit — no files written.\n');
-    exit_(0);
+    leave(DebugExitKind.ownerDeclinedWrite);
   }
 
   // ── Phase 3: write files ─────────────────────────────────────────────────────

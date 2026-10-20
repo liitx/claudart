@@ -17,6 +17,7 @@ import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import '../helpers/variant_topology.dart';
+import '../helpers/project_fixture.dart';
 
 // suggest_test.dart — validation-path coverage for runSuggest.
 //
@@ -26,8 +27,8 @@ import '../helpers/variant_topology.dart';
 // approve/refine loop — full coverage of that loop needs a fixture for
 // that, not an injection seam; this covers what's safely testable today.
 
-const _projectRoot = '/projects/my-app';
-const _workspace   = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace   = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;

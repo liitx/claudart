@@ -11,8 +11,9 @@ import 'package:test/test.dart';
 import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _workspaceDir = '/workspaces/my-app';
+const _workspaceDir = ProjectFixture.workspace;
 const _workspaceJsonPath = '$_workspaceDir/workspace.json';
 
 void main() {

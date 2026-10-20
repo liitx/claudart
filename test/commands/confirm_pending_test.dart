@@ -4,9 +4,10 @@ import 'package:claudart/commands/confirm_pending.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/pending_confirmation.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;

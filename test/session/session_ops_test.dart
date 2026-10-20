@@ -7,9 +7,10 @@ import 'package:claudart/paths.dart';
 import 'package:claudart/templates/handoff_template.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
 const _workspace = '/workspace/my-app';
-const _project = '/projects/my-app';
+const _project = ProjectFixture.root;
 const _claudeLink = '/projects/my-app/.claude';
 
 const _activeHandoff = '''# Agent Handoff — my-app

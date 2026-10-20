@@ -42,7 +42,7 @@ const Map<StepRole, Set<ClaudeTool>> _allowedToolsByRole = {
 };
 
 void main() {
-  group('StepRole.permits', () {
+  group('$StepRole.permits', () {
     for (final role in StepRole.values) {
       for (final model in AgentModel.values) {
         final expected = _permittedModelsByRole[role]!.contains(model);
@@ -53,7 +53,7 @@ void main() {
     }
   });
 
-  group('StepRole.permittedModels', () {
+  group('$StepRole.permittedModels', () {
     for (final role in StepRole.values) {
       test(role.name, () {
         expect(role.permittedModels, equals(_permittedModelsByRole[role]));
@@ -69,7 +69,7 @@ void main() {
     }
   });
 
-  group('StepRole.allowedTools', () {
+  group('$StepRole.allowedTools', () {
     for (final role in StepRole.values) {
       for (final tool in ClaudeTool.values) {
         final expected = _allowedToolsByRole[role]!.contains(tool);
@@ -96,7 +96,7 @@ void main() {
     }
   });
 
-  group('ClaudeTool.wire', () {
+  group('$ClaudeTool.wire', () {
     const expectedWire = {
       ClaudeTool.read: 'Read',
       ClaudeTool.glob: 'Glob',
@@ -112,7 +112,7 @@ void main() {
   // The CLI makes its own small helper calls inside every step, on haiku by
   // default. A role that forbids haiku must not see it there either, so the
   // role names the helper model its steps run the CLI with.
-  group('StepRole.helperModel', () {
+  group('$StepRole.helperModel', () {
     const helperModelByRole = <StepRole, AgentModel>{
       StepRole.classification: AgentModel.haiku,
       StepRole.fileReading: AgentModel.haiku,
@@ -129,7 +129,7 @@ void main() {
     }
   });
 
-  group('ClaudeHelperModelVariable names the CLI settings', () {
+  group('$ClaudeHelperModelVariable names the CLI settings', () {
     const wireByVariable = <ClaudeHelperModelVariable, String>{
       ClaudeHelperModelVariable.defaultHaikuModel:
           'ANTHROPIC_DEFAULT_HAIKU_MODEL',

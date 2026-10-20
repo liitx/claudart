@@ -141,7 +141,7 @@ void main() {
 
   // ── Wire tags ─────────────────────────────────────────────────────────────
 
-  group('WireTag delimiters are built from the tag name', () {
+  group('$WireTag delimiters are built from the tag name', () {
     for (final tag in WireTag.values) {
       test(tag.name, () {
         expect(tag.openPrefix, equals('<${tag.tagName}'));

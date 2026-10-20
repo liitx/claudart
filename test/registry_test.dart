@@ -3,6 +3,7 @@ import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import 'helpers/mocks.dart';
+import 'helpers/project_fixture.dart';
 
 RegistryEntry _entry(String name, {String? projectRoot}) => RegistryEntry(
       name: name,
@@ -35,8 +36,8 @@ void main() {
   "workspaces": [
     {
       "name": "my-app",
-      "projectRoot": "/projects/my-app",
-      "workspacePath": "/workspaces/my-app",
+      "projectRoot": "${ProjectFixture.root}",
+      "workspacePath": "${ProjectFixture.workspace}",
       "createdAt": "2026-03-15",
       "lastSession": "2026-03-16",
       "sensitivityMode": true
@@ -87,8 +88,8 @@ void main() {
       final loaded = Registry.load(io: io);
       final e = loaded.findByName('my-app')!;
       expect(e.name, equals('my-app'));
-      expect(e.projectRoot, equals('/projects/my-app'));
-      expect(e.workspacePath, equals('/workspaces/my-app'));
+      expect(e.projectRoot, equals(ProjectFixture.root));
+      expect(e.workspacePath, equals(ProjectFixture.workspace));
     });
 
     test('round-trip preserves multiple entries', () {
@@ -180,8 +181,8 @@ void main() {
   group('Registry.findByProjectRoot', () {
     test('returns entry matching project root path', () {
       final reg = Registry.empty()
-          .add(_entry('my-app', projectRoot: '/projects/my-app'));
-      final e = reg.findByProjectRoot('/projects/my-app');
+          .add(_entry('my-app', projectRoot: ProjectFixture.root));
+      final e = reg.findByProjectRoot(ProjectFixture.root);
       expect(e, isNotNull);
       expect(e!.name, equals('my-app'));
     });

@@ -4,9 +4,10 @@ import 'package:claudart/commands/preflight_cmd.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 // Handoff with confirmed root cause (so checkSkillsSync will warn without skills).
 const _confirmedHandoff = '''# Agent Handoff — my-app

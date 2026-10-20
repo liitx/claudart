@@ -146,7 +146,7 @@ void main() {
   // The failures of the debug apply path and of a step wired to a model its
   // role does not permit. One group per variant: where it rolls up, how it is
   // classified, and the exact words a person sees.
-  group('FailureType.editPlanMalformed', () {
+  group('$FailureType.editPlanMalformed', () {
     test('rolls up to pipeline with its default fault class', () {
       expect(FailureType.editPlanMalformed.errorType, ErrorType.pipeline);
       expect(
@@ -165,7 +165,7 @@ void main() {
     });
   });
 
-  group('FailureType.editVerificationFailed', () {
+  group('$FailureType.editVerificationFailed', () {
     test('rolls up to pipeline with its default fault class', () {
       expect(FailureType.editVerificationFailed.errorType, ErrorType.pipeline);
       expect(
@@ -188,7 +188,7 @@ void main() {
     });
   });
 
-  group('FailureType.stepModelNotPermittedForRole', () {
+  group('$FailureType.stepModelNotPermittedForRole', () {
     test('rolls up to pipeline and classifies as a config fault', () {
       expect(
         FailureType.stepModelNotPermittedForRole.errorType,
@@ -210,6 +210,29 @@ void main() {
         'A step was wired to a model its role does not permit (haiku may '
         'only classify and read). Fix the step or the routing so '
         'reasoning and implementation run on sonnet or opus.',
+      );
+    });
+  });
+
+  // The boundary's name for a failure no FailureType claims. It is a marker for
+  // a gap in the taxonomy, so it is a programmer fault: every occurrence means
+  // a variant is missing and should be defined.
+  group('$FailureType.unexpectedFailure', () {
+    test('rolls up to unclassified and classifies as a programmer fault', () {
+      expect(FailureType.unexpectedFailure.errorType, ErrorType.unclassified);
+      expect(
+        FailureType.unexpectedFailure.effectiveFaultClass,
+        FaultClass.programmerFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(FailureType.unexpectedFailure.label, 'Unexpected failure');
+      expect(
+        FailureType.unexpectedFailure.suggestedAction,
+        'No failure type describes this yet, so it is a gap in the failure '
+        'taxonomy: define a FailureType for it. The reason above is the '
+        'original error.',
       );
     });
   });

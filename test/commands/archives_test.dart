@@ -9,9 +9,10 @@ import 'package:claudart/session/archive_entry.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace   = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace   = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;

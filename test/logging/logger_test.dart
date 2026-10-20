@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/model_observation.dart';
+import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:claudart/session/handoff_event.dart';
@@ -13,13 +16,16 @@ import 'package:claudart/sensitivity/token_map.dart';
 import 'package:path/path.dart' as p;
 import '../helpers/mocks.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/logging/log_file.dart';
+import '../helpers/project_fixture.dart';
 
 String get _logsDir => p.join(claudeDir, 'logs');
-String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
-String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-String get _transitionsPath => p.join(_logsDir, 'transitions.jsonl');
-String get _performancePath => p.join(_logsDir, 'performance.md');
-String get _modelsPath => p.join(_logsDir, 'models.jsonl');
+String get _interactionsPath => logFilePath(_logsDir, LogFile.interactions);
+String get _errorsPath => logFilePath(_logsDir, LogFile.errors);
+String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
+String get _performancePath => logFilePath(_logsDir, LogFile.performance);
+String get _modelsPath => logFilePath(_logsDir, LogFile.models);
+String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
 
 void main() {
   group('SessionLogger', () {
@@ -511,7 +517,9 @@ void main() {
         expect(result.exitCode, 0, reason: '${result.stderr}');
       }
 
-      final lines = File(p.join(logsDirFor(dir.path), 'interactions.jsonl'))
+      final lines = File(
+        logFilePath(logsDirFor(dir.path), LogFile.interactions),
+      )
           .readAsLinesSync()
           .where((l) => l.isNotEmpty);
       expect(lines.length, writers * entriesPerWriter);
@@ -544,7 +552,9 @@ void main() {
         expect(result.exitCode, 0, reason: '${result.stderr}');
       }
       return [
-        for (final line in File(p.join(logsDirFor(dir.path), 'errors.jsonl'))
+        for (final line in File(
+          logFilePath(logsDirFor(dir.path), LogFile.errors),
+        )
             .readAsLinesSync())
           if (line.isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
       ];
@@ -572,7 +582,7 @@ void main() {
       for (final result in results) {
         expect(result.exitCode, 0, reason: '${result.stderr}');
       }
-      final rows = File(p.join(logsDirFor(dir.path), 'performance.md'))
+      final rows = File(logFilePath(logsDirFor(dir.path), LogFile.performance))
           .readAsLinesSync()
           .where((l) => l.startsWith('| ') && !l.contains('timestamp'));
       expect(rows.length, 4 * 10);
@@ -611,6 +621,10 @@ void main() {
       LogEntryField.filed: 'filed',
       LogEntryField.issueId: 'issueId',
       LogEntryField.rejected: 'rejected',
+      LogEntryField.kind: 'kind',
+      LogEntryField.stepId: 'stepId',
+      LogEntryField.detail: 'detail',
+      LogEntryField.failureType: 'failureType',
     };
 
     for (final field in LogEntryField.values) {
@@ -777,6 +791,221 @@ void main() {
       expect(entry[LogEntryField.count.name], 1);
       expect(entry[LogEntryField.filed.name], isFalse);
       expect(entry[LogEntryField.issueId.name], isNull);
+    });
+  });
+
+  // Every pipeline event is logged, whatever its kind, so a failure, a timeout
+  // or a step that never finished leaves a record. A failed step is also
+  // written to the error log with its type, so errors.jsonl names it.
+  group('$SessionLogger.logPipelineEvent', () {
+    late MemoryFileIO io;
+    late SessionLogger logger;
+
+    setUp(() {
+      io = MemoryFileIO();
+      logger = SessionLogger(io: io);
+    });
+
+    final eventsByKind = <PipelineEventKind, PipelineEvent>{
+      PipelineEventKind.agentStarted: const AgentStarted(
+        stepId: 'reader',
+        label: 'Reading',
+        model: AgentModel.haiku,
+        displayStep: 2,
+        displayTotal: 4,
+      ),
+      PipelineEventKind.agentCompleted: const AgentCompleted(
+        stepId: 'reader',
+        usage: Usage(),
+        durationMs: 1234,
+      ),
+      PipelineEventKind.agentFailed: const AgentFailed(
+        stepId: 'reader',
+        reason: 'timed out',
+        failureType: FailureType.stepTimedOut,
+      ),
+      PipelineEventKind.agentEscalating:
+          const AgentEscalating(stepId: 'lookup', question: 'which file?'),
+      PipelineEventKind.agentResumed: const AgentResumed(stepId: 'lookup'),
+      PipelineEventKind.planDraft: const PlanDraft(plan: 'the plan'),
+      PipelineEventKind.awaitingApproval: const AwaitingApproval(),
+      PipelineEventKind.pipelineCompleted: const PipelineCompleted(
+        ctx: PipelineContext(
+          projectRoot: ProjectFixture.root,
+          bug: '',
+          expected: '',
+          files: [],
+        ),
+      ),
+    };
+
+    List<Map<String, dynamic>> records(String path) => [
+          for (final line in io.read(path).split('\n'))
+            if (line.isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+        ];
+
+    test('every PipelineEventKind has an event in this spec', () {
+      expect(eventsByKind.keys.toSet(), PipelineEventKind.values.toSet());
+    });
+
+    eventsByKind.forEach((kind, event) {
+      test('${kind.name} is logged with its kind and command', () {
+        logger.logPipelineEvent(command: 'debug', event: event);
+        final record = records(_stepsPath).single;
+        expect(record[LogEntryField.kind.name], kind.name);
+        expect(record[LogEntryField.command.name], 'debug');
+        expect(record[LogEntryField.ts.name], isNotEmpty);
+      });
+    });
+
+    test('a completed step logs its duration as the detail', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentCompleted]!,
+      );
+      final record = records(_stepsPath).single;
+      expect(record[LogEntryField.stepId.name], 'reader');
+      expect(record[LogEntryField.detail.name], 1234);
+    });
+
+    test('an event that belongs to no step logs no step id', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.planDraft]!,
+      );
+      expect(records(_stepsPath).single.containsKey(
+        LogEntryField.stepId.name,
+      ), isFalse);
+    });
+
+    test('a failed step logs its failure type', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentFailed]!,
+      );
+      expect(
+        records(_stepsPath).single[LogEntryField.failureType.name],
+        FailureType.stepTimedOut.name,
+      );
+    });
+
+    test('a failed step is also written to the error log, by type', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentFailed]!,
+      );
+      final error = records(_errorsPath).single;
+      expect(
+        error[LogEntryField.outcome.name],
+        FailureType.stepTimedOut.errorType.name,
+      );
+      expect(
+        error[LogEntryField.fingerprint.name],
+        '${FailureType.stepTimedOut.errorType.name}.reader.'
+        '${FailureType.stepTimedOut.name}',
+      );
+      expect(error[LogEntryField.reason.name], 'timed out');
+      expect(
+        error[LogEntryField.suggestion.name],
+        FailureType.stepTimedOut.suggestedAction,
+      );
+    });
+
+    test('a failed step with no reason logs the failure type label', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: const AgentFailed(
+          stepId: 'reader',
+          failureType: FailureType.stepProducedNoResult,
+        ),
+      );
+      expect(
+        records(_errorsPath).single[LogEntryField.reason.name],
+        FailureType.stepProducedNoResult.label,
+      );
+    });
+
+    for (final kind in PipelineEventKind.values) {
+      if (kind == PipelineEventKind.agentFailed) continue;
+      test('${kind.name} writes no error', () {
+        logger.logPipelineEvent(command: 'debug', event: eventsByKind[kind]!);
+        expect(io.fileExists(_errorsPath), isFalse);
+      });
+    }
+
+    test('events are appended in the order they happened', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentStarted]!,
+      );
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentCompleted]!,
+      );
+      expect(
+        records(_stepsPath).map((r) => r[LogEntryField.kind.name]),
+        [
+          PipelineEventKind.agentStarted.name,
+          PipelineEventKind.agentCompleted.name,
+        ],
+      );
+    });
+
+    test('logPipelineEvents logs every event of a stream', () async {
+      final controller = StreamController<PipelineEvent>();
+      final subscription =
+          logger.logPipelineEvents(controller.stream, command: 'debug');
+      final done = subscription.asFuture<void>();
+      eventsByKind.values.forEach(controller.add);
+      await controller.close();
+      await done;
+      await subscription.cancel();
+      expect(records(_stepsPath), hasLength(PipelineEventKind.values.length));
+    });
+
+    test('logPipelineEvents also logs the models of a completed step',
+        () async {
+      final controller = StreamController<PipelineEvent>();
+      final subscription =
+          logger.logPipelineEvents(controller.stream, command: 'debug');
+      final done = subscription.asFuture<void>();
+      controller.add(const AgentCompleted(
+        stepId: 'reader',
+        usage: Usage(),
+        intendedModel: AgentModel.haiku,
+        models: [ModelObservation(observedModelId: 'claude-future-9')],
+      ));
+      await controller.close();
+      await done;
+      await subscription.cancel();
+      expect(records(_modelsPath), isNotEmpty);
+    });
+
+    group('detail of a failure that names a workspace identifier', () {
+      const failed = AgentFailed(
+        stepId: 'reader',
+        reason: 'VolumeBloc.process failed',
+        failureType: FailureType.stepTimedOut,
+      );
+
+      String loggedDetail(SessionLogger sessionLogger) {
+        sessionLogger.logPipelineEvent(command: 'debug', event: failed);
+        return records(_stepsPath).single[LogEntryField.detail.name] as String;
+      }
+
+      test('is abstracted in sensitive mode', () {
+        final sensitiveLogger = SessionLogger(
+          io: io,
+          sensitivityMode: true,
+          tokenMap: TokenMap(),
+        );
+        expect(loggedDetail(sensitiveLogger), isNot(contains('VolumeBloc')));
+      });
+
+      test('is written as is when sensitive mode is off', () {
+        final plainLogger = SessionLogger(io: io, tokenMap: TokenMap());
+        expect(loggedDetail(plainLogger), contains('VolumeBloc'));
+      });
     });
   });
 }

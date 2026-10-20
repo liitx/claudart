@@ -16,9 +16,10 @@ import 'package:claudart/session/workspace_guard.dart';
 import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 // Handoff with root cause and changed files populated — exercises pre-population.
 const _richHandoff = '''# Agent Handoff — my-app

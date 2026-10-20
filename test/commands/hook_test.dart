@@ -9,9 +9,10 @@ import 'package:claudart/workspace/workspace_config.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _root = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _root = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 const _dartFile = '$_root/lib/a.dart';
 const _exploring = HandoffStatus.suggestInvestigating;
 

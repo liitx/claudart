@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../paths.dart';
 import '../process_runner.dart';
 import '../ui/render.dart' as render;
+import '../logging/log_file.dart';
 
 const _ghRepo = 'liitx/claudart';
 const _issueLabelBase = 'claudart-generated';
@@ -35,8 +35,8 @@ Future<void> runReport({
   final logsDir = workspacePath != null
       ? logsDirFor(workspacePath)
       : logsDirFor(claudeDir);
-  final interactionsPath = p.join(logsDir, 'interactions.jsonl');
-  final errorsPath = p.join(logsDir, 'errors.jsonl');
+  final interactionsPath = logFilePath(logsDir, LogFile.interactions);
+  final errorsPath = logFilePath(logsDir, LogFile.errors);
 
   final interactions = _readJsonl(fileIO, interactionsPath);
   final errors = _readJsonl(fileIO, errorsPath);

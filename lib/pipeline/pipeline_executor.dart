@@ -18,6 +18,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../config.dart' show defaultStepTimeout;
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
 import '../process_runner.dart' show killProcessTree;
 import '../providers/agent_provider.dart' show AgentProvider;
 import '../ui/ansi.dart' as ansi;
@@ -75,9 +77,15 @@ class PipelineExecutor {
   /// which [runFuture] reads to decide whether to print.
   final bool verbose;
 
-  /// Called by [runFuture] for each completed step, so a caller can persist
-  /// what the step ran on. Not called by [run], which does no IO of its own.
-  final void Function(AgentCompleted event)? onStepCompleted;
+  /// Every event of every run, published as it happens, by [run] and so by
+  /// [runFuture] too. A logger, a renderer or a dashboard subscribes once; the
+  /// executor takes no callback per consumer. Broadcast and synchronous, so
+  /// several listeners each receive every event and a listener sees an event
+  /// before the next step starts. A listener added after an event misses it.
+  Stream<PipelineEvent> get events => _events.stream;
+
+  final StreamController<PipelineEvent> _events =
+      StreamController<PipelineEvent>.broadcast(sync: true);
 
   PipelineExecutor({
     ClaudeRunner?     runner,
@@ -85,7 +93,6 @@ class PipelineExecutor {
     ApprovalSelector? approvalSelector,
     this.strict  = false,
     this.verbose = false,
-    this.onStepCompleted,
     Duration? stepTimeout = defaultStepTimeout,
   })  : _runner           = runner           ?? _runnerWithTimeout(stepTimeout),
         _prompter         = prompter         ?? _defaultPrompter,
@@ -99,7 +106,26 @@ class PipelineExecutor {
   ///
   /// [displayStep] / [displayTotal] are forwarded in [AgentStarted] so
   /// subscribers can render `[n/N]` labels without tracking call order.
+  /// Runs [steps] in order and yields each event. Every event is also
+  /// published on [events] before it is yielded.
   Stream<PipelineEvent> run({
+    required List<AgentStep> steps,
+    required PipelineContext ctx,
+    required int displayStep,
+    required int displayTotal,
+  }) async* {
+    await for (final event in _runSteps(
+      steps: steps,
+      ctx: ctx,
+      displayStep: displayStep,
+      displayTotal: displayTotal,
+    )) {
+      _events.add(event);
+      yield event;
+    }
+  }
+
+  Stream<PipelineEvent> _runSteps({
     required List<AgentStep> steps,
     required PipelineContext ctx,
     required int displayStep,
@@ -141,6 +167,8 @@ class PipelineExecutor {
       );
 
       String? failureReason;
+      // A runner that returns nothing and throws nothing produced no result.
+      var failureType = FailureType.stepProducedNoResult;
       StepResult? result;
       try {
         result = await _runner(
@@ -154,10 +182,17 @@ class PipelineExecutor {
         );
       } on Exception catch (e) {
         failureReason = e.toString();
+        failureType = e is ClaudartException
+            ? e.failureType
+            : FailureType.unexpectedFailure;
       }
 
       if (result == null) {
-        yield AgentFailed(stepId: current.id, reason: failureReason);
+        yield AgentFailed(
+          stepId: current.id,
+          reason: failureReason,
+          failureType: failureType,
+        );
         yield PipelineCompleted(ctx: ctx);
         return;
       }
@@ -379,7 +414,6 @@ class PipelineExecutor {
           // erasing that new line instead of the spinner's — an artifact
           // left behind in the output.
           clearSpinner();
-          onStepCompleted?.call(event);
           if (verbose && postProcessRewrote) {
             print('  ${ansi.dim}◦ postProcess fired on "$stepId" — output rewritten${ansi.reset}');
           }
