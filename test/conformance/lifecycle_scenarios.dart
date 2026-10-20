@@ -12,15 +12,18 @@ import 'dart:convert';
 import 'package:claudart/commands/debug.dart';
 import 'package:claudart/commands/kill.dart';
 import 'package:claudart/commands/rotate.dart';
+import 'package:claudart/commands/save.dart';
 import 'package:claudart/commands/setup.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/teardown.dart';
 import 'package:claudart/md_io.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
+import 'package:claudart/pipeline/xml_tags.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart';
@@ -198,6 +201,35 @@ Future<void> debug(
       pickFn: (_) => 0,
     );
 
+/// A debug whose plan cannot be applied: an edit block with no closing tag.
+/// The command blocks the session (needs-suggest) and rethrows the failure;
+/// the failure is the point of the step, so it is not an error here.
+Future<void> debugBlocked(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) async {
+  try {
+    await runDebug(
+      io: io,
+      projectRootOverride: project.root,
+      exitFn: _noExit,
+      executor: _exec(
+        '<CHANGES>x</CHANGES>${WireTag.editFile.openPrefix} '
+        'path="lib/a.dart">\nno end',
+      ),
+      pickFn: (_) => 0,
+    );
+  } on EditPlanException {
+    // Expected: the unapplied plan blocks the session.
+  }
+}
+
+Future<void> save(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runSave(io: io, projectRootOverride: project.root, exitFn: _noExit);
+
 Future<void> kill(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
@@ -243,6 +275,21 @@ void seedPending(
         io.read(handoffPathFor(project.workspace)),
         'Pending Issues',
         '- [ ] Next issue to do',
+      ),
+    );
+
+/// Writes a confirmed root cause into the handoff, as an agent or the owner
+/// would before a save.
+void seedRootCause(
+  MemoryFileIO io, [
+  LifecycleProject project = defaultLifecycleProject,
+]) =>
+    io.write(
+      handoffPathFor(project.workspace),
+      updateSection(
+        io.read(handoffPathFor(project.workspace)),
+        'Root Cause',
+        'A confirmed root cause.',
       ),
     );
 
@@ -323,6 +370,70 @@ Map<String, List<LifecycleStep>> lifecycleScenarios({
     ],
     'setup, kill': [
       setupStep,
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
+    ],
+    'setup, unconfirmed save': [
+      setupStep,
+      lifecycleStep('save', bind(save), HandoffStatus.suggestInvestigating),
+    ],
+    'setup, confirmed save, kill': [
+      setupStep,
+      lifecycleStep(
+        'seed root cause',
+        (io) async => seedRootCause(io, project),
+        HandoffStatus.suggestInvestigating,
+        logged: false,
+      ),
+      lifecycleStep('save', bind(save), HandoffStatus.readyForSuggest),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
+    ],
+    'setup, suggest, debug blocked, suggest again': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'debug blocked',
+        bind(debugBlocked),
+        HandoffStatus.needsSuggest,
+      ),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+    ],
+    'setup, rotate with a pending issue': [
+      setupStep,
+      lifecycleStep(
+        'seed pending',
+        (io) async => seedPending(io, project),
+        HandoffStatus.suggestInvestigating,
+        logged: false,
+      ),
+      lifecycleStep(
+        'rotate',
+        bind(rotate),
+        HandoffStatus.suggestInvestigating,
+      ),
+    ],
+    'setup, rotate with nothing pending': [
+      setupStep,
+      lifecycleStep('rotate', bind(rotate), HandoffStatus.noHandoff),
+    ],
+    'setup, suggest, debug blocked, kill': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'debug blocked',
+        bind(debugBlocked),
+        HandoffStatus.needsSuggest,
+      ),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
+    ],
+    'setup, suggest, suggest again': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+    ],
+    'setup, suggest, debug, kill': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep('debug', bind(debug), HandoffStatus.debugComplete),
       lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
     ],
     'rotate with a pending issue seeds the next session': [

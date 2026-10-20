@@ -6,41 +6,31 @@ Each cell is what the real lifecycle scenarios did (`test/conformance/lifecycle_
 
 | status \ event | setup | saveUnconfirmed | saveConfirmedExploring | saveConfirmedReady | debugStarted | debugBlocked | suggestResumed | fixApplied | rotated | rotatedEmpty | tornDown | reminderSaved | killed |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| suggestInvestigating | · | GAP | GAP | ok x4 | · | · | · | · | GAP | GAP | · | GAP | ok x1 |
-| readyForSuggest | · | · | · | GAP | · | · | · | · | · | · | · | GAP | GAP |
-| readyForDebug | · | · | · | GAP | ok x1 | · | · | GAP | ok x1 | ok x1 | · | GAP | ok x1 |
-| debugInProgress | · | GAP | · | GAP | · | GAP | · | ok x1 | GAP | GAP | · | GAP | GAP |
-| debugComplete | · | · | · | · | · | · | · | · | · | · | ok x1 | GAP | GAP |
-| needsSuggest | · | · | · | GAP | · | · | GAP | · | · | · | · | GAP | GAP |
-| noHandoff | ok x5 | · | · | · | · | · | · | · | · | · | · | · | · |
+| suggestInvestigating | · | ok x1 | ok x1 | ok x9 | · | · | · | · | ok x1 | ok x1 | · | GAP | ok x1 |
+| readyForSuggest | · | · | · | GAP | · | · | · | · | · | · | · | GAP | ok x1 |
+| readyForDebug | · | · | · | ok x1 | ok x4 | · | · | GAP | ok x1 | ok x1 | · | GAP | ok x1 |
+| debugInProgress | · | GAP | · | GAP | · | ok x2 | · | ok x2 | GAP | GAP | · | GAP | GAP |
+| debugComplete | · | · | · | · | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
+| needsSuggest | · | · | · | GAP | · | · | ok x1 | · | · | · | · | GAP | ok x1 |
+| noHandoff | ok x13 | · | · | · | · | · | · | · | · | · | · | · | · |
 | unknown | · | · | · | · | · | · | · | · | · | · | · | · | · |
 
-## Legal moves no scenario drives (24)
+## Legal moves no scenario drives (14)
 
-- `suggestInvestigating` --`saveUnconfirmed`--> `suggestInvestigating`
-- `suggestInvestigating` --`saveConfirmedExploring`--> `readyForSuggest`
-- `suggestInvestigating` --`rotated`--> `suggestInvestigating`
-- `suggestInvestigating` --`rotatedEmpty`--> `noHandoff`
 - `suggestInvestigating` --`reminderSaved`--> `noHandoff`
 - `readyForSuggest` --`saveConfirmedReady`--> `readyForDebug`
 - `readyForSuggest` --`reminderSaved`--> `noHandoff`
-- `readyForSuggest` --`killed`--> `noHandoff`
-- `readyForDebug` --`saveConfirmedReady`--> `readyForDebug`
 - `readyForDebug` --`fixApplied`--> `debugComplete`
 - `readyForDebug` --`reminderSaved`--> `noHandoff`
 - `debugInProgress` --`saveUnconfirmed`--> `debugInProgress`
 - `debugInProgress` --`saveConfirmedReady`--> `readyForDebug`
-- `debugInProgress` --`debugBlocked`--> `needsSuggest`
 - `debugInProgress` --`rotated`--> `suggestInvestigating`
 - `debugInProgress` --`rotatedEmpty`--> `noHandoff`
 - `debugInProgress` --`reminderSaved`--> `noHandoff`
 - `debugInProgress` --`killed`--> `noHandoff`
 - `debugComplete` --`reminderSaved`--> `noHandoff`
-- `debugComplete` --`killed`--> `noHandoff`
 - `needsSuggest` --`saveConfirmedReady`--> `readyForDebug`
-- `needsSuggest` --`suggestResumed`--> `suggestInvestigating`
 - `needsSuggest` --`reminderSaved`--> `noHandoff`
-- `needsSuggest` --`killed`--> `noHandoff`
 
 ## Moves a command tried that the table rejects
 
