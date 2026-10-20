@@ -11,15 +11,15 @@ reasoning behind a stage is in `docs/session_log.md`; the roadmap entry is in
 
 ## Stage sequence
 
-| Stage | Question it answers | Output | Proof type |
-|---|---|---|---|
-| 0 Tools prove they can see | Do the lints, tests, mutation and guards catch what they claim? | Tool-liveness matrix, call census | Seeded-defect table; counted reads |
-| 1 Exhaust dependencies | What depends on what? | Signature per symbol, family enum, `docs/topology/families.md` | Every symbol in exactly one family |
-| 2 Use-case matrix | What should happen in every state, per trigger? | Cells of status x event x trigger x link x sensitivity x dartrix | Expected derived independently, compared with the log |
-| 3 Listener design | What reacts to a state change, and does it end? | Typed stream, per-cell switch | Closure graph has no cycle |
-| 4 Close gaps | Which gaps are real, in what order? | One failing test, then one fix, per gap | Gates and mutation per item |
-| 5 Cross-package truth | Where do claudart, dartrix, zedup meet? | One portal document | Generated from code |
-| 6 Verify end to end | Does the whole still agree? | Re-run of stages 2 and conformance | Expected equals actual |
+| Id | Name | Question it answers | Output | Proof type |
+|---|---|---|---|---|
+| PH0 | `toolLiveness` | Do the lints, tests, mutation and guards catch what they claim? | Tool-liveness matrix, call census | Seeded-defect table; counted reads |
+| PH1 | `dependencyFamilies` | What depends on what? | Signature per symbol, family enum, `docs/topology/families.md` | Every symbol in exactly one family |
+| PH2 | `useCaseMatrix` | What should happen in every state, per trigger? | Cells of status x event x trigger x link x sensitivity x dartrix | Expected derived independently, compared with the log |
+| PH3 | `listenerDesign` | What reacts to a state change, and does it end? | Typed stream, per-cell switch | Closure graph has no cycle |
+| PH4 | `closeGaps` | Which gaps are real, in what order? | One failing test, then one fix, per gap | Gates and mutation per item |
+| PH5 | `crossPackageTruth` | Where do claudart, dartrix, zedup meet? | One portal document | Generated from code |
+| PH6 | `verifyEndToEnd` | Does the whole still agree? | Re-run of stages 2 and conformance | Expected equals actual |
 
 Parameters that scale it: the number of packages, the number of dependency
 layers, and which proof types apply. A watcher reads the expected-versus-actual
@@ -93,19 +93,19 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 
 | Id | Name | Gap | Evidence | Status |
 |---|---|---|---|---|
-| L6 | `wildcardArmUndetected` | A wildcard arm in an enum switch is caught by no tool, so D2 can return unnoticed | stage 0.2 seed L6 | open |
-| L7 | `bareStringComparisonUndetected` | A bare string compared with `==` is caught by no tool; `bare_string_for_enum` sees only switch dispatch | stage 0.2 seed L7 | open |
-| L8 | `duplicateLiteralCheckAdvisory` | The duplicate-literal check is advisory: it prints and exits 0 | stage 0.2 seed D1 | open |
-| L9 | `newLogFileNameUndetected` | A new log file name written as a literal is not caught, because the ownership guard knows only the names `LogFile` already holds | stage 0.2 seed T6 | open |
+| U1 | `wildcardArmUndetected` | A wildcard arm in an enum switch is caught by no tool, so D2 can return unnoticed | stage 0.2 seed L6 (finding U1) | open |
+| U2 | `bareStringComparisonUndetected` | A bare string compared with `==` is caught by no tool; `bare_string_for_enum` sees only switch dispatch | stage 0.2 seed L7 | open |
+| U3 | `duplicateLiteralCheckAdvisory` | The duplicate-literal check is advisory: it prints and exits 0 | stage 0.2 seed W1 | open |
+| U4 | `newLogFileNameUndetected` | A new log file name written as a literal is not caught, because the ownership guard knows only the names `LogFile` already holds | stage 0.2 seed T6 | open |
 
 ### Measured by the call census (stage 0.3)
 
 | Id | Name | Gap | Evidence | Status |
 |---|---|---|---|---|
-| B2 | `killReadsRegistryTwice` | Confirmed: `kill` reads the registry twice (load, then the re-read inside `save`) | `docs/topology/call_census.md`, kill rows | open |
+| N2 | `killReadsRegistryTwice` | Confirmed: `kill` reads the registry twice (load, then the re-read inside `save`) | `docs/topology/call_census.md`, kill rows | open |
 | P1 | `logAppendReadsWholeLog` | Every log append also reads the whole log to count lines for trimming: 10 appends in `suggest` cost 10 reads, up to 2000 lines each for `steps.jsonl` | census, `suggest` row; `logger.dart:400` | open |
 | C1 | `censusCoversLifecycleOnly` | The census covers only the lifecycle scenarios (setup, suggest, debug, teardown, kill, rotate); save, status, resume, link, hook and the other commands are not measured yet | census scope | open |
-| B1 | `gitSpawnedTwicePerCommand` | Confirmed with real processes: every command spawns `git rev-parse --show-toplevel --abbrev-ref HEAD` twice where once is enough (`status`, `save`, `resume`, `preflight`, `scan`); `doctor` spawns five (three `rev-parse`, `config user.name`, `config user.email`); `status --project` spawns one. The second spawn's call site is not yet attributed | sandbox run, below | open |
+| N1 | `gitSpawnedTwicePerCommand` | Confirmed with real processes: every command spawns `git rev-parse --show-toplevel --abbrev-ref HEAD` twice where once is enough (`status`, `save`, `resume`, `preflight`, `scan`); `doctor` spawns five (three `rev-parse`, `config user.name`, `config user.email`); `status --project` spawns one. The second spawn's call site is not yet attributed | sandbox run, below | open |
 | C2 | `censusSeesFileSeamOnly` | The census sees the FileIO seam only; git and `claude` process spawns need a separate measurement | census scope | open |
 
 ### Measured by the families (stage 1)
@@ -140,26 +140,26 @@ report is a finding. The working tree is never seeded; the harness is
 Observed (18 seeds): 15 caught, 3 missed. The 18th seed (T7) is the call
 census doc drifting, added when the script moved into `tool/`.
 
-| Seed | Tool | Defect | Result |
-|---|---|---|---|
-| A1 | analyzer | type error | caught |
-| A2 | analyzer | unused import | caught |
-| L1 | custom_lint `bare_string_for_enum` | string switch with actions | caught |
-| L2 | custom_lint `enum_values_loop_in_single_test` | enum `values` loop in one test | caught |
-| L3 | custom_lint `ungrouped_identical_switch_cases` | identical arms | caught |
-| L4 | custom_lint `unconditional_confirm_requires_prompt_fn` | `confirmFn` true, no `promptFn` | caught |
-| L5 | analyzer `missing_enum_constant_in_switch` | enum switch missing a variant | caught |
-| L6 | any | wildcard arm on an enum switch | **missed** |
-| L7 | any | bare string compared with `==` | **missed** |
-| D1 | `check_duplicate_literals` | same-file duplicate literal | caught (advisory, exit 0) |
-| T1 | literal ownership guard | log file name literal in `lib/` | caught |
-| T2 | literal ownership guard | test title naming a type as text | caught |
-| T3 | handoff topology test | generated doc drift | caught |
-| T4 | model metadata guard | model id literal in `lib/` | caught |
-| T5 | environment topology test | generated doc drift | caught |
-| T7 | call census test | generated doc drift | caught |
-| T6 | literal ownership guard | log name literal not yet in `LogFile` | **missed** |
-| R1 | random-order suite | order-dependent test (passes in declared order) | caught |
+| Id | Name | Tool | Defect | Result |
+|---|---|---|---|---|
+| A1 | `typeError` | analyzer | type error | caught |
+| A2 | `unusedImport` | analyzer | unused import | caught |
+| L1 | `stringSwitchWithActions` | custom_lint `bare_string_for_enum` | string switch with actions | caught |
+| L2 | `enumValuesLoopInOneTest` | custom_lint `enum_values_loop_in_single_test` | enum `values` loop in one test | caught |
+| L3 | `identicalSwitchArms` | custom_lint `ungrouped_identical_switch_cases` | identical arms | caught |
+| L4 | `confirmWithoutPromptFunction` | custom_lint `unconditional_confirm_requires_prompt_fn` | `confirmFn` true, no `promptFn` | caught |
+| L5 | `enumSwitchMissingVariant` | analyzer `missing_enum_constant_in_switch` | enum switch missing a variant | caught |
+| L6 | `wildcardArmOnEnumSwitch` | any | wildcard arm on an enum switch | **missed** |
+| L7 | `bareStringComparison` | any | bare string compared with `==` | **missed** |
+| W1 | `sameFileDuplicateLiteral` | `check_duplicate_literals` | same-file duplicate literal | caught (advisory, exit 0) |
+| T1 | `logFileNameLiteralInLib` | literal ownership guard | log file name literal in `lib/` | caught |
+| T2 | `testTitleNamingTypeAsText` | literal ownership guard | test title naming a type as text | caught |
+| T3 | `handoffDocDrift` | handoff topology test | generated doc drift | caught |
+| T4 | `modelIdLiteralInLib` | model metadata guard | model id literal in `lib/` | caught |
+| T5 | `environmentDocDrift` | environment topology test | generated doc drift | caught |
+| T7 | `callCensusDocDrift` | call census test | generated doc drift | caught |
+| T6 | `logNameLiteralNotInLogFile` | literal ownership guard | log name literal not yet in `LogFile` | **missed** |
+| R1 | `orderDependentTest` | random-order suite | order-dependent test (passes in declared order) | caught |
 
 Not seeded here: mutation testing. It was observed alive in the earlier
 mutation runs, which reported survivors per file, and `edit_files.dart` cannot
@@ -175,7 +175,7 @@ Observed: `test/helpers/counting_file_io.dart` (`CountingFileIO`),
 `test/helpers/call_census.dart` (`CensusFile`, the complement kind `other`),
 and `test/topology/call_census_test.dart`, which writes
 `docs/topology/call_census.md` under `make topology`. The first run confirmed
-B2 and found P1. Both are recorded above, not yet fixed.
+N2 and found P1. Both are recorded above, not yet fixed.
 
 Process spawns, measured with the real compiled CLI in a throwaway git
 project (`tool/refactor_audit/spawn_census.sh`, `make spawn-census`, a `git` shim on `PATH` that logs each call and
