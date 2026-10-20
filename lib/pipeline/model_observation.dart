@@ -145,6 +145,28 @@ enum ModelDriftKind {
   maxOutputTokens;
 }
 
+/// A way the models observed in one step run fail to add up.
+///
+/// A run is accounted for when the model it was meant to run on is among the
+/// observed ones and every observed id is a declared model. An empty set of
+/// findings means the run adds up.
+enum ModelAccountingFinding {
+  /// An observed id is not any [AgentModel.slug].
+  unknownModelObserved,
+
+  /// The intended model is not among the observed models, so the step did not
+  /// run on the model it was assigned.
+  intendedModelNotObserved;
+
+  /// The words a person reads for this finding in `claudart status`.
+  String get label => switch (this) {
+        ModelAccountingFinding.unknownModelObserved =>
+          'an observed model is not a declared model',
+        ModelAccountingFinding.intendedModelNotObserved =>
+          'the intended model did not run',
+      };
+}
+
 /// What an observed model was doing inside a step.
 ///
 /// A step's usage can name more than one model, because the CLI makes its own
@@ -171,6 +193,22 @@ enum ObservedModelRole {
 /// the step model, because that would claim something the record does not say.
 const String _roleNotRecordedLabel = 'no role recorded';
 
+/// What `claudart status` says about a record's accounting.
+const String _accountedLabel = 'accounted';
+const String _notAccountedLabel = 'NOT accounted';
+const String _accountingNotRecordedLabel = 'accounting not recorded';
+
+String _describeAccounting(Object? recorded) {
+  if (recorded is! List) return _accountingNotRecordedLabel;
+  if (recorded.isEmpty) return _accountedLabel;
+  final labels = [
+    for (final name in recorded)
+      enumByName(ModelAccountingFinding.values, name as String?)?.label ??
+          '$name',
+  ];
+  return '$_notAccountedLabel: ${labels.join(', ')}';
+}
+
 /// One observation set against the model the step intended.
 class ModelReconciliation {
   const ModelReconciliation({
@@ -181,6 +219,7 @@ class ModelReconciliation {
     required this.contextUsedFraction,
     required this.outputCapReached,
     this.role = ObservedModelRole.stepModel,
+    this.accounting = const {},
   });
 
   final AgentModel intended;
@@ -201,6 +240,11 @@ class ModelReconciliation {
   /// Whether this was the step's model or an incidental helper call.
   final ObservedModelRole role;
 
+  /// How the models of the whole step run fail to add up; empty when they do.
+  /// Set by [reconcileStepModels], so every record of one run carries the same
+  /// set. A lone [reconcileModel] call leaves it empty without checking.
+  final Set<ModelAccountingFinding> accounting;
+
   /// This observation as an incidental helper: the same facts, without
   /// [ModelDriftKind.differsFromIntended], because it was never the step model.
   ModelReconciliation _asIncidentalHelper() => ModelReconciliation(
@@ -211,6 +255,20 @@ class ModelReconciliation {
         contextUsedFraction: contextUsedFraction,
         outputCapReached: outputCapReached,
         role: ObservedModelRole.incidentalHelper,
+        accounting: accounting,
+      );
+
+  /// The same observation carrying the step run's [accounting].
+  ModelReconciliation _withAccounting(Set<ModelAccountingFinding> accounting) =>
+      ModelReconciliation(
+        intended: intended,
+        observation: observation,
+        resolved: resolved,
+        drift: drift,
+        contextUsedFraction: contextUsedFraction,
+        outputCapReached: outputCapReached,
+        role: role,
+        accounting: accounting,
       );
 
   /// The persisted per-step record (keys are [ModelRecordField] names).
@@ -222,6 +280,9 @@ class ModelReconciliation {
         ModelRecordField.contextUsedFraction.name: contextUsedFraction,
         ModelRecordField.outputCapReached.name: outputCapReached,
         ModelRecordField.role.name: role.name,
+        ModelRecordField.accounting.name: [
+          for (final finding in accounting) finding.name,
+        ],
         ModelRecordField.observation.name: observation.toJson(),
       };
 }
@@ -245,7 +306,8 @@ String describeModelRecord(Map<String, dynamic> record) {
       '${record[ModelRecordField.intended.name]} -> $observedId  '
       '(${role?.label ?? _roleNotRecordedLabel})  '
       'context $context  '
-      'drift: ${drift.isEmpty ? 'none' : drift.join(', ')}';
+      'drift: ${drift.isEmpty ? 'none' : drift.join(', ')}  '
+      '${_describeAccounting(record[ModelRecordField.accounting.name])}';
 }
 
 /// The keys of one persisted per-step model record, written by their own
@@ -258,6 +320,7 @@ enum ModelRecordField {
   contextUsedFraction,
   outputCapReached,
   role,
+  accounting,
   observation;
 }
 
@@ -305,9 +368,14 @@ List<ModelReconciliation> reconcileStepModels({
   required AgentModel intended,
   required List<ModelObservation> observations,
 }) {
+  final accounting = accountForStepModels(
+    intended: intended,
+    observations: observations,
+  );
   final reconciliations = [
     for (final observation in observations)
-      reconcileModel(intended: intended, observation: observation),
+      reconcileModel(intended: intended, observation: observation)
+          ._withAccounting(accounting),
   ];
   final intendedRan = reconciliations.any((r) => r.resolved == intended);
   if (!intendedRan) return reconciliations;
@@ -315,4 +383,21 @@ List<ModelReconciliation> reconcileStepModels({
     for (final r in reconciliations)
       r.resolved == intended ? r : r._asIncidentalHelper(),
   ];
+}
+
+/// How the models observed in one step run fail to add up with the model the
+/// step was meant to run on; empty when they do.
+Set<ModelAccountingFinding> accountForStepModels({
+  required AgentModel intended,
+  required List<ModelObservation> observations,
+}) {
+  final resolved = [
+    for (final observation in observations)
+      AgentModel.fromSlug(observation.observedModelId),
+  ];
+  return {
+    if (resolved.contains(null)) ModelAccountingFinding.unknownModelObserved,
+    if (!resolved.contains(intended))
+      ModelAccountingFinding.intendedModelNotObserved,
+  };
 }

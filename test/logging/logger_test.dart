@@ -368,6 +368,41 @@ void main() {
       );
     });
 
+    test('every record of a run carries the same accounting', () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [
+            const ModelObservation(observedModelId: 'not-a-declared-model'),
+            ModelObservation(observedModelId: AgentModel.sonnet.slug),
+          ],
+        ),
+      );
+      expect(
+        records().map((record) => record[ModelRecordField.accounting.name]),
+        everyElement([ModelAccountingFinding.unknownModelObserved.name]),
+      );
+    });
+
+    test('a run that adds up is logged with an empty accounting', () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [ModelObservation(observedModelId: AgentModel.sonnet.slug)],
+        ),
+      );
+      expect(
+        records().single[ModelRecordField.accounting.name],
+        isEmpty,
+      );
+    });
+
     test('writes nothing when the stream named no model', () {
       logger.logStepModels(command: 'debug', event: completed());
       expect(io.fileExists(_modelsPath), isFalse);
