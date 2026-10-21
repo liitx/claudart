@@ -1151,6 +1151,21 @@ is not lost. Owner's design, restated:
 enforced layer, writes the snapshot, serves the build and opens the browser; implement the
 pre-construction scan or remove the claim from `PARADIGMS.md`. Depends on Phase 16 slice 7.
 
+### Phase 18 — State-driven architecture, observed first (in progress, opened 2026-10-20)
+The record, gap register, family table and ordered steps are in
+`docs/methodical_refactor.md`; this entry only says where it stands.
+- Done and committed locally: tool liveness (`make liveness`), FileIO call
+  census, git-spawn census (`make spawn-census`), topological families
+  (`docs/topology/families.md`), status x event matrix with a ratchet
+  (`docs/topology/transition_matrix.md`), gap register with a test that every
+  gap has a family or a proposed new variant.
+- Decided: the status transition stream is asynchronous (owner), with the
+  drain, order and isolation proofs written down in stage 3.
+- Next: the draft order Q1 to Q9, to be reviewed with the owner and claudart
+  before any listener or writer change. zedup stays paused; its compile break
+  against this checkout (X8) is recorded for its owner.
+
+
 ---
 
 ## GitHub archive convention

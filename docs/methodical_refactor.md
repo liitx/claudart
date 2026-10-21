@@ -126,6 +126,128 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | M3 | `environmentsDoNotChangeStateMachine` | Proven: the logged moves of every scenario are identical in all six link-state x dartrix environments, so those two axes do not change the state machine | `transition_matrix_test.dart`, "identical in every environment" | closed |
 
 
+### Measured in real logs
+
+Source: the real workspace logs of this machine (`transitions.jsonl` 44 moves
+from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
+`interactions.jsonl` 54 rows, `models.jsonl` 107 rows), read-only, counts only.
+
+| Id | Name | Finding | Evidence | Status |
+|---|---|---|---|---|
+| R1 | `interactionLogCoversFourCommands` | Only `setup`, `doctor`, `scan` and `workspaces` write to the interactions log; every other command leaves no interaction record, so real command usage is invisible | `interactions.jsonl`: 54 rows, 4 commands | open |
+| R2 | `suggestFromDebugCompleteRejectedInRealUse` | Real use tried `suggest` from `debug-complete` twice and it was rejected with `invalidHandoffTransition`; no lifecycle scenario tries it | `errors.jsonl`, fingerprint `suggest.invalidHandoffTransition` | open |
+| R3 | `realUseNeverTearsDown` | 8 sessions ended with `kill` from `debugComplete`, none with `teardown`, so the skills-update path did not run in real use over these two days | `transitions.jsonl` | open |
+| R4 | `realUseHitsNineOfThirtyThreeLegalCells` | Real moves touched 9 of the table's 33 legal cells; every one was legal and none was rejected | `transitions.jsonl` | open |
+| R5 | `stepLogAbsentInRealUse` | No workspace has a `steps.jsonl`: the installed binary predates step logging, which is in unpushed local commits | workspace log directories | open, collect after a rebuild |
+| R6 | `errorLogIsMostlyEnvironmentChecks` | 7 of the 8 error fingerprints come from `doctor` environment checks; one comes from a state move | `errors.jsonl` | open |
+| R7 | `logSchemaUnversioned` | Of 107 model rows only 40 carry a role and 16 an accounting field: older rows lack fields and nothing marks which schema a row follows | `models.jsonl` | open |
+| R8 | `deadCellWasLiveUntilDebugStartedLanded` | `readyForDebug --fixApplied` was produced by `debug` six times up to 2026-10-20 08:07; from 10:40 `debugStarted` precedes it. In current code the cell is never produced, so an earlier statement that it never was is true only of the current code | `transitions.jsonl` | closed (corrected) |
+
+## Gap to family
+
+Each gap is placed in a family from `docs/topology/families.md` (state role x
+reach layer) or marked as needing a new variant. A gap is placed in a family
+only when the code it concerns is in `lib/` or `bin/`, where the scan reads;
+a gap about a repo other than this one, or about tools and tests, has no
+family today and names the variant it needs. The test
+`test/topology/gap_register_test.dart` fails if a gap is missing from this
+table, a family name is not a real `StateRole x ReachLayer` pair, or a "new"
+variant is not in the proposals below.
+
+| Id | Family | Verdict |
+|---|---|---|
+| S1 | drivesState x pure | existing |
+| S2 | drivesState x processBound | existing |
+| S3 | drivesState x processBound | existing |
+| S4 | — | new: TriggerSource |
+| S5 | observesState x processBound; drivesState x processBound; observesState x pure | existing |
+| S6 | observesState x fileSeam | existing |
+| S7 | drivesState x processBound | existing |
+| S8 | — | new: StateMachineKind |
+| S9 | observesState x fileSeam | existing |
+| D1 | observesState x processBound | existing |
+| D2 | untouched x pure; drivesState x pure; drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x processBound | existing |
+| D3 | untouched x workspaceBound | existing |
+| D4 | untouched x workspaceBound; drivesState x processBound | existing |
+| D5 | untouched x fileSeam | existing |
+| D6 | untouched x workspaceBound | existing |
+| D7 | drivesState x processBound | existing |
+| D8 | untouched x fileSeam; untouched x processBound; observesState x workspaceBound | existing |
+| B1 | untouched x processBound | existing |
+| B2 | untouched x workspaceBound | existing |
+| B3 | untouched x workspaceBound; drivesState x processBound | existing |
+| B4 | untouched x workspaceBound | existing |
+| B5 | untouched x processBound | existing |
+| B6 | drivesState x pure; untouched x processBound | existing |
+| B7 | untouched x processBound | existing |
+| X1 | — | new: OwningPackage |
+| X2 | — | new: OwningPackage |
+| X3 | — | new: OwningPackage |
+| X4 | — | new: CodeTree |
+| X5 | — | new: OwningPackage |
+| X6 | — | new: OwningPackage |
+| X8 | — | new: OwningPackage |
+| X9 | — | new: CodeTree |
+| U1 | — | new: CodeTree |
+| U2 | — | new: CodeTree |
+| U3 | — | new: CodeTree |
+| U4 | — | new: CodeTree |
+| N1 | untouched x processBound | existing |
+| N2 | untouched x workspaceBound | existing |
+| P1 | observesState x fileSeam | existing |
+| C1 | — | new: CodeTree |
+| C2 | — | new: CodeTree |
+| F1 | drivesState x processBound | existing |
+| F2 | observesState x processBound; observesState x workspaceBound | existing |
+| F3 | untouched x processBound | existing |
+| F4 | — | new: CodeTree |
+| M1 | — | new: CodeTree |
+| M2 | — | new: CodeTree |
+| M3 | — | new: CodeTree |
+| R1 | observesState x fileSeam; untouched x processBound | existing |
+| R2 | drivesState x processBound | existing |
+| R3 | drivesState x processBound | existing |
+| R4 | drivesState x processBound | existing |
+| R5 | observesState x fileSeam | existing |
+| R6 | untouched x processBound | existing |
+| R7 | observesState x fileSeam | existing |
+| R8 | drivesState x processBound | existing |
+
+### Proposed new variants
+
+| Name | Axis | Evidence | Needed by |
+|---|---|---|---|
+| `StateRole.reactsToState` | state role | No code subscribes to a status transition today; the stage 3 listeners are exactly such files, so they have no family | stage 3 (no gap yet) |
+| `TriggerSource` | new axis: command, agentEdit, pipelineEvent, externalReader | Agents write statuses by editing `handoff.md` per their prompts (`handoff_status.md`, prompt references); no file family describes a trigger that is not code in this repo | S4 |
+| `StateMachineKind` | new axis: handoff, pipeline | `StateRole` is about the handoff only; `PipelineEvent` is a second state machine whose files read as `untouched` | S8 |
+| `OwningPackage` | new axis: claudart, dartrix, zedup | The scan reads one repo; dartrix and zedup gaps cannot be placed | X1, X2, X3, X5, X6, X8 |
+| `CodeTree` | new axis: library, binary, tool, test | 178 files under `tool/` and `test/` are not scanned; lints, guards, scenarios and the census live there | X4, X9, U1-U4, C1, C2, F4, M1-M3 |
+| `ReachLayer.siblingBound` | reach layer | 11 files in `lib/` name zedup or dartrix in code (`dependency_config`, `plan_template`, `doctor`, `link`, ...) and are spread across the other layers | none yet |
+
+## Proposed order (draft, to be reviewed with claudart and the owner)
+
+Derived from the register, the family table and the real logs; nothing here is
+started. Each step lists what it needs first and the test that must fail
+before the change and pass after.
+
+| Id | Name | Gaps | Needs first | Pass condition (written before the change) |
+|---|---|---|---|---|
+| Q1 | `guardsThatSee` | U1, U2, U3, U4 | nothing | `make liveness` reports CAUGHT for a wildcard arm on an enum switch, a bare string compared with `==`, a duplicate literal (as a gate, not advice) and a new log-file-name literal; existing violations are held by a ratchet so later steps cannot add more |
+| Q2 | `intendedBehaviorDecided` | M1, M2, R2, R3 | Q1 | the owner decides, per cell, whether each undriven or rejected-in-real-use move is wanted (first: `suggest` from `debugComplete`, `kill` versus `teardown`); each decision becomes a lifecycle scenario that fails before the code agrees; the undriven-cell ratchet reaches 0 or each remaining cell is marked unreachable with the reason |
+| Q3 | `oneWriterForStatus` | S2, S3, E1 | Q2 | a guard fails if `handoff.md` status is written anywhere but `applyHandoffEvent`; the seven state-driving command files go through it; every early exit writes a record (the census shows no unrecorded exit) |
+| Q4 | `asynchronousTransitionStream` | S1, S6, S7, S8 | Q3 | the totality, safety, termination, order, drain and isolation proofs of stage 3, each as a test; the logger is a subscriber and the `onTransition` callbacks are gone; `teardown` and the pipeline publish too |
+| Q5 | `logsCoverEveryCommand` | R1, R5, R7, S9 | Q4 | every command leaves an interaction record (a matrix over `ClaudartCommand`); a real run after a rebuild produces `steps.jsonl`; each log row names its schema version; `performance` has a writer or is removed |
+| Q6 | `noSilentFallbacks` | D1 to D8 | Q1 | a corrupt registry, an unreadable `workspace.json` under strict mode, a missing `HOME`, an unpersisted token map and each wildcard arm become a typed failure or an explicit variant, each with the failing test first |
+| Q7 | `measuredRedundancyRemoved` | B1 to B4, N1, N2, P1 | Q5 | `make spawn-census` and the call census show git spawned once per command, the registry parsed once, the log append not reading the log; the before and after counts are recorded here |
+| Q8 | `familiesGrowWhereDataSaysSo` | S4, S8 and the proposed variants | Q4 | each proposed variant is added only with a file that needs it: `reactsToState` with the first listener, `TriggerSource` with agent-edit detection, `CodeTree` when tools and tests are scanned; the families doc and its drift test change with them |
+| Q9 | `crossPackageTruth` | X1 to X9 | Q8 | one generated portal document across claudart, dartrix and zedup; the zedup compile break (X8) and the three contradicting plans are listed for their owners; no edit to dartrix or zedup from here |
+
+Why this order: Q1 first because every later step needs a tool that would
+notice a regression. Q2 before any code because the real logs show behavior
+the table does not describe (R2, R3), and only the owner can say which is
+intended. Q3 before Q4 because a stream of transitions is only complete if one
+writer publishes them. Q6 depends only on Q1 and can run beside Q3 to Q5.
+
 ## Stage records
 
 Each entry states the pass condition first, then the observed result.
@@ -247,8 +369,10 @@ Computed from `HandoffStatus.after` (all 104 cells), not assumed:
 Proposed shape (one writer, one stream, listeners chosen by an exhaustive switch):
 
 1. `applyHandoffEvent` stays the only place a status changes (closes S2, S3);
-   it publishes each `HandoffTransition` on a sync broadcast
-   `Stream<HandoffTransition>`, the way `PipelineExecutor.events` already does.
+   it publishes each `HandoffTransition` on an asynchronous broadcast
+   `Stream<HandoffTransition>` (owner decision: async). The file write and the
+   publish happen in the writer; listeners run after, in later turns of the
+   event loop, in the order the transitions were published.
 2. A `HandoffListenerKind` enum names every reaction; a `listenersFor` switch
    over the transition's (status, event) cell returns the kinds that run, with
    no default arm, so a new event or status fails to compile until it is
@@ -266,6 +390,9 @@ Proof obligations, each a test written before the code:
 | Safety | for every cell and every next event a listener can return, the event is legal from the status the cell lands in (checked over all 104 cells) |
 | Termination | the relation event -> events a listener may return is acyclic (checked by topological sort over the 13 events); a chain is therefore at most 13 hops |
 | Record | each hop is one line in `transitions.jsonl`, and the matrix test reads them |
+| Order | listeners see transitions in publication order, and a listener-emitted event is queued behind the ones already published (checked with a recorded sequence) |
+| Drain | the process does not exit with a listener pending: a command awaits the stream's drain before it returns, so no record is lost at exit (the silent-loss risk async adds; checked by a listener that is slow on purpose) |
+| Isolation | a listener that throws is logged as a typed failure and does not stop the others or the writer (checked by a listener that throws) |
 
 What happens today, per event (read from the code and the matrix; "next" is
 what runs automatically after the move, which is nothing in every row except
@@ -294,7 +421,9 @@ Because `debug` writes `debugStarted` first, it always applies `fixApplied`
 from `debugInProgress`: the table's `readyForDebug --fixApplied` cell is never
 produced by any command.
 
-Decisions that are yours, not derivable from the data: which sequences should
-start automatically after which state (for example, after `fixApplied` run
-analyze and the tests; after `debugBlocked` open the suggest step), and whether
-a listener may ever be asynchronous (the stream is synchronous today).
+Decided by the owner: the stream is asynchronous. Still to decide: which
+sequences start automatically after which state (for example, after
+`fixApplied` run the tests; after `debugBlocked` open the suggest step); the
+real logs show `suggest` tried from `debugComplete` twice (R2) and `kill` used
+instead of `teardown` eight times (R3), so those two moves are the first
+candidates to decide on evidence.
