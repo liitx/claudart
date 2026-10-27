@@ -316,6 +316,40 @@ the table does not describe (R2, R3), and only the owner can say which is
 intended. Q3 before Q4 because a stream of transitions is only complete if one
 writer publishes them. Q6 depends only on Q1 and can run beside Q3 to Q5.
 
+### Sandboxed experiments and recommendations (2026-10-27)
+
+Each experiment ran in a scratch copy or an in-memory sandbox and left the
+working tree as it was. Recommendations are the assistant's, drawn from the
+data; the decisions stay the owner's.
+
+| Experiment | Result |
+|---|---|
+| Sensitive-logs sweep (`test/conformance/sensitive_logs_test.dart`): `suggest` and `debug` run against a sensitive project with a model that fails naming the project's identifiers, then every file under its logs read | clean after D12; the same run on a project that is not sensitive does contain the names, so the check can see them; forcing the logger back to plain makes both sensitive cases fail, so it would have caught the old leak |
+| Cost of a log append at 0, 500 and 2000 preloaded lines (real files) | 220, 287 and 522 microseconds per append; a debug run appends about 11 times, so about 6 ms in the worst case: P1 is real but not worth fixing before the behavior work |
+| Cost of one `git rev-parse` spawn | about 16 ms; the doubled spawn per command costs 16 ms |
+| Candidate `kill` rule (only from `suggestInvestigating` and `needsSuggest`) replayed over the 44 real moves | would forbid 8 of the 9 real kills, all from `debugComplete`, the sessions ended with `kill` because `teardown` costs a model step |
+| `readyForDebug --fixApplied` made illegal (earlier experiment) | 24 lifecycle runs that call `debug` fail |
+
+Recommendations for the open decisions:
+
+1. **`suggest` from `debugComplete`: reject, with a message saying what to
+   run** (`save` then `teardown`, or `rotate` for the next issue). No data says
+   anyone wants the new move (two attempts in two days), and allowing it adds a
+   legal cell that needs its own scenario.
+2. **Hook on an unreadable `workspace.json`: stay fail-open and logged.** The
+   commands that spend model calls already stop; a hook that blocked edits on a
+   corrupt config would lock the owner out of the file they need to fix.
+3. **`kill` rule: adopt it, but in two steps.** First make `kill` from
+   `debugComplete` print a warning that nothing will be learned; make it illegal
+   only after the verified-closure `teardown` exists (H6, Q11). Today the rule
+   alone would push the 8 sessions above toward the unsafe habit, because
+   `teardown` is the expensive path.
+4. **`readyForDebug --fixApplied`: keep it as `debug`'s start check now;
+   decouple it when `debug` goes through the single writer (Q3).**
+5. **Q7 moves to last.** Its measured costs (about 6 ms of log appends per
+   `debug` run, 16 ms per extra git spawn) are real but small next to the
+   state-machine work.
+
 ### The shape of typed data (owner's direction)
 
 Recorded so every step that adds or changes an object follows it. The owner's
