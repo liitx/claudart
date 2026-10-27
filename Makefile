@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census
+.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency
 
 ## Compile native binary to ~/bin/claudart
 build:
@@ -29,6 +29,12 @@ ownership:
 ## catch it (CAUGHT / MISSED). Read only: the working tree is never touched.
 liveness:
 	tool/refactor_audit/liveness.sh
+
+## How many saved handoffs disagree with themselves (status ahead of content,
+## or content ahead of status). Read only.
+##   make handoff-consistency DIR=<a workspace's archive directory>
+handoff-consistency:
+	$(DART) run tool/refactor_audit/handoff_consistency.dart $(DIR)
 
 ## Count git spawns per real command, using the compiled CLI in a throwaway
 ## project. Read only.

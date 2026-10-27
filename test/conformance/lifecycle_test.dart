@@ -39,6 +39,14 @@ void main() {
             reason: '${step.name}: the consumer view',
           );
           if (step.logged) {
+            // A step that is not a command (an agent or the owner editing the
+            // handoff by hand) may leave the status behind until the next
+            // command; only a command must leave status and content agreeing.
+            expect(
+              SessionState.parse(handoffContentOf(io)).findings,
+              isEmpty,
+              reason: '${step.name}: the status must follow the content',
+            );
             expect(
               loggedTo(io),
               step.effective.name,

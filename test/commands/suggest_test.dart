@@ -8,6 +8,8 @@ import 'package:claudart/registry.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
+import 'package:claudart/errors/claudart_exception.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -118,6 +120,25 @@ PipelineExecutor _executorWithNoOutput() =>
 
 const _rootCause = 'Off-by-one in foo()';
 
+/// Executor whose runner answers every step with [text].
+PipelineExecutor _executorWithText(String text) => PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        required allowedTools,
+        required helperModel,
+        StepMode mode = StepMode.project,
+      }) async =>
+          StepResult(
+            text: text,
+            usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+          ),
+    );
+
 HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
 
@@ -193,6 +214,57 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('an analysis with no root cause writes nothing and does not lock one',
+        () async {
+      final io = _io();
+      final before = io.read(handoffPathFor(_workspace));
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithText('the model said nothing useful'),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: (_) => 0,
+        ),
+        throwsA(
+          isA<ClaudartException>().having(
+            (e) => e.failureType,
+            'failureType',
+            FailureType.knowledgeTransferNotConverged,
+          ),
+        ),
+      );
+      expect(io.read(handoffPathFor(_workspace)), before);
+      expect(_statusOf(io), HandoffStatus.suggestInvestigating);
+    });
+
+    test('an analysis with a root cause but no files in play is not locked '
+        'either', () async {
+      final io = _io();
+      final before = io.read(handoffPathFor(_workspace));
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithText('<ROOT_CAUSE>$_rootCause</ROOT_CAUSE>'),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: (_) => 0,
+        ),
+        throwsA(
+          isA<ClaudartException>().having(
+            (e) => e.failureType,
+            'failureType',
+            FailureType.knowledgeTransferNotConverged,
+          ),
+        ),
+      );
+      expect(io.read(handoffPathFor(_workspace)), before);
     });
 
     test('exits 1 when no handoff exists', () async {

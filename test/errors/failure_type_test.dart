@@ -32,6 +32,20 @@ void main() {
     test('stepProducedNoResult rolls up to pipeline', () {
       expect(FailureType.stepProducedNoResult.errorType, ErrorType.pipeline);
     });
+    test('knowledgeTransferNotConverged tells the owner to re-run suggest', () {
+      expect(
+        FailureType.knowledgeTransferNotConverged.suggestedAction,
+        'The analysis did not name a root cause, so nothing was written and '
+        'the status is unchanged. Re-run `claudart suggest`, or add a root '
+        'cause to the handoff by hand.',
+      );
+    });
+    test('knowledgeTransferNotConverged rolls up to session', () {
+      expect(
+        FailureType.knowledgeTransferNotConverged.errorType,
+        ErrorType.session,
+      );
+    });
     test('tokenMapUnreadable rolls up to workspace', () {
       expect(FailureType.tokenMapUnreadable.errorType, ErrorType.workspace);
     });
@@ -44,6 +58,12 @@ void main() {
   });
 
   group('FailureType.effectiveFaultClass', () {
+    test('knowledgeTransferNotConverged uses its subsystem default', () {
+      expect(
+        FailureType.knowledgeTransferNotConverged.effectiveFaultClass,
+        FaultClass.environmentFault,
+      );
+    });
     test('tokenMapUnreadable uses its subsystem default, unoverridden', () {
       expect(
         FailureType.tokenMapUnreadable.effectiveFaultClass,

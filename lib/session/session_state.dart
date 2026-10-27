@@ -1,5 +1,7 @@
 import 'handoff_event.dart';
+import 'handoff_finding.dart';
 import 'handoff_section.dart';
+import 'knowledge_transfer.dart';
 import 'teardown_utils.dart';
 
 /// Typed representation of the handoff status field.
@@ -201,6 +203,24 @@ enum HandoffStatus {
         noHandoff || unknown => 'Run: claudart setup',
       };
 
+  /// What this status claims about the handoff's knowledge transfer: the four
+  /// statuses after the root cause is confirmed say it is complete, the one
+  /// still investigating says it is not. `needsSuggest` says nothing: debug has
+  /// a question, and the root cause it was given is still in the file.
+  KnowledgeTransferExpectation get knowledgeTransferExpectation =>
+      switch (this) {
+        readyForSuggest ||
+        readyForDebug ||
+        debugInProgress ||
+        debugComplete =>
+          KnowledgeTransferExpectation.converged,
+        suggestInvestigating => KnowledgeTransferExpectation.unconverged,
+        needsSuggest ||
+        noHandoff ||
+        unknown =>
+          KnowledgeTransferExpectation.none,
+      };
+
   /// What `kill` would lose from this status, or null when it loses nothing.
   /// A finished fix is the one status whose learning only `teardown` keeps.
   String? get killWarning => switch (this) {
@@ -272,6 +292,7 @@ class SessionState {
   final String branch;
   final HandoffSection bug;
   final HandoffSection rootCause;
+  final HandoffSection scope;
   final HandoffSection attempted;
   final HandoffSection changed;
   final HandoffSection unresolved;
@@ -281,6 +302,7 @@ class SessionState {
     required this.branch,
     required this.bug,
     required this.rootCause,
+    required this.scope,
     required this.attempted,
     required this.changed,
     required this.unresolved,
@@ -300,6 +322,36 @@ class SessionState {
   HandoffStatus get effectiveStatus =>
       hasActiveContent ? status : HandoffStatus.noHandoff;
 
+  /// Whether the content is a complete knowledge transfer, read from the root
+  /// cause and the scope and not from the status.
+  KnowledgeTransfer get knowledgeTransfer =>
+      KnowledgeTransfer.of(rootCause: rootCause, scope: scope);
+
+  /// How the status and the content disagree; empty for a consistent handoff.
+  List<HandoffFinding> get findings => switch ((
+        effectiveStatus.knowledgeTransferExpectation,
+        knowledgeTransfer,
+      )) {
+        (
+          KnowledgeTransferExpectation.converged,
+          KnowledgeTransfer.unconverged,
+        ) =>
+          [HandoffFinding.statusAheadOfContent],
+        (
+          KnowledgeTransferExpectation.unconverged,
+          KnowledgeTransfer.converged,
+        ) =>
+          [HandoffFinding.contentAheadOfStatus],
+        (KnowledgeTransferExpectation.converged, KnowledgeTransfer.converged) ||
+        (
+          KnowledgeTransferExpectation.unconverged,
+          KnowledgeTransfer.unconverged,
+        ) ||
+        (KnowledgeTransferExpectation.none, KnowledgeTransfer.converged) ||
+        (KnowledgeTransferExpectation.none, KnowledgeTransfer.unconverged) =>
+          const [],
+      };
+
   /// Parses [content] from a handoff.md file into a [SessionState].
   ///
   /// Missing sections become empty strings; placeholder text is preserved
@@ -312,6 +364,9 @@ class SessionState {
       branch: extractBranch(content),
       bug: HandoffSection(_clean(extractSection(content, 'Bug'))),
       rootCause: HandoffSection(_clean(extractSection(content, 'Root Cause'))),
+      scope: HandoffSection(
+        readSubSection(extractSection(content, 'Scope'), 'Files in play'),
+      ),
       attempted: HandoffSection(
         readSubSection(debugProgress, 'What was attempted'),
       ),

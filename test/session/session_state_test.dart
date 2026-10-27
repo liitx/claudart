@@ -1,5 +1,7 @@
 import 'package:test/test.dart';
+import 'package:claudart/session/handoff_finding.dart';
 import 'package:claudart/session/handoff_section.dart';
+import 'package:claudart/session/knowledge_transfer.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart';
 
@@ -107,7 +109,94 @@ const _killWarning = <HandoffStatus, String?>{
   HandoffStatus.unknown: null,
 };
 
+/// Independent literals: what knowledge transfer each status stands for.
+const _expectation = <HandoffStatus, KnowledgeTransferExpectation>{
+  HandoffStatus.suggestInvestigating: KnowledgeTransferExpectation.unconverged,
+  HandoffStatus.readyForSuggest: KnowledgeTransferExpectation.converged,
+  HandoffStatus.readyForDebug: KnowledgeTransferExpectation.converged,
+  HandoffStatus.debugInProgress: KnowledgeTransferExpectation.converged,
+  HandoffStatus.debugComplete: KnowledgeTransferExpectation.converged,
+  HandoffStatus.needsSuggest: KnowledgeTransferExpectation.none,
+  HandoffStatus.noHandoff: KnowledgeTransferExpectation.none,
+  HandoffStatus.unknown: KnowledgeTransferExpectation.none,
+};
+
 void main() {
+  group('$HandoffStatus.knowledgeTransferExpectation', () {
+    test('every status has a pinned expectation', () {
+      expect(_expectation.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: ${_expectation[status]!.name}', () {
+        expect(status.knowledgeTransferExpectation, _expectation[status]);
+      });
+    }
+  });
+
+  group('$SessionState.findings', () {
+    // Independent literals: a status that expects a transfer, against what the
+    // handoff actually holds.
+    const converged = KnowledgeTransfer.converged;
+    const unconverged = KnowledgeTransfer.unconverged;
+    HandoffFinding? expected(HandoffStatus status, KnowledgeTransfer held) =>
+        switch ((_expectation[status]!, held)) {
+          (KnowledgeTransferExpectation.converged, unconverged) =>
+            HandoffFinding.statusAheadOfContent,
+          (KnowledgeTransferExpectation.unconverged, converged) =>
+            HandoffFinding.contentAheadOfStatus,
+          (KnowledgeTransferExpectation.converged, converged) ||
+          (KnowledgeTransferExpectation.unconverged, unconverged) ||
+          (KnowledgeTransferExpectation.none, converged) ||
+          (KnowledgeTransferExpectation.none, unconverged) =>
+            null,
+        };
+
+    SessionState held(HandoffStatus status, KnowledgeTransfer transfer) =>
+        SessionState(
+          status: status,
+          branch: 'main',
+          bug: const HandoffSection('a real bug'),
+          rootCause: HandoffSection(
+            transfer == converged ? 'a cause' : '_Not yet determined._',
+          ),
+          scope: HandoffSection(
+            transfer == converged ? 'lib/a.dart' : '_Not yet determined._',
+          ),
+          attempted: const HandoffSection('_Nothing yet._'),
+          changed: const HandoffSection('_Nothing yet._'),
+          unresolved: const HandoffSection('_Nothing yet._'),
+        );
+
+    for (final status in HandoffStatus.values) {
+      for (final transfer in KnowledgeTransfer.values) {
+        test('${status.name} holding ${transfer.name}', () {
+          final finding = expected(status, transfer);
+          expect(
+            held(status, transfer).findings,
+            finding == null ? isEmpty : [finding],
+          );
+        });
+      }
+    }
+  });
+
+  group('$SessionState.knowledgeTransfer', () {
+    test('an active handoff with a root cause and a scope is converged', () {
+      expect(
+        SessionState.parse(_activeHandoff).knowledgeTransfer,
+        KnowledgeTransfer.converged,
+      );
+    });
+
+    test('a blank handoff is unconverged', () {
+      expect(
+        SessionState.parse(blankHandoff).knowledgeTransfer,
+        KnowledgeTransfer.unconverged,
+      );
+    });
+  });
+
   group('$HandoffStatus.nextStep', () {
     test('every status has a pinned next step', () {
       expect(_nextStep.keys.toSet(), HandoffStatus.values.toSet());
@@ -315,6 +404,7 @@ void main() {
           branch: 'main',
           bug: HandoffSection(bug),
           rootCause: HandoffSection(rootCause),
+          scope: const HandoffSection('_Not yet determined._'),
           attempted: HandoffSection(attempted),
           changed: HandoffSection(changed),
           unresolved: HandoffSection(unresolved),
@@ -355,6 +445,7 @@ void main() {
           branch: 'main',
           bug: HandoffSection(active ? 'Crash on save' : blank),
           rootCause: const HandoffSection(blank),
+          scope: const HandoffSection(blank),
           attempted: const HandoffSection(blank),
           changed: const HandoffSection(blank),
           unresolved: const HandoffSection(blank),

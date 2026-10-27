@@ -32,6 +32,7 @@ enum FailureType {
   stepModelNotPermittedForRole,
   workspaceConfigUnreadable,
   tokenMapUnreadable,
+  knowledgeTransferNotConverged,
   unexpectedFailure;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
@@ -40,7 +41,8 @@ enum FailureType {
         FailureType.scanThresholdExceeded => ErrorType.scan,
         FailureType.archiveIndexCorrupt => ErrorType.archive,
         FailureType.sessionCloseFailed ||
-        FailureType.invalidHandoffTransition =>
+        FailureType.invalidHandoffTransition ||
+        FailureType.knowledgeTransferNotConverged =>
           ErrorType.session,
         FailureType.workspaceLocked ||
         FailureType.registryCorrupt ||
@@ -93,6 +95,7 @@ enum FailureType {
         FailureType.editPlanMalformed ||
         FailureType.editVerificationFailed ||
         FailureType.tokenMapUnreadable ||
+        FailureType.knowledgeTransferNotConverged ||
         FailureType.unexpectedFailure =>
           faultClass,
       };
@@ -115,6 +118,8 @@ enum FailureType {
         FailureType.workspaceConfigUnreadable =>
           'Workspace config unreadable',
         FailureType.tokenMapUnreadable => 'Token map unreadable',
+        FailureType.knowledgeTransferNotConverged =>
+          'Knowledge transfer not converged',
         FailureType.unexpectedFailure => 'Unexpected failure',
       };
 
@@ -174,6 +179,10 @@ enum FailureType {
               'is never overwritten, and without it a sensitive project\'s '
               'identifiers cannot be abstracted, so the command stopped '
               'instead of writing them out.',
+        FailureType.knowledgeTransferNotConverged =>
+          'The analysis did not name a root cause, so nothing was written and '
+              'the status is unchanged. Re-run `claudart suggest`, or add a '
+              'root cause to the handoff by hand.',
         FailureType.unexpectedFailure =>
           'No failure type describes this yet, so it is a gap in the failure '
               'taxonomy: define a FailureType for it. The reason above is the '

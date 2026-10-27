@@ -1,6 +1,8 @@
 
 import 'dart:io';
 import '../config.dart' show loadWorkspaceConfig;
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../logging/logger.dart';
@@ -18,6 +20,7 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../session/session_ops.dart';
 import '../session/handoff_event.dart';
+import '../session/handoff_placeholder.dart';
 import '../session/invalid_handoff_transition_exception.dart';
 import '../session/session_state.dart' show HandoffStatus;
 import '../ui/menu.dart';
@@ -267,6 +270,14 @@ Future<void> runSuggest({
   final scopeClasses = tagOr(analysisOut, 'SCOPE_CLASSES');
   final mustNotTouch = tagOr(analysisOut, 'MUST_NOT_TOUCH');
   final constraints  = tagOr(analysisOut, 'CONSTRAINTS');
+
+  // The write below moves the status to readyForDebug, which says the
+  // knowledge transfer is complete. An analysis with no root cause or no
+  // files in play is not one, so nothing is written and the status stays.
+  if (HandoffPlaceholder.isBlank(rootCause.trim()) ||
+      HandoffPlaceholder.isBlank(scopeFiles.trim())) {
+    throw ClaudartException(FailureType.knowledgeTransferNotConverged);
+  }
 
   final newScope = '''### Files in play
 $scopeFiles
