@@ -1,5 +1,5 @@
 import 'handoff_event.dart';
-import 'handoff_placeholder.dart';
+import 'handoff_section.dart';
 import 'teardown_utils.dart';
 
 /// Typed representation of the handoff status field.
@@ -239,11 +239,11 @@ enum HandoffStatus {
 class SessionState {
   final HandoffStatus status;
   final String branch;
-  final String bug;
-  final String rootCause;
-  final String attempted;
-  final String changed;
-  final String unresolved;
+  final HandoffSection bug;
+  final HandoffSection rootCause;
+  final HandoffSection attempted;
+  final HandoffSection changed;
+  final HandoffSection unresolved;
 
   const SessionState({
     required this.status,
@@ -258,9 +258,7 @@ class SessionState {
   /// Returns true if the handoff contains non-placeholder content in any
   /// meaningful field — i.e., the session was actually started.
   bool get hasActiveContent =>
-      !HandoffPlaceholder.isBlank(bug) ||
-      !HandoffPlaceholder.isBlank(rootCause) ||
-      !HandoffPlaceholder.isBlank(attempted);
+      !bug.isBlank || !rootCause.isBlank || !attempted.isBlank;
 
   /// The status a consumer should show: [status] when the handoff holds a real
   /// session, [HandoffStatus.noHandoff] when it does not. The blank handoff
@@ -281,11 +279,17 @@ class SessionState {
     return SessionState(
       status: HandoffStatus.fromString(_clean(extractSection(content, 'Status'))),
       branch: extractBranch(content),
-      bug: _clean(extractSection(content, 'Bug')),
-      rootCause: _clean(extractSection(content, 'Root Cause')),
-      attempted: readSubSection(debugProgress, 'What was attempted'),
-      changed: readSubSection(debugProgress, 'What changed (files modified)'),
-      unresolved: readSubSection(debugProgress, 'What is still unresolved'),
+      bug: HandoffSection(_clean(extractSection(content, 'Bug'))),
+      rootCause: HandoffSection(_clean(extractSection(content, 'Root Cause'))),
+      attempted: HandoffSection(
+        readSubSection(debugProgress, 'What was attempted'),
+      ),
+      changed: HandoffSection(
+        readSubSection(debugProgress, 'What changed (files modified)'),
+      ),
+      unresolved: HandoffSection(
+        readSubSection(debugProgress, 'What is still unresolved'),
+      ),
     );
   }
 

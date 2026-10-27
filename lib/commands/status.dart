@@ -1,5 +1,4 @@
 import 'dart:io';
-import '../session/handoff_placeholder.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../logging/logger.dart';
@@ -75,17 +74,18 @@ Future<void> runStatus({
   print('Branch   : ${currentBranch ?? state.branch}');
   final statusColour = render.statusColour(shown);
   print('Status   : ${ansi.c(statusColour, shown.value)}');
-  print('Bug      : ${_truncate(state.bug)}');
-  print('Root cause: ${_truncate(state.rootCause)}');
+  print('Bug      : ${_truncate(state.bug.text)}');
+  print('Root cause: ${_truncate(state.rootCause.text)}');
   if (shown == HandoffStatus.debugInProgress ||
       shown == HandoffStatus.needsSuggest) {
     print('Unresolved: ${_truncate(unresolved)}');
   }
 
   final skillsFile = skillsPathFor(workspace);
-  if (!HandoffPlaceholder.isBlank(state.bug) &&
+  if (!state.bug.isBlank &&
       fileIO.fileExists(skillsFile)) {
-    final patterns = relevantSkillPatterns(fileIO.read(skillsFile), state.bug);
+    final patterns =
+        relevantSkillPatterns(fileIO.read(skillsFile), state.bug.text);
     if (patterns.isNotEmpty) {
       print('\nRelevant past patterns:');
       for (final pattern in patterns) {

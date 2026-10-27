@@ -107,7 +107,7 @@ Future<RotateResult>  runRotate({
 
   // 2 — Show current session summary.
   print('\n───────────────────────────────────────');
-  print('  Bug    : ${_truncate(state.bug)}');
+  print('  Bug    : ${_truncate(state.bug.text)}');
   print('  Branch : ${gitCtx?.branch ?? state.branch}');
   print('───────────────────────────────────────\n');
 
@@ -144,7 +144,7 @@ Future<RotateResult>  runRotate({
     branch:      state.branch,
     handoff:     handoff,
     kind:        ArchiveKind.reminder,
-    description: state.bug,
+    description: state.bug.text,
     io:          fileIO,
   );
   final archiveFile = p.join(archiveDirFor(workspace), archiveEntry.handoffFile);

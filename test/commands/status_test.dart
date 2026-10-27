@@ -392,6 +392,18 @@ $bug
       expect(output.join('\n'), contains('symlink-management'));
     });
 
+    test('prints the bug and the root cause as written', () async {
+      final io = ioWith(bug: 'the save button does nothing');
+      final handoff = handoffPathFor(workspaceFor(_projectName));
+      io.write(
+        handoff,
+        '${io.read(handoff)}\n## Root Cause\n\nthe handler is unbound\n',
+      );
+      final text = (await statusOutput(io)).join('\n');
+      expect(text, contains('Bug      : the save button does nothing'));
+      expect(text, contains('Root cause: the handler is unbound'));
+    });
+
     test('omits the section when skills.md does not exist', () async {
       final io = ioWith(bug: 'some real bug description');
       final output = await statusOutput(io);

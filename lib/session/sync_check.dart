@@ -1,4 +1,3 @@
-import 'handoff_placeholder.dart';
 import 'session_state.dart';
 import 'teardown_utils.dart';
 
@@ -71,7 +70,7 @@ SyncCheckResult checkSkillsSync(
 
   if (!state.hasActiveContent) return SyncCheckResult.clean();
 
-  final rootCauseConfirmed = !HandoffPlaceholder.isBlank(state.rootCause);
+  final rootCauseConfirmed = !state.rootCause.isBlank;
   if (!rootCauseConfirmed) return SyncCheckResult.clean();
 
   final pendingHasEntry = pendingHasBranch(skillsContent, state.branch);

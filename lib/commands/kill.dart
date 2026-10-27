@@ -7,7 +7,6 @@ import '../md_io.dart' show confirmOrEof, readHandoffStatus;
 import '../paths.dart';
 import '../registry.dart';
 import 'claudart_command.dart';
-import '../session/handoff_placeholder.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
@@ -167,14 +166,14 @@ void _printSessionSummary(String name, SessionState state, String? liveBranch) {
   print('  Session: $name');
   print('  Branch : ${liveBranch ?? state.branch}');
   print('  Status : ${state.effectiveStatus.value}');
-  print('  Bug    : ${_truncate(state.bug)}');
+  print('  Bug    : ${_truncate(state.bug.text)}');
   if (state.hasActiveContent) {
     print('\n  Debug progress recorded — this work will be archived.');
-    if (!HandoffPlaceholder.isBlank(state.attempted)) {
-      print('  Attempted : ${_truncate(state.attempted)}');
+    if (!state.attempted.isBlank) {
+      print('  Attempted : ${_truncate(state.attempted.text)}');
     }
-    if (!HandoffPlaceholder.isBlank(state.changed)) {
-      print('  Changed   : ${_truncate(state.changed)}');
+    if (!state.changed.isBlank) {
+      print('  Changed   : ${_truncate(state.changed.text)}');
     }
   } else {
     print('\n  No debug progress recorded (fresh session).');

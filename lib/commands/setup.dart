@@ -86,7 +86,7 @@ Future<void> runSetup({
       print('\n─── ${entry.name} ───────────────────────────────');
       print('  Branch : ${gitCtx?.branch ?? state.branch}');
       print('  Status : ${ansi.c(statusColour, state.status.value)}');
-      print('  Bug    : ${_truncate(state.bug)}');
+      print('  Bug    : ${_truncate(state.bug.text)}');
       print('');
 
       final choice = pick_([

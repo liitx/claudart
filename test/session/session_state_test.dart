@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:claudart/session/handoff_section.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart';
 
@@ -91,19 +92,19 @@ void main() {
     });
 
     test('reads bug', () {
-      expect(state.bug, contains('Config not loaded'));
+      expect(state.bug.text, contains('Config not loaded'));
     });
 
     test('reads rootCause', () {
-      expect(state.rootCause, contains('ConfigLoader'));
+      expect(state.rootCause.text, contains('ConfigLoader'));
     });
 
     test('reads attempted', () {
-      expect(state.attempted, contains('Traced call'));
+      expect(state.attempted.text, contains('Traced call'));
     });
 
     test('reads changed', () {
-      expect(state.changed, contains('loader.dart'));
+      expect(state.changed.text, contains('loader.dart'));
     });
 
     test('hasActiveContent is true when real content present', () {
@@ -125,15 +126,15 @@ void main() {
     });
 
     test('bug is placeholder', () {
-      expect(state.bug, startsWith('_Not'));
+      expect(state.bug.isBlank, isTrue);
     });
 
     test('rootCause is placeholder', () {
-      expect(state.rootCause, startsWith('_Not'));
+      expect(state.rootCause.isBlank, isTrue);
     });
 
     test('attempted is placeholder', () {
-      expect(state.attempted, startsWith('_Nothing'));
+      expect(state.attempted.text, startsWith('_Nothing'));
     });
 
     test('hasActiveContent is false for blank handoff', () {
@@ -258,11 +259,11 @@ void main() {
         SessionState(
           status: HandoffStatus.suggestInvestigating,
           branch: 'main',
-          bug: bug,
-          rootCause: rootCause,
-          attempted: attempted,
-          changed: changed,
-          unresolved: unresolved,
+          bug: HandoffSection(bug),
+          rootCause: HandoffSection(rootCause),
+          attempted: HandoffSection(attempted),
+          changed: HandoffSection(changed),
+          unresolved: HandoffSection(unresolved),
         );
 
     test('a real bug alone is active', () {
@@ -298,11 +299,11 @@ void main() {
         SessionState(
           status: status,
           branch: 'main',
-          bug: active ? 'Crash on save' : blank,
-          rootCause: blank,
-          attempted: blank,
-          changed: blank,
-          unresolved: blank,
+          bug: HandoffSection(active ? 'Crash on save' : blank),
+          rootCause: const HandoffSection(blank),
+          attempted: const HandoffSection(blank),
+          changed: const HandoffSection(blank),
+          unresolved: const HandoffSection(blank),
         );
 
     for (final status in HandoffStatus.values) {

@@ -80,9 +80,9 @@ String? archiveCurrentHandoff({
     branch:      state.branch,
     handoff:     content,
     kind:        kind,
-    description: state.bug.trim().isEmpty
+    description: state.bug.text.trim().isEmpty
         ? (description ?? 'session snapshot')
-        : state.bug,
+        : state.bug.text,
     io: fileIO,
   );
   return entry.handoffFile;
@@ -136,7 +136,7 @@ Future<void> closeSession(
       handoff:         originalHandoff,
       kind:            kind,
       description:     description ??
-          (state.bug.trim().isEmpty ? 'session closed' : state.bug),
+          (state.bug.text.trim().isEmpty ? 'session closed' : state.bug.text),
       io:              fileIO,
       archiveFileName: fileName,
       now:             now,

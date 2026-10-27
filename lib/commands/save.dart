@@ -11,7 +11,6 @@ import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../sensitivity/token_map.dart';
 import '../templates/handoff_template.dart' show stampHandoffUpdated;
-import '../session/handoff_placeholder.dart';
 import '../session/handoff_event.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
@@ -68,7 +67,7 @@ Future<SkillsUpdateResult> runSave({
 
   // 2b — Apply the save event: root cause confirmed or not. A save from a
   // status with no such move (or no session) is a plain checkpoint.
-  final saveEvent = HandoffPlaceholder.isBlank(state.rootCause)
+  final saveEvent = state.rootCause.isBlank
       ? HandoffEvent.saveUnconfirmed
       : HandoffEvent.saveConfirmedExploring;
   if (state.effectiveStatus.after(saveEvent) != null) {
@@ -122,7 +121,7 @@ SkillsUpdateResult _updatePendingSkills({
   required bool sensitivityMode,
   required SessionState state,
 }) {
-  if (HandoffPlaceholder.isBlank(state.rootCause)) {
+  if (state.rootCause.isBlank) {
     return SkillsUpdateResult.skipped;
   }
 
@@ -141,11 +140,11 @@ SkillsUpdateResult _updatePendingSkills({
   // One upserted entry per branch — combines root cause and (optional) hot
   // files into a single keyed line, replacing any prior entry for this
   // branch instead of accumulating duplicate bullets on repeated /save.
-  final cause = sanitize(state.rootCause.replaceAll('\n', ' ').trim());
+  final cause = sanitize(state.rootCause.text.replaceAll('\n', ' ').trim());
   final changed =
-      HandoffPlaceholder.isBlank(state.changed)
+      state.changed.isBlank
           ? null
-          : sanitize(state.changed.replaceAll('\n', ' ').trim());
+          : sanitize(state.changed.text.replaceAll('\n', ' ').trim());
   skills = upsertPendingEntry(skills, state.branch, rootCause: cause, hotFiles: changed);
 
   fileIO.write(skillsFile, skills);

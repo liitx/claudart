@@ -104,7 +104,7 @@ Future<void> runLauncher({
     final statusColour = render.statusColour(shown);
     print('  Status : ${ansi.c(statusColour, shown.value)}');
     if (state.hasActiveContent) {
-      print('  Bug    : ${_truncate(state.bug)}');
+      print('  Bug    : ${_truncate(state.bug.text)}');
     }
   } else {
     print('  No active session.');
