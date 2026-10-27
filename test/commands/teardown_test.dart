@@ -14,6 +14,7 @@ import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/file_io.dart';
 import 'package:claudart/session/workspace_guard.dart';
 import '../helpers/logged_moves.dart';
+import '../helpers/fake_executors.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import '../helpers/project_fixture.dart';
@@ -287,6 +288,7 @@ void main() {
       final io = _io(); // no handoff seeded
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -302,6 +304,7 @@ void main() {
       final io = _io(handoff: '');
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -319,6 +322,7 @@ void main() {
 
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -336,6 +340,7 @@ void main() {
       await expectLater(
         runZoned(
           () => runTeardown(
+            executor: noModelExecutor(),
             io: io,
             projectRootOverride: _projectRoot,
             confirmFn: (_) => true,
@@ -361,6 +366,7 @@ void main() {
       final io = _io(handoff: _richHandoff);
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false, // decline
@@ -376,6 +382,7 @@ void main() {
       final io = _io(handoff: _richHandoff);
       try {
         await runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false,
@@ -394,6 +401,7 @@ void main() {
 
   group('teardown — transition log', () {
     Future<void> teardown(MemoryFileIO io, {int? kind}) => runTeardown(
+      executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -411,6 +419,7 @@ void main() {
             _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
       );
       await runTeardown(
+        executor: noModelExecutor(),
         confirmFn: unscriptedConfirm,
         
         io: io,
@@ -460,6 +469,7 @@ void main() {
       final io = _io(handoff: _richHandoff);
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false,
@@ -477,6 +487,7 @@ void main() {
     test('writes one archive file', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -490,6 +501,7 @@ void main() {
     test('archive filename contains sanitised branch name', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -503,6 +515,7 @@ void main() {
     test('archive content matches original handoff', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -517,6 +530,7 @@ void main() {
     test('handoff is reset to blank after teardown', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -543,6 +557,7 @@ void main() {
 _None recorded yet._
 ''');
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -560,6 +575,7 @@ _None recorded yet._
       final io = _io(handoff: _richHandoff);
       expect(io.fileExists(skillsPathFor(_workspace)), isFalse);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -573,6 +589,7 @@ _None recorded yet._
     test('appends root cause pattern entry', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -589,6 +606,7 @@ _None recorded yet._
     test('appends hot path entry for changed file', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -603,6 +621,7 @@ _None recorded yet._
     test('appends session index entry', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -625,6 +644,7 @@ _None recorded yet._
         'Validate path before loading.', // fixPattern
       ];
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -641,6 +661,7 @@ _None recorded yet._
         () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -651,6 +672,7 @@ _None recorded yet._
       // Plant a new session and run teardown again.
       io.write(handoffPathFor(_workspace), _bareHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -670,6 +692,7 @@ _None recorded yet._
     test('accepts pre-populated hotFiles when user returns null', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -692,6 +715,7 @@ _None recorded yet._
         'Always resolve before load.',
       ];
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -706,6 +730,7 @@ _None recorded yet._
     test('accepts pre-populated pattern when user returns null', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -727,6 +752,7 @@ _None recorded yet._
         'Re-attach listener.',
       ];
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -744,6 +770,7 @@ _None recorded yet._
       // hotFiles prompt gets no default so user must provide one explicitly.
       final io = _io(handoff: _bareHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -759,6 +786,7 @@ _None recorded yet._
     test('no pattern default when root cause is blank', () async {
       final io = _io(handoff: _bareHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -787,6 +815,7 @@ _None recorded yet._
       final io = _io(handoff: completeHandoff);
 
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         mode: RunMode.headless,
@@ -812,6 +841,7 @@ _None recorded yet._
 
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           mode: RunMode.headless,
@@ -842,6 +872,7 @@ _None recorded yet._
       await expectLater(
         runZoned(
           () => runTeardown(
+            executor: noModelExecutor(),
             io: io,
             projectRootOverride: _projectRoot,
             mode: RunMode.headless,
@@ -873,6 +904,7 @@ _None recorded yet._
       final io = _io(handoff: completeHandoff);
 
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         mode: RunMode.headless,
@@ -897,6 +929,7 @@ _None recorded yet._
     test('does not update skills.md ("no skills update" per ArchiveKind.reminder)', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -910,6 +943,7 @@ _None recorded yet._
     test('still archives the handoff', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -929,6 +963,7 @@ _None recorded yet._
       Object? caught;
       try {
         await runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,

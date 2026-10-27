@@ -234,6 +234,7 @@ void main() {
       ClaudartCommand.suggest,
       ClaudartCommand.debug,
       ClaudartCommand.flow,
+      ClaudartCommand.teardown,
     };
 
     for (final command in ClaudartCommand.values) {

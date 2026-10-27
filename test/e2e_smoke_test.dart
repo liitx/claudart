@@ -4,6 +4,7 @@ import 'package:claudart/commands/teardown.dart' show runTeardown, TeardownCateg
 import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:path/path.dart' as p;
+import 'helpers/fake_executors.dart';
 import 'helpers/mocks.dart';
 
 const _root = '/e2e/claudart';
@@ -148,6 +149,7 @@ void main() {
 
       // Teardown — hotFiles and pattern answers are null → accept pre-populated defaults.
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _root,
         confirmFn: (_) => true,
@@ -187,6 +189,7 @@ void main() {
         exitFn: (c) => throw Exception('exit($c)'),
       );
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _root,
         confirmFn: (_) => true,

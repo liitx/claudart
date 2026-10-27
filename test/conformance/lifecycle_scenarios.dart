@@ -29,6 +29,7 @@ import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';
 
+import '../helpers/fake_executors.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import 'package:claudart/logging/log_file.dart';
@@ -259,6 +260,7 @@ Future<void> teardown(
   LifecycleProject project = defaultLifecycleProject,
 }) =>
     runTeardown(
+      executor: noModelExecutor(),
       io: io,
       projectRootOverride: project.root,
       mode: RunMode.headless,

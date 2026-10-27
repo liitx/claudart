@@ -40,11 +40,12 @@ Evidence is file:line as of the commit this was written against.
 | S4 | `agentsEditHandoffDirectly` | Agents edit `handoff.md` directly, bypassing the table | agent prompts, `docs/topology/handoff_status.md` | open |
 | S5 | `perStatusSwitchesDuplicated` | Four per-status switches re-derive behavior | `launch.dart:238`; `status.dart:118`; `render.dart:38`; `save.dart:190` | open |
 | S6 | `permissiveMoveLogging` | Setup, rotate, teardown, kill log a missing move as rejected and continue | `logger.dart:143` | open |
-| S7 | `teardownPipelineUnlogged` | Teardown pipeline has no log subscriber; subscriptions are dropped | `teardown.dart:144`; suggest/debug/flow | open |
+| S7 | `teardownPipelineUnlogged` | The `teardown` analyzer pipeline had no log subscriber, so a `teardown` run left no step record. Closed: `runTeardown` subscribes its logger to the executor's events like `suggest`, `debug` and `flow` (and `ClaudartCommand.recordsStepModels` now says so, checked against the source). The subscription is still dropped after the run (the stream is not async yet; Q4) | `teardown.dart`, `claudart_command_test.dart` | closed for teardown (Q4 still owns the stream) |
 | S8 | `pipelineStateMachineUndeclared` | Pipeline FSM exists only as a comment | `pipeline_event.dart:3-24` | open |
 | S9 | `performanceLogHasNoWriter` | `LogFile.performance` has no writer | `logger.dart:326` | open |
 | S10 | `resolvedWithoutDebugHasNoStatus` | A handoff that is resolved without a debug (debug not applicable, or debug not used) has no way to be torn down: `tornDown` is legal only from `debugComplete`, which means a fix was applied. Owner's rule: teardown also when debug is not applicable, and in addition if debug isn't used | `session_state.dart` `tornDown` arm, owner direction | open, placeholder |
 | S11 | `nothingVerifiesTheFix` | `debugComplete` means the planned files were written and each `.dart` file passed `dart analyze --no-fatal-warnings`; no test runs, and `debug` prints "run tests" for the user. The only verification command in the code is `afterFixCommand`, run by `rotate` as a gate, not by `debug` or `teardown`. So nothing today verifies that a fix works before a session can be torn down | `edit_files.dart:102`, `debug.dart:335-345`, `rotate.dart:156` | open, placeholder (H6) |
+| S12 | `teardownSpawnedTheRealModelInTests` | `runTeardown` built its own executor, so 37 test call sites (34 in `teardown_test.dart`, the lifecycle scenarios, the smoke test) started the real `claude` process. They passed because the CLI failed fast under `dart test` (2.5 s with `claude` on `PATH`, 1.4 s without), but on a machine where it is signed in they could spend model calls. Closed: `runTeardown` takes an `executor`, every test passes a fake that never answers, and a guard fails if a test call omits it | `fake_executors.dart`, `model_seam_guard_test.dart` | closed |
 
 ### Exits that leave no record
 
@@ -186,6 +187,7 @@ variant is not in the proposals below.
 | S9 | observesState x fileSeam | existing |
 | S10 | drivesState x workspaceBound | existing |
 | S11 | drivesState x processBound; untouched x processBound | existing |
+| S12 | drivesState x processBound | existing |
 | D1 | observesState x processBound | existing |
 | D2 | untouched x pure; drivesState x pure; drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x processBound | existing |
 | D3 | untouched x workspaceBound | existing |

@@ -33,6 +33,7 @@ Future<void> runTeardown({
   String? Function(String question, {bool optional})? promptFn,
   int Function(List<String> items, {int startIndex})? pickFn,
   Never Function(int code)? exitFn,
+  PipelineExecutor? executor,
 }) async {
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
@@ -142,7 +143,12 @@ Future<void> runTeardown({
   // ── Run teardown analyzer (haiku) to pre-fill all metadata ─────────────────
 
   print('');
-  final analyzerCtx = await PipelineExecutor().runFuture(
+  final exec = executor ?? PipelineExecutor();
+  SessionLogger.forEntry(entry, io: fileIO).logPipelineEvents(
+    exec.events,
+    command: ClaudartCommand.teardown.name,
+  );
+  final analyzerCtx = await exec.runFuture(
     steps:        [TeardownSteps.analyzer],
     ctx:          PipelineContext(
       projectRoot: projectRoot,

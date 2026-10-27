@@ -164,7 +164,7 @@ enum ClaudartCommand {
   /// log its executor's events through logPipelineEvents) by
   /// claudart_command_test.dart.
   bool get recordsStepModels => switch (this) {
-        suggest || debug || flow => true,
+        suggest || debug || flow || teardown => true,
         chat ||
         archives ||
         add ||
@@ -173,7 +173,6 @@ enum ClaudartCommand {
         unlink ||
         setup ||
         status ||
-        teardown ||
         save ||
         rotate ||
         kill ||
