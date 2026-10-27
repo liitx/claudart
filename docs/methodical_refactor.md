@@ -9,6 +9,41 @@ The approved plan is the source of the stage order (Phases 0 to 6). The
 reasoning behind a stage is in `docs/session_log.md`; the roadmap entry is in
 `PLAN.md`.
 
+## Where we are (rendered 2026-10-28)
+
+Branch `claudart/enum-matrix-architecture`, all local, nothing pushed; the suite,
+`custom_lint` and the analyzer baseline (18) hold at every commit. This section is
+the one place that says what is done and what is next, so it survives a lost
+context; the register below holds the evidence.
+
+| Step | Name | State |
+|---|---|---|
+| Phases 0 to 2 | tool liveness, census, families, status x event matrix | done |
+| Q1 | `guardsThatSee` | done |
+| Q2 | `intendedBehaviorDecided` | done, provisional: `suggest` rejection text, `kill` warning and record, knowledge-transfer value, debug disposition, the `tornDown` table change (S10). Open: `notApplicable` has no writer (waits on H2) |
+| Q2b | `handoffObjectTyped` | first part partly done (`HandoffSection`); the value types for step id, workspace, project root, project name remain |
+| Q6 | `noSilentFallbacks` | done except D11 (repeated literals), D13 (typed values) and D16, which fold into Q12, Q17 |
+| Q12 | `shapeTopologyAndBases` | **next**: not started (the owner's finding of 2026-10-28) |
+| Q13 | `seamBundle` | not started |
+| Q14 | `oneSourcePerDatum` | not started |
+| Q15 | `enumFactsAsData` | not started |
+| Q16 | `folderLayout` | not started |
+| Q17 | `userTextFromConfig` | not started |
+| Q3, Q4, Q5 | one writer, the asynchronous stream, logs for every command | not started; recommended to wait for Q12 to Q15: writing the writer and the stream on today's duplicated seams and per-variant switches would mean writing them twice |
+| Q7 | `measuredRedundancyRemoved` | last, by design |
+| Q8 to Q11 | families, cross-package, ticket classification, verified fix | not started; Q10 waits on the owner vetting the ticket flow |
+
+Provisional decisions awaiting the owner's confirmation: `suggest` from
+`debugComplete` is rejected with a next step; the hook stays fail-open and logged;
+the `kill` rule is a warning until verified-closure `teardown` exists; the
+`readyForDebug --fixApplied` cell stays as `debug`'s start check; `tornDown` is
+legal from the four statuses that expect a complete transfer.
+
+Open owner questions: the single list of handoff types and where the type is
+chosen (K2, K5, deferred until the ticket flow is vetted); the Workspace Feature
+scope (K1); whether dropping an unknown stack or agent entry in `workspace.json`
+is intended (D16); and the thresholds k and theta for the shape invariant I1.
+
 ## Stage sequence
 
 | Id | Name | Question it answers | Output | Proof type |
@@ -73,6 +108,12 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | D12 | `sensitiveLoggerWithoutTokenMapWritesRaw` | `SessionLogger` abstracted text only when it held a token map, and 17 call sites built it by hand with a `sensitivityMode` bool; only 3 passed the map, so for a sensitive project the step log and error log (a failed step's reason) were written raw. Closed in Q6 as the first use of the typed-data shape: a sealed `LogProtection` (plain, abstracted with the map, label only) and one factory each; `SessionLogger.forEntry` picks from the registry entry (label only when the map is unreadable); the public constructor is gone; the failure boundary logs label only when the registry itself is unreadable; a scan fails if any call site builds the logger by hand | `logger_test.dart` (forEntry, labelOnly), `failure_boundary_test.dart`, `construction_funnel_test.dart` | closed (Q6) |
 | D13 | `stringsWhereTypesBelong` | Objects carry `String` where a bool, enum, class, list or function would say what the value is. Measured in `lib/`: 135 `final String` fields in 44 files and 109 `required String` parameters. `SessionState` holds `attempted`, `changed` and `unresolved` as three raw strings that each hide a section with a placeholder; the same names recur as strings (`stepId` 7 times, `workspace`, `workspacePath` and `projectRoot` 12 times between them, `name`, `cause`, `label`), each one a concept that wants one type. The code written in this refactor does the same (`WorkspaceConfigUnreadableException(path, cause)`, `HandoffPlaceholder.isBlank(String)`). Dart 3.0 has no extension types, so a value type is a small class and a closed set is an enum | census in this section, `session_state.dart:239-256` | open, in progress: first typed section done (see the progress note); audited at Q2b and after every step |
 | D16 | `unknownStackAndAgentEntriesDropped` | `workspace.json` parsing drops a stack or agent entry it does not recognise (`.whereType<StackType>()`, `.whereType<AgentFlow>()`), so a typo silently narrows the workspace's declared stack or agents. Found while closing D2 and not changed: dropping may be intended for forward compatibility, which is the owner's call | `workspace_config.dart` project and session parsing | open |
+| Y1 | `sharedShapesNotInherited` | Classes that hold the same properties are written separately instead of a base class holding them and variants extending it. Heuristic first measurement (regex, to be replaced by the analyzer): 55 classes with three or more fields, 67 pairs sharing three or more same-typed field names; the leaders are the `AgentResponse` variants (26 `String` fields in one file, with `workspace`, `subtask`, `summary`, `filesTouched` repeated per variant) and the `PipelineEvent` subclasses (`stepId`, `usage`, `models`, `failureType`, `reason` repeated across `AgentStarted`/`AgentCompleted`/`AgentFailed`) | `agent_response.dart`, `pipeline_event.dart`, `workspace_config.dart`; measurement script in this section | open |
+| Y2 | `seamParametersRepeatedPerFunction` | The same injected seams are redeclared on every command function instead of one bundle passed down: `FileIO? io` 66 declarations in 43 files, `projectRootOverride` 22 files, `exitFn` 19, `pickFn` 18, `promptFn` 16, `confirmFn` 9, `ProcessRunner? runner` 9 | `lib/commands/*.dart`, `lib/session/*.dart` | open |
+| Y3 | `dataSourcesAccessedFromManyFiles` | One source of truth per external datum is not enforced: `Platform.environment` is read in 9 files, `Process.run/start` in 9, the git helpers (`detectGitContext`, `readGitConfig`, `resolveProjectRoot`) are used 44 times in 24 files, and the credential and settings reads (`~/.claude/settings.json`, provider env) sit in more than one file | `bin/claudart.dart`, `lib/commands/*`, `lib/providers/*`, `lib/pipeline/*` | open |
+| Y4 | `enumFactsAreSwitchesNotData` | Facts about an enum's variants are written as `switch` arms alternated with `\|\|` (275 such lines in 12 files: 105 in `claudart_command.dart`, 100 in `session_state.dart`, 27 in `failure_type.dart`), and 85 switches test status-like subjects, instead of each variant carrying its facts as constructor data on an enhanced enum (a data class the enum holds) and consumers reading the field | `claudart_command.dart`, `session_state.dart`, `failure_type.dart`, `agent_flow.dart` | open |
+| Y5 | `folderLayoutLooseAndMixed` | 14 files sit loose in `lib/` (`paths`, `registry`, `config`, `git_utils`, `file_io`, `process_runner`, `md_io`, `pubspec_utils`, `ignore_rules`, `dependency_config`, `knowledge_templates`, `portability_gap`, `version`, the barrel), and `lib/commands/` holds files that are not commands (`failure_boundary`, `project_selector`, `scope_files`, `claudart_command`) while helpers of one command (doctor's) live in other folders | `lib/` layout | open |
+| Y6 | `userTextWrittenInCommands` | Text a user reads is written inline in the commands: 410 `print` calls and 1086 string literals of 12 or more characters in `lib/commands/`, with no single place (a config file with accessors) that owns it, so the same intention is worded in several places | `lib/commands/*.dart` | open |
 | D14 | `titleMemberNamesAreOnlyText` | A test title written `'$Type.member'` references the type for real (`$Type` is the type's `toString()`, so a rename breaks it) but the member after the dot is plain text: renaming the member leaves the title naming something that is gone. 31 titles use `$Type`; 22 add a `.member`. Related: `$Type` is a `Type` interpolated, not a `String`; it is stable on the VM and for the compiled CLI, but not under obfuscation or dart2js minification and it carries type arguments (`List<int>`), so it is a test-title device, not a way to name types in `lib/`; and braces (`${Type}`) are forbidden by `unnecessary_brace_in_string_interps` for a plain identifier and needed only for an expression such as `${status.name}`. Closed for the member part in this step by a guard that fails when a titled member is not written in the type's file; the guard found no stale title and a seeded one trips it | `literal_ownership_topology_test.dart`, `make liveness` seed T8 | closed (guard); `Type` naming outside titles accepted with the reason above |
 
 ### Binding and source of truth
@@ -204,6 +245,12 @@ variant is not in the proposals below.
 | D11 | untouched x pure; untouched x workspaceBound; drivesState x processBound; observesState x workspaceBound | existing |
 | D12 | observesState x fileSeam | existing |
 | D16 | untouched x workspaceBound | existing |
+| Y1 | untouched x pure; drivesState x pure; observesState x pure | existing |
+| Y2 | drivesState x processBound; untouched x processBound; observesState x processBound | existing |
+| Y3 | untouched x processBound; untouched x workspaceBound; drivesState x processBound | existing |
+| Y4 | drivesState x workspaceBound; untouched x pure; drivesState x pure | existing |
+| Y5 | — | new: CodeTree |
+| Y6 | drivesState x processBound; untouched x processBound; observesState x processBound | existing |
 | D13 | drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x pure; drivesState x processBound | existing |
 | D14 | — | new: CodeTree |
 | B1 | untouched x processBound | existing |
@@ -288,6 +335,12 @@ before the change and pass after.
 | Q9 | `crossPackageTruth` | X1 to X9 | Q8 | one generated portal document across claudart, dartrix and zedup; the zedup compile break (X8) and the three contradicting plans are listed for their owners; no edit to dartrix or zedup from here |
 | Q10 | `ticketClassificationPrepared` | K2 to K6 | Q4, and the current work complete | a placeholder `SprintTicket` (class or factory constructor) carries the type of work into the handoff; `HandoffTemplate` has one variant per type with Scope as a variant object; a handoff's data updates the Workspace Feature it is allocated to; `suggest` reads only that feature's knowledge. Designed in a parallel claudart session once the owner has vetted the ticket flow; nothing is built before then |
 | Q11 | `fixVerifiedBeforeDone` | S11 | Q2, Q4 | `debug` runs the workspace `afterFixCommand` before it records the work as done and writes the evidence kind into the handoff; the five evidence scenarios of H6 pass; only verified evidence updates the workspace, and suggest-confirmed handoffs end as a reminder |
+| Q12 | `shapeTopologyAndBases` | Y1 | Q1 | the shape invariant I1 as an analyzer-based test with today's pairs as its ratchet; then each family of classes that shares properties gets an abstract base holding them (the `AgentResponse` variants, the `PipelineEvent` subclasses, the workspace config sections) with variants overriding getters or built by one factory |
+| Q13 | `seamBundle` | Y2 | Q12 | invariant I2 at today's count; one bundle type for the injected seams, passed down instead of nine loose parameters; each command takes it and the guards for the model seam and the funnel read it |
+| Q14 | `oneSourcePerDatum` | Y3 | Q13 | invariant I3 with an owner table; git, project identity, workspace, credentials and settings are each reached through one module's accessors, and every other file calls them |
+| Q15 | `enumFactsAsData` | Y4 | Q14 | invariant I4; `HandoffStatus`, `ClaudartCommand`, `FailureType` and `AgentFlow` carry their facts as enhanced-enum constructor fields (a data class per enum where the facts group), and the `\|\|` switches go; the relational `after` stays a function and the proofs P1 to P14 must still pass unchanged |
+| Q16 | `folderLayout` | Y5 | Q14 | invariant I5; loose `lib/` files move into folders by concern, non-command files leave `lib/commands/`, a command's helpers sit beside it; moves are mechanical (imports only) and the whole suite and the topology docs must be unchanged apart from paths |
+| Q17 | `userTextFromConfig` | Y6 | Q15 | invariant I6; the text a user reads moves to one config file with accessors, repeated wording is merged, and `D11` (repeated literals) falls with it |
 
 Progress (updated as steps finish):
 
@@ -535,6 +588,42 @@ section below. Nothing was skipped silently; the exceptions are named.
 | `make test-only-census` | 12 symbols used only by tests, unchanged (advisory) |
 | mutation testing | run per slice on every `lib/` file this refactor touched, none with a survivor in a changed line, except `teardown.dart` (hangs the tool, upstream issue #77) and `flow.dart` (timed out earlier). A whole-branch `make mutation-test-changed` was started and stopped after five files: it re-measures older, untouched code at about three minutes a file (about three hours), and those survivors are already recorded as M4 |
 | the proofs (P1 to P9) | 113 cases pass; two deliberate breaks of the table were caught (see the proofs section) |
+
+### Proofs against missed consolidation (defined 2026-10-28, owner's direction)
+
+The owner's finding: the families so far classified code by what it does (state
+role, reach), never by what it holds, so structural duplication went unseen and
+each gap was fixed as a local patch. Consolidation means the shared shape is
+written once, as an abstract (base) class, an enhanced enum's constructor data, a
+bundle type or a single accessor, and the callers extend or read it; variants
+differ only by overriding getters or by a factory that switches once on the enum.
+
+Definitions. A *shape* sigma(x) of a declaration x is the finite set of
+(name, type) pairs it holds (a class's fields, a function's parameters, an
+enum's per-variant facts). For two declarations the overlap is
+o(x, y) = abs(sigma(x) cap sigma(y)) / min(abs(sigma(x)), abs(sigma(y))). A pair
+is *consolidatable* when abs(sigma(x) cap sigma(y)) >= k and o >= theta. Let
+Inherits be the pairs related by `extends`, `implements`, `with`, or a shared
+typedef, and Ledger the pairs recorded with a reason that their variance is real.
+
+| Id | Invariant | Decided by | Status |
+|---|---|---|---|
+| I1 | Shape: every consolidatable pair of classes is in Inherits (directly, or through a common base) or in the Ledger | an analyzer pass over `lib/` computing sigma and Inherits; the test fails naming each pair outside both sets | defined; measured by regex only (Y1) |
+| I2 | Seams: a function that declares three or more of the seam parameters (`io`, `runner`, `exitFn`, `confirmFn`, `promptFn`, `pickFn`, `projectRootOverride`, `mode`, `executor`) takes one bundle type instead | signature scan; a ratchet to zero | measured (Y2); not built |
+| I3 | One source: for each external datum d (the environment, a process, git, the credentials and settings files, `registry.json`, `workspace.json`, `config.json`, `handoff.md`) there is one owner module M(d), and no other file in `lib/` or `bin/` contains an access pattern for d | pattern scan against an owner table, like the log-name guard | measured (Y3); not built |
+| I4 | Enum data: for each enum E, the number of `\|\|`-alternation lines in switches over E is at most the number in its one relational function (for the state machine, `after`); facts are constructor fields | switch scan per enum; a ratchet to the relational floor | measured (Y4); not built |
+| I5 | Layout: `lib/` holds only the barrel at its root; a folder is one concern; `lib/commands/` holds only files named for a `ClaudartCommand` | file-tree scan | measured (Y5); not built |
+| I6 | Text: user-facing literals of 12 or more characters in `lib/commands/` are read from one text owner, not written inline | literal scan; a ratchet to zero, with the owner a config file plus accessors | measured (Y6); not built |
+
+Soundness, said plainly. I1 to I6 are decided on the finite set of declarations,
+so each holds or fails exactly; what they cannot prove is that k and theta are the
+right thresholds, only that no pair above them is missed. A pair below them, or a
+consolidation of behavior rather than shape, is not covered; the Ledger is the
+place to say why a pair that looks alike is not.
+
+Order of work for these, test-first: build the measurement and its ratchet at
+today's number, then consolidate until the number reaches its floor, then lower
+the ratchet. None starts before the owner has read this section.
 
 ### Proofs of the topology: what is proved, how, and what is not
 

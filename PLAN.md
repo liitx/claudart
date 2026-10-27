@@ -1161,8 +1161,10 @@ The record, gap register, family table and ordered steps are in
   gap has a family or a proposed new variant.
 - Decided: the status transition stream is asynchronous (owner), with the
   drain, order and isolation proofs written down in stage 3.
-- Next: the draft order Q1 to Q9, to be reviewed with the owner and claudart
-  before any listener or writer change. zedup stays paused; its compile break
+- Next (2026-10-28, owner's finding): consolidation before the writer and the
+  stream. Steps Q12 to Q17 and the invariants I1 to I6 (shape, seam bundle, one
+  source per datum, enum facts as data, folder layout, text from config) are in
+  `docs/methodical_refactor.md`, which also holds the rendered current plan. zedup stays paused; its compile break
   against this checkout (X8) is recorded for its owner.
 
 
