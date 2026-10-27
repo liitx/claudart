@@ -12,6 +12,7 @@ import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/paths.dart';
+import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -181,6 +182,24 @@ Map<String, String> _move(
 
 void main() {
   group('runDebug — validation', () {
+    test('an unreadable workspace.json stops with a typed failure, before any '
+        'model call', () async {
+      final io = _io();
+      io.write(workspaceConfigPathFor(_workspace), '{not valid json');
+      await expectLater(
+        runDebug(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithPlan(
+            onCall: () => fail('a model call was spent'),
+          ),
+          pickFn: unscriptedPick,
+        ),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
+      );
+    });
+
     test('exits 1 when project is not registered', () async {
       final io = MemoryFileIO();
       await expectLater(

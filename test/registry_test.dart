@@ -22,10 +22,9 @@ void main() {
       expect(reg.entries, isEmpty);
     });
 
-    test('returns empty registry when file is corrupt', () {
-      final io = MemoryFileIO(files: {registryPath: 'not-json'});
-      final reg = Registry.load(io: io);
-      expect(reg.isEmpty, isTrue);
+    test('returns empty registry when file is empty', () {
+      final io = MemoryFileIO(files: {registryPath: ''});
+      expect(Registry.load(io: io).isEmpty, isTrue);
     });
 
     test('parses entries correctly', () {
@@ -105,9 +104,10 @@ void main() {
     });
   });
 
-  // A registry.json that exists but cannot be read loads as empty (so a
-  // command can still show an empty list), but saving over it would erase every
-  // registered project, so save refuses and leaves the file as it found it.
+  // A registry.json that exists but cannot be read is a typed failure on load,
+  // so no command mistakes it for "no projects registered", and saving over it
+  // would erase every registered project, so save refuses and leaves the file
+  // as it found it.
   group('an unreadable registry.json', () {
     const unreadable = <String, String>{
       'not json': '{not valid json',
@@ -119,9 +119,12 @@ void main() {
     };
 
     unreadable.forEach((name, text) {
-      test('$name: load gives an empty registry, not a crash', () {
+      test('$name: load throws CorruptRegistryException', () {
         final io = MemoryFileIO(files: {registryPath: text});
-        expect(Registry.load(io: io).isEmpty, isTrue);
+        expect(
+          () => Registry.load(io: io),
+          throwsA(isA<CorruptRegistryException>()),
+        );
       });
 
       test('$name: save throws CorruptRegistryException and writes nothing',

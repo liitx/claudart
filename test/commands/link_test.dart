@@ -882,12 +882,28 @@ dependencies:
     test('does nothing when workspace.json already exists', () async {
       final io = _emptyIO();
       final path = workspaceJsonPath();
-      io.write(path, '{"hand": "written"}');
+      const handWritten = '{"owner": {"name": "n", "email": "e", '
+          '"handle": "h"}, "project": {"name": "p", "stack": ["dart"], '
+          '"role": "maintainer"}, "session": {"agents": [], "knowledge": [], '
+          '"proofNotation": "generic", "sensitivityMode": false}}';
+      io.write(path, handWritten);
       await link(
         io,
         askFn: (q) => _asksAbout(q, _sensitivityModeQuestion)
             ? false
             : throw StateError('should not have asked: $q'),
+      );
+      expect(io.read(path), equals(handWritten));
+    });
+
+    test('an unreadable workspace.json stops the link and is left as found',
+        () async {
+      final io = _emptyIO();
+      final path = workspaceJsonPath();
+      io.write(path, '{"hand": "written"}');
+      await expectLater(
+        link(io, askFn: (_) => false),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
       );
       expect(io.read(path), equals('{"hand": "written"}'));
     });

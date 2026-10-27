@@ -32,9 +32,21 @@ void main() {
     test('stepProducedNoResult rolls up to pipeline', () {
       expect(FailureType.stepProducedNoResult.errorType, ErrorType.pipeline);
     });
+    test('workspaceConfigUnreadable rolls up to workspace', () {
+      expect(
+        FailureType.workspaceConfigUnreadable.errorType,
+        ErrorType.workspace,
+      );
+    });
   });
 
   group('FailureType.effectiveFaultClass', () {
+    test('workspaceConfigUnreadable is a configFault, not workspace\'s default',
+        () {
+      const failure = FailureType.workspaceConfigUnreadable;
+      expect(failure.faultClass, FaultClass.environmentFault);
+      expect(failure.effectiveFaultClass, FaultClass.configFault);
+    });
     test('workspaceLocked overrides to transientFault, not workspace\'s default environmentFault', () {
       expect(FailureType.workspaceLocked.faultClass, FaultClass.environmentFault);
       expect(FailureType.workspaceLocked.effectiveFaultClass, FaultClass.transientFault);

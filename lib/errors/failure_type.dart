@@ -30,6 +30,7 @@ enum FailureType {
   editPlanMalformed,
   editVerificationFailed,
   stepModelNotPermittedForRole,
+  workspaceConfigUnreadable,
   unexpectedFailure;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
@@ -41,7 +42,8 @@ enum FailureType {
         FailureType.invalidHandoffTransition =>
           ErrorType.session,
         FailureType.workspaceLocked ||
-        FailureType.registryCorrupt =>
+        FailureType.registryCorrupt ||
+        FailureType.workspaceConfigUnreadable =>
           ErrorType.workspace,
         FailureType.providerNotConfigured ||
         FailureType.stepTimedOut ||
@@ -77,7 +79,8 @@ enum FailureType {
         FailureType.stepProducedNoResult =>
           FaultClass.transientFault,
         FailureType.providerNotConfigured ||
-        FailureType.stepModelNotPermittedForRole =>
+        FailureType.stepModelNotPermittedForRole ||
+        FailureType.workspaceConfigUnreadable =>
           FaultClass.configFault,
         FailureType.scanThresholdExceeded ||
         FailureType.archiveIndexCorrupt ||
@@ -106,6 +109,8 @@ enum FailureType {
         FailureType.editVerificationFailed => 'Edit verification failed',
         FailureType.stepModelNotPermittedForRole =>
           'Step model not permitted for its role',
+        FailureType.workspaceConfigUnreadable =>
+          'Workspace config unreadable',
         FailureType.unexpectedFailure => 'Unexpected failure',
       };
 
@@ -155,6 +160,11 @@ enum FailureType {
           'A step was wired to a model its role does not permit (haiku may '
               'only classify and read). Fix the step or the routing so '
               'reasoning and implementation run on sonnet or opus.',
+        FailureType.workspaceConfigUnreadable =>
+          'Fix or restore workspace.json by hand -- claudart never overwrites '
+              'it, and without it the owner settings (such as strict mode) '
+              'cannot be checked, so the command stopped instead of assuming '
+              'they are off.',
         FailureType.unexpectedFailure =>
           'No failure type describes this yet, so it is a gap in the failure '
               'taxonomy: define a FailureType for it. The reason above is the '

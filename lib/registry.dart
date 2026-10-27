@@ -100,10 +100,10 @@ class Registry {
     if (raw.isEmpty) return Registry.empty();
     try {
       return _parse(raw);
-    } on FormatException catch (_) {
-      return Registry.empty();
-    } on TypeError catch (_) {
-      return Registry.empty();
+    } on FormatException catch (e) {
+      throw CorruptRegistryException(e.message);
+    } on TypeError catch (e) {
+      throw CorruptRegistryException(e.toString());
     }
   }
 

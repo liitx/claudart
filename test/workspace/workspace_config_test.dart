@@ -8,6 +8,7 @@
 // collision — just a latent one, noted and left alone here.
 
 import 'package:test/test.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import '../helpers/mocks.dart';
@@ -80,15 +81,33 @@ void main() {
       expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
     });
 
-    test('returns null when workspace.json is malformed json', () {
-      final io = MemoryFileIO(files: {
-        _workspaceJsonPath: '{not valid json',
-      });
+    test('returns null when workspace.json is empty', () {
+      final io = MemoryFileIO(files: {_workspaceJsonPath: ''});
       expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
     });
 
+    test('throws WorkspaceConfigUnreadableException for malformed json', () {
+      final io = MemoryFileIO(files: {
+        _workspaceJsonPath: '{not valid json',
+      });
+      expect(
+        () => WorkspaceConfig.load(_workspaceDir, io: io),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
+      );
+    });
+
+    test('the exception carries the workspaceConfigUnreadable failure', () {
+      final io = MemoryFileIO(files: {_workspaceJsonPath: '[1, 2]'});
+      try {
+        WorkspaceConfig.load(_workspaceDir, io: io);
+        fail('load should have thrown');
+      } on WorkspaceConfigUnreadableException catch (e) {
+        expect(e.failureType, FailureType.workspaceConfigUnreadable);
+      }
+    });
+
     // Valid JSON of the wrong shape throws a TypeError (an Error, not an
-    // Exception); each of these must be "unparseable", not a crash.
+    // Exception); each of these is unreadable, reported as the typed failure.
     final wrongShapes = <String, String>{
       'a missing section': '{"hand": "written"}',
       'a section of the wrong type':
@@ -98,9 +117,12 @@ void main() {
       'a top-level list': '[1, 2]',
     };
     wrongShapes.forEach((name, text) {
-      test('returns null for $name', () {
+      test('throws WorkspaceConfigUnreadableException for $name', () {
         final io = MemoryFileIO(files: {_workspaceJsonPath: text});
-        expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
+        expect(
+          () => WorkspaceConfig.load(_workspaceDir, io: io),
+          throwsA(isA<WorkspaceConfigUnreadableException>()),
+        );
       });
     });
 

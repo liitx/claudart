@@ -9,6 +9,7 @@ import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/paths.dart';
+import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
@@ -179,6 +180,26 @@ void main() {
           pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
+      );
+    });
+
+    test('an unreadable workspace.json stops with a typed failure, before any '
+        'model call', () async {
+      final io = _io();
+      io.write(workspaceConfigPathFor(_workspace), '{not valid json');
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithAnalysis(
+            onCall: () => fail('a model call was spent'),
+          ),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
+        ),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
       );
     });
 

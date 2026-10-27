@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
 import '../file_io.dart';
 import '../paths.dart';
 import '../pipeline/agent_flow.dart';
@@ -9,6 +11,19 @@ import '../util/enum_util.dart';
 // workspace.json string values are the canonical serialised form; the CLI
 // parses them into these enums so no command ever compares raw strings.
 // ---------------------------------------------------------------------------
+
+/// workspace.json exists but cannot be read: malformed JSON, or JSON of the
+/// wrong shape.
+class WorkspaceConfigUnreadableException extends ClaudartException {
+  WorkspaceConfigUnreadableException(this.path, this.cause)
+      : super(FailureType.workspaceConfigUnreadable);
+
+  final String path;
+  final String cause;
+
+  @override
+  String toString() => 'Workspace config is unreadable ($path): $cause';
+}
 
 /// Tech stack declared by the workspace.
 ///
@@ -217,8 +232,10 @@ class WorkspaceConfig {
 
   /// Loads and parses workspace.json for the given workspace directory.
   ///
-  /// Returns `null` when the file is missing or unparseable — callers should
-  /// stop and tell the user to run `/setup`.
+  /// Returns `null` when the file is missing or empty: the workspace has no
+  /// owner config yet. Throws [WorkspaceConfigUnreadableException] when the
+  /// file is there but cannot be read, so a caller never mistakes an unreadable
+  /// file for settings that are off.
   static WorkspaceConfig? load(String workspaceDir, {FileIO? io}) {
     final fileIO = io ?? const RealFileIO();
     final path = workspaceConfigPathFor(workspaceDir);
@@ -227,12 +244,12 @@ class WorkspaceConfig {
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
       return WorkspaceConfig.fromJson(json);
-    } on Exception catch (_) {
-      return null;
-    } on TypeError catch (_) {
+    } on Exception catch (e) {
+      throw WorkspaceConfigUnreadableException(path, e.toString());
+    } on TypeError catch (e) {
       // Valid JSON of the wrong shape (a missing section, a field of the wrong
       // type) throws a TypeError, which is an Error and not an Exception.
-      return null;
+      throw WorkspaceConfigUnreadableException(path, e.toString());
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:test/test.dart';
 import 'package:claudart/commands/flow.dart';
 import 'package:claudart/logging/planner_log.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
@@ -78,6 +79,23 @@ void main() {
           plannerLog: _silentPlannerLog(),
         ),
         throwsA(isA<_ExitException>()),
+      );
+    });
+  });
+
+  group('runFlow — unreadable workspace.json', () {
+    test('stops with a typed failure, before asking for a prompt', () async {
+      final io = _io();
+      io.write(workspaceConfigPathFor(_workspace), '{not valid json');
+      await expectLater(
+        runFlow(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          plannerLog: _silentPlannerLog(),
+          promptFn: (question, {optional = false}) => fail('was prompted'),
+        ),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
       );
     });
   });

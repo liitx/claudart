@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/commands/hook.dart';
+import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/session_state.dart';
@@ -312,6 +315,21 @@ void main() {
       final io = _ioWithSession(status: HandoffStatus.readyForDebug);
       io.write(handoffPathFor(_workspace), blankHandoff);
       expect(_hookOutput(_stdin(_dartFile), io), contains('no-handoff'));
+    });
+
+    test('an unreadable workspace.json still advises, and the failure is '
+        'logged by its type, not dropped', () {
+      final io = _ioWithSession(status: _exploring, withConfig: false);
+      io.write(workspaceConfigPathFor(_workspace), '{not valid json');
+      expect(_hookOutput(_stdin(_dartFile), io), contains('suggest-investigating'));
+      final errors = io.read(
+        logFilePath(logsDirFor(_workspace), LogFile.errors),
+      );
+      expect(
+        errors,
+        contains('${ClaudartCommand.hook.name}.'
+            '${FailureType.workspaceConfigUnreadable.name}'),
+      );
     });
 
     test('a non-Dart file is never advised about', () {

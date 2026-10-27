@@ -59,8 +59,8 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 |---|---|---|---|---|
 | D1 | `defaultArmInLaunch` | `default:` arm | `launch.dart:158` | open |
 | D2 | `wildcardArms` | Wildcard arms | `session_state.dart:29`; `failure_type.dart:82`; `claudart_command.dart:168,270`; `sync_check.dart:16,139`; `workspace_config.dart:41,61`; `chat_shell.dart:50`; `config.dart:80` | open; the four enum-subject arms were closed in Q1 (U1), the rest are on strings or ints |
-| D3 | `corruptRegistryReadsEmpty` | Corrupt registry reads as empty | `registry.dart:103` | open |
-| D4 | `unreadableWorkspaceConfigDisablesStrictMode` | Unreadable `workspace.json` makes `owner.strict` false | `suggest.dart:59`; `debug.dart:111`; `flow.dart:67`; `hook.dart:157` | open |
+| D3 | `corruptRegistryReadsEmpty` | A corrupt `registry.json` loaded as an empty registry, so a command could report "not registered" for a project that is. Closed in Q6: `Registry.load` throws `CorruptRegistryException` (`registryCorrupt`) for every unreadable shape, a missing or empty file is still an empty registry, and `doctor` reports the cause | `registry_test.dart` (six unreadable shapes), `doctor_test.dart` | closed (Q6) |
+| D4 | `unreadableWorkspaceConfigDisablesStrictMode` | An unreadable `workspace.json` made `owner.strict` silently false in `suggest`, `debug`, `flow` and the hook. Closed in Q6: `WorkspaceConfig.load` throws `WorkspaceConfigUnreadableException` (new `FailureType.workspaceConfigUnreadable`, a config fault) for malformed JSON and JSON of the wrong shape; `suggest`, `debug`, `flow` and `link` stop before any model call or write; the hook never blocks an edit, so it advises as before and logs the failure by its type. The hook's fail-open choice is the assistant's and is recorded as open for the owner | `workspace_config_test.dart`, `suggest_test.dart`, `debug_test.dart`, `flow_test.dart`, `link_test.dart`, `hook_test.dart` | closed (Q6); hook fail-open awaiting the owner |
 | D5 | `missingFileReadsEmpty` | Missing file reads as an empty string | `file_io.dart:41` | open |
 | D6 | `homeDirectoryAssumed` | `HOME` assumed set | `paths.dart:75,79` | open |
 | D7 | `tokenMapNotPersisted` | Token map updated but not persisted in setup and save | `setup.dart:191`; `save.dart:136` | open |
@@ -283,6 +283,12 @@ Progress (updated as steps finish):
   touched lib files: no survivor in a line this step changed; older survivors
   are `failure_type.dart` line 119 and `sync_check.dart` lines 30, 31 and 126,
   to be filed as an issue with the other pre-existing ones, not fixed here.
+
+- **Q6 `noSilentFallbacks`: in progress.** D3 and D4 closed (see the register).
+  Mutation on the touched files: no survivor in a line this step changed;
+  older survivors are `workspace_config.dart` lines 88 and 91, `hook.dart` line
+  133 and `failure_type.dart` line 124, for the issue of pre-existing ones.
+  Still open under Q6: D1, D2 (non-enum arms), D5 to D8, D10, D11.
 
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior

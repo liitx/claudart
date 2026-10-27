@@ -5,7 +5,6 @@
 // fixing a failure, each check re-reads live state rather than caching.
 
 import 'dart:async' show TimeoutException;
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -115,7 +114,17 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
 /// would otherwise always report "not registered" for a project that is.
 HarnessCheckOutcome _checkArtifactFreshness(ProcessRunner proc, String root, FileIO io) {
   final resolvedRoot = detectGitContext(runner: proc)?.root ?? root;
-  final entry = Registry.load(io: io).findByProjectRoot(resolvedRoot);
+  final Registry registry;
+  try {
+    registry = Registry.load(io: io);
+  } on CorruptRegistryException {
+    return (
+      id: HarnessCheckId.artifactFreshness,
+      result: HarnessCheckResult.skip,
+      detail: 'registry.json is unreadable — see the registry health check',
+    );
+  }
+  final entry = registry.findByProjectRoot(resolvedRoot);
   if (entry == null) {
     return (
       id: HarnessCheckId.artifactFreshness,
@@ -304,12 +313,9 @@ HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env, FileIO io) {
   );
 }
 
-/// `Registry.load` (`lib/registry.dart`) silently swallows a JSON parse
-/// failure and returns an empty registry — correct for its own callers
-/// (a wizard flow failing shouldn't crash over a corrupt file), but it
-/// means a corrupt registry.json and a genuinely-fresh one were
-/// indistinguishable from doctor's output alone. This re-reads the raw
-/// file to tell those two apart before falling through to `Registry.load`.
+/// A missing or empty registry.json means nothing is linked yet; one that
+/// cannot be read is a failure, reported with its cause, never an empty list
+/// (`Registry.load` throws `CorruptRegistryException` for it).
 HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
   if (!io.fileExists(registryPath)) {
     return (
@@ -328,18 +334,18 @@ HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
     );
   }
 
+  final Registry registry;
   try {
-    jsonDecode(raw);
-  } on FormatException {
+    registry = Registry.load(io: io);
+  } on CorruptRegistryException catch (e) {
     return (
       id: HarnessCheckId.registryHealth,
       result: HarnessCheckResult.fail,
       detail: 'registry.json exists at $workspacesRoot but failed to '
-          'parse — back it up and investigate before linking anything new',
+          'parse (${e.cause}) — back it up and investigate before linking '
+          'anything new',
     );
   }
-
-  final registry = Registry.load(io: io);
   if (registry.isEmpty) {
     return (
       id: HarnessCheckId.registryHealth,
