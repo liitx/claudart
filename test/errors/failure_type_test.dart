@@ -32,6 +32,9 @@ void main() {
     test('stepProducedNoResult rolls up to pipeline', () {
       expect(FailureType.stepProducedNoResult.errorType, ErrorType.pipeline);
     });
+    test('tokenMapUnreadable rolls up to workspace', () {
+      expect(FailureType.tokenMapUnreadable.errorType, ErrorType.workspace);
+    });
     test('workspaceConfigUnreadable rolls up to workspace', () {
       expect(
         FailureType.workspaceConfigUnreadable.errorType,
@@ -41,6 +44,12 @@ void main() {
   });
 
   group('FailureType.effectiveFaultClass', () {
+    test('tokenMapUnreadable uses its subsystem default, unoverridden', () {
+      expect(
+        FailureType.tokenMapUnreadable.effectiveFaultClass,
+        FaultClass.environmentFault,
+      );
+    });
     test('workspaceConfigUnreadable is a configFault, not workspace\'s default',
         () {
       const failure = FailureType.workspaceConfigUnreadable;

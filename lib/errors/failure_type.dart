@@ -31,6 +31,7 @@ enum FailureType {
   editVerificationFailed,
   stepModelNotPermittedForRole,
   workspaceConfigUnreadable,
+  tokenMapUnreadable,
   unexpectedFailure;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
@@ -43,7 +44,8 @@ enum FailureType {
           ErrorType.session,
         FailureType.workspaceLocked ||
         FailureType.registryCorrupt ||
-        FailureType.workspaceConfigUnreadable =>
+        FailureType.workspaceConfigUnreadable ||
+        FailureType.tokenMapUnreadable =>
           ErrorType.workspace,
         FailureType.providerNotConfigured ||
         FailureType.stepTimedOut ||
@@ -90,6 +92,7 @@ enum FailureType {
         FailureType.stepExitedNonzero ||
         FailureType.editPlanMalformed ||
         FailureType.editVerificationFailed ||
+        FailureType.tokenMapUnreadable ||
         FailureType.unexpectedFailure =>
           faultClass,
       };
@@ -111,6 +114,7 @@ enum FailureType {
           'Step model not permitted for its role',
         FailureType.workspaceConfigUnreadable =>
           'Workspace config unreadable',
+        FailureType.tokenMapUnreadable => 'Token map unreadable',
         FailureType.unexpectedFailure => 'Unexpected failure',
       };
 
@@ -165,6 +169,11 @@ enum FailureType {
               'it, and without it the owner settings (such as strict mode) '
               'cannot be checked, so the command stopped instead of assuming '
               'they are off.',
+        FailureType.tokenMapUnreadable =>
+          'Restore token_map.json from a backup or inspect it by hand -- it '
+              'is never overwritten, and without it a sensitive project\'s '
+              'identifiers cannot be abstracted, so the command stopped '
+              'instead of writing them out.',
         FailureType.unexpectedFailure =>
           'No failure type describes this yet, so it is a gap in the failure '
               'taxonomy: define a FailureType for it. The reason above is the '

@@ -49,9 +49,15 @@ ClaudartException reportFailure({
   final root = projectRoot ?? detectGitContext()?.root;
   final entry =
       root == null ? null : Registry.load(io: fileIO).findByProjectRoot(root);
-  final tokenMap = entry != null && entry.sensitivityMode
-      ? TokenMap.load(tokenMapPathFor(entry.workspacePath), io: fileIO)
-      : null;
+  TokenMap? tokenMap;
+  var abstractable = true;
+  if (entry != null && entry.sensitivityMode) {
+    try {
+      tokenMap = TokenMap.load(tokenMapPathFor(entry.workspacePath), io: fileIO);
+    } on TokenMapUnreadableException {
+      abstractable = false;
+    }
+  }
 
   SessionLogger(
     io: fileIO,
@@ -62,8 +68,13 @@ ClaudartException reportFailure({
     command: command,
     errorType: failure.errorType.name,
     fingerprint: '$command.${failure.failureType.name}',
-    reason: failure.toString(),
-    stackTrace: error is ClaudartException ? null : stackTrace?.toString(),
+    // A sensitive project whose token map cannot be read cannot abstract the
+    // message, so only the failure's own label is written, never the message
+    // or the stack trace.
+    reason: abstractable ? failure.toString() : failure.failureType.label,
+    stackTrace: abstractable && error is! ClaudartException
+        ? stackTrace?.toString()
+        : null,
   );
   return failure;
 }

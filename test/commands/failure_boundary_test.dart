@@ -134,6 +134,45 @@ void main() {
     });
   });
 
+  group('reportFailure — a sensitive project with an unreadable token map', () {
+    MemoryFileIO sensitiveIo() {
+      final io = MemoryFileIO();
+      Registry.empty()
+          .add(
+            const RegistryEntry(
+              name: 'my-app',
+              projectRoot: _projectRoot,
+              workspacePath: _workspace,
+              createdAt: '2026-01-01',
+              lastSession: '2026-03-15',
+              sensitivityMode: true,
+            ),
+          )
+          .save(io: io);
+      io.write(tokenMapPathFor(_workspace), '{not valid json');
+      return io;
+    }
+
+    test('still logs the failure, but never its raw message', () {
+      final io = sensitiveIo();
+      final reported = reportFailure(
+        command: _command,
+        error: StateError('VolumeBloc exploded'),
+        stackTrace: StackTrace.fromString('at VolumeBloc.process'),
+        projectRoot: _projectRoot,
+        io: io,
+      );
+      expect(reported.failureType, FailureType.unexpectedFailure);
+      final entry = _errors(io, logsDirFor(_workspace)).single;
+      expect(entry[LogEntryField.reason.name], isNot(contains('VolumeBloc')));
+      expect(entry.containsKey(LogEntryField.stack.name), isFalse);
+      expect(
+        entry[LogEntryField.fingerprint.name],
+        '$_command.${FailureType.unexpectedFailure.name}',
+      );
+    });
+  });
+
   group('reportFailure — where it is logged', () {
     test('a registered project logs to its workspace', () {
       final io = _io();

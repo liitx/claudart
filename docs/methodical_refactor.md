@@ -64,10 +64,11 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | D5 | `missingFileReadsEmpty` | Missing file reads as an empty string | `file_io.dart:41` | open |
 | D6 | `homeDirectoryAssumed` | `HOME` assumed set | `paths.dart:75,79` | open |
 | D7 | `tokenMapNotPersisted` | Token map updated but not persisted in setup and save | `setup.dart:191`; `save.dart:136` | open |
-| D8 | `swallowedErrors` | Swallowed errors | `token_map.dart:91`; `link.dart:690`; `session_ops.dart:161` | open |
+| D8 | `swallowedErrors` | Three catches dropped an error. Closed in Q6 for the token map: `TokenMap.load` throws `TokenMapUnreadableException` (new `FailureType.tokenMapUnreadable`) instead of loading an empty map that the next save would write back over every assigned token, and the failure boundary, which cannot abstract a message without the map, writes only the failure's label for a sensitive project. Accepted with a reason: `link.dart` `_detectProjectName` falls back to the folder name when `git remote` fails (a name guess, not a failure), and `session_ops.dart` `_safeDelete` ignores a failed delete while rolling back a failed close (the original failure is the one thrown) | `token_map_test.dart`, `failure_boundary_test.dart`, `link.dart:690`, `session_ops.dart:161` | closed (Q6) for the token map; two accepted |
 | D9 | `suggestAppliesReadyWithoutConvergence` | `suggest` writes the model's `ROOT_CAUSE` with `tagOr`, which returns `_Not determined._` when the tag is missing, and then applies `saveConfirmedReady` anyway: the status says the root cause is locked while the handoff says it is not determined | `suggest.dart:271,291-296`, `xml_tags.dart:30` | open |
 | D10 | `placeholderSpelledThreeWays` | The "no root cause" placeholder is `_Not yet determined._` in the template, `_Not determined._` from `tagOr`, and `debug` compares only the first exactly (`debug.dart:219`), so the fallback reaches the debug prompt as if it were a real root cause. `save` and `teardown` use `startsWith('_Not')` and catch both | `handoff_template.dart:48`, `xml_tags.dart:30`, `debug.dart:219` | open |
 | D11 | `repeatedLiteralsInLib` | The gate's first count: 175 string literals are repeated within a file across `lib/`, many of them JSON keys written once to read and once to write (`registry`, `workspace_config`, `archive_entry`, `pending_confirmation`) and status wire values. The no-bare-strings rule is far from met; the ratchet holds it at 175 | `check_duplicate_literals_test.dart` | open (reduced under Q6) |
+| D12 | `sensitiveLoggerWithoutTokenMapWritesRaw` | `SessionLogger` abstracts a reason, stack trace or detail only when it holds a token map; a logger built with sensitivity on and no map writes the raw text. The failure boundary now avoids it, but the logger itself does not refuse | `logger.dart` `logError`, `_safe` | open |
 
 ### Binding and source of truth
 
@@ -192,6 +193,7 @@ variant is not in the proposals below.
 | D9 | drivesState x processBound | existing |
 | D10 | drivesState x processBound; untouched x pure | existing |
 | D11 | untouched x pure; untouched x workspaceBound; drivesState x processBound; observesState x workspaceBound | existing |
+| D12 | observesState x fileSeam | existing |
 | B1 | untouched x processBound | existing |
 | B2 | untouched x workspaceBound | existing |
 | B3 | untouched x workspaceBound; drivesState x processBound | existing |
@@ -284,11 +286,11 @@ Progress (updated as steps finish):
   are `failure_type.dart` line 119 and `sync_check.dart` lines 30, 31 and 126,
   to be filed as an issue with the other pre-existing ones, not fixed here.
 
-- **Q6 `noSilentFallbacks`: in progress.** D3 and D4 closed (see the register).
+- **Q6 `noSilentFallbacks`: in progress.** D3, D4 and D8 closed (see the register).
   Mutation on the touched files: no survivor in a line this step changed;
   older survivors are `workspace_config.dart` lines 88 and 91, `hook.dart` line
   133 and `failure_type.dart` line 124, for the issue of pre-existing ones.
-  Still open under Q6: D1, D2 (non-enum arms), D5 to D8, D10, D11.
+  Token map slice: no survivor in a line it changed (a first run found one in the new exception, fixed with a test); older survivors are `token_map.dart` lines 100, 105, 132 to 134 and 143 and `failure_type.dart` line 128. Still open under Q6: D1, D2 (non-enum arms), D5, D6, D7, D10, D11, D12.
 
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior
