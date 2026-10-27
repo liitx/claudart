@@ -168,6 +168,33 @@ void main() {
       );
     });
 
+    test('from debugComplete it is rejected and says what to run instead',
+        () async {
+      final io = _io(
+        handoff: _handoffWithScope.replaceFirst(
+          'suggest-investigating',
+          'debug-complete',
+        ),
+      );
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
+        ),
+        throwsA(
+          isA<InvalidHandoffTransitionException>().having(
+            (e) => e.toString(),
+            'message',
+            allOf(contains('claudart teardown'), contains('claudart rotate')),
+          ),
+        ),
+      );
+    });
+
     test('exits 1 when no handoff exists', () async {
       final io = _io(handoff: null);
       await expectLater(

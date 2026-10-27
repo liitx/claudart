@@ -115,22 +115,7 @@ Future<void> runStatus({
   }
 
   print('\nNext step:');
-  switch (shown) {
-    case HandoffStatus.suggestInvestigating:
-      print('  Run /suggest in your editor.');
-    case HandoffStatus.readyForSuggest:
-      print('  Run /suggest in your editor to begin a new cycle.');
-    case HandoffStatus.readyForDebug:
-      print('  Run /debug in your editor.');
-    case HandoffStatus.debugInProgress:
-      print('  Continue with /debug, or run /suggest if you hit a wall.');
-    case HandoffStatus.debugComplete:
-      print('  Verify with dart test, then claudart teardown.');
-    case HandoffStatus.needsSuggest:
-      print('  Run /suggest in your editor — debug has a question for you.');
-    case HandoffStatus.unknown || HandoffStatus.noHandoff:
-      print('  Run: claudart setup');
-  }
+  print('  ${shown.nextStep}');
   print('');
 }
 

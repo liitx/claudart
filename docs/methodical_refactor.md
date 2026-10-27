@@ -312,6 +312,31 @@ Progress (updated as steps finish):
   types for the recurring strings (step id, workspace, project root, project
   name); the second part waits for Q2.
 
+- **Q2 `intendedBehaviorDecided`, first decisions: done, provisional.** The
+  owner accepted the four recommendations on 2026-10-27 (recorded as
+  provisional until the owner has seen them run). Built test-first:
+  `HandoffStatus.nextStep` is the one text per status for what to do next, used by
+  `status` and by the rejection message, so `suggest` from `debugComplete` is
+  still rejected but now says "Next step: Verify with dart test, then claudart
+  teardown to keep what was learned, or claudart rotate for the next issue"
+  (partly closes S5: `save` still has its own switch). `kill` from `debugComplete`
+  prints a warning that nothing is learned (`HandoffStatus.killWarning`), and every
+  `kill` exit after the project is known now writes an interaction record
+  named by `KillOutcome` (killed, killedWithWarning, cancelled, noInput,
+  lockNotCleared, closeFailed, workspaceLocked), so the later step that makes
+  `kill` illegal has data (partly closes R11: `teardown` and `suggest` still
+  write none). A `kill` outside any project still writes nothing, which the
+  workspace isolation test requires. The hook stays fail-open and the
+  `readyForDebug --fixApplied` cell stays as `debug`'s start check, unchanged.
+  Mutation: no survivor in a changed line in `session_state.dart`,
+  `invalid_handoff_transition_exception.dart` or `kill.dart`; `status.dart` shows
+  one mutant at the next-step print that the mutation tool reports as surviving
+  but that the two variants I could reproduce by hand (a duplicated print, a
+  shifted one) both fail the tests on, so it is recorded as unexplained, not
+  fixed. Still to do for Q2: the typed KT-converged value, the debug
+  disposition, `suggest` not applying `saveConfirmedReady` without a root cause
+  (D9), and the `kill` rule's second step, which waits for Q11.
+
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior
 the table does not describe (R2, R3), and only the owner can say which is

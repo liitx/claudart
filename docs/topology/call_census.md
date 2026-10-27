@@ -12,15 +12,15 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | setup, suggest, debug, teardown | teardown | r1 | r1 w1 | — | — | r1 w2 | — | r1 a1 | w3 d1 |
 | setup, suggest, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, kill | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
-| setup, suggest, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r1 a1 | w3 d1 |
+| setup, suggest, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r1 a1 | w3 d1 |
+| setup, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, unconfirmed save | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, unconfirmed save | save | r2 w1 | r1 w1 | — | — | — | — | r1 a1 | w1 |
 | setup, confirmed save, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, confirmed save, kill | seed root cause | — | r1 w1 | — | — | — | — | — | — |
 | setup, confirmed save, kill | save | r2 w1 | r1 w1 | — | — | w1 | — | r1 a1 | w1 |
-| setup, confirmed save, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r1 a1 | w3 d1 |
+| setup, confirmed save, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, suggest, debug blocked, suggest again | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug blocked, suggest again | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug blocked, suggest again | debug blocked | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
@@ -33,14 +33,14 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | setup, suggest, debug blocked, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug blocked, kill | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug blocked, kill | debug blocked | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
-| setup, suggest, debug blocked, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r1 a1 | w3 d1 |
+| setup, suggest, debug blocked, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, suggest, suggest again | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, suggest again | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, suggest again | suggest | r1 | r2 w1 | r1 | r1 | — | — | r10 a10 | w2 |
 | setup, suggest, debug, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug, kill | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug, kill | debug | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
-| setup, suggest, debug, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r1 a1 | w3 d1 |
+| setup, suggest, debug, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | rotate with a pending issue seeds the next session | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | rotate with a pending issue seeds the next session | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
 | rotate with a pending issue seeds the next session | seed pending | — | r1 w1 | — | — | — | — | — | — |

@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 import 'package:claudart/commands/status.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/ui/ansi.dart' as ansi;
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
@@ -391,6 +392,15 @@ $bug
       expect(output.join('\n'), contains('Relevant past patterns'));
       expect(output.join('\n'), contains('symlink-management'));
     });
+
+    for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
+      test('${status.name}: prints that status\'s next step', () async {
+        final io = ioWith(bug: 'a real bug', status: status.value);
+        final text = (await statusOutput(io)).join('\n');
+        expect(text, contains('Next step:\n  ${status.nextStep}'));
+        expect(status.nextStep.allMatches(text), hasLength(1));
+      });
+    }
 
     test('prints the bug and the root cause as written', () async {
       final io = ioWith(bug: 'the save button does nothing');

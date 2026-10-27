@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/claudart_command.dart';
@@ -6,6 +7,8 @@ import 'package:claudart/commands/kill.dart';
 import 'package:claudart/file_io.dart';
 import 'package:claudart/git_utils.dart';
 import 'package:claudart/registry.dart';
+import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/logging/logger.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import 'package:claudart/session/handoff_event.dart';
@@ -248,6 +251,90 @@ void main() {
         ),
       );
       expect(output.join('\n'), contains('Status : ready-for-debug'));
+    });
+  });
+
+  group('kill — the outcome is recorded', () {
+    List<String> outcomesIn(MemoryFileIO io, String logsDir) => [
+          for (final line in io
+              .read(logFilePath(logsDir, LogFile.interactions))
+              .split('\n')
+              .where((l) => l.isNotEmpty))
+            (jsonDecode(line)
+                as Map<String, dynamic>)[LogEntryField.outcome.name] as String,
+        ];
+
+    Future<List<String>> outcomeOf(
+      MemoryFileIO io, {
+      bool confirm = true,
+    }) async {
+      await runZoned(
+        () async {
+          try {
+            await runKill(
+              io: io,
+              projectRootOverride: _projectRoot,
+              confirmFn: (_) => confirm,
+              exitFn: (code) => throw _ExitException(code),
+            );
+          } on _ExitException {
+            // A refused kill ends with an exit; the log is the point.
+          }
+        },
+        zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+      );
+      return outcomesIn(io, logsDirFor(_workspace));
+    }
+
+    test('a kill from a status with nothing to lose is killed', () async {
+      expect(await outcomeOf(_io()), [KillOutcome.killed.name]);
+    });
+
+    test('a kill from debugComplete is killedWithWarning', () async {
+      final io = _io();
+      io.write(
+        handoffPathFor(_workspace),
+        _activeHandoff.replaceFirst('ready-for-debug', 'debug-complete'),
+      );
+      expect(await outcomeOf(io), [KillOutcome.killedWithWarning.name]);
+    });
+
+    test('the warning is printed for debugComplete and for nothing else',
+        () async {
+      for (final entry in {
+        'debug-complete': isTrue,
+        'ready-for-debug': isFalse,
+      }.entries) {
+        final io = _io();
+        io.write(
+          handoffPathFor(_workspace),
+          _activeHandoff.replaceFirst('ready-for-debug', entry.key),
+        );
+        final output = <String>[];
+        await runZoned(
+          () => runKill(
+            io: io,
+            projectRootOverride: _projectRoot,
+            confirmFn: (_) => true,
+            exitFn: (code) => throw _ExitException(code),
+          ),
+          zoneSpecification: ZoneSpecification(
+            print: (_, __, ___, line) => output.add(line),
+          ),
+        );
+        expect(
+          output.join('\n').contains(HandoffStatus.debugComplete.killWarning!),
+          entry.value,
+          reason: entry.key,
+        );
+      }
+    });
+
+    test('a declined kill is cancelled', () async {
+      expect(
+        await outcomeOf(_io(), confirm: false),
+        [KillOutcome.cancelled.name],
+      );
     });
   });
 

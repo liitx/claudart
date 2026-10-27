@@ -77,7 +77,61 @@ _Nothing yet._
 _Nothing yet._
 ''';
 
+/// Independent literals: what each status tells the owner to do next.
+const _nextStep = <HandoffStatus, String>{
+  HandoffStatus.suggestInvestigating: 'Run /suggest in your editor.',
+  HandoffStatus.readyForSuggest:
+      'Run /suggest in your editor to begin a new cycle.',
+  HandoffStatus.readyForDebug: 'Run /debug in your editor.',
+  HandoffStatus.debugInProgress:
+      'Continue with /debug, or run /suggest if you hit a wall.',
+  HandoffStatus.debugComplete: 'Verify with dart test, then claudart teardown '
+      'to keep what was learned, or claudart rotate for the next issue.',
+  HandoffStatus.needsSuggest:
+      'Run /suggest in your editor — debug has a question for you.',
+  HandoffStatus.noHandoff: 'Run: claudart setup',
+  HandoffStatus.unknown: 'Run: claudart setup',
+};
+
+/// Only a finished fix has something to lose by `kill`.
+const _killWarning = <HandoffStatus, String?>{
+  HandoffStatus.suggestInvestigating: null,
+  HandoffStatus.readyForSuggest: null,
+  HandoffStatus.readyForDebug: null,
+  HandoffStatus.debugInProgress: null,
+  HandoffStatus.debugComplete: 'The fix is applied. kill does not update '
+      'skills.md, so nothing from this session is learned; claudart teardown '
+      'keeps it.',
+  HandoffStatus.needsSuggest: null,
+  HandoffStatus.noHandoff: null,
+  HandoffStatus.unknown: null,
+};
+
 void main() {
+  group('$HandoffStatus.nextStep', () {
+    test('every status has a pinned next step', () {
+      expect(_nextStep.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: next step', () {
+        expect(status.nextStep, _nextStep[status]);
+      });
+    }
+  });
+
+  group('$HandoffStatus.killWarning', () {
+    test('every status has a pinned answer', () {
+      expect(_killWarning.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: kill warning', () {
+        expect(status.killWarning, _killWarning[status]);
+      });
+    }
+  });
+
   group('SessionState.parse — active handoff', () {
     late SessionState state;
 

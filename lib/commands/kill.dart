@@ -15,6 +15,32 @@ import '../session/workspace_guard.dart';
 import '../workspace/workspace_link_state.dart';
 import '../ui/render.dart' as render;
 
+/// How a `kill` run ended. The name is the outcome written to the interaction
+/// log, so a warned kill, a cancelled one and a refused one can be told apart.
+enum KillOutcome {
+  /// Archived and reset; nothing the session learned was at stake.
+  killed,
+
+  /// Archived and reset from a status whose learning only `teardown` keeps; the
+  /// owner was warned and confirmed.
+  killedWithWarning,
+
+  /// The owner declined a confirmation.
+  cancelled,
+
+  /// Nobody was there to answer, so nothing was changed.
+  noInput,
+
+  /// The workspace was locked by an interrupted operation and the lock stayed.
+  lockNotCleared,
+
+  /// Closing the session failed and was rolled back.
+  closeFailed,
+
+  /// Another operation held the workspace lock.
+  workspaceLocked,
+}
+
 /// Abandons the active session for the current project.
 ///
 /// Unlike `teardown`, kill does not update skills.md or suggest a commit.
@@ -45,6 +71,18 @@ Future<void> runKill({
       askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
   final exit_ = exitFn ?? exit;
   final sw = Stopwatch()..start();
+  // Null until the project is known: a run that cannot find a project has no
+  // workspace to record in, and a command outside any project writes nothing.
+  SessionLogger? logger;
+
+  /// Records how the run ended, then exits with [code].
+  Never leave(KillOutcome outcome, int code) {
+    logger?.logInteraction(
+      command: ClaudartCommand.kill.name,
+      outcome: outcome.name,
+    );
+    exit_(code);
+  }
 
   /// One decision point. Headless never prompts: it uses [headlessAnswer].
   bool decide(String question, {required bool headlessAnswer}) {
@@ -53,7 +91,7 @@ Future<void> runKill({
     if (answer == null) {
       print('\n✗ No input available to answer "$question", so nothing was changed.');
       print('  Re-run in a terminal, or pass --headless to kill without asking.\n');
-      exit_(1);
+      leave(KillOutcome.noInput, 1);
     }
     return answer;
   }
@@ -77,6 +115,8 @@ Future<void> runKill({
     exit_(1);
   }
   print('Project  : ${entry.name}');
+  final recorder = SessionLogger.forEntry(entry, io: fileIO);
+  logger = recorder;
 
   final workspace = entry.workspacePath;
 
@@ -89,7 +129,7 @@ Future<void> runKill({
       print('\nKill cancelled. Resolve the interrupted state before retrying.');
       if (headless) print('  (--headless never clears a workspace lock; re-run in a terminal.)');
       print('');
-      exit_(headless ? 1 : 0);
+      leave(KillOutcome.lockNotCleared, headless ? 1 : 0);
     }
     clearLock(workspace, io: fileIO);
   }
@@ -100,7 +140,7 @@ Future<void> runKill({
     print('\n⚠  No active session found for ${entry.name}.');
     if (!decide('Kill anyway and archive the handoff?', headlessAnswer: true)) {
       print('\nKill cancelled.\n');
-      exit_(0);
+      leave(KillOutcome.cancelled, 0);
     }
   }
 
@@ -111,7 +151,7 @@ Future<void> runKill({
     print('\n⚠  No handoff found in workspace: $workspace');
     if (!decide('Nothing to archive. Reset the session anyway?', headlessAnswer: true)) {
       print('\nKill cancelled.\n');
-      exit_(0);
+      leave(KillOutcome.cancelled, 0);
     }
   } else {
     final state = SessionState.parse(handoff);
@@ -123,7 +163,7 @@ Future<void> runKill({
   if (!decide('Kill this session? (archive will be saved, skills.md will NOT be updated)',
       headlessAnswer: true)) {
     print('\nKill cancelled.\n');
-    exit_(0);
+    leave(KillOutcome.cancelled, 0);
   }
 
   // 7 — Execute transactional close under guard.
@@ -137,18 +177,25 @@ Future<void> runKill({
     // closeSession's own rollback already restored the workspace, so the
     // lock withGuard left behind is not signaling a real interrupted state.
     clearLock(workspace, io: fileIO);
-    exit_(1);
+    leave(KillOutcome.closeFailed, 1);
   } on WorkspaceLockedException catch (e) {
     print('\n✗ ${e.toString()}\n');
-    exit_(1);
+    leave(KillOutcome.workspaceLocked, 1);
   }
 
   // Record the move only after the close succeeded. Not enforced: kill is
   // deliberately permissive, so a status the table lacks is logged, not thrown.
-  SessionLogger.forEntry(entry, io: fileIO).logHandoffMove(
+  recorder.logHandoffMove(
     command: ClaudartCommand.kill.name,
     from: readHandoffStatus(handoff),
     event: HandoffEvent.killed,
+  );
+  recorder.logInteraction(
+    command: ClaudartCommand.kill.name,
+    outcome: (SessionState.parse(handoff).effectiveStatus.killWarning == null
+            ? KillOutcome.killed
+            : KillOutcome.killedWithWarning)
+        .name,
   );
 
   // 8 — Update registry timestamp.
@@ -167,6 +214,8 @@ void _printSessionSummary(String name, SessionState state, String? liveBranch) {
   print('  Branch : ${liveBranch ?? state.branch}');
   print('  Status : ${state.effectiveStatus.value}');
   print('  Bug    : ${_truncate(state.bug.text)}');
+  final warning = state.effectiveStatus.killWarning;
+  if (warning != null) print('\n⚠  $warning');
   if (state.hasActiveContent) {
     print('\n  Debug progress recorded — this work will be archived.');
     if (!state.attempted.isBlank) {

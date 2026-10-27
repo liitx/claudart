@@ -24,5 +24,6 @@ class InvalidHandoffTransitionException extends ClaudartException {
 
   @override
   String toString() =>
-      'Handoff status "${from.value}" does not allow "${event.name}".';
+      'Handoff status "${from.value}" does not allow "${event.name}". '
+      'Next step: ${from.nextStep}';
 }

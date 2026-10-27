@@ -186,6 +186,37 @@ enum HandoffStatus {
           },
       };
 
+  /// What the owner should do next from this status. One text per status, so
+  /// `status`, a rejected command and any later reader say the same thing.
+  String get nextStep => switch (this) {
+        suggestInvestigating => 'Run /suggest in your editor.',
+        readyForSuggest => 'Run /suggest in your editor to begin a new cycle.',
+        readyForDebug => 'Run /debug in your editor.',
+        debugInProgress =>
+          'Continue with /debug, or run /suggest if you hit a wall.',
+        debugComplete => 'Verify with dart test, then claudart teardown to '
+            'keep what was learned, or claudart rotate for the next issue.',
+        needsSuggest =>
+          'Run /suggest in your editor — debug has a question for you.',
+        noHandoff || unknown => 'Run: claudart setup',
+      };
+
+  /// What `kill` would lose from this status, or null when it loses nothing.
+  /// A finished fix is the one status whose learning only `teardown` keeps.
+  String? get killWarning => switch (this) {
+        debugComplete => 'The fix is applied. kill does not update skills.md, '
+            'so nothing from this session is learned; claudart teardown keeps '
+            'it.',
+        suggestInvestigating ||
+        readyForSuggest ||
+        readyForDebug ||
+        debugInProgress ||
+        needsSuggest ||
+        noHandoff ||
+        unknown =>
+          null,
+      };
+
   /// True when `/debug` may start without an override: the root cause is
   /// locked (`readyForDebug`) or debug already began (`debugInProgress`).
   bool get canStartDebug => switch (this) {
