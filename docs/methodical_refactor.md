@@ -303,6 +303,49 @@ the table does not describe (R2, R3), and only the owner can say which is
 intended. Q3 before Q4 because a stream of transitions is only complete if one
 writer publishes them. Q6 depends only on Q1 and can run beside Q3 to Q5.
 
+### The shape of typed data (owner's direction)
+
+Recorded so every step that adds or changes an object follows it. The owner's
+words, then how the assistant reads them (the reading is marked; confirm or
+correct it).
+
+> Enums, typedefs, bools and the like enforce the validity of the required
+> types that are passed. This should cut down the codebase, mitigating existing
+> redundancies, to fit our goal to funnel from generics to specifics per
+> utilization. Use factory constructors when possible, switching off the enum
+> they are based on; abstract classes first, depending on the utilization.
+> Templates should check this type, so the scoped data is passed and the
+> AgentFlow is tightened per the return type of the future or function. That is
+> best practice at its finest.
+
+Reading:
+
+- **Funnel from generic to specific.** A value starts as the narrowest type that
+  says what it is. A `String`, `Map` or nullable that stands in for a closed
+  set, a flag, a collection or a function is replaced by an enum, a `bool`, a
+  list, a typedef or a class.
+- **Abstract first, then variants.** Where the variants carry different data, a
+  `sealed` (or `base`) class comes first and the variants extend it, as
+  `PipelineEvent` and `StepRoute` already do with a kind enum beside them. Where
+  they carry none, an enum is enough.
+- **A factory constructor switches off the enum it is based on.** One entry
+  point per kind, with an exhaustive switch and no default arm, so a new variant
+  fails to compile until it is built.
+- **Templates take the typed variant, not loose data.** A template function's
+  parameter is the variant (or the typed object), so passing the wrong scope
+  fails at compile time and the AgentFlow's step output type follows from the
+  type the function or future returns.
+- **One construction path per concept.** Where many call sites build the same
+  object by hand, one factory builds it and the public generative constructor
+  goes away; the redundancy and the chance to build it wrongly go with it.
+
+First application: D12. `SessionLogger` was built by hand at 17 call sites
+with `sensitivityMode` (a bool) and an optional token map, and only 3 passed
+the map, so for a sensitive project most logs were written without
+abstraction. The shape replaces that with a sealed protection type (plain,
+abstracted with a token map, label only) and one factory per case, built from
+the registry entry.
+
 ### Proof that a handoff state enhancement converges
 
 Applies to any change to what the handoff records or how its status moves: a
@@ -316,6 +359,7 @@ a test written before the change:
 | Safety | every move a listener or command can request is legal from the status it lands in, over all cells |
 | Termination | the relation event -> events a listener may return is acyclic, so a chain is at most one hop per event |
 | Status follows content | no converged status holds an unconverged KT and no unconverged status holds a converged one: asserted on the lifecycle scenarios and run over the real archived handoffs, where today it disagrees in about 10% (R10); the target is zero |
+| Shape | a new object follows the shape above: abstract first, a factory that switches exhaustively on its enum, templates and functions taking the typed variant; no new public constructor where one factory can build it |
 | Typed data | the fields and parameters the change adds are typed values (enum, class, bool, list, function), not `String`, unless the string is genuinely free text; the census of `String` fields and parameters does not grow |
 | Evidence matrix | each row of the H6 matrix is a scenario whose expected exit is written before the code, and whose logged moves match the consumer view |
 | Real-log replay | the real `transitions.jsonl` moves (44 on this machine) replay through the new table and every one that was legal still is, so no real session becomes illegal |
