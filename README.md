@@ -709,7 +709,7 @@ Each workspace keeps its own logs under `logs/`, all written by [`SessionLogger`
 
 `--project` and `claudart workspaces` write to `interactions.jsonl` too: the first records `targeted-by-project` in the workspace it aimed at, the second records `listed N workspaces` in the workspace that asked.
 
-Routing decisions are a separate, global log. [`PlannerLog`](lib/logging/planner_log.dart#L132) appends one JSON line per categorize step — the three-axis classification (`category`, `intent`, `complexity`), the routed model, and design-surface counts — to `~/.claudart/planner.jsonl`, sibling to `registry.json` rather than per-workspace. It's wired into `claudart flow` only ([`lib/commands/flow.dart`](lib/commands/flow.dart#L42)); `suggest` and `debug`'s own Phase 0 categorize steps don't call it yet.
+Routing decisions are a separate, global log. [`PlannerLog`](lib/logging/planner_log.dart#L132) appends one JSON line per categorize step — the three-axis classification (`category`, `intent`, `complexity`), the routed model, and design-surface counts — to `planner.jsonl` (`LogFile.planner`) in `~/.claudart/`, sibling to `registry.json` rather than per-workspace. It's wired into `claudart flow` only ([`lib/commands/flow.dart`](lib/commands/flow.dart#L42)); `suggest` and `debug`'s own Phase 0 categorize steps don't call it yet.
 
 Path construction is centralized in [`lib/paths.dart`](lib/paths.dart) — one function per artifact, no string concatenation at call sites. [`lib/registry.dart`](lib/registry.dart) resolves a git project root to its workspace; [`lib/workspace/workspace_config.dart`](lib/workspace/workspace_config.dart) parses `workspace.json` once at session entry, and agents read the parsed value rather than the file.
 
