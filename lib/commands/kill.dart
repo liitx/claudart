@@ -146,11 +146,7 @@ Future<void> runKill({
 
   // Record the move only after the close succeeded. Not enforced: kill is
   // deliberately permissive, so a status the table lacks is logged, not thrown.
-  SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: workspace,
-  ).logHandoffMove(
+  SessionLogger.forEntry(entry, io: fileIO).logHandoffMove(
     command: ClaudartCommand.kill.name,
     from: readHandoffStatus(handoff),
     event: HandoffEvent.killed,

@@ -105,7 +105,8 @@ Future<void> runStatus({
   print('Skills   : ${skillsPathFor(workspace)}');
 
   final modelRecords =
-      SessionLogger(io: fileIO, workspacePath: workspace).readStepModelRecords();
+      SessionLogger.plain(io: fileIO, workspacePath: workspace)
+          .readStepModelRecords();
   if (modelRecords.isNotEmpty) {
     print('\nModels (newest per step):');
     for (final record in modelRecords) {

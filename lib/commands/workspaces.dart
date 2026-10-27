@@ -221,7 +221,10 @@ Future<void> runWorkspaces({
       summaries.where((summary) => summary.isCurrent).firstOrNull;
   if (currentSummary != null) {
     // Recorded in the asking workspace's log: what it was told about the rest.
-    SessionLogger(io: fileIO, workspacePath: currentSummary.workspacePath)
+    SessionLogger.plain(
+      io: fileIO,
+      workspacePath: currentSummary.workspacePath,
+    )
         .logInteraction(
       command: ClaudartCommand.workspaces.wireName,
       outcome: WorkspaceInteraction.workspacesListed

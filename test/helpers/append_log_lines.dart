@@ -12,7 +12,7 @@ void main(List<String> args) {
   final writer = args[1];
   final count = int.parse(args[2]);
   final logger =
-      SessionLogger(io: const RealFileIO(), workspacePath: workspace);
+      SessionLogger.plain(io: const RealFileIO(), workspacePath: workspace);
   for (var i = 0; i < count; i++) {
     logger.logInteraction(command: 'w$writer-$i', outcome: 'ok');
   }

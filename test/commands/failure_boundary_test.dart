@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:claudart/commands/failure_boundary.dart';
 import 'package:claudart/errors/claudart_exception.dart';
 import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/logging/log_protection.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
@@ -183,6 +184,20 @@ void main() {
         io: io,
       );
       expect(_errors(io, logsDirFor(_workspace)), hasLength(1));
+    });
+
+    test('an unreadable registry cannot say which project, so no text is '
+        'logged, and the boundary itself does not throw', () {
+      final io = MemoryFileIO(files: {registryPath: '{not valid json'});
+      final reported = reportFailure(
+        command: _command,
+        error: StateError('VolumeBloc exploded'),
+        projectRoot: _projectRoot,
+        io: io,
+      );
+      expect(reported.failureType, FailureType.unexpectedFailure);
+      final entry = _errors(io, p.join(claudeDir, 'logs')).single;
+      expect(entry[LogEntryField.reason.name], redactedLogText);
     });
 
     test('a project that is not registered logs to the global log', () {

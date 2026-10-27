@@ -46,12 +46,13 @@ Future<void> runScan({
   final tokenMap = TokenMap.load(tokenMapPath, io: fileIO);
   final previousSize = tokenMap.size;
 
-  final logger = SessionLogger(
-    io: fileIO,
-    sensitivityMode: sensitivityMode,
-    tokenMap: tokenMap,
-    workspacePath: workspacePath,
-  );
+  final logger = sensitivityMode
+      ? SessionLogger.abstracted(
+          tokenMap: tokenMap,
+          io: fileIO,
+          workspacePath: workspacePath,
+        )
+      : SessionLogger.plain(io: fileIO, workspacePath: workspacePath);
 
   ScanResult result;
   try {

@@ -30,11 +30,7 @@ void logProjectTargeted(
   String command, {
   FileIO? io,
 }) {
-  SessionLogger(
-    io: io,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: entry.workspacePath,
-  ).logInteraction(
+  SessionLogger.forEntry(entry, io: io).logInteraction(
     command: command,
     outcome: WorkspaceInteraction.projectTargeted.outcomeFor(),
     platform: Platform.operatingSystem,

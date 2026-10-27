@@ -141,6 +141,9 @@ rm -f lib/zz_seed_t6.dart
 echo "const t4 = 'claude-sonnet-5-5';" > lib/zz_seed_t4.dart
 guard T4 test/topology/model_metadata_topology_test.dart "model id literal in lib"
 rm -f lib/zz_seed_t4.dart
+echo "void f() => SessionLogger(io: null);" > lib/zz_seed_f1.dart
+guard F1 test/topology/construction_funnel_test.dart "logger built by hand outside its factories"
+rm -f lib/zz_seed_f1.dart
 for pair in "T3 handoff_topology_test.dart handoff_status.md" "T5 environment_topology_test.dart environments.md" "T7 call_census_test.dart call_census.md"; do
   set -- ${=pair}
   cp docs/topology/$3 /tmp/liveness_bak.$$.$3

@@ -66,11 +66,8 @@ Future<void> runSuggest({
   // Every pipeline event the executor publishes is logged for as long as the
   // executor lives, so a failure, a timeout or a step that never finished
   // leaves a record.
-  SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: workspace,
-  ).logPipelineEvents(exec.events, command: ClaudartCommand.suggest.name);
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  logger.logPipelineEvents(exec.events, command: ClaudartCommand.suggest.name);
   final handoffFile  = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
@@ -125,11 +122,7 @@ Future<void> runSuggest({
     handoff = applyHandoffEvent(
       handoff,
       HandoffEvent.suggestResumed,
-      onTransition: (transition) => SessionLogger(
-        io: fileIO,
-        sensitivityMode: entry.sensitivityMode,
-        workspacePath: workspace,
-      ).logTransition(
+      onTransition: (transition) => logger.logTransition(
         command: ClaudartCommand.suggest.name,
         transition: transition,
       ),
@@ -294,11 +287,7 @@ $mustNotTouch''';
   updated = applyHandoffEvent(
     updated,
     HandoffEvent.saveConfirmedReady,
-    onTransition: (transition) => SessionLogger(
-      io: fileIO,
-      sensitivityMode: entry.sensitivityMode,
-      workspacePath: workspace,
-    ).logTransition(
+    onTransition: (transition) => logger.logTransition(
       command: ClaudartCommand.suggest.name,
       transition: transition,
     ),

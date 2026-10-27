@@ -12,9 +12,7 @@ import '../errors/failure_type.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../logging/logger.dart';
-import '../paths.dart';
 import '../registry.dart';
-import '../sensitivity/token_map.dart';
 
 /// The keys of the context [reportFailure] puts on a failure it had to wrap.
 /// The enum name is the key.
@@ -47,34 +45,28 @@ ClaudartException reportFailure({
         );
 
   final root = projectRoot ?? detectGitContext()?.root;
-  final entry =
-      root == null ? null : Registry.load(io: fileIO).findByProjectRoot(root);
-  TokenMap? tokenMap;
-  var abstractable = true;
-  if (entry != null && entry.sensitivityMode) {
+  RegistryEntry? entry;
+  var registryReadable = true;
+  if (root != null) {
     try {
-      tokenMap = TokenMap.load(tokenMapPathFor(entry.workspacePath), io: fileIO);
-    } on TokenMapUnreadableException {
-      abstractable = false;
+      entry = Registry.load(io: fileIO).findByProjectRoot(root);
+    } on CorruptRegistryException {
+      registryReadable = false;
     }
   }
-
-  SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry?.sensitivityMode ?? false,
-    tokenMap: tokenMap,
-    workspacePath: entry?.workspacePath,
-  ).logError(
+  // An unreadable registry cannot say whether the project is sensitive, so no
+  // text is logged rather than guessing it is not.
+  final logger = !registryReadable
+      ? SessionLogger.labelOnly(io: fileIO)
+      : entry == null
+          ? SessionLogger.plain(io: fileIO)
+          : SessionLogger.forEntry(entry, io: fileIO);
+  logger.logError(
     command: command,
     errorType: failure.errorType.name,
     fingerprint: '$command.${failure.failureType.name}',
-    // A sensitive project whose token map cannot be read cannot abstract the
-    // message, so only the failure's own label is written, never the message
-    // or the stack trace.
-    reason: abstractable ? failure.toString() : failure.failureType.label,
-    stackTrace: abstractable && error is! ClaudartException
-        ? stackTrace?.toString()
-        : null,
+    reason: failure.toString(),
+    stackTrace: error is ClaudartException ? null : stackTrace?.toString(),
   );
   return failure;
 }

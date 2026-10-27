@@ -16,7 +16,9 @@ import 'package:claudart/sensitivity/token_map.dart';
 import 'package:path/path.dart' as p;
 import '../helpers/mocks.dart';
 import 'package:claudart/paths.dart';
+import 'package:claudart/registry.dart';
 import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/logging/log_protection.dart';
 import '../helpers/project_fixture.dart';
 
 String get _logsDir => p.join(claudeDir, 'logs');
@@ -34,7 +36,7 @@ void main() {
 
     setUp(() {
       io = MemoryFileIO();
-      logger = SessionLogger(io: io);
+      logger = SessionLogger.plain(io: io);
     });
 
     List<Map<String, dynamic>> readJsonl(String path) {
@@ -171,7 +173,7 @@ void main() {
       io.write(_interactionsPath, manyEntries);
 
       // Simulate new log — recreate logger and log one more
-      final l2 = SessionLogger(io: io);
+      final l2 = SessionLogger.plain(io: io);
       l2.logInteraction(command: 'new_cmd', outcome: 'ok');
 
       final entries = readJsonl(_interactionsPath);
@@ -188,7 +190,8 @@ void main() {
         ),
       ).join('\n')}\n';
       io.write(_interactionsPath, within);
-      SessionLogger(io: io).logInteraction(command: 'new_cmd', outcome: 'ok');
+      SessionLogger.plain(io: io)
+          .logInteraction(command: 'new_cmd', outcome: 'ok');
       final entries = readJsonl(_interactionsPath);
       expect(entries.length, 550);
       expect(entries.first['n'], 0);
@@ -196,11 +199,7 @@ void main() {
 
     test('sensitive mode abstracts stack trace before write', () {
       final tm = TokenMap();
-      final sensitiveLogger = SessionLogger(
-        io: io,
-        sensitivityMode: true,
-        tokenMap: tm,
-      );
+      final sensitiveLogger = SessionLogger.abstracted(tokenMap: tm, io: io);
       sensitiveLogger.logError(
         command: 'scan',
         errorType: 'error',
@@ -219,11 +218,7 @@ void main() {
       // caller actually populates -- so a sensitive-mode project's error
       // log still leaked raw identifiers through `reason`.
       final tm = TokenMap();
-      final sensitiveLogger = SessionLogger(
-        io: io,
-        sensitivityMode: true,
-        tokenMap: tm,
-      );
+      final sensitiveLogger = SessionLogger.abstracted(tokenMap: tm, io: io);
       sensitiveLogger.logError(
         command: 'scan',
         errorType: 'error',
@@ -286,7 +281,7 @@ void main() {
 
     setUp(() {
       io = MemoryFileIO();
-      logger = SessionLogger(io: io);
+      logger = SessionLogger.plain(io: io);
     });
 
     AgentCompleted completed({
@@ -644,7 +639,7 @@ void main() {
 
     setUp(() {
       io = MemoryFileIO();
-      logger = SessionLogger(io: io);
+      logger = SessionLogger.plain(io: io);
     });
 
     Map<String, dynamic> lastLine(String path) =>
@@ -797,13 +792,94 @@ void main() {
   // Every pipeline event is logged, whatever its kind, so a failure, a timeout
   // or a step that never finished leaves a record. A failed step is also
   // written to the error log with its type, so errors.jsonl names it.
+  group('$SessionLogger.forEntry', () {
+    const reason = 'VolumeBloc timed out';
+    const failed = AgentFailed(
+      stepId: 'reader',
+      reason: reason,
+      failureType: FailureType.stepTimedOut,
+    );
+
+    RegistryEntry entryFor({required bool sensitive}) => RegistryEntry(
+          name: 'my-app',
+          projectRoot: ProjectFixture.root,
+          workspacePath: ProjectFixture.workspace,
+          createdAt: '2026-01-01',
+          lastSession: '2026-03-15',
+          sensitivityMode: sensitive,
+        );
+
+    /// The step log and the error log of the project, after [failed] is logged.
+    String logged(MemoryFileIO io, {required bool sensitive}) {
+      SessionLogger.forEntry(entryFor(sensitive: sensitive), io: io)
+          .logPipelineEvent(command: 'debug', event: failed);
+      final logs = logsDirFor(ProjectFixture.workspace);
+      return io.read(logFilePath(logs, LogFile.steps)) +
+          io.read(logFilePath(logs, LogFile.errors));
+    }
+
+    test('a project that is not sensitive is logged as is', () {
+      expect(logged(MemoryFileIO(), sensitive: false), contains('VolumeBloc'));
+    });
+
+    test('a sensitive project with a readable token map is abstracted', () {
+      final io = MemoryFileIO(
+        files: {tokenMapPathFor(ProjectFixture.workspace): '{}'},
+      );
+      expect(logged(io, sensitive: true), isNot(contains('VolumeBloc')));
+    });
+
+    test('a sensitive project with no token map yet is still abstracted', () {
+      expect(
+        logged(MemoryFileIO(), sensitive: true),
+        isNot(contains('VolumeBloc')),
+      );
+    });
+
+    test('a sensitive project with an unreadable token map logs no text', () {
+      final io = MemoryFileIO(
+        files: {tokenMapPathFor(ProjectFixture.workspace): '{not valid json'},
+      );
+      final text = logged(io, sensitive: true);
+      expect(text, isNot(contains('VolumeBloc')));
+      expect(text, contains(redactedLogText));
+    });
+
+    test('the failure itself is still named by its type when redacted', () {
+      final io = MemoryFileIO(
+        files: {tokenMapPathFor(ProjectFixture.workspace): '{not valid json'},
+      );
+      expect(
+        logged(io, sensitive: true),
+        contains(FailureType.stepTimedOut.name),
+      );
+    });
+  });
+
+  group('$SessionLogger.labelOnly', () {
+    test('writes the redaction marker for a reason and drops the stack', () {
+      final io = MemoryFileIO();
+      SessionLogger.labelOnly(io: io).logError(
+        command: 'scan',
+        errorType: 'error',
+        fingerprint: 'scan.fp',
+        reason: 'VolumeBloc.process failed',
+        stackTrace: 'at VolumeBloc.process',
+      );
+      final entry = jsonDecode(io.read(_errorsPath).trim())
+          as Map<String, dynamic>;
+      expect(entry[LogEntryField.reason.name], redactedLogText);
+      expect(entry.containsKey(LogEntryField.stack.name), isFalse);
+    });
+  });
+
   group('$SessionLogger.logPipelineEvent', () {
     late MemoryFileIO io;
     late SessionLogger logger;
 
     setUp(() {
       io = MemoryFileIO();
-      logger = SessionLogger(io: io);
+      logger = SessionLogger.plain(io: io);
     });
 
     final eventsByKind = <PipelineEventKind, PipelineEvent>{
@@ -994,16 +1070,15 @@ void main() {
       }
 
       test('is abstracted in sensitive mode', () {
-        final sensitiveLogger = SessionLogger(
-          io: io,
-          sensitivityMode: true,
+        final sensitiveLogger = SessionLogger.abstracted(
           tokenMap: TokenMap(),
+          io: io,
         );
         expect(loggedDetail(sensitiveLogger), isNot(contains('VolumeBloc')));
       });
 
       test('is written as is when sensitive mode is off', () {
-        final plainLogger = SessionLogger(io: io, tokenMap: TokenMap());
+        final plainLogger = SessionLogger.plain(io: io);
         expect(loggedDetail(plainLogger), contains('VolumeBloc'));
       });
     });

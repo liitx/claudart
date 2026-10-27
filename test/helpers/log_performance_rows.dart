@@ -6,7 +6,7 @@ import 'package:claudart/logging/logger.dart';
 
 void main(List<String> args) {
   final logger =
-      SessionLogger(io: const RealFileIO(), workspacePath: args[0]);
+      SessionLogger.plain(io: const RealFileIO(), workspacePath: args[0]);
   for (var i = 0; i < int.parse(args[2]); i++) {
     logger.logPerformance(command: 'w${args[1]}-$i', outcome: 'ok');
   }

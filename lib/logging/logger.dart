@@ -10,10 +10,10 @@ import '../paths.dart';
 import '../pipeline/model_observation.dart';
 import '../pipeline/pipeline_event.dart'
     show AgentCompleted, AgentFailed, PipelineEvent;
+import '../registry.dart';
 import '../sensitivity/token_map.dart';
-import '../sensitivity/abstractor.dart';
-import '../sensitivity/detector.dart';
-import '../logging/log_file.dart';
+import 'log_file.dart';
+import 'log_protection.dart';
 
 const int _maxInteractions = 500;
 const int _maxErrors = 200;
@@ -60,21 +60,64 @@ enum LogEntryField {
 }
 
 /// Appends structured log entries to workspace log files.
+///
+/// Built only through its factories, each of which says how free text is
+/// protected ([LogProtection]); [forEntry] chooses for a registered project.
 class SessionLogger {
-  final FileIO _io;
-  final bool sensitivityMode;
-  final TokenMap? tokenMap;
-  final String _logsDir;
-
-  SessionLogger({
-    FileIO? io,
-    this.sensitivityMode = false,
-    this.tokenMap,
-    String? workspacePath,
-  })  : _io = io ?? const RealFileIO(),
+  SessionLogger._(FileIO? io, this._protection, String? workspacePath)
+      : _io = io ?? const RealFileIO(),
         _logsDir = workspacePath != null
             ? logsDirFor(workspacePath)
             : p.join(claudeDir, 'logs');
+
+  /// Text is written as it is: a project that is not sensitive, or a log that
+  /// holds nothing from a project.
+  factory SessionLogger.plain({FileIO? io, String? workspacePath}) =>
+      SessionLogger._(io, const PlainLogging(), workspacePath);
+
+  /// Identifiers in text are replaced using [tokenMap] before they are written.
+  factory SessionLogger.abstracted({
+    required TokenMap tokenMap,
+    FileIO? io,
+    String? workspacePath,
+  }) =>
+      SessionLogger._(io, AbstractedLogging(tokenMap), workspacePath);
+
+  /// No free text is written, only what is recorded by type.
+  factory SessionLogger.labelOnly({FileIO? io, String? workspacePath}) =>
+      SessionLogger._(io, const LabelOnlyLogging(), workspacePath);
+
+  /// The logger for a registered project: plain when it is not sensitive,
+  /// abstracted with its token map when it is, and label only when that map
+  /// cannot be read, so a sensitive project never has raw text logged.
+  factory SessionLogger.forEntry(RegistryEntry entry, {FileIO? io}) {
+    final fileIO = io ?? const RealFileIO();
+    if (!entry.sensitivityMode) {
+      return SessionLogger.plain(
+        io: fileIO,
+        workspacePath: entry.workspacePath,
+      );
+    }
+    try {
+      return SessionLogger.abstracted(
+        tokenMap: TokenMap.load(
+          tokenMapPathFor(entry.workspacePath),
+          io: fileIO,
+        ),
+        io: fileIO,
+        workspacePath: entry.workspacePath,
+      );
+    } on TokenMapUnreadableException {
+      return SessionLogger.labelOnly(
+        io: fileIO,
+        workspacePath: entry.workspacePath,
+      );
+    }
+  }
+
+  final FileIO _io;
+  final LogProtection _protection;
+  final String _logsDir;
 
   String get _interactionsPath => logFilePath(_logsDir, LogFile.interactions);
   String get _errorsPath => logFilePath(_logsDir, LogFile.errors);
@@ -99,7 +142,8 @@ class SessionLogger {
     final entry = <String, dynamic>{
       LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
       LogEntryField.command.name: command,
-      LogEntryField.sensitivityMode.name: sensitivityModeOverride ?? sensitivityMode,
+      LogEntryField.sensitivityMode.name:
+          sensitivityModeOverride ?? _protection.isSensitive,
       if (scanScope != null) LogEntryField.scanScope.name: scanScope,
       if (filesScanned != null) LogEntryField.filesScanned.name: filesScanned,
       if (tokensTotal != null) LogEntryField.tokensTotal.name: tokensTotal,
@@ -214,9 +258,7 @@ class SessionLogger {
   /// A detail value with its text abstracted in sensitive mode, so a reason
   /// that names a workspace path does not reach the log.
   Object _safe(Object detail) =>
-      detail is String && sensitivityMode && tokenMap != null
-          ? abstractor.abstract(detail, tokenMap!, defaultDetector)
-          : detail;
+      detail is String ? _protection.protect(detail) : detail;
 
   /// One line per model a step ran on: the intended model, what the stream
   /// reported, and how they differ. Read from the completion event, so it
@@ -284,16 +326,9 @@ class SessionLogger {
       // workspace paths/exception causes through `reason` -- the field
       // every caller actually populates. scan.dart had the identical gap
       // before this fix; both callers get it fixed here, not patched twice.
-      String safeReason = reason;
-      String? safeStack = stackTrace;
-      if (sensitivityMode && tokenMap != null) {
-        safeReason =
-            abstractor.abstract(safeReason, tokenMap!, defaultDetector);
-        if (safeStack != null) {
-          safeStack =
-              abstractor.abstract(safeStack, tokenMap!, defaultDetector);
-        }
-      }
+      final safeReason = _protection.protect(reason);
+      final safeStack =
+          stackTrace == null ? null : _protection.protectStack(stackTrace);
 
       if (matchIdx >= 0) {
         final old = Map<String, dynamic>.from(existing[matchIdx]);

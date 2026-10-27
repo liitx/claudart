@@ -72,14 +72,11 @@ Future<SkillsUpdateResult> runSave({
       ? HandoffEvent.saveUnconfirmed
       : HandoffEvent.saveConfirmedExploring;
   if (state.effectiveStatus.after(saveEvent) != null) {
+    final logger = SessionLogger.forEntry(entry, io: fileIO);
     handoff = applyHandoffEvent(
       handoff,
       saveEvent,
-      onTransition: (transition) => SessionLogger(
-        io: fileIO,
-        sensitivityMode: entry.sensitivityMode,
-        workspacePath: workspace,
-      ).logTransition(
+      onTransition: (transition) => logger.logTransition(
         command: ClaudartCommand.save.name,
         transition: transition,
       ),

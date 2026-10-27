@@ -77,7 +77,7 @@ Future<void> runDebug({
 
   // Logs the kind as the run's outcome, then exits with the kind's code. Until
   // the project is known there is no workspace, so it is the global log.
-  var exitLogger = SessionLogger(io: fileIO);
+  var exitLogger = SessionLogger.plain(io: fileIO);
   Never leave(DebugExitKind kind) {
     exitLogger.logInteraction(
       command: ClaudartCommand.debug.name,
@@ -101,11 +101,8 @@ Future<void> runDebug({
     leave(DebugExitKind.projectNotRegistered);
   }
   print('Project  : ${entry.name}');
-  exitLogger = SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: entry.workspacePath,
-  );
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  exitLogger = logger;
 
   final workspace   = entry.workspacePath;
   final wsConfig    = WorkspaceConfig.load(workspace, io: fileIO);
@@ -119,11 +116,7 @@ Future<void> runDebug({
   // Every pipeline event the executor publishes is logged for as long as the
   // executor lives, so a failure, a timeout or a step that never finished
   // leaves a record.
-  SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: workspace,
-  ).logPipelineEvents(exec.events, command: ClaudartCommand.debug.name);
+  logger.logPipelineEvents(exec.events, command: ClaudartCommand.debug.name);
   final handoffFile = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
@@ -163,11 +156,6 @@ Future<void> runDebug({
   // after that blocks the session (debugBlocked) and rethrows, so the failure
   // is never silent and the handoff never stays at ready-for-debug.
 
-  final logger = SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: workspace,
-  );
 
   String applyDebugEvent(String text, HandoffEvent event) => applyHandoffEvent(
         text,

@@ -199,7 +199,7 @@ Future<void> runSetup({
   fileIO.write(handoffFile, content);
 
   // Log the setup interaction.
-  final logger = SessionLogger(io: fileIO, sensitivityMode: entry.sensitivityMode, workspacePath: workspace);
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
   logger.logInteraction(
     command: 'setup',
     outcome: 'ok',

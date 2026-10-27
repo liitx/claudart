@@ -553,7 +553,7 @@ Future<void> runDoctor({
     for (final o in outcomes)
       if (o.result == HarnessCheckResult.fail) o,
   ];
-  final logger = SessionLogger(io: io, workspacePath: workspacePath);
+  final logger = SessionLogger.plain(io: io, workspacePath: workspacePath);
   logger.logInteraction(
     command: _doctorCommandName,
     outcome: failed.isEmpty ? 'ok' : 'failed',

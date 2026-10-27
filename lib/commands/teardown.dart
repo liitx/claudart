@@ -332,11 +332,7 @@ Future<void> runTeardown({
   // Record the move once the guarded close succeeded. Not enforced: teardown
   // is deliberately permissive (a human may confirm "resolved" from any
   // status), so a status the table lacks is logged, not thrown.
-  SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: workspace,
-  ).logHandoffMove(
+  SessionLogger.forEntry(entry, io: fileIO).logHandoffMove(
     command: ClaudartCommand.teardown.name,
     from: readHandoffStatus(handoff),
     event: archiveKind == ArchiveKind.archive

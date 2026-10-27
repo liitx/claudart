@@ -14,7 +14,7 @@ void main(List<String> args) {
   final count = int.parse(args[2]);
   final shared = args[3] == 'shared';
   final logger =
-      SessionLogger(io: const RealFileIO(), workspacePath: workspace);
+      SessionLogger.plain(io: const RealFileIO(), workspacePath: workspace);
   for (var i = 0; i < count; i++) {
     logger.logError(
       command: 'w$writer',

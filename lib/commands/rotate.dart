@@ -166,11 +166,8 @@ Future<RotateResult>  runRotate({
   // Records the move once the build gate has passed and the handoff is about
   // to change. Not enforced: rotate is deliberately permissive, so a status
   // the table lacks is logged, not thrown.
-  void recordMove(HandoffEvent event) => SessionLogger(
-        io: fileIO,
-        sensitivityMode: entry.sensitivityMode,
-        workspacePath: workspace,
-      ).logHandoffMove(
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  void recordMove(HandoffEvent event) => logger.logHandoffMove(
         command: ClaudartCommand.rotate.name,
         from: state.status,
         event: event,
