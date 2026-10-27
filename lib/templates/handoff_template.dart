@@ -1,3 +1,4 @@
+import '../session/debug_disposition.dart';
 import '../session/handoff_placeholder.dart';
 import '../session/session_state.dart' show HandoffStatus;
 
@@ -85,6 +86,12 @@ $nothingYetText
 
 ### Specific question for suggest
 $nothingYetText
+
+---
+
+## Debug Disposition
+
+${DebugDisposition.pending.wire}
 
 ---
 
@@ -193,6 +200,12 @@ $nothingYetText
 
 ### Specific question for suggest
 $nothingYetText
+
+---
+
+## Debug Disposition
+
+$notYetDeterminedText
 
 ---
 

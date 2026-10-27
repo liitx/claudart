@@ -17,6 +17,7 @@ import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../registry.dart';
+import '../session/debug_disposition.dart';
 import '../session/handoff_event.dart';
 import '../session/invalid_handoff_transition_exception.dart';
 import '../ui/ansi.dart' as ansi;
@@ -321,7 +322,10 @@ Future<void> runDebug({
 
   fileIO.write(
     handoffFile,
-    applyDebugEvent(fileIO.read(handoffFile), HandoffEvent.fixApplied),
+    withDebugDisposition(
+      applyDebugEvent(fileIO.read(handoffFile), HandoffEvent.fixApplied),
+      DebugDisposition.done,
+    ),
   );
 
   stdout.write(

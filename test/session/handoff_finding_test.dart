@@ -9,6 +9,8 @@ const _description = <HandoffFinding, String>{
       'is complete, but the root cause or scope is still a placeholder.',
   HandoffFinding.contentAheadOfStatus: 'The root cause and scope are filled '
       'in, but the status still says the knowledge transfer is in progress.',
+  HandoffFinding.debugDispositionDisagrees: 'The recorded debug disposition '
+      'does not match the status: only a finished fix is done.',
 };
 
 void main() {

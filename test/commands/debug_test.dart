@@ -10,8 +10,10 @@ import 'package:claudart/md_io.dart' show readHandoffStatus, withHandoffStatus;
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
-import 'package:claudart/session/session_state.dart' show HandoffStatus;
+import 'package:claudart/session/session_state.dart'
+    show HandoffStatus, SessionState;
 import 'package:claudart/paths.dart';
+import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/edit_files.dart';
@@ -474,6 +476,11 @@ void main() {
       );
 
       expect(_statusOf(io), HandoffStatus.debugComplete);
+      expect(
+        SessionState.parse(io.read(handoffPathFor(_workspace)))
+            .recordedDebugDisposition,
+        DebugDisposition.done,
+      );
     });
 
     test('logs the transitions it applied: command, from, event, to', () async {

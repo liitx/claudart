@@ -7,6 +7,7 @@
 // same scenarios run against zedup's real reader by `make consumer-check`.
 
 import 'package:claudart/dependency_config.dart';
+import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';
 import 'package:test/test.dart';
@@ -58,6 +59,22 @@ void main() {
       });
     }
   }
+
+  group('the debug disposition follows the session', () {
+    test('setup and suggest record pending; debug records done', () async {
+      final io = freshLifecycleIo();
+      DebugDisposition recorded() =>
+          SessionState.parse(handoffContentOf(io)).debugDisposition;
+      SessionState state() => SessionState.parse(handoffContentOf(io));
+
+      await quietly(() => setupDefault(io));
+      expect(state().recordedDebugDisposition, DebugDisposition.pending);
+      await quietly(() => suggest(io));
+      expect(recorded(), DebugDisposition.pending);
+      await quietly(() => debug(io));
+      expect(state().recordedDebugDisposition, DebugDisposition.done);
+    });
+  });
 
   group('the environment fixture', () {
     for (final environment in lifecycleEnvironments()) {

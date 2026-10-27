@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/session/handoff_finding.dart';
 import 'package:claudart/session/handoff_section.dart';
 import 'package:claudart/session/knowledge_transfer.dart';
@@ -178,6 +179,85 @@ void main() {
           );
         });
       }
+    }
+  });
+
+  group('$SessionState debug disposition', () {
+    String withDisposition(String handoff, String? value) => value == null
+        ? handoff
+        : '$handoff\n## Debug Disposition\n\n$value\n';
+
+    test('a recorded disposition is read from the handoff', () {
+      final state =
+          SessionState.parse(withDisposition(_activeHandoff, 'skipped'));
+      expect(state.recordedDebugDisposition, DebugDisposition.skipped);
+      expect(state.debugDisposition, DebugDisposition.skipped);
+    });
+
+    test('a section followed by the handoff\'s rule is still read', () {
+      final state = SessionState.parse(
+        '$_activeHandoff\n## Debug Disposition\n\ndone\n\n---\n',
+      );
+      expect(state.recordedDebugDisposition, DebugDisposition.done);
+    });
+
+    test('with none recorded, a finished fix is done', () {
+      final state = SessionState.parse(
+        _activeHandoff.replaceFirst('ready-for-debug', 'debug-complete'),
+      );
+      expect(state.recordedDebugDisposition, isNull);
+      expect(state.debugDisposition, DebugDisposition.done);
+    });
+
+    test('with none recorded, anything else is pending', () {
+      final state = SessionState.parse(_activeHandoff);
+      expect(state.recordedDebugDisposition, isNull);
+      expect(state.debugDisposition, DebugDisposition.pending);
+    });
+
+    test('an unrecognised value is not recorded, so it is not guessed', () {
+      final state =
+          SessionState.parse(withDisposition(_activeHandoff, 'maybe later'));
+      expect(state.recordedDebugDisposition, isNull);
+    });
+  });
+
+  group('$SessionState.findings for the debug disposition', () {
+    SessionState held(HandoffStatus status, DebugDisposition? recorded) =>
+        SessionState(
+          status: status,
+          branch: 'main',
+          bug: const HandoffSection('a real bug'),
+          rootCause: const HandoffSection('a cause'),
+          scope: const HandoffSection('lib/a.dart'),
+          attempted: const HandoffSection('_Nothing yet._'),
+          changed: const HandoffSection('_Nothing yet._'),
+          unresolved: const HandoffSection('_Nothing yet._'),
+          recordedDebugDisposition: recorded,
+        );
+
+    // Independent literals: only a finished fix is `done`, and a finished fix
+    // is nothing else.
+    bool disagrees(HandoffStatus status, DebugDisposition recorded) =>
+        (status == HandoffStatus.debugComplete) !=
+        (recorded == DebugDisposition.done);
+
+    for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
+      for (final recorded in DebugDisposition.values) {
+        test('${status.name} recorded ${recorded.name}', () {
+          final findings = held(status, recorded)
+              .findings
+              .where((f) => f == HandoffFinding.debugDispositionDisagrees);
+          expect(findings.isNotEmpty, disagrees(status, recorded));
+        });
+      }
+
+      test('${status.name} with none recorded never disagrees', () {
+        expect(
+          held(status, null).findings,
+          isNot(contains(HandoffFinding.debugDispositionDisagrees)),
+        );
+      });
     }
   });
 

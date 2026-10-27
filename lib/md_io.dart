@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'pipeline/pipeline_context.dart' show ScopeFile;
+import 'session/debug_disposition.dart';
 import 'session/handoff_event.dart';
 import 'session/handoff_transition.dart';
 import 'session/invalid_handoff_transition_exception.dart';
@@ -29,6 +30,11 @@ String updateSection(String content, String header, String newContent) {
   // Section not found — append it
   return '$content\n## $header\n\n$newContent\n';
 }
+
+/// Records [disposition] as the handoff's debug disposition, adding the section
+/// to a handoff that has none.
+String withDebugDisposition(String content, DebugDisposition disposition) =>
+    updateSection(content, 'Debug Disposition', disposition.wire);
 
 /// Reads the Status line value from the handoff.
 String readStatus(String content) {

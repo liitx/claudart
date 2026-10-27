@@ -13,6 +13,17 @@ void main() {
       projectName: 'my-app',
     );
 
+    test('records the debug disposition as pending, ahead of the resume notes',
+        () {
+      expect(
+        result,
+        contains(
+          '## Debug Disposition\n\npending\n\n---\n\n'
+          '## Suggest Resume Notes',
+        ),
+      );
+    });
+
     test('includes project name in title', () {
       expect(result, contains('Agent Handoff — my-app'));
     });
@@ -51,6 +62,17 @@ void main() {
   });
 
   group('blankHandoff', () {
+    test('holds the debug disposition as a placeholder, ahead of the notes',
+        () {
+      expect(
+        blankHandoff,
+        contains(
+          '## Debug Disposition\n\n_Not yet determined._\n\n---\n\n'
+          '## Suggest Resume Notes',
+        ),
+      );
+    });
+
     test('is non-empty', () {
       expect(blankHandoff, isNotEmpty);
     });

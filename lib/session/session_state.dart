@@ -1,3 +1,4 @@
+import 'debug_disposition.dart';
 import 'handoff_event.dart';
 import 'handoff_finding.dart';
 import 'handoff_section.dart';
@@ -297,6 +298,9 @@ class SessionState {
   final HandoffSection changed;
   final HandoffSection unresolved;
 
+  /// The debug disposition the handoff records, or null when it records none.
+  final DebugDisposition? recordedDebugDisposition;
+
   const SessionState({
     required this.status,
     required this.branch,
@@ -306,6 +310,7 @@ class SessionState {
     required this.attempted,
     required this.changed,
     required this.unresolved,
+    this.recordedDebugDisposition,
   });
 
   /// Returns true if the handoff contains non-placeholder content in any
@@ -327,8 +332,31 @@ class SessionState {
   KnowledgeTransfer get knowledgeTransfer =>
       KnowledgeTransfer.of(rootCause: rootCause, scope: scope);
 
+  /// Where debug stands: what the handoff records, else what the status says (a
+  /// finished fix is done, anything else is still pending).
+  DebugDisposition get debugDisposition =>
+      recordedDebugDisposition ??
+      (effectiveStatus == HandoffStatus.debugComplete
+          ? DebugDisposition.done
+          : DebugDisposition.pending);
+
   /// How the status and the content disagree; empty for a consistent handoff.
-  List<HandoffFinding> get findings => switch ((
+  List<HandoffFinding> get findings => [
+        ..._knowledgeTransferFindings,
+        if (_debugDispositionDisagrees)
+          HandoffFinding.debugDispositionDisagrees,
+      ];
+
+  /// A recorded disposition contradicts the status: `done` only with a finished
+  /// fix, and a finished fix only with `done`.
+  bool get _debugDispositionDisagrees {
+    final recorded = recordedDebugDisposition;
+    if (recorded == null) return false;
+    return (effectiveStatus == HandoffStatus.debugComplete) !=
+        (recorded == DebugDisposition.done);
+  }
+
+  List<HandoffFinding> get _knowledgeTransferFindings => switch ((
         effectiveStatus.knowledgeTransferExpectation,
         knowledgeTransfer,
       )) {
@@ -375,6 +403,9 @@ class SessionState {
       ),
       unresolved: HandoffSection(
         readSubSection(debugProgress, 'What is still unresolved'),
+      ),
+      recordedDebugDisposition: DebugDisposition.fromWire(
+        _clean(extractSection(content, 'Debug Disposition')),
       ),
     );
   }

@@ -160,7 +160,7 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | K4 | `knowledgeNotKeyedByFeature` | Knowledge is generic files plus one file per project; no file is keyed by a Feature variant, and `suggest` is told to read every generic file listed for the workspace, not the ones relevant to the handoff's feature | `knowledge/` layout, `setup_template.dart:31-39` | open |
 | K5 | `threeCategoryTaxonomies` | `AgentCategory` (feature, bug, refactor, research, setup, gui), `TeardownCategory` (the skills categories) and the owner's handoff types (bug, feat, refactor, spike, story) are separate lists with no mapping between them | `categorization.dart:148`, `teardown.dart:195-209` | open |
 | K6 | `ticketMetadataNotModeled` | Nothing in claudart models the ticket a handoff comes from. The owner's direction: the type of work will arrive as metadata on a sprint-board ticket (zedup owns the board), through an event-driven ticket flow, so `suggest` and `flow` are given a type instead of classifying one. Not yet vetted by the owner | owner direction, 2026-10-26 | open, placeholder (H1 to H4) |
-| K7 | `debugDispositionNotRecorded` | Nothing in the handoff records whether debug is pending, done, not applicable or skipped: `debug` runs on whatever status allows it, and `teardown` asks the user. A type of work such as a spike should declare debug not applicable, and a decision not to use debug should be written down, not inferred | owner direction, `teardown.dart:96-110` | open, placeholder (belongs with H2) |
+| K7 | `debugDispositionNotRecorded` | Nothing in the handoff records whether debug is pending, done, not applicable or skipped: `debug` runs on whatever status allows it, and `teardown` asks the user. A type of work such as a spike should declare debug not applicable, and a decision not to use debug should be written down, not inferred | owner direction, `teardown.dart:96-110` | partly closed (Q2): the disposition is a typed value recorded in the handoff and `debug` writes `done`; nothing writes `notApplicable` or `skipped` yet, and `teardown` does not read it (S10) |
 
 ## Gap to family
 
@@ -351,6 +351,22 @@ Progress (updated as steps finish):
   Mutation: no survivor in a changed line (two prose mutants were fixed by pinning
   the message; an untestable spinner line was removed). Still to do for Q2: the
   debug disposition, and recording it in the handoff template.
+
+- **Q2, debug disposition: done, provisional (the typed value and its record).**
+  `DebugDisposition` (`debug_disposition.dart`: pending, done, notApplicable,
+  skipped, with `wire` spellings and `isResolved`) is recorded in a new
+  `## Debug Disposition` section of the handoff (`pending` in a new handoff, a
+  placeholder in the blank one); `debug` writes `done` with `fixApplied`;
+  `SessionState` exposes `recordedDebugDisposition` (null when none, never a
+  guess) and `debugDisposition` (the status's answer when none is recorded);
+  and a recorded disposition that contradicts the status (`done` only with a
+  finished fix, a finished fix only with `done`) is a `HandoffFinding`. Handoffs
+  that predate the section still read correctly. Mutation: no survivor in a
+  changed line (two template separator lines were pinned by tests). Still open:
+  nothing writes `notApplicable` or `skipped`, and `teardown` does not read the
+  disposition, so S10 (a resolved-without-debug handoff cannot be torn down) is
+  not closed; that is the next step, with the `HandoffStatus.after` table
+  change written test-first.
 
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior
