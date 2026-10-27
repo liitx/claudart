@@ -152,6 +152,7 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | R8 | `fixAppliedFromReadyForDebugIsDebugPrecondition` | `readyForDebug --fixApplied` is never produced as a move by current `debug` (it writes `debugStarted` first; real logs show it produced up to 2026-10-20 08:07), but `debug` uses the cell as its start check before any model call (`debug.dart:139`) and `canStartDebug` is tested to agree with it. Measured in a scratch copy: making the cell illegal makes all 24 lifecycle runs that call `debug` fail (4 scenarios x 6 environments). The earlier "dead cell" claim was wrong: it is unused as a move and load-bearing as a check | scratch experiment, `debug.dart:139`, `transitions.jsonl` | open (decide: keep as the precondition, or check `debugStarted` instead and then remove) |
 | R9 | `killAllowedFromEveryLiveStatus` | The table allows `killed` from all six live statuses, including `debugComplete`. The owner's rule is that `kill` is only for a handoff that is not confirmed and `teardown` is for a root cause and fix that are completely done (teardown itself asks "confirmed resolved?": yes archives and updates `skills.md`, no saves a reminder). The table does not enforce that rule. The owner has since stated the rule in terms of knowledge transfer (see the placeholder section) | `session_state.dart` `killed` arm, `teardown.dart:96-110`, `kill.dart` doc | open, spec recorded as a placeholder |
 | R10 | `statusDisagreesWithHandoffContent` | Of 179 archived handoffs and checkpoints, 17 say `suggest-investigating` while holding a real root cause and scope, and 1 says `ready-for-debug` with a placeholder root cause: about 10% have a status that does not follow the knowledge transfer in the handoff | the real workspace `archive/` | open |
+| R11 | `commandsLeaveNoOutcomeRecord` | `kill`, `teardown` and `suggest` never write an interaction record, so a warned `kill` and an unwarned one, a `teardown` the user confirmed from the wrong status, and a rejected `suggest` look the same, or are absent, in the logs. The step that makes `kill` illegal has no data on how the warning was answered. Found by claudart's own review, confirmed by grep | `kill.dart`, `teardown.dart`, `suggest.dart` (no `logInteraction`); `docs/briefs/claudart_review_2026-10-27.md` | open |
 | K1 | `workspaceKnowsNoFeatures` | The workspace records no Feature variants: `workspace.json` holds owner, project and session only, and `skills.md` is keyed by branch, category and files, not by Feature variant. Owner's direction: when a Feature variant is updated, the workspace should know which features exist in it. Scope not yet confirmed (derived from the project's enums, or declared) | `workspace.json`, `skills.md` | open, awaiting the owner's scope |
 | K2 | `handoffHasNoType` | One `handoffTemplate` function renders every handoff (`setup.dart:179`, `rotate.dart:191`); the handoff records no type. `flow` classifies an `AgentCategory` in its own run and logs it, but never writes it into the handoff | `handoff_template.dart:3`, `flow.dart:226` | open |
 | K3 | `scopeIsOneShapeForEveryKindOfWork` | `suggest` writes the same Scope sub-sections (files, entry points, classes, must-not-touch) for a bug, a feature, a refactor and a spike | `suggest.dart:277-284` | open |
@@ -239,6 +240,7 @@ variant is not in the proposals below.
 | R8 | drivesState x processBound; drivesState x workspaceBound | existing |
 | R9 | drivesState x processBound; drivesState x workspaceBound | existing |
 | R10 | drivesState x processBound; observesState x workspaceBound | existing |
+| R11 | drivesState x processBound | existing |
 | K1 | untouched x workspaceBound; drivesState x processBound | existing |
 | K2 | drivesState x processBound; untouched x pure | existing |
 | K3 | drivesState x processBound | existing |
@@ -350,6 +352,25 @@ Recommendations for the open decisions:
    `debug` run, 16 ms per extra git spawn) are real but small next to the
    state-machine work.
 
+### Independent review by claudart (sandboxed `suggest`)
+
+A real `claudart suggest` run in a throwaway workspace on a copy of this repo,
+asked to review the logging and the open decisions (`CLAUDART_WORKSPACE` and the
+project both under `/tmp`; the real workspace and registry were not touched).
+Its full analysis is saved unedited in `docs/briefs/claudart_review_2026-10-27.md`.
+The assistant checked each claim against the code and the logs:
+
+| Claudart's point | The assistant's check | Outcome |
+|---|---|---|
+| All four recommendations are right; Q7 last is right | agrees with the experiments | confirmed independently |
+| Recommendation 1 and 2 are already built in code (the `suggest` rejection, the hook's logged fail-open) | true; only the message text and the cap are open | noted |
+| The "two attempts" behind recommendation 1 are not tied to a log record | wrong: `errors.jsonl` holds `suggest.invalidHandoffTransition` with count 2 (written by the failure boundary); it is not a transition because a thrown rejection is not one | corrected |
+| The hook can flood the error log | no: `logError` deduplicates by fingerprint under a lock, so one line with a rising count; the cost is a lock and a file rewrite per edit, small | not a gap |
+| `kill` from `debugComplete` is logged as an ordinary legal move, and no command records whether the warning was shown or overridden | true (grep: `kill`, `teardown`, `suggest` never call `logInteraction`) | new gap R11 |
+| `teardown` confirmed from the wrong status is logged `rejected` with no `to`, so the real-log replay must say how rejected lines count | true | proof table row refined |
+| "Fix verified" in `teardown` really means "fix written" | true (S11) | already recorded |
+| Protection on read is not needed | agrees: protection is at write, and the sweep shows the files clean | confirmed |
+
 ### The shape of typed data (owner's direction)
 
 Recorded so every step that adds or changes an object follows it. The owner's
@@ -409,7 +430,7 @@ a test written before the change:
 | Shape | a new object follows the shape above: abstract first, a factory that switches exhaustively on its enum, templates and functions taking the typed variant; no new public constructor where one factory can build it |
 | Typed data | the fields and parameters the change adds are typed values (enum, class, bool, list, function), not `String`, unless the string is genuinely free text; the census of `String` fields and parameters does not grow |
 | Evidence matrix | each row of the H6 matrix is a scenario whose expected exit is written before the code, and whose logged moves match the consumer view |
-| Real-log replay | the real `transitions.jsonl` moves (44 on this machine) replay through the new table and every one that was legal still is, so no real session becomes illegal |
+| Real-log replay | the real `transitions.jsonl` moves (44 on this machine) replay through the new table and every one that was legal still is, so no real session becomes illegal; a line logged `rejected` is counted separately and stays rejected (a rejected move has no `to`), so it cannot silently become an applied one |
 | Ratchet | the undriven-cell count does not grow, and the gap register test still places every gap in a family or a proposed variant |
 
 Convergence here means: the checks above all pass on the final table, so a
