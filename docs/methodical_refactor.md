@@ -147,6 +147,10 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | R9 | `killAllowedFromEveryLiveStatus` | The table allows `killed` from all six live statuses, including `debugComplete`. The owner's rule is that `kill` is only for a handoff that is not confirmed and `teardown` is for a root cause and fix that are completely done (teardown itself asks "confirmed resolved?": yes archives and updates `skills.md`, no saves a reminder). The table does not enforce that rule | `session_state.dart` `killed` arm, `teardown.dart:96-110`, `kill.dart` doc | open |
 | R10 | `statusDisagreesWithHandoffContent` | Of 179 archived handoffs and checkpoints, 17 say `suggest-investigating` while holding a real root cause and scope, and 1 says `ready-for-debug` with a placeholder root cause: about 10% have a status that does not follow the knowledge transfer in the handoff | the real workspace `archive/` | open |
 | K1 | `workspaceKnowsNoFeatures` | The workspace records no Feature variants: `workspace.json` holds owner, project and session only, and `skills.md` is keyed by branch, category and files, not by Feature variant. Owner's direction: when a Feature variant is updated, the workspace should know which features exist in it. Scope not yet confirmed (derived from the project's enums, or declared) | `workspace.json`, `skills.md` | open, awaiting the owner's scope |
+| K2 | `handoffHasNoType` | One `handoffTemplate` function renders every handoff (`setup.dart:179`, `rotate.dart:191`); the handoff records no type. `flow` classifies an `AgentCategory` in its own run and logs it, but never writes it into the handoff | `handoff_template.dart:3`, `flow.dart:226` | open |
+| K3 | `scopeIsOneShapeForEveryKindOfWork` | `suggest` writes the same Scope sub-sections (files, entry points, classes, must-not-touch) for a bug, a feature, a refactor and a spike | `suggest.dart:277-284` | open |
+| K4 | `knowledgeNotKeyedByFeature` | Knowledge is generic files plus one file per project; no file is keyed by a Feature variant, and `suggest` is told to read every generic file listed for the workspace, not the ones relevant to the handoff's feature | `knowledge/` layout, `setup_template.dart:31-39` | open |
+| K5 | `threeCategoryTaxonomies` | `AgentCategory` (feature, bug, refactor, research, setup, gui), `TeardownCategory` (the skills categories) and the owner's handoff types (bug, feat, refactor, spike, story) are separate lists with no mapping between them | `categorization.dart:148`, `teardown.dart:195-209` | open |
 
 ## Gap to family
 
@@ -222,6 +226,10 @@ variant is not in the proposals below.
 | R9 | drivesState x processBound; drivesState x workspaceBound | existing |
 | R10 | drivesState x processBound; observesState x workspaceBound | existing |
 | K1 | untouched x workspaceBound; drivesState x processBound | existing |
+| K2 | drivesState x processBound; untouched x pure | existing |
+| K3 | drivesState x processBound | existing |
+| K4 | untouched x workspaceBound; untouched x pure | existing |
+| K5 | untouched x pure; drivesState x processBound | existing |
 
 ### Proposed new variants
 
