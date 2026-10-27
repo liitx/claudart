@@ -151,6 +151,7 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | K3 | `scopeIsOneShapeForEveryKindOfWork` | `suggest` writes the same Scope sub-sections (files, entry points, classes, must-not-touch) for a bug, a feature, a refactor and a spike | `suggest.dart:277-284` | open |
 | K4 | `knowledgeNotKeyedByFeature` | Knowledge is generic files plus one file per project; no file is keyed by a Feature variant, and `suggest` is told to read every generic file listed for the workspace, not the ones relevant to the handoff's feature | `knowledge/` layout, `setup_template.dart:31-39` | open |
 | K5 | `threeCategoryTaxonomies` | `AgentCategory` (feature, bug, refactor, research, setup, gui), `TeardownCategory` (the skills categories) and the owner's handoff types (bug, feat, refactor, spike, story) are separate lists with no mapping between them | `categorization.dart:148`, `teardown.dart:195-209` | open |
+| K6 | `ticketMetadataNotModeled` | Nothing in claudart models the ticket a handoff comes from. The owner's direction: the type of work will arrive as metadata on a sprint-board ticket (zedup owns the board), through an event-driven ticket flow, so `suggest` and `flow` are given a type instead of classifying one. Not yet vetted by the owner | owner direction, 2026-10-26 | open, placeholder (H1 to H4) |
 
 ## Gap to family
 
@@ -230,6 +231,7 @@ variant is not in the proposals below.
 | K3 | drivesState x processBound | existing |
 | K4 | untouched x workspaceBound; untouched x pure | existing |
 | K5 | untouched x pure; drivesState x processBound | existing |
+| K6 | — | new: OwningPackage |
 
 ### Proposed new variants
 
@@ -259,12 +261,32 @@ before the change and pass after.
 | Q7 | `measuredRedundancyRemoved` | B1 to B4, N1, N2, P1 | Q5 | `make spawn-census` and the call census show git spawned once per command, the registry parsed once, the log append not reading the log; the before and after counts are recorded here |
 | Q8 | `familiesGrowWhereDataSaysSo` | S4, S8 and the proposed variants | Q4 | each proposed variant is added only with a file that needs it: `reactsToState` with the first listener, `TriggerSource` with agent-edit detection, `CodeTree` when tools and tests are scanned; the families doc and its drift test change with them |
 | Q9 | `crossPackageTruth` | X1 to X9 | Q8 | one generated portal document across claudart, dartrix and zedup; the zedup compile break (X8) and the three contradicting plans are listed for their owners; no edit to dartrix or zedup from here |
+| Q10 | `ticketClassificationPrepared` | K2 to K6 | Q4, and the current work complete | a placeholder `SprintTicket` (class or factory constructor) carries the type of work into the handoff; `HandoffTemplate` has one variant per type with Scope as a variant object; a handoff's data updates the Workspace Feature it is allocated to; `suggest` reads only that feature's knowledge. Designed in a parallel claudart session once the owner has vetted the ticket flow; nothing is built before then |
 
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior
 the table does not describe (R2, R3), and only the owner can say which is
 intended. Q3 before Q4 because a stream of transitions is only complete if one
 writer publishes them. Q6 depends only on Q1 and can run beside Q3 to Q5.
+
+### Placeholders (the owner's architecture, not designed yet)
+
+Recorded so the work in progress leaves room for it. Each row is the owner's
+direction in outline, not a design; none is built, and the two open decisions
+below wait on it.
+
+| Id | Name | Outline | Depends on |
+|---|---|---|---|
+| H1 | `sprintTicket` | for now, work is allocated into a handoff as a `SprintTicket` (a class, or a factory constructor); it carries the ticket's metadata: the type of work now, the Workspace Feature later | none |
+| H2 | `handoffTemplateVariants` | `template(type, handoff) => HandoffTemplate.variant(metadata)`: one variant per type of work, switched on the type the handoff is scoped to; the Scope section is an object on the variant, not one shared shape | H1 |
+| H3 | `workspaceFeatureUpdatedByHandoff` | the data captured per handoff updates the Workspace Feature the handoff is allocated to; knowledge is organized per feature, and `suggest` is given only the knowledge for that feature | H2, K1 |
+| H4 | `ticketEventFlow` | ticket handling driven by events: the sprint board (zedup) communicates the ticket's metadata, so `suggest` and `flow`, invoked asynchronously, already know the type of work | Q4, H1 |
+
+Open decisions, deferred by the owner until the ticket flow is vetted: the
+single list of handoff types (the owner's bug, feat, refactor, spike, story
+against `AgentCategory` and the teardown categories, K5) and where the type is
+chosen and whether it can change (K2). Until then `setup` and `flow` keep
+classifying as they do today.
 
 ## Stage records
 
