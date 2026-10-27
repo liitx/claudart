@@ -470,6 +470,68 @@ abstraction. The shape replaces that with a sealed protection type (plain,
 abstracted with a token map, label only) and one factory per case, built from
 the registry entry.
 
+### Audit run (2026-10-27)
+
+Every instrument the repo has, run on the tree at `920fcd2` plus the proofs
+section below. Nothing was skipped silently; the exceptions are named.
+
+| Instrument | Result |
+|---|---|
+| `dart test`, random order | 3587 pass |
+| `dart analyze` | 18, the baseline |
+| `dart run custom_lint` | clean; it also flagged the first draft of the new proofs test (a loop over enum values inside one test), which was rewritten as one test per cell: the project's own rule caught new code |
+| `make liveness` | 20 of 21 seeds caught; the miss is the plain `String == literal` comparison (U2), accepted with a reason |
+| generated docs (`make topology`) | all current: the drift tests pass |
+| `make handoff-consistency` on the real archive | 159 of 179 consistent; 4 status-ahead-of-content, 16 content-ahead-of-status, 0 disposition disagreements |
+| `make spawn-census` | unchanged: 2 git spawns for `status`, `save`, `resume`, `preflight`, `scan`, `report`; 5 for `doctor`; 1 for `hook` and for `status --project` |
+| `make consumer-check` | fails to compile zedup against this checkout (X8, unchanged, zedup is paused) |
+| `make check-coverage` | passes: 88.2% overall against an 84.0% floor; `lib/session` 97.0%, `lib/logging` 95.8%, `lib/templates` 99.0%, `lib/workspace` 95.2%, `lib/codegen` 93.3%, `lib/errors` 100% |
+| `make test-only-census` | 12 symbols used only by tests, unchanged (advisory) |
+| mutation testing | run per slice on every `lib/` file this refactor touched, none with a survivor in a changed line, except `teardown.dart` (hangs the tool, upstream issue #77) and `flow.dart` (timed out earlier). A whole-branch `make mutation-test-changed` was started and stopped after five files: it re-measures older, untouched code at about three minutes a file (about three hours), and those survivors are already recorded as M4 |
+| the proofs (P1 to P9) | 113 cases pass; two deliberate breaks of the table were caught (see the proofs section) |
+
+### Proofs of the topology: what is proved, how, and what is not
+
+The handoff state machine is the triple (S, E, delta): S = `HandoffStatus` (8),
+E = `HandoffEvent` (13), and delta : S x E -> S u {rejected}, the partial function
+`HandoffStatus.after`. Let L = {(s, e) : delta(s, e) is a status} be the legal
+cells and G the directed graph on S with an edge s -> delta(s, e) for each
+(s, e) in L. Every set is finite, so a property of delta is decided by checking
+all 104 cells, or by a search over G: that is a proof, not a sample. Properties
+that depend on running commands are verified over a finite set of scenarios and
+are labelled so. `test/topology/transition_proofs_test.dart` holds the executable
+form; the expected values are independent literals.
+
+| Id | Statement | How it is decided | Status |
+|---|---|---|---|
+| P1 | Totality: for every (s, e), delta(s, e) is decided, never undefined | the Dart switch is exhaustive (a missing cell fails to compile) and 104 cell tests | proved |
+| P2 | Determinism: delta is single-valued | a Dart switch returns one value; each cell is evaluated twice and must agree | proved |
+| P3 | Size: abs(S) = 8, abs(E) = 13, abs(L) = 33 | pinned literals; a table change fails until it is made on purpose | proved |
+| P4 | Isolation: no legal move enters or leaves `unknown` | search over G | proved |
+| P5 | Reachability: every live status (S without `unknown`) is reachable from `noHandoff` | breadth-first search over G | proved |
+| P6 | No trap: from every live status `noHandoff` is reachable | search over G | proved |
+| P7 | The live statuses form one strongly connected component | follows from P5 and P6 (any two meet through `noHandoff`); also checked directly | proved |
+| P8 | Self-loops exist exactly at `suggestInvestigating`, `readyForDebug` and `debugInProgress` | edge enumeration against a literal | proved |
+| P9 | Real-use replay: for each of the 44 real moves m, delta(m.from, m.event) = m.to | the fixture `test/fixtures/real_transitions.jsonl` (enum names only) | proved for these 44 |
+| P10 | Status follows content: after every command of every lifecycle scenario, `findings` is empty | 13 scenarios x 6 environments | verified over the scenario set, not proved for all handoffs; 20 of 179 real saved handoffs disagree (R10), from direct edits |
+| P11 | Every legal cell is driven by a scenario | `transition_matrix_test.dart` ratchet | not met: 14 of 33 undriven |
+| P12 | Termination: if the relation R(e) = events a listener may return after e is acyclic, a listener chain has at most abs(E) = 13 hops | topological order of E | not provable yet: no listeners exist |
+| P13 | Safety: for every legal (s, e) and every e' in R(e), delta(delta(s, e), e') is legal | check over L x R | not provable yet: no listeners |
+| P14 | The teardown rule: delta(s, tornDown) is legal exactly when the status expects a converged knowledge transfer and the disposition is resolved | written with the table change (S10) | pending |
+
+How a break shows. Two deliberate breaks of the table were applied in a scratch
+state and reverted:
+
+- `kill` made illegal from `debugComplete` (and `reminderSaved` with it, they
+  share an arm): P3 fails (33 becomes 31) and P9 fails (8 of the 44 real moves
+  become illegal).
+- `setup` made to land in `unknown`: P4, P5, P6 and P7 fail.
+
+What is not proved, said plainly: P12 and P13 (no listeners yet), P14 (not
+built), anything a command does besides the move, and the absence of races once
+the stream is asynchronous (the drain, order and isolation checks of stage 3
+cover that and are not built).
+
 ### Proof that a handoff state enhancement converges
 
 Applies to any change to what the handoff records or how its status moves: a
