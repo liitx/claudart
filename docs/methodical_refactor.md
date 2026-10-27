@@ -141,7 +141,9 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | R5 | `stepLogAbsentInRealUse` | No workspace has a `steps.jsonl`: the installed binary predates step logging, which is in unpushed local commits | workspace log directories | open, collect after a rebuild |
 | R6 | `errorLogIsMostlyEnvironmentChecks` | 7 of the 8 error fingerprints come from `doctor` environment checks; one comes from a state move | `errors.jsonl` | open |
 | R7 | `logSchemaUnversioned` | Of 107 model rows only 40 carry a role and 16 an accounting field: older rows lack fields and nothing marks which schema a row follows | `models.jsonl` | open |
-| R8 | `deadCellWasLiveUntilDebugStartedLanded` | `readyForDebug --fixApplied` was produced by `debug` six times up to 2026-10-20 08:07; from 10:40 `debugStarted` precedes it. In current code the cell is never produced, so an earlier statement that it never was is true only of the current code | `transitions.jsonl` | closed (corrected) |
+| R8 | `fixAppliedFromReadyForDebugIsDebugPrecondition` | `readyForDebug --fixApplied` is never produced as a move by current `debug` (it writes `debugStarted` first; real logs show it produced up to 2026-10-20 08:07), but `debug` uses the cell as its start check before any model call (`debug.dart:139`) and `canStartDebug` is tested to agree with it. Measured in a scratch copy: making the cell illegal makes all 24 lifecycle runs that call `debug` fail (4 scenarios x 6 environments). The earlier "dead cell" claim was wrong: it is unused as a move and load-bearing as a check | scratch experiment, `debug.dart:139`, `transitions.jsonl` | open (decide: keep as the precondition, or check `debugStarted` instead and then remove) |
+| R9 | `killAllowedFromEveryLiveStatus` | The table allows `killed` from all six live statuses, including `debugComplete`. The owner's rule is that `kill` is only for a handoff that is not confirmed and `teardown` is for a root cause and fix that are completely done (teardown itself asks "confirmed resolved?": yes archives and updates `skills.md`, no saves a reminder). The table does not enforce that rule | `session_state.dart` `killed` arm, `teardown.dart:96-110`, `kill.dart` doc | open |
+| K1 | `workspaceKnowsNoFeatures` | The workspace records no Feature variants: `workspace.json` holds owner, project and session only, and `skills.md` is keyed by branch, category and files, not by Feature variant. Owner's direction: when a Feature variant is updated, the workspace should know which features exist in it. Scope not yet confirmed (derived from the project's enums, or declared) | `workspace.json`, `skills.md` | open, awaiting the owner's scope |
 
 ## Gap to family
 
@@ -211,7 +213,9 @@ variant is not in the proposals below.
 | R5 | observesState x fileSeam | existing |
 | R6 | untouched x processBound | existing |
 | R7 | observesState x fileSeam | existing |
-| R8 | drivesState x processBound | existing |
+| R8 | drivesState x processBound; drivesState x workspaceBound | existing |
+| R9 | drivesState x processBound; drivesState x workspaceBound | existing |
+| K1 | untouched x workspaceBound; drivesState x processBound | existing |
 
 ### Proposed new variants
 
@@ -419,7 +423,8 @@ lands in, `debugComplete`, which means "files written and analyze-clean, tests
 not run"; `teardown` reads it to choose between `tornDown` and `reminderSaved`.
 Because `debug` writes `debugStarted` first, it always applies `fixApplied`
 from `debugInProgress`: the table's `readyForDebug --fixApplied` cell is never
-produced by any command.
+produced as a move by current code. It is still used: `debug` checks it before
+any model call to decide whether it may start (R8).
 
 Decided by the owner: the stream is asynchronous. Still to decide: which
 sequences start automatically after which state (for example, after
