@@ -89,6 +89,27 @@ void main() {
     }
   });
 
+  group('no log file name is spelled that LogFile does not own', () {
+    test('every quoted .jsonl name is a LogFile name', () {
+      final named = LogFile.values.map((file) => file.fileName).toSet();
+      final logName = RegExp(r"""['"]([\w.-]+\.jsonl)['"]""");
+      final offenders = <String>[
+        for (final entry in sources.entries)
+          if (!_logFileOwners.contains(entry.key))
+            for (var i = 0; i < entry.value.length; i++)
+              for (final match in logName.allMatches(entry.value[i]))
+                if (!named.contains(match.group(1)))
+                  '${entry.key}:${i + 1} ${match.group(1)}',
+      ];
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'a log file name is written as text but is not a LogFile: '
+            'add a LogFile variant and reach it through that',
+      );
+    });
+  });
+
   group('a fixture path has one owner', () {
     const paths = {
       'root': ProjectFixture.root,

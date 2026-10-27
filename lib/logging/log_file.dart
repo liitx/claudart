@@ -7,7 +7,8 @@
 
 import 'package:path/path.dart' as p;
 
-/// A log file inside a workspace's logs directory.
+/// A log file claudart writes: inside a workspace's logs directory, except
+/// [planner], which is global.
 enum LogFile {
   /// One record per command run: what ran and how it ended.
   interactions,
@@ -25,7 +26,12 @@ enum LogFile {
   steps,
 
   /// Timing of command runs, as a table.
-  performance;
+  performance,
+
+  /// Each categorize step's routing decision. Unlike the others it is global:
+  /// it sits beside the registry in the workspaces root, not in a workspace's
+  /// logs directory.
+  planner;
 
   /// The file name inside the logs directory.
   String get fileName => switch (this) {
@@ -35,6 +41,7 @@ enum LogFile {
         LogFile.models => 'models.jsonl',
         LogFile.steps => 'steps.jsonl',
         LogFile.performance => 'performance.md',
+        LogFile.planner => 'planner.jsonl',
       };
 }
 

@@ -7,9 +7,9 @@
 
 import 'dart:convert';
 import 'dart:io' as io;
-import 'package:path/path.dart' as p;
 
 import '../paths.dart';
+import 'log_file.dart';
 import '../pipeline/agent_flow.dart';
 import '../pipeline/agent_model.dart';
 import '../pipeline/agents/categorization.dart';
@@ -143,7 +143,7 @@ class PlannerLog {
   /// used to hardcode `~/.claudart` directly, ignoring that env var
   /// entirely, so planner records landed in a different directory than
   /// the rest of a session's state on any machine using the override.
-  static String _defaultPath() => p.join(workspacesRoot, 'planner.jsonl');
+  static String _defaultPath() => logFilePath(workspacesRoot, LogFile.planner);
 
   static void _defaultAppend(String path, String line) {
     final file = io.File(path);

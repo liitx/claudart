@@ -100,7 +100,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | U1 | `wildcardArmUndetected` | A wildcard arm in an enum switch is caught by no tool, so D2 can return unnoticed | stage 0.2 seed L6 (finding U1) | open |
 | U2 | `bareStringComparisonUndetected` | A bare string compared with `==` is caught by no tool; `bare_string_for_enum` sees only switch dispatch | stage 0.2 seed L7 | open |
 | U3 | `duplicateLiteralCheckAdvisory` | The duplicate-literal check is advisory: it prints and exits 0 | stage 0.2 seed W1 | open |
-| U4 | `newLogFileNameUndetected` | A new log file name written as a literal is not caught, because the ownership guard knows only the names `LogFile` already holds | stage 0.2 seed T6 | open |
+| U4 | `newLogFileNameUndetected` | A new log file name written as a literal was not caught, because the ownership guard knew only the names `LogFile` already held. Closed in Q1: the guard now fails on any quoted `.jsonl` name that is not a `LogFile`, and the first run found a real one, `planner.jsonl` in `planner_log.dart`, now `LogFile.planner` | `literal_ownership_topology_test.dart`, `make liveness` seed T6 | closed (Q1) |
 
 ### Measured by the call census (stage 0.3)
 
@@ -464,7 +464,7 @@ seeded defect in a scratch copy of the repo is reported. A defect it does not
 report is a finding. The working tree is never seeded; the harness is
 `tool/refactor_audit/liveness.sh` (`make liveness`) and copies the repo first.
 
-Observed (18 seeds): 15 caught, 3 missed. The 18th seed (T7) is the call
+Observed (18 seeds): 15 caught, 3 missed at first; 16 caught, 2 missed after Q1 closed the log-name seed. The 18th seed (T7) is the call
 census doc drifting, added when the script moved into `tool/`.
 
 | Id | Name | Tool | Defect | Result |
@@ -485,7 +485,7 @@ census doc drifting, added when the script moved into `tool/`.
 | T4 | `modelIdLiteralInLib` | model metadata guard | model id literal in `lib/` | caught |
 | T5 | `environmentDocDrift` | environment topology test | generated doc drift | caught |
 | T7 | `callCensusDocDrift` | call census test | generated doc drift | caught |
-| T6 | `logNameLiteralNotInLogFile` | literal ownership guard | log name literal not yet in `LogFile` | **missed** |
+| T6 | `logNameLiteralNotInLogFile` | literal ownership guard | log name literal not yet in `LogFile` | caught (was missed; closed in Q1) |
 | R1 | `orderDependentTest` | random-order suite | order-dependent test (passes in declared order) | caught |
 
 Not seeded here: mutation testing. It was observed alive in the earlier
