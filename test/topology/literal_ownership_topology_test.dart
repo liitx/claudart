@@ -71,6 +71,42 @@ Set<String> _declaredTypes(Map<String, List<String>> sources) {
   };
 }
 
+/// The titles that name `\$Type.member` where `member` is not written anywhere
+/// in the file that declares `Type`. The type is a real reference, so renaming
+/// it breaks the title; the member after the dot is only text, so without this
+/// a renamed member would leave the title naming something that is gone.
+List<String> titleMembersMissing(
+  Map<String, List<String>> sources,
+  Map<String, String> declaredIn,
+) {
+  final title = RegExp(r"(?:group|test)\('\$(\w+)\.(\w+)");
+  return [
+    for (final entry in sources.entries)
+      if (entry.key.startsWith('test/'))
+        for (var i = 0; i < entry.value.length; i++)
+          for (final match in title.allMatches(entry.value[i]))
+            if (declaredIn.containsKey(match.group(1)) &&
+                !RegExp('\\b${match.group(2)}\\b')
+                    .hasMatch(sources[declaredIn[match.group(1)]!]!.join('\n')))
+              '${entry.key}:${i + 1} \$${match.group(1)}.${match.group(2)}',
+  ];
+}
+
+/// Type name -> the lib file that declares it.
+Map<String, String> _declaredIn(Map<String, List<String>> sources) {
+  final declaration = RegExp(
+    r'^(?:abstract |final |sealed |base |interface |mixin )*'
+    r'(?:class|enum|typedef)\s+(\w+)',
+  );
+  return {
+    for (final entry in sources.entries)
+      if (entry.key.startsWith('lib/'))
+        for (final line in entry.value)
+          if (declaration.firstMatch(line) != null)
+            declaration.firstMatch(line)!.group(1)!: entry.key,
+  };
+}
+
 void main() {
   final sources = _sources();
 
@@ -144,6 +180,31 @@ void main() {
         lessThanOrEqualTo(_knownTitlesNamingATypeAsText),
         reason: 'a title writes a production type as text; write \$Type '
             'instead. Newest offenders: ${offenders.take(5).join(', ')}',
+      );
+    });
+  });
+
+  group('a title\'s member name exists', () {
+    test('titleMembersMissing finds a member the type no longer has', () {
+      final seen = titleMembersMissing(
+        {
+          'lib/a.dart': ['enum Kind { one;', '  String get label => "";', '}'],
+          'test/a_test.dart': [
+            "  group('\$Kind.label', () {});",
+            "  group('\$Kind.gone', () {});",
+          ],
+        },
+        {'Kind': 'lib/a.dart'},
+      );
+      expect(seen, ['test/a_test.dart:2 \$Kind.gone']);
+    });
+
+    test('no title names a member that is gone from its type', () {
+      expect(
+        titleMembersMissing(sources, _declaredIn(sources)),
+        isEmpty,
+        reason: 'a test title names \$Type.member but the member is not in the '
+            'type\'s file: update the title',
       );
     });
   });

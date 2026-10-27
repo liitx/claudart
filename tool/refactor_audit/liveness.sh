@@ -135,6 +135,18 @@ void main() {
 D
 guard T2 test/topology/literal_ownership_topology_test.dart "test title naming a type as text"
 rm -f test/zz_seed_t2_test.dart
+cat > test/zz_seed_t8_test.dart <<'D'
+import 'package:claudart/pipeline/step_role.dart';
+import 'package:test/test.dart';
+
+void main() {
+  group('$StepRole.renamedAway', () {
+    test('x', () {});
+  });
+}
+D
+guard T8 test/topology/literal_ownership_topology_test.dart "test title naming a member the type no longer has"
+rm -f test/zz_seed_t8_test.dart
 echo "const t6 = 'new_log_file.jsonl';" > lib/zz_seed_t6.dart
 guard T6 test/topology/literal_ownership_topology_test.dart "log name literal not yet in LogFile"
 rm -f lib/zz_seed_t6.dart
