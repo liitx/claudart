@@ -44,6 +44,7 @@ Evidence is file:line as of the commit this was written against.
 | S8 | `pipelineStateMachineUndeclared` | Pipeline FSM exists only as a comment | `pipeline_event.dart:3-24` | open |
 | S9 | `performanceLogHasNoWriter` | `LogFile.performance` has no writer | `logger.dart:326` | open |
 | S10 | `resolvedWithoutDebugHasNoStatus` | A handoff that is resolved without a debug (debug not applicable, or debug not used) has no way to be torn down: `tornDown` is legal only from `debugComplete`, which means a fix was applied. Owner's rule: teardown also when debug is not applicable, and in addition if debug isn't used | `session_state.dart` `tornDown` arm, owner direction | open, placeholder |
+| S11 | `nothingVerifiesTheFix` | `debugComplete` means the planned files were written and each `.dart` file passed `dart analyze --no-fatal-warnings`; no test runs, and `debug` prints "run tests" for the user. The only verification command in the code is `afterFixCommand`, run by `rotate` as a gate, not by `debug` or `teardown`. So nothing today verifies that a fix works before a session can be torn down | `edit_files.dart:102`, `debug.dart:335-345`, `rotate.dart:156` | open, placeholder (H6) |
 
 ### Exits that leave no record
 
@@ -178,6 +179,7 @@ variant is not in the proposals below.
 | S8 | — | new: StateMachineKind |
 | S9 | observesState x fileSeam | existing |
 | S10 | drivesState x workspaceBound | existing |
+| S11 | drivesState x processBound; untouched x processBound | existing |
 | D1 | observesState x processBound | existing |
 | D2 | untouched x pure; drivesState x pure; drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x processBound | existing |
 | D3 | untouched x workspaceBound | existing |
@@ -286,6 +288,7 @@ below wait on it.
 | H3 | `workspaceFeatureUpdatedByHandoff` | the data captured per handoff updates the Workspace Feature the handoff is allocated to; knowledge is organized per feature, and `suggest` is given only the knowledge for that feature | H2, K1 |
 | H4 | `ticketEventFlow` | ticket handling driven by events: the sprint board (zedup) communicates the ticket's metadata, so `suggest` and `flow`, invoked asynchronously, already know the type of work | Q4, H1 |
 | H5 | `endSessionByKnowledgeTransfer` | a session ends by what the handoff says, not by which command the user chose: resolved (converged KT and debug done, not applicable or skipped) means `save` then `teardown`, which updates the workspace; converged with debug pending is a reminder; not confirmed is `kill`; see the section below | H2, D9, D10, S10, K7 |
+| H6 | `convergenceClosesWithVerifiedEvidence` | when the flow converges it calls `teardown` itself, carrying the evidence that closed the KT: the fix was verified by `debug` after testing, or `suggest` confirmed readiness and debug is not being run. Closure is verified by an agent, and where the flow calls for debug, `debug` does the verifying | H5, Q4, S11 |
 
 Open decisions, deferred by the owner until the ticket flow is vetted: the
 single list of handoff types (the owner's bug, feat, refactor, spike, story
@@ -383,6 +386,43 @@ exists on the handoff object (D9, D10, R10); `suggest` can apply
 for a handoff resolved without debug (S10) and no record of whether debug is
 pending, done, not applicable or skipped (K7); `teardown` updates `skills.md` only, not a Workspace Feature
 (K1); the Scope shape is one for every kind of work (K3).
+
+#### Convergence closes with recorded evidence (owner's idea, placeholder)
+
+The owner's direction: when the AgentFlow converges it calls `teardown`,
+indicating the fix has been verified, either by `debug` after testing, or by
+`suggest` confirming readiness (`readyForDebug`) with debug not being run. The
+closure to the KT should be verified by the agent, and where the flow calls for
+debug, `debug` handles it. To be tested; nothing is built.
+
+The assistant's reading, with the parts that are its own marked:
+
+- The evidence is recorded in the handoff, as the debug disposition is
+  (placeholder values, the assistant's): verified by a `debug` run that passed
+  its checks, or confirmed by `suggest` with no verification run. They are
+  different trust levels and should stay distinguishable in the knowledge that
+  `teardown` writes.
+- The check `debug` runs today is only `dart analyze` on the written files (S11);
+  the existing `afterFixCommand` gate is the candidate verification, run by
+  `debug` before it records the disposition.
+- The call to `teardown` is a reaction to a transition, which is what the
+  stage 3 listeners are for; `teardown` includes a model step, which is why the
+  stream is asynchronous.
+
+A test plan, written before any code, as a matrix of evidence against the
+expected exit (each row a lifecycle scenario):
+
+| Evidence when the flow converges | Expected |
+|---|---|
+| `debug` ran and its verification passed | `teardown` runs, workspace updated |
+| `debug` ran and its verification failed | no `teardown`; status `needsSuggest`; failure logged |
+| `suggest` confirmed, debug skipped, recorded | `teardown` runs, evidence recorded as suggest-confirmed |
+| `suggest` confirmed, nothing recorded about debug | no `teardown`; reminder |
+| converged by the flow with no evidence at all | no `teardown`; stays open |
+
+Open: whether the automatic `teardown` is for headless and flow runs only, with
+interactive runs keeping the confirm; whether suggest-confirmed evidence may
+update the workspace at all, or only verified evidence may.
 
 Open, and left open on purpose: whether `constraints` are part of a converged
 KT; what `teardown` writes when no fix was applied (today it reads changed
