@@ -193,6 +193,46 @@ void main() {
       expect(output.join('\n'), contains('Status : no-handoff'));
     });
 
+    Future<String> summaryFor(String handoff) async {
+      final io = _io();
+      io.write(handoffPathFor(_workspace), handoff);
+      final output = <String>[];
+      await runZoned(
+        () => runKill(
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => true,
+          exitFn: (code) => throw _ExitException(code),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      return output.join('\n');
+    }
+
+    test('recorded attempted and changed work is shown', () async {
+      final summary = await summaryFor(
+        _activeHandoff
+            .replaceFirst(
+              '### What was attempted\n_Nothing yet._',
+              '### What was attempted\nTried the first fix',
+            )
+            .replaceFirst(
+              '### What changed (files modified)\n_Nothing yet._',
+              '### What changed (files modified)\nlib/a.dart',
+            ),
+      );
+      expect(summary, contains('Attempted : Tried the first fix'));
+      expect(summary, contains('Changed   : lib/a.dart'));
+    });
+
+    test('placeholder progress is not shown as work', () async {
+      final summary = await summaryFor(_activeHandoff);
+      expect(summary, isNot(contains('Attempted :')));
+      expect(summary, isNot(contains('Changed   :')));
+    });
+
     test('a live handoff shows its own status', () async {
       final io = _io();
       final output = <String>[];

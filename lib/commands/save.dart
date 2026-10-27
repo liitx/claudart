@@ -11,6 +11,7 @@ import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../sensitivity/token_map.dart';
 import '../templates/handoff_template.dart' show stampHandoffUpdated;
+import '../session/handoff_placeholder.dart';
 import '../session/handoff_event.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
@@ -67,7 +68,7 @@ Future<SkillsUpdateResult> runSave({
 
   // 2b — Apply the save event: root cause confirmed or not. A save from a
   // status with no such move (or no session) is a plain checkpoint.
-  final saveEvent = _isBlank(state.rootCause)
+  final saveEvent = HandoffPlaceholder.isBlank(state.rootCause)
       ? HandoffEvent.saveUnconfirmed
       : HandoffEvent.saveConfirmedExploring;
   if (state.effectiveStatus.after(saveEvent) != null) {
@@ -124,7 +125,9 @@ SkillsUpdateResult _updatePendingSkills({
   required bool sensitivityMode,
   required SessionState state,
 }) {
-  if (_isBlank(state.rootCause)) return SkillsUpdateResult.skipped;
+  if (HandoffPlaceholder.isBlank(state.rootCause)) {
+    return SkillsUpdateResult.skipped;
+  }
 
   var skills = fileIO.fileExists(skillsFile)
       ? fileIO.read(skillsFile)
@@ -143,7 +146,9 @@ SkillsUpdateResult _updatePendingSkills({
   // branch instead of accumulating duplicate bullets on repeated /save.
   final cause = sanitize(state.rootCause.replaceAll('\n', ' ').trim());
   final changed =
-      _isBlank(state.changed) ? null : sanitize(state.changed.replaceAll('\n', ' ').trim());
+      HandoffPlaceholder.isBlank(state.changed)
+          ? null
+          : sanitize(state.changed.replaceAll('\n', ' ').trim());
   skills = upsertPendingEntry(skills, state.branch, rootCause: cause, hotFiles: changed);
 
   fileIO.write(skillsFile, skills);
@@ -162,8 +167,6 @@ String _checkpointName(String branch) {
   return 'checkpoint_${safeBranch}_$ts.md';
 }
 
-bool _isBlank(String s) =>
-    s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');
 
 void _printReport(
   String projectName,

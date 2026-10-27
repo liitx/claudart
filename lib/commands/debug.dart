@@ -1,5 +1,6 @@
 
 import 'dart:io';
+import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
@@ -216,7 +217,7 @@ Future<void> runDebug({
 
   final fullBug = [
     if (bug.isNotEmpty) '## Bug\n$bug',
-    if (rootCause.isNotEmpty && rootCause != '_Not yet determined._')
+    if (!HandoffPlaceholder.isBlank(rootCause))
       '## Root Cause\n$rootCause',
     if (expected.isNotEmpty) '## Expected Behavior\n$expected',
   ].join('\n\n');

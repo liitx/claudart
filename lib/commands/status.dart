@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../session/handoff_placeholder.dart';
 import '../file_io.dart';
 import '../git_utils.dart';
 import '../logging/logger.dart';
@@ -82,8 +83,7 @@ Future<void> runStatus({
   }
 
   final skillsFile = skillsPathFor(workspace);
-  if (state.bug.isNotEmpty &&
-      !state.bug.startsWith('_Not') &&
+  if (!HandoffPlaceholder.isBlank(state.bug) &&
       fileIO.fileExists(skillsFile)) {
     final patterns = relevantSkillPatterns(fileIO.read(skillsFile), state.bug);
     if (patterns.isNotEmpty) {

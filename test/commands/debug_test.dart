@@ -415,6 +415,51 @@ void main() {
     }
   });
 
+  group('runDebug — the root cause in the prompt', () {
+    // What the handoff's Root Cause section holds, and whether the model is
+    // told it: real content is, a placeholder (either spelling) is not.
+    const rootCauses = <String, bool>{
+      'Found it.': true,
+      '_Not yet determined._': false,
+      '_Not determined._': false,
+    };
+
+    rootCauses.forEach((text, told) {
+      test('"$text" ${told ? 'is' : 'is not'} sent to the model', () async {
+        final sent = <String>[];
+        final executor = PipelineExecutor(
+          prompter: unscriptedUserPrompter,
+          approvalSelector: unscriptedApprovalSelector,
+          runner: ({
+            required model,
+            required systemPrompt,
+            required message,
+            required workingDir,
+            required allowedTools,
+            required helperModel,
+            StepMode mode = StepMode.project,
+          }) async {
+            sent.add(message);
+            return const StepResult(
+              text: '<CHANGES>no file edits needed</CHANGES>',
+              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            );
+          },
+        );
+        await runDebug(
+          io: _io(
+            handoff: _handoffReadyWithScope.replaceFirst('Found it.', text),
+          ),
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: executor,
+          pickFn: (_) => 0,
+        );
+        expect(sent.join('\n').contains('## Root Cause'), told);
+      });
+    });
+  });
+
   group('runDebug — applied plan', () {
     test('moves the handoff from readyForDebug to debugComplete', () async {
       final io = _io();

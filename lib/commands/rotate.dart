@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../config.dart';
 import '../file_io.dart';
@@ -192,7 +193,7 @@ Future<RotateResult>  runRotate({
     branch: state.branch,
     date: date,
     bug: nextBug,
-    expected: '_Not yet determined._',
+    expected: notYetDeterminedText,
     projectName: entry.name,
     pendingIssues: remaining,
   );

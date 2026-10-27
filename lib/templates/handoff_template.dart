@@ -1,3 +1,4 @@
+import '../session/handoff_placeholder.dart';
 import '../session/session_state.dart' show HandoffStatus;
 
 String handoffTemplate({
@@ -10,8 +11,8 @@ String handoffTemplate({
   String? entryPoints,
   List<String>? pendingIssues,
 }) {
-  final filesSection = files ?? '_Not yet determined._';
-  final entryPointsSection = entryPoints ?? '_Not yet determined._';
+  final filesSection = files ?? notYetDeterminedText;
+  final entryPointsSection = entryPoints ?? notYetDeterminedText;
   final pendingSection = (pendingIssues != null && pendingIssues.isNotEmpty)
       ? pendingIssues.map((i) => '- [ ] $i').join('\n')
       : '_None recorded yet._';
@@ -45,7 +46,7 @@ $expected
 
 ## Root Cause
 
-_Not yet determined._
+$notYetDeterminedText
 
 ---
 
@@ -58,10 +59,10 @@ $filesSection
 $entryPointsSection
 
 ### Classes / methods in play
-_Not yet determined._
+$notYetDeterminedText
 
 ### Must not touch
-_Not yet determined._
+$notYetDeterminedText
 
 ---
 
@@ -74,22 +75,22 @@ _None yet._
 ## Debug Progress
 
 ### What was attempted
-_Nothing yet._
+$nothingYetText
 
 ### What changed (files modified)
-_Nothing yet._
+$nothingYetText
 
 ### What is still unresolved
-_Nothing yet._
+$nothingYetText
 
 ### Specific question for suggest
-_Nothing yet._
+$nothingYetText
 
 ---
 
 ## Suggest Resume Notes
 
-_Nothing yet._
+$nothingYetText
 
 ---
 
@@ -141,35 +142,35 @@ ${HandoffStatus.suggestInvestigating.value}
 
 ## Bug
 
-_Not yet determined._
+$notYetDeterminedText
 
 ---
 
 ## Expected Behavior
 
-_Not yet determined._
+$notYetDeterminedText
 
 ---
 
 ## Root Cause
 
-_Not yet determined._
+$notYetDeterminedText
 
 ---
 
 ## Scope
 
 ### Files in play
-_Not yet determined._
+$notYetDeterminedText
 
 ### Key entry points in play
-_Not yet determined._
+$notYetDeterminedText
 
 ### Classes / methods in play
-_Not yet determined._
+$notYetDeterminedText
 
 ### Must not touch
-_Not yet determined._
+$notYetDeterminedText
 
 ---
 
@@ -182,22 +183,22 @@ _None yet._
 ## Debug Progress
 
 ### What was attempted
-_Nothing yet._
+$nothingYetText
 
 ### What changed (files modified)
-_Nothing yet._
+$nothingYetText
 
 ### What is still unresolved
-_Nothing yet._
+$nothingYetText
 
 ### Specific question for suggest
-_Nothing yet._
+$nothingYetText
 
 ---
 
 ## Suggest Resume Notes
 
-_Nothing yet._
+$nothingYetText
 
 ---
 

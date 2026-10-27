@@ -27,7 +27,8 @@
 // closing delimiter is composed from the tag name, so no source file has
 // to spell a closing tag out literally.
 
-const String _kDefaultFallback = '_Not determined._';
+import '../session/handoff_placeholder.dart';
+
 const int _kCodeUnitA = 0x41;
 const int _kCodeUnitZ = 0x5A;
 const int _kAsciiCaseBit = 0x20;
@@ -55,8 +56,12 @@ enum WireTag {
 
 /// Extracts the trimmed content between `<TAG>` and `</TAG>` in [text].
 /// Returns [fallback] when the tag is absent. Case-sensitive.
-String tagOr(String text, String tag, [String fallback = _kDefaultFallback]) =>
-    _extractTag(text, tag, caseInsensitive: false) ?? fallback;
+String tagOr(String text, String tag, [String? fallback]) =>
+    _extractTag(text, tag, caseInsensitive: false) ??
+    fallback ??
+    // A missing tag becomes the handoff placeholder, so the handoff, the
+    // template and the blank checks all agree it is not content.
+    HandoffPlaceholder.notYetDetermined.text;
 
 /// Case-sensitive [tagOr] variant that returns null when absent.
 String? tagOrNull(String text, String tag) =>

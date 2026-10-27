@@ -4,6 +4,7 @@
 // case-insensitive variant introduced for LLM-emitted tags.
 
 import 'package:claudart/pipeline/xml_tags.dart';
+import 'package:claudart/session/handoff_placeholder.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -19,8 +20,11 @@ void main() {
       );
     });
 
-    test('default fallback when none provided', () {
-      expect(tagOr('no tags', 'X'), isNotEmpty);
+    test('default fallback is the handoff placeholder, spelled once', () {
+      expect(
+        tagOr('no tags', 'X'),
+        HandoffPlaceholder.notYetDetermined.text,
+      );
     });
 
     test('case-sensitive — lower-case tag in input misses upper-case lookup',

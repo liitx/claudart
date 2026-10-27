@@ -1,3 +1,5 @@
+import 'handoff_placeholder.dart';
+
 // Pure logic extracted from teardown.dart for testability.
 
 String extractBranch(String content) {
@@ -16,7 +18,8 @@ String readSubSection(String section, String subheader) {
   final match = RegExp(
     r'### ' + RegExp.escape(subheader) + r'\n+([\s\S]*?)(?=\n### |\s*$)',
   ).firstMatch(section);
-  return match?.group(1)?.trim() ?? '_Nothing yet._';
+  return match?.group(1)?.trim() ??
+      HandoffPlaceholder.nothingYet.text;
 }
 
 String appendToSection(String content, String header, String newEntry) {
@@ -104,7 +107,7 @@ String incrementHotPath(String skills, String area, String file) {
 
 String buildCommitMessage(String area, String bug, String rootCause, String fix) {
   final bugLine = bug.replaceAll('\n', ' ').trim();
-  final rootLine = rootCause == '_Not yet determined._'
+  final rootLine = HandoffPlaceholder.isBlank(rootCause)
       ? ''
       : ' Root cause: ${rootCause.replaceAll('\n', ' ').trim()}.';
   final fixLine = fix.trim();

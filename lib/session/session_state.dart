@@ -1,4 +1,5 @@
 import 'handoff_event.dart';
+import 'handoff_placeholder.dart';
 import 'teardown_utils.dart';
 
 /// Typed representation of the handoff status field.
@@ -257,7 +258,9 @@ class SessionState {
   /// Returns true if the handoff contains non-placeholder content in any
   /// meaningful field — i.e., the session was actually started.
   bool get hasActiveContent =>
-      !_isBlank(bug) || !_isBlank(rootCause) || !_isBlank(attempted);
+      !HandoffPlaceholder.isBlank(bug) ||
+      !HandoffPlaceholder.isBlank(rootCause) ||
+      !HandoffPlaceholder.isBlank(attempted);
 
   /// The status a consumer should show: [status] when the handoff holds a real
   /// session, [HandoffStatus.noHandoff] when it does not. The blank handoff
@@ -267,9 +270,6 @@ class SessionState {
   /// commands, zedup) should read this, so they cannot disagree.
   HandoffStatus get effectiveStatus =>
       hasActiveContent ? status : HandoffStatus.noHandoff;
-
-  static bool _isBlank(String s) =>
-      s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');
 
   /// Parses [content] from a handoff.md file into a [SessionState].
   ///

@@ -13,7 +13,7 @@ import '../../tool/check_duplicate_literals.dart';
 
 /// Repeated literals found across lib/ today, counted once per file. A ratchet:
 /// lower it as repeats are extracted; it must never be raised.
-const _knownRepeatedLiterals = 175;
+const _knownRepeatedLiterals = 174;
 
 void main() {
   group('repeatedLiterals', () {

@@ -6,6 +6,7 @@
 // override, same as any other promptWithDefault-backed question.
 
 import 'dart:io';
+import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
 import '../git_utils.dart';
@@ -81,4 +82,4 @@ Future<void> runResume({
 /// (`_Not yet determined._`, `_Nothing yet._`) when the section is empty —
 /// never useful as a pre-filled default.
 String? _cleanOrNull(String raw) =>
-    (raw.isEmpty || raw.startsWith('_Not') || raw.startsWith('_Nothing')) ? null : raw;
+    HandoffPlaceholder.isBlank(raw) ? null : raw;

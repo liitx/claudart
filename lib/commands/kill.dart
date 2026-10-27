@@ -7,6 +7,7 @@ import '../md_io.dart' show confirmOrEof, readHandoffStatus;
 import '../paths.dart';
 import '../registry.dart';
 import 'claudart_command.dart';
+import '../session/handoff_placeholder.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
@@ -173,10 +174,10 @@ void _printSessionSummary(String name, SessionState state, String? liveBranch) {
   print('  Bug    : ${_truncate(state.bug)}');
   if (state.hasActiveContent) {
     print('\n  Debug progress recorded — this work will be archived.');
-    if (!_isBlank(state.attempted)) {
+    if (!HandoffPlaceholder.isBlank(state.attempted)) {
       print('  Attempted : ${_truncate(state.attempted)}');
     }
-    if (!_isBlank(state.changed)) {
+    if (!HandoffPlaceholder.isBlank(state.changed)) {
       print('  Changed   : ${_truncate(state.changed)}');
     }
   } else {
@@ -188,6 +189,4 @@ void _printSessionSummary(String name, SessionState state, String? liveBranch) {
 String _truncate(String s, {int max = 72}) =>
     s.length > max ? '${s.substring(0, max)}…' : s;
 
-bool _isBlank(String s) =>
-    s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');
 
