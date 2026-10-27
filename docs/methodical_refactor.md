@@ -130,6 +130,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | M1 | `legalMovesUndriven` | 24 of the table's legal moves were driven by no lifecycle scenario. Eight scenarios were added (unconfirmed and confirmed save, blocked debug and re-suggest, kill after debug, kill after a blocked debug, rotate with and without a pending issue from a fresh setup, suggest twice), leaving 14: all six `reminderSaved` cells (teardown's reminder path), five from `debugInProgress` (a state only a run killed mid-debug rests in), `saveConfirmedReady` from `readyForSuggest` and `needsSuggest`, and `readyForDebug --fixApplied`. Other command tests may cover some; none of them checks the logged move against the consumer view. A ratchet fails if the number grows | `docs/topology/transition_matrix.md` | open |
 | M2 | `rejectedMovesUntried` | The lifecycle scenarios never make a command try a move the table rejects, so the "setup over a live handoff" rejection is covered only by its own separate test | transition matrix, rejected section | open |
 | M3 | `environmentsDoNotChangeStateMachine` | Proven: the logged moves of every scenario are identical in all six link-state x dartrix environments, so those two axes do not change the state machine | `transition_matrix_test.dart`, "identical in every environment" | closed |
+| M4 | `olderMutationSurvivors` | Mutation runs over the files this work touched found survivors in older, untouched lines, to be filed as one issue (not fixed inline, per the repo rule): `handoff_template` 33, `report` 40, `pipeline_executor` 37, `save` 26, `debug` 24, `rotate` 23, `kill` 21, `status` 17, `token_map` 10, `logger` 9, `workspace_config` 8, `teardown_utils` 7, `resume` 5, `sync_check` 3, and one each in `hook`, `failure_type` and `xml_tags`. `teardown` cannot be measured: it hangs the mutation tool | mutation runs, this document's progress notes | open, issue not yet filed |
 
 
 ### Measured in real logs
@@ -225,6 +226,7 @@ variant is not in the proposals below.
 | M1 | — | new: CodeTree |
 | M2 | — | new: CodeTree |
 | M3 | — | new: CodeTree |
+| M4 | drivesState x processBound; observesState x processBound; observesState x workspaceBound; untouched x workspaceBound; untouched x pure | existing |
 | R1 | observesState x fileSeam; untouched x processBound | existing |
 | R2 | drivesState x processBound | existing |
 | R3 | drivesState x processBound | existing |
