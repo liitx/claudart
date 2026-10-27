@@ -259,21 +259,43 @@ before the change and pass after.
 | Id | Name | Gaps | Needs first | Pass condition (written before the change) |
 |---|---|---|---|---|
 | Q1 | `guardsThatSee` | U1, U2, U3, U4 | nothing | `make liveness` reports CAUGHT for a wildcard arm on an enum switch, a bare string compared with `==`, a duplicate literal (as a gate, not advice) and a new log-file-name literal; existing violations are held by a ratchet so later steps cannot add more |
-| Q2 | `intendedBehaviorDecided` | M1, M2, R2, R3 | Q1 | the owner decides, per cell, whether each undriven or rejected-in-real-use move is wanted (first: `suggest` from `debugComplete`, `kill` versus `teardown`); each decision becomes a lifecycle scenario that fails before the code agrees; the undriven-cell ratchet reaches 0 or each remaining cell is marked unreachable with the reason |
+| Q2 | `intendedBehaviorDecided` | M1, M2, R2, R3, R9, R10, S10, K7, D9, D10 | Q1 | the owner's decisions on handoff state become lifecycle scenarios that fail before the code agrees: when each move is wanted (`suggest` from `debugComplete`, `kill` versus `teardown` by knowledge transfer), the typed KT-converged value and the debug disposition recorded in the handoff, `suggest` not applying `saveConfirmedReady` without a root cause, one placeholder spelling; the undriven-cell ratchet reaches 0 or each remaining cell is marked unreachable with the reason; every state enhancement passes the convergence proof below |
 | Q3 | `oneWriterForStatus` | S2, S3, E1 | Q2 | a guard fails if `handoff.md` status is written anywhere but `applyHandoffEvent`; the seven state-driving command files go through it; every early exit writes a record (the census shows no unrecorded exit) |
-| Q4 | `asynchronousTransitionStream` | S1, S6, S7, S8 | Q3 | the totality, safety, termination, order, drain and isolation proofs of stage 3, each as a test; the logger is a subscriber and the `onTransition` callbacks are gone; `teardown` and the pipeline publish too |
+| Q4 | `asynchronousTransitionStream` | S1, S6, S7, S8, H6 | Q3 | the totality, safety, termination, order, drain and isolation proofs of stage 3, each as a test; the logger is a subscriber and the `onTransition` callbacks are gone; `teardown` and the pipeline publish too; the first listener kind that calls `teardown` on converged, verified closure (headless and flow runs only) |
 | Q5 | `logsCoverEveryCommand` | R1, R5, R7, S9 | Q4 | every command leaves an interaction record (a matrix over `ClaudartCommand`); a real run after a rebuild produces `steps.jsonl`; each log row names its schema version; `performance` has a writer or is removed |
 | Q6 | `noSilentFallbacks` | D1 to D8 | Q1 | a corrupt registry, an unreadable `workspace.json` under strict mode, a missing `HOME`, an unpersisted token map and each wildcard arm become a typed failure or an explicit variant, each with the failing test first |
 | Q7 | `measuredRedundancyRemoved` | B1 to B4, N1, N2, P1 | Q5 | `make spawn-census` and the call census show git spawned once per command, the registry parsed once, the log append not reading the log; the before and after counts are recorded here |
 | Q8 | `familiesGrowWhereDataSaysSo` | S4, S8 and the proposed variants | Q4 | each proposed variant is added only with a file that needs it: `reactsToState` with the first listener, `TriggerSource` with agent-edit detection, `CodeTree` when tools and tests are scanned; the families doc and its drift test change with them |
 | Q9 | `crossPackageTruth` | X1 to X9 | Q8 | one generated portal document across claudart, dartrix and zedup; the zedup compile break (X8) and the three contradicting plans are listed for their owners; no edit to dartrix or zedup from here |
 | Q10 | `ticketClassificationPrepared` | K2 to K6 | Q4, and the current work complete | a placeholder `SprintTicket` (class or factory constructor) carries the type of work into the handoff; `HandoffTemplate` has one variant per type with Scope as a variant object; a handoff's data updates the Workspace Feature it is allocated to; `suggest` reads only that feature's knowledge. Designed in a parallel claudart session once the owner has vetted the ticket flow; nothing is built before then |
+| Q11 | `fixVerifiedBeforeDone` | S11 | Q2, Q4 | `debug` runs the workspace `afterFixCommand` before it records the work as done and writes the evidence kind into the handoff; the five evidence scenarios of H6 pass; only verified evidence updates the workspace, and suggest-confirmed handoffs end as a reminder |
 
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior
 the table does not describe (R2, R3), and only the owner can say which is
 intended. Q3 before Q4 because a stream of transitions is only complete if one
 writer publishes them. Q6 depends only on Q1 and can run beside Q3 to Q5.
+
+### Proof that a handoff state enhancement converges
+
+Applies to any change to what the handoff records or how its status moves: a
+new status, the debug disposition, the evidence kind, the KT-converged value,
+the Scope variants. A change is not done until every line below holds, each as
+a test written before the change:
+
+| Check | What it proves |
+|---|---|
+| Totality | every status x event cell is decided in an exhaustive switch with no default arm; a new variant fails to compile until it is |
+| Safety | every move a listener or command can request is legal from the status it lands in, over all cells |
+| Termination | the relation event -> events a listener may return is acyclic, so a chain is at most one hop per event |
+| Status follows content | no converged status holds an unconverged KT and no unconverged status holds a converged one: asserted on the lifecycle scenarios and run over the real archived handoffs, where today it disagrees in about 10% (R10); the target is zero |
+| Evidence matrix | each row of the H6 matrix is a scenario whose expected exit is written before the code, and whose logged moves match the consumer view |
+| Real-log replay | the real `transitions.jsonl` moves (44 on this machine) replay through the new table and every one that was legal still is, so no real session becomes illegal |
+| Ratchet | the undriven-cell count does not grow, and the gap register test still places every gap in a family or a proposed variant |
+
+Convergence here means: the checks above all pass on the final table, so a
+handoff cannot reach a state the table does not describe, cannot end in a state
+that disagrees with its content, and cannot trigger a chain that does not end.
 
 ### Placeholders (the owner's architecture, not designed yet)
 
@@ -420,9 +442,10 @@ expected exit (each row a lifecycle scenario):
 | `suggest` confirmed, nothing recorded about debug | no `teardown`; reminder |
 | converged by the flow with no evidence at all | no `teardown`; stays open |
 
-Open: whether the automatic `teardown` is for headless and flow runs only, with
-interactive runs keeping the confirm; whether suggest-confirmed evidence may
-update the workspace at all, or only verified evidence may.
+Agreed in principle by the owner (to be confirmed when the tests are written):
+the automatic `teardown` is for headless and flow runs only, interactive runs
+keep the confirm; only verified evidence updates the workspace, and a
+suggest-confirmed handoff ends as a reminder until the owner decides otherwise.
 
 Open, and left open on purpose: whether `constraints` are part of a converged
 KT; what `teardown` writes when no fix was applied (today it reads changed
