@@ -33,6 +33,7 @@ import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
+import 'package:analyzer/error/error.dart' show DiagnosticSeverity;
 import 'package:analyzer/error/listener.dart';
 import 'package:custom_lint_builder/custom_lint_builder.dart';
 
@@ -45,6 +46,8 @@ class _ClaudartLints extends PluginBase {
         EnumValuesLoopInSingleTest(),
         UngroupedIdenticalSwitchCases(),
         UnconditionalConfirmRequiresPromptFn(),
+        WildcardArmOnEnumSwitch(),
+        EnumNameComparedToString(),
       ];
 }
 
@@ -379,5 +382,114 @@ class UnconditionalConfirmRequiresPromptFn extends DartLintRule {
   static bool _isTrueLiteral(Expression? expr) {
     final unwrapped = expr?.unParenthesized;
     return unwrapped is BooleanLiteral && unwrapped.value == true;
+  }
+}
+
+/// True when [type] is an enum type.
+bool _isEnumType(DartType? type) =>
+    type is InterfaceType && type.element is EnumElement;
+
+/// Flags a `default:` or `_` arm in a `switch` whose subject is an enum. A
+/// wildcard arm there is a missing variant: it accepts every variant added
+/// later without anyone deciding what that variant does, and
+/// `missing_enum_constant_in_switch` can no longer say so. Name each variant,
+/// grouping identical outcomes with `||`.
+///
+/// claudart-local: it enforces the standing rule that an exhaustive switch over
+/// an enum has no catch-all, not a convention dartrix owns.
+class WildcardArmOnEnumSwitch extends DartLintRule {
+  WildcardArmOnEnumSwitch() : super(code: _code);
+
+  static const _code = LintCode(
+    name: 'wildcard_arm_on_enum_switch',
+    errorSeverity: DiagnosticSeverity.ERROR,
+    problemMessage:
+        'This switch over an enum has a default or wildcard arm. It accepts '
+        'every variant added later without anyone deciding what it does.',
+    correctionMessage:
+        'Name each variant and group identical outcomes with ||; the compiler '
+        'then fails when a variant is added.',
+  );
+
+  @override
+  void run(
+    CustomLintResolver resolver,
+    DiagnosticReporter reporter,
+    CustomLintContext context,
+  ) {
+    context.registry.addSwitchExpression((node) {
+      if (!_isEnumType(node.expression.staticType)) return;
+      for (final switchCase in node.cases) {
+        if (_isWildcard(switchCase.guardedPattern)) {
+          reporter.atNode(switchCase, _code);
+        }
+      }
+    });
+
+    context.registry.addSwitchStatement((node) {
+      if (!_isEnumType(node.expression.staticType)) return;
+      for (final member in node.members) {
+        if (member is SwitchDefault ||
+            (member is SwitchPatternCase &&
+                _isWildcard(member.guardedPattern))) {
+          reporter.atNode(member, _code);
+        }
+      }
+    });
+  }
+
+  static bool _isWildcard(GuardedPattern guarded) =>
+      guarded.whenClause == null && guarded.pattern is WildcardPattern;
+}
+
+/// Flags comparing an enum's `.name` to a string literal with `==` or `!=`.
+/// The comparison is a bare string standing in for the enum value: renaming
+/// the variant silently breaks it. Compare the enum values themselves.
+///
+/// claudart-local, and narrow on purpose: it reports only the shape that is
+/// unambiguously a bare string for an enum (`value.name == 'literal'` where
+/// `value` is an enum), not every comparison of a string.
+class EnumNameComparedToString extends DartLintRule {
+  EnumNameComparedToString() : super(code: _code);
+
+  static const _code = LintCode(
+    name: 'enum_name_compared_to_string',
+    errorSeverity: DiagnosticSeverity.ERROR,
+    problemMessage:
+        'An enum\'s name is compared to a string literal. The string stands '
+        'in for the enum value and breaks silently if the variant is renamed.',
+    correctionMessage:
+        'Compare the enum values: `value == Kind.variant`.',
+  );
+
+  @override
+  void run(
+    CustomLintResolver resolver,
+    DiagnosticReporter reporter,
+    CustomLintContext context,
+  ) {
+    context.registry.addBinaryExpression((node) {
+      final operator = node.operator.lexeme;
+      if (operator != '==' && operator != '!=') return;
+      final left = node.leftOperand;
+      final right = node.rightOperand;
+      if ((_isEnumName(left) && right is StringLiteral) ||
+          (_isEnumName(right) && left is StringLiteral)) {
+        reporter.atNode(node, _code);
+      }
+    });
+  }
+
+  /// True for `x.name` where `x` is an enum value.
+  static bool _isEnumName(Expression expression) {
+    if (expression is PrefixedIdentifier) {
+      return expression.identifier.name == 'name' &&
+          _isEnumType(expression.prefix.staticType);
+    }
+    if (expression is PropertyAccess) {
+      return expression.propertyName.name == 'name' &&
+          _isEnumType(expression.target?.staticType);
+    }
+    return false;
   }
 }

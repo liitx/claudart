@@ -165,7 +165,30 @@ enum ClaudartCommand {
   /// claudart_command_test.dart.
   bool get recordsStepModels => switch (this) {
         suggest || debug || flow => true,
-        _ => false,
+        chat ||
+        archives ||
+        add ||
+        init ||
+        link ||
+        unlink ||
+        setup ||
+        status ||
+        teardown ||
+        save ||
+        rotate ||
+        kill ||
+        resume ||
+        confirmPending ||
+        preflight ||
+        scan ||
+        report ||
+        map ||
+        experiment ||
+        compile ||
+        doctor ||
+        workspaces ||
+        hook =>
+          false,
       };
 
   /// `init --project <name>` names a NEW project knowledge file; the global

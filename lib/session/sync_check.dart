@@ -136,7 +136,10 @@ SyncCheckResult checkHandoffStatus(
           suggestion: 'Run `claudart setup` to start a session first.',
         ),
       ]),
-    _ => SyncCheckResult.clean(),
+    ClaudartOperation.debug ||
+    ClaudartOperation.save ||
+    ClaudartOperation.test =>
+      SyncCheckResult.clean(),
   };
 }
 

@@ -80,7 +80,12 @@ int l6(E6 e) => switch (e) {
     };
 D
 cat > lib/zz_seed_l7.dart <<'D'
-bool l7(String s) => s == 'transitions.jsonl' || s == 'errors.jsonl';
+enum E7 { a, b }
+
+bool l7(E7 e) => e.name == 'a';
+D
+cat > lib/zz_seed_l8.dart <<'D'
+bool l8(String s) => s == 'transitions.jsonl' || s == 'errors.jsonl';
 D
 cat > test/zz_seed_l2_test.dart <<'D'
 import 'package:test/test.dart';
@@ -104,8 +109,9 @@ chk L2 custom_lint:enum_values_loop_in_single_test "enum values loop in one test
 chk L3 custom_lint:ungrouped_identical_switch_cases "identical arms" zz_seed_l3 "$cl"
 chk L4 custom_lint:unconditional_confirm_requires_prompt_fn "confirmFn true, no promptFn" zz_seed_l4 "$cl"
 chk L5 analyzer:missing_enum_constant_in_switch "enum switch missing a variant" zz_seed_l5 "$an"
-chk L6 any "wildcard arm on an enum switch" zz_seed_l6 "$an$cl"
-chk L7 any "bare string compared with ==" zz_seed_l7 "$an$cl"
+chk L6 custom_lint:wildcard_arm_on_enum_switch "wildcard arm on an enum switch" zz_seed_l6 "$cl"
+chk L7 custom_lint:enum_name_compared_to_string "enum name compared to a string literal" zz_seed_l7 "$cl"
+chk L8 any "plain String compared to a literal with ==" zz_seed_l8 "$an$cl"
 rm -f lib/zz_seed_* test/zz_seed_*
 
 # ---- duplicate-literal gate (the tool nudges; the ratchet test is the gate)

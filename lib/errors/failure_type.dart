@@ -79,7 +79,16 @@ enum FailureType {
         FailureType.providerNotConfigured ||
         FailureType.stepModelNotPermittedForRole =>
           FaultClass.configFault,
-        _ => faultClass,
+        FailureType.scanThresholdExceeded ||
+        FailureType.archiveIndexCorrupt ||
+        FailureType.registryCorrupt ||
+        FailureType.sessionCloseFailed ||
+        FailureType.invalidHandoffTransition ||
+        FailureType.stepExitedNonzero ||
+        FailureType.editPlanMalformed ||
+        FailureType.editVerificationFailed ||
+        FailureType.unexpectedFailure =>
+          faultClass,
       };
 
   String get label => switch (this) {

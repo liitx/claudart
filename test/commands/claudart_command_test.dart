@@ -13,7 +13,29 @@ String? _sourceFor(ClaudartCommand command) {
     ClaudartCommand.confirmPending => 'confirm_pending',
     ClaudartCommand.preflight => 'preflight_cmd',
     ClaudartCommand.map => 'map_cmd',
-    _ => command.name,
+    ClaudartCommand.archives ||
+    ClaudartCommand.add ||
+    ClaudartCommand.init ||
+    ClaudartCommand.link ||
+    ClaudartCommand.unlink ||
+    ClaudartCommand.setup ||
+    ClaudartCommand.status ||
+    ClaudartCommand.teardown ||
+    ClaudartCommand.suggest ||
+    ClaudartCommand.debug ||
+    ClaudartCommand.flow ||
+    ClaudartCommand.save ||
+    ClaudartCommand.rotate ||
+    ClaudartCommand.kill ||
+    ClaudartCommand.resume ||
+    ClaudartCommand.scan ||
+    ClaudartCommand.report ||
+    ClaudartCommand.experiment ||
+    ClaudartCommand.compile ||
+    ClaudartCommand.doctor ||
+    ClaudartCommand.workspaces ||
+    ClaudartCommand.hook =>
+      command.name,
   };
   final path = 'lib/commands/$stem.dart';
   return File(path).existsSync() ? path : null;

@@ -58,7 +58,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | Id | Name | Gap | Evidence | Status |
 |---|---|---|---|---|
 | D1 | `defaultArmInLaunch` | `default:` arm | `launch.dart:158` | open |
-| D2 | `wildcardArms` | Wildcard arms | `session_state.dart:29`; `failure_type.dart:82`; `claudart_command.dart:168,270`; `sync_check.dart:16,139`; `workspace_config.dart:41,61`; `chat_shell.dart:50`; `config.dart:80` | open |
+| D2 | `wildcardArms` | Wildcard arms | `session_state.dart:29`; `failure_type.dart:82`; `claudart_command.dart:168,270`; `sync_check.dart:16,139`; `workspace_config.dart:41,61`; `chat_shell.dart:50`; `config.dart:80` | open; the four enum-subject arms were closed in Q1 (U1), the rest are on strings or ints |
 | D3 | `corruptRegistryReadsEmpty` | Corrupt registry reads as empty | `registry.dart:103` | open |
 | D4 | `unreadableWorkspaceConfigDisablesStrictMode` | Unreadable `workspace.json` makes `owner.strict` false | `suggest.dart:59`; `debug.dart:111`; `flow.dart:67`; `hook.dart:157` | open |
 | D5 | `missingFileReadsEmpty` | Missing file reads as an empty string | `file_io.dart:41` | open |
@@ -98,8 +98,8 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 
 | Id | Name | Gap | Evidence | Status |
 |---|---|---|---|---|
-| U1 | `wildcardArmUndetected` | A wildcard arm in an enum switch is caught by no tool, so D2 can return unnoticed | stage 0.2 seed L6 (finding U1) | open |
-| U2 | `bareStringComparisonUndetected` | A bare string compared with `==` is caught by no tool; `bare_string_for_enum` sees only switch dispatch | stage 0.2 seed L7 | open |
+| U1 | `wildcardArmUndetected` | A wildcard arm in an enum switch was caught by no tool. Closed in Q1: the lint `wildcard_arm_on_enum_switch` (error severity) fails on a default or `_` arm in a switch whose subject is an enum; it found four, in `claudart_command.dart`, `failure_type.dart`, `sync_check.dart` and one test, all now explicit variants. Wildcard arms on non-enum subjects (strings, ints) remain and belong to D2 | `claudart_lints.dart`, `make liveness` seed L6 | closed (Q1) |
+| U2 | `bareStringComparisonUndetected` | A bare string compared with `==` was caught by no tool. Partly closed in Q1: the lint `enum_name_compared_to_string` fails on `enumValue.name == 'literal'` (none existed). A plain `String == 'literal'` is still unseen, deliberately: without the type owning the value the lint cannot tell a wire string from free text, and flagging every comparison would bury the real findings. Revisit when the wire edges are enum-owned (WireTag, field enums) | `claudart_lints.dart`, `make liveness` seeds L7, L8 | partly closed (Q1); plain-string case accepted with reason |
 | U3 | `duplicateLiteralCheckAdvisory` | The duplicate-literal check only printed a nudge and exited 0. Closed in Q1: the same finding is now a ratchet test (`test/tool/check_duplicate_literals_test.dart`), and `make liveness` seed W1 trips it | `check_duplicate_literals_test.dart`, `make liveness` seed W1 | closed (Q1) |
 | U4 | `newLogFileNameUndetected` | A new log file name written as a literal was not caught, because the ownership guard knew only the names `LogFile` already held. Closed in Q1: the guard now fails on any quoted `.jsonl` name that is not a `LogFile`, and the first run found a real one, `planner.jsonl` in `planner_log.dart`, now `LogFile.planner` | `literal_ownership_topology_test.dart`, `make liveness` seed T6 | closed (Q1) |
 
@@ -271,6 +271,18 @@ before the change and pass after.
 | Q9 | `crossPackageTruth` | X1 to X9 | Q8 | one generated portal document across claudart, dartrix and zedup; the zedup compile break (X8) and the three contradicting plans are listed for their owners; no edit to dartrix or zedup from here |
 | Q10 | `ticketClassificationPrepared` | K2 to K6 | Q4, and the current work complete | a placeholder `SprintTicket` (class or factory constructor) carries the type of work into the handoff; `HandoffTemplate` has one variant per type with Scope as a variant object; a handoff's data updates the Workspace Feature it is allocated to; `suggest` reads only that feature's knowledge. Designed in a parallel claudart session once the owner has vetted the ticket flow; nothing is built before then |
 | Q11 | `fixVerifiedBeforeDone` | S11 | Q2, Q4 | `debug` runs the workspace `afterFixCommand` before it records the work as done and writes the evidence kind into the handoff; the five evidence scenarios of H6 pass; only verified evidence updates the workspace, and suggest-confirmed handoffs end as a reminder |
+
+Progress (updated as steps finish):
+
+- **Q1 `guardsThatSee`: done.** U1 closed (lint `wildcard_arm_on_enum_switch`;
+  four enum-subject wildcard arms fixed), U2 partly closed (lint
+  `enum_name_compared_to_string`; the plain-string case accepted with a reason),
+  U3 closed (duplicate literals are a ratchet gate, 175 today, D11), U4 closed
+  (a quoted `.jsonl` name must be a `LogFile`; it found `planner.jsonl`, now
+  `LogFile.planner`). `make liveness`: 18 of 19 seeds caught. Mutation on the
+  touched lib files: no survivor in a line this step changed; older survivors
+  are `failure_type.dart` line 119 and `sync_check.dart` lines 30, 31 and 126,
+  to be filed as an issue with the other pre-existing ones, not fixed here.
 
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior
@@ -466,7 +478,7 @@ seeded defect in a scratch copy of the repo is reported. A defect it does not
 report is a finding. The working tree is never seeded; the harness is
 `tool/refactor_audit/liveness.sh` (`make liveness`) and copies the repo first.
 
-Observed (18 seeds): 15 caught, 3 missed at first; 16 caught, 2 missed after Q1 closed the log-name seed (the duplicate-literal seed is now caught by a gate, not a nudge). The 18th seed (T7) is the call
+Observed at first (18 seeds): 15 caught, 3 missed. After Q1 (19 seeds, the plain-string case added): 18 caught, 1 missed, the plain-string comparison, accepted with a reason (U2). The duplicate-literal seed is caught by a gate, not a nudge. The 18th seed (T7) is the call
 census doc drifting, added when the script moved into `tool/`.
 
 | Id | Name | Tool | Defect | Result |
@@ -478,8 +490,9 @@ census doc drifting, added when the script moved into `tool/`.
 | L3 | `identicalSwitchArms` | custom_lint `ungrouped_identical_switch_cases` | identical arms | caught |
 | L4 | `confirmWithoutPromptFunction` | custom_lint `unconditional_confirm_requires_prompt_fn` | `confirmFn` true, no `promptFn` | caught |
 | L5 | `enumSwitchMissingVariant` | analyzer `missing_enum_constant_in_switch` | enum switch missing a variant | caught |
-| L6 | `wildcardArmOnEnumSwitch` | any | wildcard arm on an enum switch | **missed** |
-| L7 | `bareStringComparison` | any | bare string compared with `==` | **missed** |
+| L6 | `wildcardArmOnEnumSwitch` | custom_lint `wildcard_arm_on_enum_switch` | wildcard arm on an enum switch | caught (was missed; closed in Q1) |
+| L7 | `enumNameComparedToString` | custom_lint `enum_name_compared_to_string` | enum name compared to a string literal | caught (was missed; closed in Q1) |
+| L8 | `plainStringComparedToLiteral` | any | plain `String` compared to a literal with `==` | **missed** (accepted, see U2) |
 | W1 | `sameFileDuplicateLiteral` | `check_duplicate_literals` | same-file duplicate literal | caught (advisory, exit 0); caught by the gate after Q1 |
 | T1 | `logFileNameLiteralInLib` | literal ownership guard | log file name literal in `lib/` | caught |
 | T2 | `testTitleNamingTypeAsText` | literal ownership guard | test title naming a type as text | caught |
