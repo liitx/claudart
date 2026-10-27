@@ -108,13 +108,12 @@ chk L6 any "wildcard arm on an enum switch" zz_seed_l6 "$an$cl"
 chk L7 any "bare string compared with ==" zz_seed_l7 "$an$cl"
 rm -f lib/zz_seed_* test/zz_seed_*
 
-# ---- duplicate-literal advisory
+# ---- duplicate-literal gate (the tool nudges; the ratchet test is the gate)
 cat > lib/zz_seed_d1.dart <<'D'
 String d1a() => 'some repeated literal';
 String d1b() => 'some repeated literal';
 D
-o=$(dart run tool/check_duplicate_literals.dart lib/zz_seed_d1.dart 2>&1)
-chk W1 check_duplicate_literals "same-file duplicate literal (advisory, exits 0)" "repeated literal" "$o"
+guard W1 test/tool/check_duplicate_literals_test.dart "same-file duplicate literal"
 rm -f lib/zz_seed_d1.dart
 
 # ---- topology guards: seed, run the guard, revert

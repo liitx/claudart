@@ -67,6 +67,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | D8 | `swallowedErrors` | Swallowed errors | `token_map.dart:91`; `link.dart:690`; `session_ops.dart:161` | open |
 | D9 | `suggestAppliesReadyWithoutConvergence` | `suggest` writes the model's `ROOT_CAUSE` with `tagOr`, which returns `_Not determined._` when the tag is missing, and then applies `saveConfirmedReady` anyway: the status says the root cause is locked while the handoff says it is not determined | `suggest.dart:271,291-296`, `xml_tags.dart:30` | open |
 | D10 | `placeholderSpelledThreeWays` | The "no root cause" placeholder is `_Not yet determined._` in the template, `_Not determined._` from `tagOr`, and `debug` compares only the first exactly (`debug.dart:219`), so the fallback reaches the debug prompt as if it were a real root cause. `save` and `teardown` use `startsWith('_Not')` and catch both | `handoff_template.dart:48`, `xml_tags.dart:30`, `debug.dart:219` | open |
+| D11 | `repeatedLiteralsInLib` | The gate's first count: 175 string literals are repeated within a file across `lib/`, many of them JSON keys written once to read and once to write (`registry`, `workspace_config`, `archive_entry`, `pending_confirmation`) and status wire values. The no-bare-strings rule is far from met; the ratchet holds it at 175 | `check_duplicate_literals_test.dart` | open (reduced under Q6) |
 
 ### Binding and source of truth
 
@@ -99,7 +100,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 |---|---|---|---|---|
 | U1 | `wildcardArmUndetected` | A wildcard arm in an enum switch is caught by no tool, so D2 can return unnoticed | stage 0.2 seed L6 (finding U1) | open |
 | U2 | `bareStringComparisonUndetected` | A bare string compared with `==` is caught by no tool; `bare_string_for_enum` sees only switch dispatch | stage 0.2 seed L7 | open |
-| U3 | `duplicateLiteralCheckAdvisory` | The duplicate-literal check is advisory: it prints and exits 0 | stage 0.2 seed W1 | open |
+| U3 | `duplicateLiteralCheckAdvisory` | The duplicate-literal check only printed a nudge and exited 0. Closed in Q1: the same finding is now a ratchet test (`test/tool/check_duplicate_literals_test.dart`), and `make liveness` seed W1 trips it | `check_duplicate_literals_test.dart`, `make liveness` seed W1 | closed (Q1) |
 | U4 | `newLogFileNameUndetected` | A new log file name written as a literal was not caught, because the ownership guard knew only the names `LogFile` already held. Closed in Q1: the guard now fails on any quoted `.jsonl` name that is not a `LogFile`, and the first run found a real one, `planner.jsonl` in `planner_log.dart`, now `LogFile.planner` | `literal_ownership_topology_test.dart`, `make liveness` seed T6 | closed (Q1) |
 
 ### Measured by the call census (stage 0.3)
@@ -190,6 +191,7 @@ variant is not in the proposals below.
 | D8 | untouched x fileSeam; untouched x processBound; observesState x workspaceBound | existing |
 | D9 | drivesState x processBound | existing |
 | D10 | drivesState x processBound; untouched x pure | existing |
+| D11 | untouched x pure; untouched x workspaceBound; drivesState x processBound; observesState x workspaceBound | existing |
 | B1 | untouched x processBound | existing |
 | B2 | untouched x workspaceBound | existing |
 | B3 | untouched x workspaceBound; drivesState x processBound | existing |
@@ -464,7 +466,7 @@ seeded defect in a scratch copy of the repo is reported. A defect it does not
 report is a finding. The working tree is never seeded; the harness is
 `tool/refactor_audit/liveness.sh` (`make liveness`) and copies the repo first.
 
-Observed (18 seeds): 15 caught, 3 missed at first; 16 caught, 2 missed after Q1 closed the log-name seed. The 18th seed (T7) is the call
+Observed (18 seeds): 15 caught, 3 missed at first; 16 caught, 2 missed after Q1 closed the log-name seed (the duplicate-literal seed is now caught by a gate, not a nudge). The 18th seed (T7) is the call
 census doc drifting, added when the script moved into `tool/`.
 
 | Id | Name | Tool | Defect | Result |
@@ -478,7 +480,7 @@ census doc drifting, added when the script moved into `tool/`.
 | L5 | `enumSwitchMissingVariant` | analyzer `missing_enum_constant_in_switch` | enum switch missing a variant | caught |
 | L6 | `wildcardArmOnEnumSwitch` | any | wildcard arm on an enum switch | **missed** |
 | L7 | `bareStringComparison` | any | bare string compared with `==` | **missed** |
-| W1 | `sameFileDuplicateLiteral` | `check_duplicate_literals` | same-file duplicate literal | caught (advisory, exit 0) |
+| W1 | `sameFileDuplicateLiteral` | `check_duplicate_literals` | same-file duplicate literal | caught (advisory, exit 0); caught by the gate after Q1 |
 | T1 | `logFileNameLiteralInLib` | literal ownership guard | log file name literal in `lib/` | caught |
 | T2 | `testTitleNamingTypeAsText` | literal ownership guard | test title naming a type as text | caught |
 | T3 | `handoffDocDrift` | handoff topology test | generated doc drift | caught |
