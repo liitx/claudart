@@ -119,13 +119,8 @@ Future<void> runLauncher({
 
   // ── Action menu ───────────────────────────────────────────────────────────
 
-  final int action;
-
   if (locked) {
-    action = pick_([
-      '${ansi.c(ansi.yellow, 'Kill')}   clear lock · archive · reset handoff',
-      'Back',
-    ]);
+    final action = _choose(LockedMenu.values, (m) => m.label, pick_);
     if (action == LockedMenu.kill) {
       await runKill(
         io: fileIO,
@@ -140,11 +135,7 @@ Future<void> runLauncher({
   final hasActive = state != null && state.hasActiveContent;
 
   if (hasActive) {
-    action = pick_([
-      '${ansi.c(ansi.green, 'Resume')}  open editor · run /suggest or /debug',
-      '${ansi.c(ansi.red, 'Kill')}    archive handoff · discard session',
-      'Back',
-    ]);
+    final action = _choose(ActiveMenu.values, (m) => m.label, pick_);
     switch (action) {
       case ActiveMenu.resume:
         _printResumeInstructions(state.status);
@@ -155,13 +146,11 @@ Future<void> runLauncher({
           confirmFn: confirmFn,
           exitFn: exitFn,
         );
-      default: // ActiveMenu.back — no-op
+      case ActiveMenu.back:
+        break;
     }
   } else {
-    action = pick_([
-      (ansi.c(ansi.green, 'Start new session')),
-      'Back',
-    ]);
+    final action = _choose(FreshMenu.values, (m) => m.label, pick_);
     if (action == FreshMenu.start) {
       await runSetup(projectRootOverride: selected.projectRoot);
     }
@@ -174,26 +163,55 @@ Future<void> runLauncher({
 /// rather than hard-coding a magic number.
 int registerChoice(int entryCount) => entryCount;
 
-// ── Menu choice namespaces ─────────────────────────────────────────────────────
-// 0-based. Exposed so tests reference named actions instead of magic numbers.
+// ── Menu choices ───────────────────────────────────────────────────────
+// Each menu is an enum that owns its labels, in the order they are shown; a
+// pick (an index) is turned back into the choice by [_choose], so no code
+// compares an index to a number.
+
+/// The choice the owner made from [choices], shown as [label]s, via [pick].
+T _choose<T>(
+  List<T> choices,
+  String Function(T choice) label,
+  int Function(List<String> items) pick,
+) =>
+    choices[pick([for (final choice in choices) label(choice)])];
 
 /// Locked-workspace menu choices.
-abstract final class LockedMenu {
-  static const kill = 0;
-  static const back = 1;
+enum LockedMenu {
+  kill,
+  back;
+
+  String get label => switch (this) {
+        kill => '${ansi.c(ansi.yellow, 'Kill')}   '
+            'clear lock · archive · reset handoff',
+        back => 'Back',
+      };
 }
 
 /// Active-session menu choices.
-abstract final class ActiveMenu {
-  static const resume = 0;
-  static const kill = 1;
-  static const back = 2;
+enum ActiveMenu {
+  resume,
+  kill,
+  back;
+
+  String get label => switch (this) {
+        resume => '${ansi.c(ansi.green, 'Resume')}  '
+            'open editor · run /suggest or /debug',
+        kill => '${ansi.c(ansi.red, 'Kill')}    '
+            'archive handoff · discard session',
+        back => 'Back',
+      };
 }
 
 /// Fresh-workspace menu choices.
-abstract final class FreshMenu {
-  static const start = 0;
-  static const back = 1;
+enum FreshMenu {
+  start,
+  back;
+
+  String get label => switch (this) {
+        start => ansi.c(ansi.green, 'Start new session'),
+        back => 'Back',
+      };
 }
 
 // ── Item builders ─────────────────────────────────────────────────────────────

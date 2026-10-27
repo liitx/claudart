@@ -162,7 +162,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : ActiveMenu.back;
+          return pickCall == 1 ? 0 : ActiveMenu.back.index;
         },
         exitFn: _throwExit,
       );
@@ -183,7 +183,7 @@ void main() {
         pickFn: (items) {
           capturedItems ??= items;
           pickCall++;
-          return pickCall == 1 ? 0 : ActiveMenu.back;
+          return pickCall == 1 ? 0 : ActiveMenu.back.index;
         },
         exitFn: _throwExit,
       );
@@ -204,7 +204,7 @@ void main() {
         projectRootOverride: _projectRoot,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back.index;
         },
         exitFn: _throwExit,
       );
@@ -221,7 +221,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : LockedMenu.kill;
+          return pickCall == 1 ? 0 : LockedMenu.kill.index;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
@@ -239,7 +239,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : LockedMenu.back;
+          return pickCall == 1 ? 0 : LockedMenu.back.index;
         },
         exitFn: _throwExit,
       );
@@ -256,7 +256,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : ActiveMenu.kill;
+          return pickCall == 1 ? 0 : ActiveMenu.kill.index;
         },
         confirmFn: (_) => true,
         exitFn: _throwExit,
@@ -276,7 +276,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : ActiveMenu.resume;
+          return pickCall == 1 ? 0 : ActiveMenu.resume.index;
         },
         exitFn: _throwExit,
       );
@@ -295,7 +295,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back.index;
         },
         exitFn: _throwExit,
       );
@@ -346,7 +346,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back.index;
         },
         exitFn: _throwExit,
       );
@@ -365,7 +365,7 @@ void main() {
         projectRootOverride: null,
         pickFn: (_) {
           pickCall++;
-          return pickCall == 1 ? 0 : FreshMenu.back;
+          return pickCall == 1 ? 0 : FreshMenu.back.index;
         },
         exitFn: _throwExit,
       );
@@ -403,7 +403,7 @@ void main() {
           projectRootOverride: null,
           pickFn: (_) {
             pickCall++;
-            return pickCall == 1 ? 0 : ActiveMenu.back;
+            return pickCall == 1 ? 0 : ActiveMenu.back.index;
           },
           exitFn: _throwExit,
         ),
@@ -432,7 +432,7 @@ void main() {
           projectRootOverride: null,
           pickFn: (_) {
             pickCall++;
-            return pickCall == 1 ? 0 : ActiveMenu.back;
+            return pickCall == 1 ? 0 : ActiveMenu.back.index;
           },
           exitFn: _throwExit,
         ),
@@ -460,7 +460,7 @@ void main() {
           projectRootOverride: null,
           pickFn: (_) {
             pickCall++;
-            return pickCall == 1 ? 0 : ActiveMenu.back;
+            return pickCall == 1 ? 0 : FreshMenu.back.index;
           },
           exitFn: _throwExit,
         ),
@@ -486,7 +486,7 @@ void main() {
           projectRootOverride: null,
           pickFn: (_) {
             pickCall++;
-            return pickCall == 1 ? 0 : ActiveMenu.back;
+            return pickCall == 1 ? 0 : ActiveMenu.back.index;
           },
           exitFn: _throwExit,
         ),
@@ -499,5 +499,47 @@ void main() {
         contains('Status : ${ansi.yellow}ready-for-debug${ansi.reset}'),
       );
     });
+  });
+
+  group('the menus own their labels', () {
+    // Independent literals: how many choices each menu offers, and that the
+    // last is always a way back.
+    const sizes = {'locked': 2, 'active': 3, 'fresh': 2};
+
+    test('$LockedMenu offers kill, then back', () {
+      expect(LockedMenu.values, [LockedMenu.kill, LockedMenu.back]);
+      expect(LockedMenu.values.length, sizes['locked']);
+    });
+
+    test('$ActiveMenu offers resume, kill, then back', () {
+      expect(
+        ActiveMenu.values,
+        [ActiveMenu.resume, ActiveMenu.kill, ActiveMenu.back],
+      );
+      expect(ActiveMenu.values.length, sizes['active']);
+    });
+
+    test('$FreshMenu offers start, then back', () {
+      expect(FreshMenu.values, [FreshMenu.start, FreshMenu.back]);
+      expect(FreshMenu.values.length, sizes['fresh']);
+    });
+
+    for (final menu in ActiveMenu.values) {
+      test('${menu.name}: has a label', () {
+        expect(menu.label, isNotEmpty);
+      });
+    }
+
+    for (final menu in LockedMenu.values) {
+      test('locked ${menu.name}: has a label', () {
+        expect(menu.label, isNotEmpty);
+      });
+    }
+
+    for (final menu in FreshMenu.values) {
+      test('fresh ${menu.name}: has a label', () {
+        expect(menu.label, isNotEmpty);
+      });
+    }
   });
 }

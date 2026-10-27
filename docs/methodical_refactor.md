@@ -59,7 +59,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 
 | Id | Name | Gap | Evidence | Status |
 |---|---|---|---|---|
-| D1 | `defaultArmInLaunch` | `default:` arm | `launch.dart:158` | open |
+| D1 | `defaultArmInLaunch` | `launch.dart` picked from three menus by comparing an index to `static const` ints (`ActiveMenu.resume = 0`), and one switch ended in `default: // back — no-op`, so any index nothing handled was silently ignored. Closed in Q6 as an application of the typed-data shape: each menu is an enum that owns its labels (in the order shown), `_choose` turns the pick back into the enum, and the switch names every variant with no default. A first run showed the cost of the old form: a launch test had been answering a fresh-workspace menu with an active-session constant (2 of 0..1), which the ints let through unnoticed and the enum rejects | `launch.dart`, `launch_test.dart` | closed (Q6) |
 | D2 | `wildcardArms` | Wildcard arms | `session_state.dart:29`; `failure_type.dart:82`; `claudart_command.dart:168,270`; `sync_check.dart:16,139`; `workspace_config.dart:41,61`; `chat_shell.dart:50`; `config.dart:80` | open; the four enum-subject arms were closed in Q1 (U1), the rest are on strings or ints |
 | D3 | `corruptRegistryReadsEmpty` | A corrupt `registry.json` loaded as an empty registry, so a command could report "not registered" for a project that is. Closed in Q6: `Registry.load` throws `CorruptRegistryException` (`registryCorrupt`) for every unreadable shape, a missing or empty file is still an empty registry, and `doctor` reports the cause | `registry_test.dart` (six unreadable shapes), `doctor_test.dart` | closed (Q6) |
 | D4 | `unreadableWorkspaceConfigDisablesStrictMode` | An unreadable `workspace.json` made `owner.strict` silently false in `suggest`, `debug`, `flow` and the hook. Closed in Q6: `WorkspaceConfig.load` throws `WorkspaceConfigUnreadableException` (new `FailureType.workspaceConfigUnreadable`, a config fault) for malformed JSON and JSON of the wrong shape; `suggest`, `debug`, `flow` and `link` stop before any model call or write; the hook never blocks an edit, so it advises as before and logs the failure by its type. The hook's fail-open choice is the assistant's and is recorded as open for the owner | `workspace_config_test.dart`, `suggest_test.dart`, `debug_test.dart`, `flow_test.dart`, `link_test.dart`, `hook_test.dart` | closed (Q6); hook fail-open awaiting the owner |
@@ -396,6 +396,12 @@ Progress (updated as steps finish):
   it passes and a seeded leaking test trips it. Mutation: no survivor in a changed
   line (one `abstractTexts` mutant was fixed with direct tests). Still open under
   Q6: D1, D2 (non-enum arms), D11 (174 repeated literals), D13 (typed values).
+
+- **Q6, D1: done.** The three launch menus are enums that own their labels; no
+  default arm remains in that switch. Mutation on `launch.dart` hangs the tool (it
+  ran past twenty minutes and was stopped, file restored), so it is unmeasured;
+  26 launch tests, including one per menu choice and one per label, cover it.
+  Still open under Q6: D2 (non-enum arms), D11, D13.
 
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior

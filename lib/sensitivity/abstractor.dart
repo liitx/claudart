@@ -72,9 +72,9 @@ class Abstractor {
 final abstractor = Abstractor();
 
 /// Abstracts each of [texts] with one token map loaded from [tokenMapPath],
-/// then saves the map when it gained a token. One map for the whole call is what
-/// keeps two names of the same kind from both becoming `Bloc:A`; saving it is
-/// what makes the next run reuse the tokens instead of assigning them again.
+/// then saves the map when it gained a token. One map for the whole call is
+/// what keeps two names of the same kind from both becoming `Bloc:A`; saving it
+/// is what makes the next run reuse the tokens instead of assigning them again.
 /// Throws [TokenMapUnreadableException] when the map exists but cannot be read.
 List<String> abstractTexts(
   List<String> texts, {
