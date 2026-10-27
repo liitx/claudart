@@ -35,8 +35,10 @@ const _neverTried = '·';
 
 /// Legal cells no lifecycle scenario drives today. A ratchet: it may only go
 /// down, to 0, as scenarios are added; a new legal move without a scenario
-/// fails.
-const _knownUndrivenLegalCells = 14;
+/// fails. It rose from 14 to 15 once, on purpose, when `tornDown` became legal
+/// from three more statuses: two are driven by scenarios, the third is
+/// `debugInProgress`, which no command rests in (as with its other cells).
+const _knownUndrivenLegalCells = 15;
 
 /// A logged move: the cell it landed in and whether the table rejected it.
 typedef LoggedMove = ({HandoffStatus from, HandoffEvent event, bool rejected});

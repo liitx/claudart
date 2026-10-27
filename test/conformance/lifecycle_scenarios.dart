@@ -231,6 +231,23 @@ Future<void> save(
 }) =>
     runSave(io: io, projectRootOverride: project.root, exitFn: _noExit);
 
+/// An interactive teardown of a handoff whose debug did not run: every
+/// confirmation is answered yes, so debug is recorded as skipped and the
+/// session is archived as resolved.
+Future<void> teardownSkippingDebug(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runTeardown(
+      executor: noModelExecutor(),
+      io: io,
+      projectRootOverride: project.root,
+      confirmFn: (_) => true,
+      promptFn: (question, {optional = false}) => 'answered',
+      pickFn: (items, {startIndex = 0}) => 0,
+      exitFn: _noExit,
+    );
+
 Future<void> kill(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
@@ -431,6 +448,30 @@ Map<String, List<LifecycleStep>> lifecycleScenarios({
       setupStep,
       lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
       lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+    ],
+    'setup, suggest, teardown without debug': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'teardown skipping debug',
+        bind(teardownSkippingDebug),
+        HandoffStatus.noHandoff,
+      ),
+    ],
+    'setup, confirmed save, teardown without debug': [
+      setupStep,
+      lifecycleStep(
+        'seed root cause',
+        (io) async => seedRootCause(io, project),
+        HandoffStatus.suggestInvestigating,
+        logged: false,
+      ),
+      lifecycleStep('save', bind(save), HandoffStatus.readyForSuggest),
+      lifecycleStep(
+        'teardown skipping debug',
+        bind(teardownSkippingDebug),
+        HandoffStatus.noHandoff,
+      ),
     ],
     'setup, suggest, debug, kill': [
       setupStep,

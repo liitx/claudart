@@ -165,11 +165,15 @@ enum HandoffStatus {
               null,
           },
         HandoffEvent.tornDown => switch (this) {
-            debugComplete => noHandoff,
-            suggestInvestigating ||
+            // Legal where the knowledge transfer is complete; `teardown` also
+            // requires the debug disposition to be resolved before it applies
+            // this move, asking to record debug as skipped when it did not run.
             readyForSuggest ||
             readyForDebug ||
             debugInProgress ||
+            debugComplete =>
+              noHandoff,
+            suggestInvestigating ||
             needsSuggest ||
             noHandoff ||
             unknown =>

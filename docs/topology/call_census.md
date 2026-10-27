@@ -37,6 +37,13 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | setup, suggest, suggest again | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, suggest again | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, suggest again | suggest | r1 | r2 w1 | r1 | r1 | — | — | r10 a10 | w2 |
+| setup, suggest, teardown without debug | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
+| setup, suggest, teardown without debug | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r1 w2 | — | r5 w1 a4 | w3 d1 |
+| setup, confirmed save, teardown without debug | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
+| setup, confirmed save, teardown without debug | seed root cause | — | r1 w1 | — | — | — | — | — | — |
+| setup, confirmed save, teardown without debug | save | r2 w1 | r1 w1 | — | — | w1 | — | r1 a1 | w1 |
+| setup, confirmed save, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r2 w2 | — | r5 w1 a4 | w3 d1 |
 | setup, suggest, debug, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug, kill | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug, kill | debug | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |

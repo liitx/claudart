@@ -43,7 +43,7 @@ Evidence is file:line as of the commit this was written against.
 | S7 | `teardownPipelineUnlogged` | The `teardown` analyzer pipeline had no log subscriber, so a `teardown` run left no step record. Closed: `runTeardown` subscribes its logger to the executor's events like `suggest`, `debug` and `flow` (and `ClaudartCommand.recordsStepModels` now says so, checked against the source). The subscription is still dropped after the run (the stream is not async yet; Q4) | `teardown.dart`, `claudart_command_test.dart` | closed for teardown (Q4 still owns the stream) |
 | S8 | `pipelineStateMachineUndeclared` | Pipeline FSM exists only as a comment | `pipeline_event.dart:3-24` | open |
 | S9 | `performanceLogHasNoWriter` | `LogFile.performance` has no writer | `logger.dart:326` | open |
-| S10 | `resolvedWithoutDebugHasNoStatus` | A handoff that is resolved without a debug (debug not applicable, or debug not used) has no way to be torn down: `tornDown` is legal only from `debugComplete`, which means a fix was applied. Owner's rule: teardown also when debug is not applicable, and in addition if debug isn't used | `session_state.dart` `tornDown` arm, owner direction | open, placeholder |
+| S10 | `resolvedWithoutDebugHasNoStatus` | A handoff resolved without a debug (debug not used) could not be torn down: `tornDown` was legal only from `debugComplete`. Closed in Q2 (provisional): `tornDown` is now legal from `readyForSuggest`, `readyForDebug`, `debugInProgress` and `debugComplete`, exactly the statuses that expect a complete knowledge transfer (proof P14); `teardown` asks "Debug did not run for this handoff. Record it as skipped?", writes `skipped` into the archived handoff on yes, and treats no as not resolved (nothing is torn down). A handoff resolved because debug does not apply (`notApplicable`) still has no writer, so that case waits on the type of work (H2) | `session_state.dart`, `teardown.dart`, `teardown_test.dart`, `transition_proofs_test.dart` | closed for skipped debug (Q2); notApplicable open |
 | S11 | `nothingVerifiesTheFix` | `debugComplete` means the planned files were written and each `.dart` file passed `dart analyze --no-fatal-warnings`; no test runs, and `debug` prints "run tests" for the user. The only verification command in the code is `afterFixCommand`, run by `rotate` as a gate, not by `debug` or `teardown`. So nothing today verifies that a fix works before a session can be torn down | `edit_files.dart:102`, `debug.dart:335-345`, `rotate.dart:156` | open, placeholder (H6) |
 | S12 | `teardownSpawnedTheRealModelInTests` | `runTeardown` built its own executor, so 37 test call sites (34 in `teardown_test.dart`, the lifecycle scenarios, the smoke test) started the real `claude` process. They passed because the CLI failed fast under `dart test` (2.5 s with `claude` on `PATH`, 1.4 s without), but on a machine where it is signed in they could spend model calls. Closed: `runTeardown` takes an `executor`, every test passes a fake that never answers, and a guard fails if a test call omits it | `fake_executors.dart`, `model_seam_guard_test.dart` | closed |
 
@@ -370,6 +370,21 @@ Progress (updated as steps finish):
   not closed; that is the next step, with the `HandoffStatus.after` table
   change written test-first.
 
+- **Q2, the teardown table change (S10): done, provisional.** The first change
+  to `HandoffStatus.after` itself, written test-first: `tornDown` is legal from
+  the four statuses that expect a complete knowledge transfer (3 new legal cells,
+  36 in all; shown in the README's diagram and `docs/design.md`'s extension
+  table). `teardown` asks to record debug as skipped before it archives a handoff
+  debug never finished. Two lifecycle scenarios drive the new cells; the third
+  (`debugInProgress`, which no command rests in) is undriven, so the undriven
+  ratchet rose from 14 to 15 once, with its reason in the test. Proofs P1 to P9
+  and P14 hold and the 44 real moves still replay. In the same step the teardown
+  pipeline became injectable and logged (S7, S12; 37 tests had been able to start
+  the real model, and a guard now stops that). Mutation: the table file has no
+  survivor in a changed line; `teardown.dart` still hangs the mutation tool at
+  mutant 43 even with the model seam injected (so the hang is not the model), and
+  stays unmeasured, covered by 38 teardown tests and the two scenarios.
+
 Why this order: Q1 first because every later step needs a tool that would
 notice a regression. Q2 before any code because the real logs show behavior
 the table does not describe (R2, R3), and only the owner can say which is
@@ -508,7 +523,7 @@ form; the expected values are independent literals.
 |---|---|---|---|
 | P1 | Totality: for every (s, e), delta(s, e) is decided, never undefined | the Dart switch is exhaustive (a missing cell fails to compile) and 104 cell tests | proved |
 | P2 | Determinism: delta is single-valued | a Dart switch returns one value; each cell is evaluated twice and must agree | proved |
-| P3 | Size: abs(S) = 8, abs(E) = 13, abs(L) = 33 | pinned literals; a table change fails until it is made on purpose | proved |
+| P3 | Size: abs(S) = 8, abs(E) = 13, abs(L) = 36 (33 before the teardown change) | pinned literals; a table change fails until it is made on purpose | proved |
 | P4 | Isolation: no legal move enters or leaves `unknown` | search over G | proved |
 | P5 | Reachability: every live status (S without `unknown`) is reachable from `noHandoff` | breadth-first search over G | proved |
 | P6 | No trap: from every live status `noHandoff` is reachable | search over G | proved |
@@ -516,10 +531,10 @@ form; the expected values are independent literals.
 | P8 | Self-loops exist exactly at `suggestInvestigating`, `readyForDebug` and `debugInProgress` | edge enumeration against a literal | proved |
 | P9 | Real-use replay: for each of the 44 real moves m, delta(m.from, m.event) = m.to | the fixture `test/fixtures/real_transitions.jsonl` (enum names only) | proved for these 44 |
 | P10 | Status follows content: after every command of every lifecycle scenario, `findings` is empty | 13 scenarios x 6 environments | verified over the scenario set, not proved for all handoffs; 20 of 179 real saved handoffs disagree (R10), from direct edits |
-| P11 | Every legal cell is driven by a scenario | `transition_matrix_test.dart` ratchet | not met: 14 of 33 undriven |
+| P11 | Every legal cell is driven by a scenario | `transition_matrix_test.dart` ratchet | not met: 15 of 36 undriven |
 | P12 | Termination: if the relation R(e) = events a listener may return after e is acyclic, a listener chain has at most abs(E) = 13 hops | topological order of E | not provable yet: no listeners exist |
 | P13 | Safety: for every legal (s, e) and every e' in R(e), delta(delta(s, e), e') is legal | check over L x R | not provable yet: no listeners |
-| P14 | The teardown rule: delta(s, tornDown) is legal exactly when the status expects a converged knowledge transfer and the disposition is resolved | written with the table change (S10) | pending |
+| P14 | The teardown rule: delta(s, tornDown) is legal exactly when the status expects a converged knowledge transfer | one test per status against `knowledgeTransferExpectation` | proved for the table; the other half of the rule, that `teardown` applies the move only once the disposition is resolved, is a command rule verified by the teardown tests and two lifecycle scenarios, not a property of delta |
 
 How a break shows. Two deliberate breaks of the table were applied in a scratch
 state and reverted:

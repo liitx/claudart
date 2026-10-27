@@ -16,13 +16,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/knowledge_transfer.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 
 const _fixturePath = 'test/fixtures/real_transitions.jsonl';
 
 /// Independent literals.
-const _legalCellCount = 33;
+const _legalCellCount = 36;
 const _statusCount = 8;
 const _eventCount = 13;
 const _selfLoops = {
@@ -133,6 +134,17 @@ void main() {
         _selfLoops,
       );
     });
+  });
+
+  group('P14: tornDown is legal exactly where the transfer is complete', () {
+    for (final status in HandoffStatus.values) {
+      final expectsConverged = status.knowledgeTransferExpectation ==
+          KnowledgeTransferExpectation.converged;
+      test('${status.name}: tornDown is legal ${expectsConverged ? '' : 'not'}',
+          () {
+        expect(status.after(HandoffEvent.tornDown) != null, expectsConverged);
+      });
+    }
   });
 
   group('the real moves replay through delta', () {

@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/claudart_command.dart';
-import 'package:claudart/commands/teardown.dart' show runTeardown, TeardownCategory;
-import 'package:claudart/md_io.dart' show readSection;
+import 'package:claudart/commands/teardown.dart'
+    show kTeardownSkipDebugQuestion, runTeardown, TeardownCategory;
+import 'package:claudart/session/debug_disposition.dart';
+import 'package:claudart/md_io.dart' show readHandoffStatus, readSection;
 import 'package:claudart/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
@@ -437,8 +439,8 @@ void main() {
       ]);
     });
 
-    test('confirming resolved from debugInProgress logs tornDown as a move '
-        'the table lacks', () async {
+    test('confirming resolved and recording debug as skipped, from '
+        'debugInProgress, logs tornDown as a legal move', () async {
       final io = _io(handoff: _richHandoff); // status: debug-in-progress
       await teardown(io);
       expect(loggedMoves(io, _workspace), [
@@ -446,9 +448,97 @@ void main() {
           'command': ClaudartCommand.teardown.name,
           'from': HandoffStatus.debugInProgress.name,
           'event': HandoffEvent.tornDown.name,
-          'rejected': true,
+          'to': HandoffStatus.noHandoff.name,
         },
       ]);
+    });
+
+    test('the archived handoff records debug as skipped', () async {
+      final io = _io(handoff: _richHandoff);
+      await teardown(io);
+      final archived = io.files.entries
+          .where((e) => e.key.startsWith(p.join(_workspace, 'archive')) &&
+              e.key.endsWith('.md') &&
+              !e.key.contains('index'))
+          .map((e) => e.value)
+          .join('\n');
+      expect(
+        archived,
+        contains('## Debug Disposition\n\n${DebugDisposition.skipped.wire}'),
+      );
+    });
+
+    group('the question about debug', () {
+      /// Runs teardown, answering each confirmation by [answers] in order (then
+      /// yes), and returns the questions that were asked.
+      Future<List<String>> questionsFor(
+        String handoff,
+        List<bool> answers,
+      ) async {
+        final io = _io(handoff: handoff);
+        final asked = <String>[];
+        final queue = [...answers];
+        await runTeardown(
+          executor: noModelExecutor(),
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (question) {
+            asked.add(question);
+            return queue.isEmpty ? true : queue.removeAt(0);
+          },
+          promptFn: _prompts(_richAnswers),
+          pickFn: _pick(TeardownCategory.stateManagement),
+          exitFn: _throwExit,
+        ).catchError((Object _) {});
+        return asked;
+      }
+
+      test('is asked when debug did not run for a complete transfer', () async {
+        final asked = await questionsFor(_richHandoff, [true]);
+        expect(asked, contains(kTeardownSkipDebugQuestion));
+      });
+
+      test('is not asked after a finished fix', () async {
+        final asked = await questionsFor(
+          _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+          [true],
+        );
+        expect(asked, isNot(contains(kTeardownSkipDebugQuestion)));
+      });
+
+      test('is not asked while the transfer is incomplete', () async {
+        final asked = await questionsFor(
+          _richHandoff
+              .replaceFirst('debug-in-progress', 'suggest-investigating')
+              .replaceFirst(
+                'ConfigLoader splits path on spaces before resolving.',
+                '_Not yet determined._',
+              ),
+          [true],
+        );
+        expect(asked, isNot(contains(kTeardownSkipDebugQuestion)));
+      });
+
+      test('declining it is not resolved: nothing is torn down and the '
+          'session stays live', () async {
+        final io = _io(handoff: _richHandoff);
+        // resolved? yes, record as skipped? no, save as a reminder? yes
+        final answers = [true, false, true];
+        await runTeardown(
+          executor: noModelExecutor(),
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => answers.removeAt(0),
+          promptFn: _prompts(['still pending']),
+          pickFn: _pick(TeardownCategory.stateManagement),
+          exitFn: _throwExit,
+        ).catchError((Object _) {});
+        expect(loggedMoves(io, _workspace), isEmpty);
+        expect(
+          readHandoffStatus(io.read(handoffPathFor(_workspace))),
+          HandoffStatus.debugInProgress,
+        );
+      });
     });
 
     test('saving a reminder logs reminderSaved into noHandoff', () async {

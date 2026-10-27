@@ -11,18 +11,18 @@ stateDiagram-v2
   suggestInvestigating --> readyForDebug: saveConfirmedReady
   suggestInvestigating --> noHandoff: rotatedEmpty, reminderSaved, killed
   readyForSuggest --> readyForDebug: saveConfirmedReady
-  readyForSuggest --> noHandoff: reminderSaved, killed
+  readyForSuggest --> noHandoff: tornDown, reminderSaved, killed
   readyForDebug --> readyForDebug: saveConfirmedReady
   readyForDebug --> debugInProgress: debugStarted
   readyForDebug --> debugComplete: fixApplied
   readyForDebug --> suggestInvestigating: rotated
-  readyForDebug --> noHandoff: rotatedEmpty, reminderSaved, killed
+  readyForDebug --> noHandoff: rotatedEmpty, tornDown, reminderSaved, killed
   debugInProgress --> debugInProgress: saveUnconfirmed
   debugInProgress --> readyForDebug: saveConfirmedReady
   debugInProgress --> needsSuggest: debugBlocked
   debugInProgress --> debugComplete: fixApplied
   debugInProgress --> suggestInvestigating: rotated
-  debugInProgress --> noHandoff: rotatedEmpty, reminderSaved, killed
+  debugInProgress --> noHandoff: rotatedEmpty, tornDown, reminderSaved, killed
   debugComplete --> noHandoff: tornDown, reminderSaved, killed
   needsSuggest --> readyForDebug: saveConfirmedReady
   needsSuggest --> suggestInvestigating: suggestResumed

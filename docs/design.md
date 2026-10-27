@@ -83,6 +83,7 @@ across whole lifecycles, and `make consumer-check` replays the same scenarios ag
 | `ready-for-debug`, `debug-in-progress`, `needs-suggest` | `saveConfirmedReady` | `ready-for-debug` | `/suggest` re-run overwrites an existing handoff after the user confirms |
 | `ready-for-debug`, `debug-in-progress` | `fixApplied` | `debug-complete` | `/debug` applies its plan and marks it complete in one step; claudart does not verify the fix, so "fix verified" is named for what happens |
 | `suggest-investigating`, `ready-for-debug`, `debug-in-progress` | `rotatedEmpty` | `no-handoff` | `claudart rotate` with no pending issue archives the session and resets the handoff to blank |
+| `ready-for-suggest`, `ready-for-debug`, `debug-in-progress` | `tornDown` | `no-handoff` | a handoff whose knowledge transfer is complete may be torn down before debug has run, once `claudart teardown` has recorded debug as skipped (it asks; the move is legal in the table, the question is the command's rule). Provisional, owner's rule of 2026-10-26 |
 | any persisted state | `reminderSaved` | `no-handoff` | `claudart teardown` on an unresolved session saves a reminder and resets the handoff |
 | any persisted state | `killed` | `no-handoff` | `claudart kill` erases the handoff |
 

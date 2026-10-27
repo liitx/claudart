@@ -6,16 +6,16 @@ Each cell is what the real lifecycle scenarios did (`test/conformance/lifecycle_
 
 | status \ event | setup | saveUnconfirmed | saveConfirmedExploring | saveConfirmedReady | debugStarted | debugBlocked | suggestResumed | fixApplied | rotated | rotatedEmpty | tornDown | reminderSaved | killed |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| suggestInvestigating | · | ok x1 | ok x1 | ok x9 | · | · | · | · | ok x1 | ok x1 | · | GAP | ok x1 |
-| readyForSuggest | · | · | · | GAP | · | · | · | · | · | · | · | GAP | ok x1 |
-| readyForDebug | · | · | · | ok x1 | ok x4 | · | · | GAP | ok x1 | ok x1 | · | GAP | ok x1 |
-| debugInProgress | · | GAP | · | GAP | · | ok x2 | · | ok x2 | GAP | GAP | · | GAP | GAP |
+| suggestInvestigating | · | ok x1 | ok x2 | ok x10 | · | · | · | · | ok x1 | ok x1 | · | GAP | ok x1 |
+| readyForSuggest | · | · | · | GAP | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
+| readyForDebug | · | · | · | ok x1 | ok x4 | · | · | GAP | ok x1 | ok x1 | ok x1 | GAP | ok x1 |
+| debugInProgress | · | GAP | · | GAP | · | ok x2 | · | ok x2 | GAP | GAP | GAP | GAP | GAP |
 | debugComplete | · | · | · | · | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
 | needsSuggest | · | · | · | GAP | · | · | ok x1 | · | · | · | · | GAP | ok x1 |
-| noHandoff | ok x13 | · | · | · | · | · | · | · | · | · | · | · | · |
+| noHandoff | ok x15 | · | · | · | · | · | · | · | · | · | · | · | · |
 | unknown | · | · | · | · | · | · | · | · | · | · | · | · | · |
 
-## Legal moves no scenario drives (14)
+## Legal moves no scenario drives (15)
 
 - `suggestInvestigating` --`reminderSaved`--> `noHandoff`
 - `readyForSuggest` --`saveConfirmedReady`--> `readyForDebug`
@@ -26,6 +26,7 @@ Each cell is what the real lifecycle scenarios did (`test/conformance/lifecycle_
 - `debugInProgress` --`saveConfirmedReady`--> `readyForDebug`
 - `debugInProgress` --`rotated`--> `suggestInvestigating`
 - `debugInProgress` --`rotatedEmpty`--> `noHandoff`
+- `debugInProgress` --`tornDown`--> `noHandoff`
 - `debugInProgress` --`reminderSaved`--> `noHandoff`
 - `debugInProgress` --`killed`--> `noHandoff`
 - `debugComplete` --`reminderSaved`--> `noHandoff`

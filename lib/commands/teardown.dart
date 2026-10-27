@@ -12,7 +12,9 @@ import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../registry.dart';
+import '../session/debug_disposition.dart';
 import '../session/handoff_placeholder.dart';
+import '../session/knowledge_transfer.dart';
 import '../session/archive_entry.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
@@ -24,6 +26,11 @@ import '../ui/menu.dart';
 import '../util/prompt_with_default.dart';
 import '../ui/render.dart' as render;
 import '../ui/ansi.dart' as ansi;
+
+/// The question `teardown` asks when a handoff is confirmed resolved but debug
+/// did not run: debug must be recorded as skipped on purpose, never assumed.
+const String kTeardownSkipDebugQuestion =
+    'Debug did not run for this handoff. Record it as skipped?';
 
 Future<void> runTeardown({
   FileIO? io,
@@ -99,9 +106,26 @@ Future<void> runTeardown({
   // variant that means "fix verified" per the FSA (docs/design.md). Any
   // other status headless treats the same way a human declining the
   // interactive confirm would: save as a reminder, don't archive as fixed.
-  final resolved = headless
+  var resolved = headless
       ? SessionState.parse(handoff).status == HandoffStatus.debugComplete
       : confirm_('Is the bug confirmed resolved?');
+
+  // A complete transfer that debug never finished is resolved only if debug is
+  // recorded as skipped, so the decision is written into the archived handoff.
+  var archivedHandoff = handoff;
+  if (resolved && !headless) {
+    final state = SessionState.parse(handoff);
+    final debugNeverRan = state.effectiveStatus.knowledgeTransferExpectation ==
+            KnowledgeTransferExpectation.converged &&
+        state.debugDisposition == DebugDisposition.pending;
+    if (debugNeverRan) {
+      resolved = confirm_(kTeardownSkipDebugQuestion);
+      if (resolved) {
+        archivedHandoff =
+            withDebugDisposition(handoff, DebugDisposition.skipped);
+      }
+    }
+  }
 
   if (!resolved) {
     // Offer to save as a reminder so the session can be resumed later.
@@ -317,7 +341,7 @@ Future<void> runTeardown({
       final entry = writeArchiveEntry(
         workspace:   workspace,
         branch:      branch,
-        handoff:     handoff,
+        handoff:     archivedHandoff,
         kind:        archiveKind,
         description: fixSummary ?? bug,
         io:          fileIO,
