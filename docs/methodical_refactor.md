@@ -144,7 +144,7 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | R6 | `errorLogIsMostlyEnvironmentChecks` | 7 of the 8 error fingerprints come from `doctor` environment checks; one comes from a state move | `errors.jsonl` | open |
 | R7 | `logSchemaUnversioned` | Of 107 model rows only 40 carry a role and 16 an accounting field: older rows lack fields and nothing marks which schema a row follows | `models.jsonl` | open |
 | R8 | `fixAppliedFromReadyForDebugIsDebugPrecondition` | `readyForDebug --fixApplied` is never produced as a move by current `debug` (it writes `debugStarted` first; real logs show it produced up to 2026-10-20 08:07), but `debug` uses the cell as its start check before any model call (`debug.dart:139`) and `canStartDebug` is tested to agree with it. Measured in a scratch copy: making the cell illegal makes all 24 lifecycle runs that call `debug` fail (4 scenarios x 6 environments). The earlier "dead cell" claim was wrong: it is unused as a move and load-bearing as a check | scratch experiment, `debug.dart:139`, `transitions.jsonl` | open (decide: keep as the precondition, or check `debugStarted` instead and then remove) |
-| R9 | `killAllowedFromEveryLiveStatus` | The table allows `killed` from all six live statuses, including `debugComplete`. The owner's rule is that `kill` is only for a handoff that is not confirmed and `teardown` is for a root cause and fix that are completely done (teardown itself asks "confirmed resolved?": yes archives and updates `skills.md`, no saves a reminder). The table does not enforce that rule | `session_state.dart` `killed` arm, `teardown.dart:96-110`, `kill.dart` doc | open |
+| R9 | `killAllowedFromEveryLiveStatus` | The table allows `killed` from all six live statuses, including `debugComplete`. The owner's rule is that `kill` is only for a handoff that is not confirmed and `teardown` is for a root cause and fix that are completely done (teardown itself asks "confirmed resolved?": yes archives and updates `skills.md`, no saves a reminder). The table does not enforce that rule. The owner has since stated the rule in terms of knowledge transfer (see the placeholder section) | `session_state.dart` `killed` arm, `teardown.dart:96-110`, `kill.dart` doc | open, spec recorded as a placeholder |
 | R10 | `statusDisagreesWithHandoffContent` | Of 179 archived handoffs and checkpoints, 17 say `suggest-investigating` while holding a real root cause and scope, and 1 says `ready-for-debug` with a placeholder root cause: about 10% have a status that does not follow the knowledge transfer in the handoff | the real workspace `archive/` | open |
 | K1 | `workspaceKnowsNoFeatures` | The workspace records no Feature variants: `workspace.json` holds owner, project and session only, and `skills.md` is keyed by branch, category and files, not by Feature variant. Owner's direction: when a Feature variant is updated, the workspace should know which features exist in it. Scope not yet confirmed (derived from the project's enums, or declared) | `workspace.json`, `skills.md` | open, awaiting the owner's scope |
 | K2 | `handoffHasNoType` | One `handoffTemplate` function renders every handoff (`setup.dart:179`, `rotate.dart:191`); the handoff records no type. `flow` classifies an `AgentCategory` in its own run and logs it, but never writes it into the handoff | `handoff_template.dart:3`, `flow.dart:226` | open |
@@ -281,12 +281,68 @@ below wait on it.
 | H2 | `handoffTemplateVariants` | `template(type, handoff) => HandoffTemplate.variant(metadata)`: one variant per type of work, switched on the type the handoff is scoped to; the Scope section is an object on the variant, not one shared shape | H1 |
 | H3 | `workspaceFeatureUpdatedByHandoff` | the data captured per handoff updates the Workspace Feature the handoff is allocated to; knowledge is organized per feature, and `suggest` is given only the knowledge for that feature | H2, K1 |
 | H4 | `ticketEventFlow` | ticket handling driven by events: the sprint board (zedup) communicates the ticket's metadata, so `suggest` and `flow`, invoked asynchronously, already know the type of work | Q4, H1 |
+| H5 | `endSessionByKnowledgeTransfer` | a session ends by what the handoff's knowledge transfer (KT) says, not by which command the user chose: converged KT means `save` then `teardown`, otherwise `kill`; see the section below | H2, D9, D10 |
 
 Open decisions, deferred by the owner until the ticket flow is vetted: the
 single list of handoff types (the owner's bug, feat, refactor, spike, story
 against `AgentCategory` and the teardown categories, K5) and where the type is
 chosen and whether it can change (K2). Until then `setup` and `flow` keep
 classifying as they do today.
+
+### Placeholder: ending a session by knowledge transfer (work in progress)
+
+**Status: placeholder.** The owner's rule is recorded below in the owner's own
+words. The table under it is the assistant's reading of that rule against
+today's statuses. Nothing here is enforced or tested yet, no transition in
+`HandoffStatus.after` has been changed, and every "not implemented" line is a
+gap in the register.
+
+The owner's spec, as given:
+
+> Verify the topology based on whether the handoff specifies the KT
+> (knowledge transfer): when the suggest process determines convergence, that
+> is, defines the root cause and the solution, even when suggest or flow
+> communicates the resolution, we can teardown; otherwise kill. This is not
+> implicit. Even when the debug session has not been handed over: save, then
+> teardown.
+>
+> The only time kill should be used is when the handoff isn't confirmed.
+> Teardown is for when the root cause and the fix are completely done.
+
+How the two statements fit together (the assistant's reading, to be confirmed):
+KT is converged when the handoff holds a root cause and a solution, wherever
+that came from (`suggest`, or `flow` communicating the resolution). A converged
+handoff ends with `save` then `teardown`, whether or not `debug` has run, so
+the learning reaches `skills.md`. An unconverged handoff ends with `kill`.
+"Not implicit" is read as: the rule is checked from the handoff, not assumed
+from the command or from the status line. What counts as "the solution" is the
+Scope section, which becomes a variant object per type of work (H2), so its
+exact fields wait on that design.
+
+Placeholder mapping onto the statuses that exist today:
+
+| Status | KT | Ends with | Today |
+|---|---|---|---|
+| `suggestInvestigating` | not converged | `kill` | `kill` and `teardown` (as reminder) both legal |
+| `needsSuggest` | not converged (a blocked debug put the root cause in doubt) | `kill` | both legal |
+| `readyForSuggest` | converged (root cause confirmed) | `save`, then `teardown` | `teardown` writes a reminder only; `tornDown` is not legal from here |
+| `readyForDebug` | converged | `save`, then `teardown` | same |
+| `debugInProgress` | converged | `save`, then `teardown` | same |
+| `debugComplete` | converged, fix applied | `save`, then `teardown` | `tornDown` legal; `kill` also legal |
+| `noHandoff` | no session | none | none |
+
+Not implemented, each recorded in the register: no typed KT-converged value
+exists on the handoff object (D9, D10, R10); `suggest` can apply `saveConfirmedReady`
+without a root cause (D9); `tornDown` is legal only from `debugComplete` and
+`killed` from every live status (R9); `teardown` decides "resolved" by a yes or
+no answer, not by the handoff (R9); the Scope shape is one for every kind of
+work (K3).
+
+Open, and left open on purpose: whether `constraints` are part of a converged
+KT; what `teardown` writes to `skills.md` when no fix was applied (today it
+reads changed files, and an undebugged session has none); and the table
+changes themselves, which are written test-first under Q2 and Q3 once the
+owner has confirmed this reading.
 
 ## Stage records
 
