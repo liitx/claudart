@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency
+.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
 
 ## Compile native binary to ~/bin/claudart
 build:
@@ -35,6 +35,11 @@ liveness:
 ##   make handoff-consistency DIR=<a workspace's archive directory>
 handoff-consistency:
 	$(DART) run tool/refactor_audit/handoff_consistency.dart $(DIR)
+
+## Run the suite with HOME and the workspace root pointed at empty temp
+## directories; fails if any test leaves a file there (a seam it did not inject).
+leak-check:
+	tool/refactor_audit/write_leak_check.sh
 
 ## Count git spawns per real command, using the compiled CLI in a throwaway
 ## project. Read only.

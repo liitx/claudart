@@ -8,7 +8,6 @@ import '../paths.dart';
 import '../registry.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
-import '../sensitivity/token_map.dart';
 import '../logging/logger.dart';
 import '../session/handoff_event.dart';
 import '../session/session_state.dart' show SessionState, HandoffStatus;
@@ -167,6 +166,7 @@ Future<void> runSetup({
   // Run sensitivity scan if enabled.
   if (entry.sensitivityMode) {
     await runScan(
+      io: fileIO,
       scope: null,
       projectRootOverride: projectRoot,
       sensitivityModeOverride: entry.sensitivityMode,
@@ -188,8 +188,11 @@ Future<void> runSetup({
 
   // Abstract sensitive tokens if sensitivity mode on.
   if (entry.sensitivityMode) {
-    final tokenMap = TokenMap.load(tokenMapPathFor(workspace));
-    content = abstractor.abstract(content, tokenMap, defaultDetector);
+    content = abstractTexts(
+      [content],
+      tokenMapPath: tokenMapPathFor(workspace),
+      io: fileIO,
+    ).single;
     if (!abstractor.isNotSensitive(content, defaultDetector)) {
       print('\n⚠  Handoff still contains sensitive tokens after abstraction.');
       print('   Review handoff.md manually before sharing.');

@@ -46,6 +46,9 @@ void main() {
         ErrorType.session,
       );
     });
+    test('homeDirectoryUnset rolls up to workspace', () {
+      expect(FailureType.homeDirectoryUnset.errorType, ErrorType.workspace);
+    });
     test('tokenMapUnreadable rolls up to workspace', () {
       expect(FailureType.tokenMapUnreadable.errorType, ErrorType.workspace);
     });
@@ -58,6 +61,19 @@ void main() {
   });
 
   group('FailureType.effectiveFaultClass', () {
+    test('homeDirectoryUnset uses its subsystem default', () {
+      expect(
+        FailureType.homeDirectoryUnset.effectiveFaultClass,
+        FaultClass.environmentFault,
+      );
+    });
+    test('homeDirectoryUnset says what to set', () {
+      expect(
+        FailureType.homeDirectoryUnset.suggestedAction,
+        'Set HOME, or set CLAUDART_WORKSPACE to an absolute directory, then '
+        're-run.',
+      );
+    });
     test('knowledgeTransferNotConverged uses its subsystem default', () {
       expect(
         FailureType.knowledgeTransferNotConverged.effectiveFaultClass,

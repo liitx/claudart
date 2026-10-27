@@ -271,6 +271,64 @@ List<String> _checkpoints(MemoryFileIO io) => io.files.keys
     .toList();
 
 void main() {
+  group('save — a sensitive project', () {
+    MemoryFileIO sensitiveIo() {
+      final io = MemoryFileIO(
+        files: {
+          handoffPathFor(_workspace): _fullHandoff
+              .replaceFirst(
+                'ConfigLoader splits path on spaces before resolving.',
+                'VolumeBloc splits the path',
+              )
+              .replaceFirst(
+                'lib/config/loader.dart — added path quoting.',
+                'ApexBloc quotes the path',
+              ),
+        },
+      );
+      Registry.empty()
+          .add(
+            const RegistryEntry(
+              name: 'my-app',
+              projectRoot: _projectRoot,
+              workspacePath: _workspace,
+              createdAt: '2026-01-01',
+              lastSession: '2026-03-15',
+              sensitivityMode: true,
+            ),
+          )
+          .save(io: io);
+      return io;
+    }
+
+    Future<MemoryFileIO> saved() async {
+      final io = sensitiveIo();
+      await runZoned(
+        () => runSave(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+        ),
+        zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+      );
+      return io;
+    }
+
+    test('two names of the same kind get two different tokens', () async {
+      final skills = (await saved()).read(skillsPathFor(_workspace));
+      expect(skills, isNot(contains('VolumeBloc')));
+      expect(skills, isNot(contains('ApexBloc')));
+      expect(skills, contains('Bloc:A'));
+      expect(skills, contains('Bloc:B'));
+    });
+
+    test('the tokens it assigned are saved', () async {
+      final map = (await saved()).read(tokenMapPathFor(_workspace));
+      expect(map, contains('VolumeBloc'));
+      expect(map, contains('ApexBloc'));
+    });
+  });
+
   group('save — report', () {
     Future<String> report(MemoryFileIO io) async {
       final output = <String>[];

@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:claudart/sensitivity/abstractor.dart';
 import 'package:claudart/sensitivity/token_map.dart';
 import 'package:claudart/sensitivity/detector.dart';
+import '../helpers/mocks.dart';
 
 void main() {
   group('Abstractor', () {
@@ -69,6 +70,54 @@ void main() {
       abs.abstract('VolumeBloc is here', map, detector);
       final result2 = abs.abstract('VolumeBloc again', map, detector);
       expect(result2, contains('Bloc:A'));
+    });
+  });
+
+  group('abstractTexts', () {
+    const path = '/workspace/token_map.json';
+
+    test('two names of the same kind get different tokens', () {
+      final io = MemoryFileIO();
+      final result = abstractTexts(
+        ['VolumeBloc fails', 'ApexBloc fails'],
+        tokenMapPath: path,
+        io: io,
+      );
+      expect(result, ['Bloc:A fails', 'Bloc:B fails']);
+    });
+
+    test('a token it assigned is saved to the map', () {
+      final io = MemoryFileIO();
+      abstractTexts(['VolumeBloc fails'], tokenMapPath: path, io: io);
+      expect(io.read(path), contains('VolumeBloc'));
+    });
+
+    test('text with nothing sensitive leaves no map behind', () {
+      final io = MemoryFileIO();
+      final result =
+          abstractTexts(['nothing to hide here'], tokenMapPath: path, io: io);
+      expect(result, ['nothing to hide here']);
+      expect(io.fileExists(path), isFalse);
+    });
+
+    test('a later call reuses the tokens already saved', () {
+      final io = MemoryFileIO();
+      abstractTexts(['VolumeBloc fails'], tokenMapPath: path, io: io);
+      final result = abstractTexts(
+        ['ApexBloc fails', 'VolumeBloc again'],
+        tokenMapPath: path,
+        io: io,
+      );
+      expect(result, ['Bloc:B fails', 'Bloc:A again']);
+    });
+
+    test('an unreadable map is a typed failure, and is left as it was', () {
+      final io = MemoryFileIO(files: {path: '{not valid json'});
+      expect(
+        () => abstractTexts(['VolumeBloc'], tokenMapPath: path, io: io),
+        throwsA(isA<TokenMapUnreadableException>()),
+      );
+      expect(io.read(path), '{not valid json');
     });
   });
 }

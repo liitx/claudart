@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'errors/claudart_exception.dart';
+import 'errors/failure_type.dart';
 
 // ── Filename constants ─────────────────────────────────────────────────────
 // Single source of truth for all file/dir names used across claudart + consumers.
@@ -68,15 +70,29 @@ String? parseWorkspaceDirFromStatusOutput(String output) {
 /// process that doesn't inherit a shell's exported `CLAUDART_WORKSPACE`
 /// (launchd, a GUI-launched Zed) would be stuck pointed at the fallback
 /// for its whole lifetime even if the env var were set moments later.
-String get workspacesRoot {
-  final env = Platform.environment[claudartWorkspaceEnvVar];
-  if (env != null && env.isNotEmpty) {
-    if (env.startsWith('~/')) {
-      return p.join(Platform.environment[homeEnvVar]!, env.substring(2));
+String get workspacesRoot => workspacesRootFor(Platform.environment);
+
+/// The workspaces root for [environment]: `CLAUDART_WORKSPACE` when set (a
+/// leading `~/` expands with `HOME`), else `.claudart` under `HOME`. A needed
+/// `HOME` that is not set is a typed [FailureType.homeDirectoryUnset], not a
+/// null-check error. Pure, so the rules are testable without the real
+/// environment.
+String workspacesRootFor(Map<String, String> environment) {
+  String home() {
+    final value = environment[homeEnvVar];
+    if (value == null || value.isEmpty) {
+      throw ClaudartException(FailureType.homeDirectoryUnset);
     }
-    return env;
+    return value;
   }
-  return p.join(Platform.environment[homeEnvVar]!, '.claudart');
+
+  final override = environment[claudartWorkspaceEnvVar];
+  if (override != null && override.isNotEmpty) {
+    return override.startsWith('~/')
+        ? p.join(home(), override.substring(2))
+        : override;
+  }
+  return p.join(home(), '.claudart');
 }
 
 /// Registry of all known project workspaces.

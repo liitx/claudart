@@ -8,8 +8,6 @@ import '../md_io.dart' show applyHandoffEvent;
 import '../paths.dart';
 import '../registry.dart';
 import '../sensitivity/abstractor.dart';
-import '../sensitivity/detector.dart';
-import '../sensitivity/token_map.dart';
 import '../templates/handoff_template.dart' show stampHandoffUpdated;
 import '../session/handoff_event.dart';
 import '../session/session_state.dart';
@@ -131,20 +129,23 @@ SkillsUpdateResult _updatePendingSkills({
 
   // Abstract KT content before writing when sensitivity mode is on.
   // This ensures root cause and hot file paths are not written in plaintext.
-  String sanitize(String text) {
-    if (!sensitivityMode) return text;
-    final tokenMap = TokenMap.load(tokenMapFile);
-    return abstractor.abstract(text, tokenMap, defaultDetector);
-  }
+  // One token map serves both texts, so two names never share a token.
+  List<String> sanitize(List<String> texts) => sensitivityMode
+      ? abstractTexts(texts, tokenMapPath: tokenMapFile, io: fileIO)
+      : texts;
 
   // One upserted entry per branch — combines root cause and (optional) hot
   // files into a single keyed line, replacing any prior entry for this
   // branch instead of accumulating duplicate bullets on repeated /save.
-  final cause = sanitize(state.rootCause.text.replaceAll('\n', ' ').trim());
-  final changed =
-      state.changed.isBlank
-          ? null
-          : sanitize(state.changed.text.replaceAll('\n', ' ').trim());
+  final changedText = state.changed.isBlank
+      ? null
+      : state.changed.text.replaceAll('\n', ' ').trim();
+  final safe = sanitize([
+    state.rootCause.text.replaceAll('\n', ' ').trim(),
+    if (changedText != null) changedText,
+  ]);
+  final cause = safe.first;
+  final changed = changedText == null ? null : safe.last;
   skills = upsertPendingEntry(skills, state.branch, rootCause: cause, hotFiles: changed);
 
   fileIO.write(skillsFile, skills);

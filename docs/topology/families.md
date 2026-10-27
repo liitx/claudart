@@ -8,7 +8,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 |---|---|---|---|---|
 | drivesState | 2 | 0 | 1 | 7 |
 | observesState | 10 | 1 | 3 | 4 |
-| untouched | 74 | 14 | 5 | 24 |
+| untouched | 73 | 15 | 5 | 24 |
 
 ## drivesState x pure
 
@@ -109,7 +109,6 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/pipeline/xml_tags.dart`
 - `lib/portability_gap.dart`
 - `lib/scanner/scan_threshold_exception.dart`
-- `lib/sensitivity/abstractor.dart`
 - `lib/sensitivity/detector.dart`
 - `lib/session/archive_entry.dart`
 - `lib/session/debug_disposition.dart`
@@ -151,6 +150,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/providers/claude_settings_env.dart`
 - `lib/pubspec_utils.dart`
 - `lib/scanner/scanner.dart`
+- `lib/sensitivity/abstractor.dart`
 - `lib/sensitivity/token_map.dart`
 - `lib/session/pending_confirmation.dart`
 - `lib/session/workspace_guard.dart`

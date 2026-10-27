@@ -693,6 +693,38 @@ void main() {
 
   // ── sensitivityMode = false ───────────────────────────────────────────────────
 
+  group('setup — sensitivityMode true', () {
+    Future<MemoryFileIO> setupWithBug(String bug) async {
+      final io = _io(sensitivityMode: true);
+      await runSetup(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        promptFn:
+            _prompts(['fix/null-ref', bug, 'It should work.', null, null]),
+        pickFn: (_) => 0,
+        exitFn: _throwExit,
+      );
+      return io;
+    }
+
+    test('the handoff holds tokens, not the project\'s names', () async {
+      final io =
+          await setupWithBug('VolumeBloc crashes in VolumeRepository.load');
+      expect(
+        io.read(handoffPathFor(_workspace)),
+        isNot(contains('VolumeBloc')),
+      );
+    });
+
+    test('the tokens it assigned are saved, so the next run reuses them',
+        () async {
+      final io =
+          await setupWithBug('VolumeBloc crashes in VolumeRepository.load');
+      expect(io.read(tokenMapPathFor(_workspace)), contains('VolumeBloc'));
+    });
+  });
+
   group('setup — sensitivityMode false', () {
     test('handoff written as plain text without abstraction', () async {
       final io = _io(sensitivityMode: false);

@@ -33,6 +33,7 @@ enum FailureType {
   workspaceConfigUnreadable,
   tokenMapUnreadable,
   knowledgeTransferNotConverged,
+  homeDirectoryUnset,
   unexpectedFailure;
 
   /// Parent subsystem for this failure. Rolls up to a FaultClass via
@@ -47,7 +48,8 @@ enum FailureType {
         FailureType.workspaceLocked ||
         FailureType.registryCorrupt ||
         FailureType.workspaceConfigUnreadable ||
-        FailureType.tokenMapUnreadable =>
+        FailureType.tokenMapUnreadable ||
+        FailureType.homeDirectoryUnset =>
           ErrorType.workspace,
         FailureType.providerNotConfigured ||
         FailureType.stepTimedOut ||
@@ -96,6 +98,7 @@ enum FailureType {
         FailureType.editVerificationFailed ||
         FailureType.tokenMapUnreadable ||
         FailureType.knowledgeTransferNotConverged ||
+        FailureType.homeDirectoryUnset ||
         FailureType.unexpectedFailure =>
           faultClass,
       };
@@ -120,6 +123,7 @@ enum FailureType {
         FailureType.tokenMapUnreadable => 'Token map unreadable',
         FailureType.knowledgeTransferNotConverged =>
           'Knowledge transfer not converged',
+        FailureType.homeDirectoryUnset => 'Home directory unset',
         FailureType.unexpectedFailure => 'Unexpected failure',
       };
 
@@ -183,6 +187,9 @@ enum FailureType {
           'The analysis did not name a root cause, so nothing was written and '
               'the status is unchanged. Re-run `claudart suggest`, or add a '
               'root cause to the handoff by hand.',
+        FailureType.homeDirectoryUnset =>
+          'Set HOME, or set CLAUDART_WORKSPACE to an absolute directory, then '
+              're-run.',
         FailureType.unexpectedFailure =>
           'No failure type describes this yet, so it is a gap in the failure '
               'taxonomy: define a FailureType for it. The reason above is the '
