@@ -12,6 +12,14 @@ import '../util/enum_util.dart';
 // parses them into these enums so no command ever compares raw strings.
 // ---------------------------------------------------------------------------
 
+/// [value] when it is a value this version knows; otherwise the workspace file
+/// is unreadable, because a value it does not know is never guessed at.
+T _required<T>(T? value, String field) =>
+    value ??
+    (throw FormatException(
+      '"$field" holds a value this version does not know',
+    ));
+
 /// workspace.json exists but cannot be read: malformed JSON, or JSON of the
 /// wrong shape.
 class WorkspaceConfigUnreadableException extends ClaudartException {
@@ -51,10 +59,9 @@ enum WorkspaceRole {
   maintainer,
   contributor;
 
-  static WorkspaceRole fromString(String s) => switch (s) {
-        'maintainer' => maintainer,
-        _ => contributor,
-      };
+  /// The role named [s], or null when [s] names none: an unknown role is never
+  /// taken for the least-privileged one.
+  static WorkspaceRole? fromString(String s) => enumByName(values, s);
 
   /// Returns `true` when this role permits updating the project README.md.
   bool get canUpdateReadme => this == maintainer;
@@ -70,11 +77,14 @@ enum ProofNotation {
   tsGrounded,
   generic;
 
-  static ProofNotation fromString(String s) => switch (s) {
-        'dart-grounded' => dartGrounded,
-        'ts-grounded' => tsGrounded,
-        _ => generic,
-      };
+  /// The notation written as [s], or null when [s] names none: an unknown
+  /// notation is never taken for `generic`.
+  static ProofNotation? fromString(String s) {
+    for (final notation in values) {
+      if (notation.value == s) return notation;
+    }
+    return null;
+  }
 
   String get value => switch (this) {
         dartGrounded => 'dart-grounded',
@@ -152,7 +162,12 @@ class WorkspaceProject {
           .map(StackType.fromString)
           .whereType<StackType>()
           .toList(),
-      role: WorkspaceRole.fromString(json['role'] as String? ?? 'contributor'),
+      role: _required(
+        WorkspaceRole.fromString(
+          json['role'] as String? ?? WorkspaceRole.contributor.name,
+        ),
+        'role',
+      ),
       repo: json['repo'] as String?,
       org: json['org'] as String?,
     );
@@ -189,8 +204,12 @@ class WorkspaceSession {
           .toList(),
       knowledge:
           (json['knowledge'] as List<dynamic>? ?? []).cast<String>(),
-      proofNotation: ProofNotation.fromString(
-          json['proofNotation'] as String? ?? 'generic'),
+      proofNotation: _required(
+        ProofNotation.fromString(
+          json['proofNotation'] as String? ?? ProofNotation.generic.value,
+        ),
+        'proofNotation',
+      ),
       sensitivityMode: json['sensitivityMode'] as bool? ?? false,
     );
   }

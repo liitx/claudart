@@ -965,6 +965,37 @@ dependencies:
       expect(cfg.session.sensitivityMode, isFalse);
     });
 
+    test('a role that is not one is said so and seeds contributor', () async {
+      final io = _emptyIO();
+      final output = <String>[];
+      await runZoned(
+        () => link(
+          io,
+          askFn: (q) => _asksAbout(q, _sensitivityModeQuestion)
+              ? false
+              : !q.contains('strict'),
+          promptFn: _prompts([
+            'Aksana',
+            'a@vgv.dev',
+            'aksana',
+            'owner',
+            'dart',
+            null,
+            null,
+          ]),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      final cfg = WorkspaceConfig.load(workspaceFor(_projectName), io: io)!;
+      expect(cfg.project.role, WorkspaceRole.contributor);
+      expect(
+        output.join('\n'),
+        contains('"owner" is not a role; using contributor.'),
+      );
+    });
+
     test('accepting the strict question sets owner.strict true', () async {
       final io = _emptyIO();
       // Everything but the sensitivity question answered true, including

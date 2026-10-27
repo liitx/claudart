@@ -41,9 +41,8 @@ void main() {
           equals(WorkspaceRole.contributor));
     });
 
-    test('unrecognised value defaults to contributor', () {
-      expect(
-          WorkspaceRole.fromString('owner'), equals(WorkspaceRole.contributor));
+    test('an unrecognised value is not a role, and is not guessed', () {
+      expect(WorkspaceRole.fromString('owner'), isNull);
     });
 
     test('maintainer canUpdateReadme is true', () {
@@ -68,10 +67,54 @@ void main() {
       expect(ProofNotation.tsGrounded.value, equals('ts-grounded'));
     });
 
-    test('unrecognised value defaults to generic', () {
-      expect(ProofNotation.fromString('python-grounded'),
-          equals(ProofNotation.generic));
+    test('generic round-trips', () {
+      expect(ProofNotation.fromString('generic'), ProofNotation.generic);
       expect(ProofNotation.generic.value, equals('generic'));
+    });
+
+    test('an unrecognised value is not a notation, and is not guessed', () {
+      expect(ProofNotation.fromString('python-grounded'), isNull);
+    });
+  });
+
+  group('$WorkspaceConfig.load with a value it does not know', () {
+    const base = '{"owner": {"name": "n", "email": "e", "handle": "h"}, '
+        '"project": {"name": "p", "stack": ["dart"], "role": ROLE}, '
+        '"session": {"agents": [], "knowledge": [], '
+        '"proofNotation": NOTATION, "sensitivityMode": false}}';
+
+    String json({
+      String role = '"maintainer"',
+      String notation = '"generic"',
+    }) =>
+        base.replaceFirst('ROLE', role).replaceFirst('NOTATION', notation);
+
+    test('a known role and notation load', () {
+      final io = MemoryFileIO(files: {_workspaceJsonPath: json()});
+      expect(
+        WorkspaceConfig.load(_workspaceDir, io: io)!.project.role,
+        WorkspaceRole.maintainer,
+      );
+    });
+
+    test('an unknown role is unreadable, not quietly a contributor', () {
+      final io = MemoryFileIO(
+        files: {_workspaceJsonPath: json(role: '"owner"')},
+      );
+      expect(
+        () => WorkspaceConfig.load(_workspaceDir, io: io),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
+      );
+    });
+
+    test('an unknown proof notation is unreadable, not quietly generic', () {
+      final io = MemoryFileIO(
+        files: {_workspaceJsonPath: json(notation: '"python-grounded"')},
+      );
+      expect(
+        () => WorkspaceConfig.load(_workspaceDir, io: io),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
+      );
     });
   });
 

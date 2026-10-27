@@ -10,11 +10,14 @@ enum ClaudartOperation {
   save,
   test;
 
-  static ClaudartOperation fromString(String s) => switch (s) {
-        'debug' => debug,
-        'save' => save,
-        _ => test,
-      };
+  /// The operation named [s], or null when [s] names none: an unknown name is
+  /// never taken for `test`.
+  static ClaudartOperation? fromString(String s) {
+    for (final operation in values) {
+      if (operation.name == s) return operation;
+    }
+    return null;
+  }
 }
 
 /// A single issue found during a preflight sync check.

@@ -54,6 +54,11 @@ Future<void> runPreflightCmd(
 
   // 4 — Parse operation string once at boundary.
   final op = ClaudartOperation.fromString(operation);
+  if (op == null) {
+    print('✗ Unknown operation "$operation". Use one of: '
+        '${ClaudartOperation.values.map((o) => o.name).join(', ')}.');
+    exit_(1);
+  }
 
   // 5 — Read test files when operation is 'test'.
   final testFileContents = <String, String>{};

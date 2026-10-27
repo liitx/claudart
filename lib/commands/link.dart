@@ -413,7 +413,13 @@ void _seedWorkspaceConfig({
   final strict = ask('Enforce strict architectural validation for this project?') ?? false;
 
   final roleInput = prompt_('Role on this project (maintainer/contributor)', optional: true);
-  final role = roleInput != null ? WorkspaceRole.fromString(roleInput) : WorkspaceRole.contributor;
+  final typedRole =
+      roleInput == null ? null : WorkspaceRole.fromString(roleInput);
+  if (roleInput != null && typedRole == null) {
+    print('  "$roleInput" is not a role; using '
+        '${WorkspaceRole.contributor.name}.');
+  }
+  final role = typedRole ?? WorkspaceRole.contributor;
 
   final stackInput = prompt_('Tech stack, comma-separated (e.g. dart,flutter)', optional: true);
   final stack = (stackInput ?? '')

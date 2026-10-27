@@ -218,6 +218,42 @@ MemoryFileIO _io({
 void main() {
   // ── Registry errors ────────────────────────────────────────────────────────
 
+  group('preflight — an operation that is not one', () {
+    test('exits 1 and says so, instead of running the test check', () async {
+      final io = MemoryFileIO();
+      Registry.empty()
+          .add(const RegistryEntry(
+            name: 'my-app',
+            projectRoot: _projectRoot,
+            workspacePath: _workspace,
+            createdAt: '2026-01-01',
+            lastSession: '2026-03-15',
+          ))
+          .save(io: io);
+      final output = <String>[];
+      _ExitException? caught;
+      await runZoned(
+        () async {
+          try {
+            await runPreflightCmd(
+              'tset',
+              io: io,
+              projectRootOverride: _projectRoot,
+              exitFn: _throwExit,
+            );
+          } on _ExitException catch (e) {
+            caught = e;
+          }
+        },
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      expect(caught?.code, 1);
+      expect(output.join('\n'), contains('tset'));
+    });
+  });
+
   group('preflight — registry errors', () {
     test('exits when project not in registry', () async {
       // Empty registry — no entry for _projectRoot.
