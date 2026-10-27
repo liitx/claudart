@@ -43,7 +43,7 @@ Evidence is file:line as of the commit this was written against.
 | S7 | `teardownPipelineUnlogged` | Teardown pipeline has no log subscriber; subscriptions are dropped | `teardown.dart:144`; suggest/debug/flow | open |
 | S8 | `pipelineStateMachineUndeclared` | Pipeline FSM exists only as a comment | `pipeline_event.dart:3-24` | open |
 | S9 | `performanceLogHasNoWriter` | `LogFile.performance` has no writer | `logger.dart:326` | open |
-| S10 | `resolvedWithoutDebugHasNoStatus` | A handoff that analysis resolved, where debug is not applicable, has no status: `tornDown` is legal only from `debugComplete`, which means a fix was applied. Owner's rule: teardown only when the handoff confirms debug is not applicable | `session_state.dart` `tornDown` arm, owner direction | open, placeholder |
+| S10 | `resolvedWithoutDebugHasNoStatus` | A handoff that is resolved without a debug (debug not applicable, or debug not used) has no way to be torn down: `tornDown` is legal only from `debugComplete`, which means a fix was applied. Owner's rule: teardown also when debug is not applicable, and in addition if debug isn't used | `session_state.dart` `tornDown` arm, owner direction | open, placeholder |
 
 ### Exits that leave no record
 
@@ -153,7 +153,7 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | K4 | `knowledgeNotKeyedByFeature` | Knowledge is generic files plus one file per project; no file is keyed by a Feature variant, and `suggest` is told to read every generic file listed for the workspace, not the ones relevant to the handoff's feature | `knowledge/` layout, `setup_template.dart:31-39` | open |
 | K5 | `threeCategoryTaxonomies` | `AgentCategory` (feature, bug, refactor, research, setup, gui), `TeardownCategory` (the skills categories) and the owner's handoff types (bug, feat, refactor, spike, story) are separate lists with no mapping between them | `categorization.dart:148`, `teardown.dart:195-209` | open |
 | K6 | `ticketMetadataNotModeled` | Nothing in claudart models the ticket a handoff comes from. The owner's direction: the type of work will arrive as metadata on a sprint-board ticket (zedup owns the board), through an event-driven ticket flow, so `suggest` and `flow` are given a type instead of classifying one. Not yet vetted by the owner | owner direction, 2026-10-26 | open, placeholder (H1 to H4) |
-| K7 | `debugApplicabilityNotDeclared` | Nothing in the handoff says whether debug applies to this work: `debug` runs on whatever status allows it, and `teardown` asks the user. A type of work such as a spike should declare that debug is not applicable | owner direction, `teardown.dart:96-110` | open, placeholder (belongs with H2) |
+| K7 | `debugDispositionNotRecorded` | Nothing in the handoff records whether debug is pending, done, not applicable or skipped: `debug` runs on whatever status allows it, and `teardown` asks the user. A type of work such as a spike should declare debug not applicable, and a decision not to use debug should be written down, not inferred | owner direction, `teardown.dart:96-110` | open, placeholder (belongs with H2) |
 
 ## Gap to family
 
@@ -285,7 +285,7 @@ below wait on it.
 | H2 | `handoffTemplateVariants` | `template(type, handoff) => HandoffTemplate.variant(metadata)`: one variant per type of work, switched on the type the handoff is scoped to; the Scope section is an object on the variant, not one shared shape | H1 |
 | H3 | `workspaceFeatureUpdatedByHandoff` | the data captured per handoff updates the Workspace Feature the handoff is allocated to; knowledge is organized per feature, and `suggest` is given only the knowledge for that feature | H2, K1 |
 | H4 | `ticketEventFlow` | ticket handling driven by events: the sprint board (zedup) communicates the ticket's metadata, so `suggest` and `flow`, invoked asynchronously, already know the type of work | Q4, H1 |
-| H5 | `endSessionByKnowledgeTransfer` | a session ends by what the handoff says, not by which command the user chose: resolved (fix done, or debug not applicable) means `save` then `teardown`, which updates the workspace; converged but debug pending is a reminder; not confirmed is `kill`; see the section below | H2, D9, D10, S10, K7 |
+| H5 | `endSessionByKnowledgeTransfer` | a session ends by what the handoff says, not by which command the user chose: resolved (converged KT and debug done, not applicable or skipped) means `save` then `teardown`, which updates the workspace; converged with debug pending is a reminder; not confirmed is `kill`; see the section below | H2, D9, D10, S10, K7 |
 
 Open decisions, deferred by the owner until the ticket flow is vetted: the
 single list of handoff types (the owner's bug, feat, refactor, spike, story
@@ -301,7 +301,7 @@ today's statuses. Nothing here is enforced or tested yet, no transition in
 `HandoffStatus.after` has been changed, and every "not implemented" line is a
 gap in the register.
 
-The owner's spec, as given (first statement, then its refinement):
+The owner's spec, as given (first statement, its refinement, then a correction):
 
 > Verify the topology based on whether the handoff specifies the KT
 > (knowledge transfer): when the suggest process determines convergence, that
@@ -320,61 +320,68 @@ The owner's spec, as given (first statement, then its refinement):
 > arbitrary handoffs recognize the scoped workspace attributes and ramp up
 > more efficiently. This further defines the dependencies per analysis and
 > debugging.
+>
+> Correction: not only when debug is not applicable; in addition, if debug
+> isn't used.
 
 How the statements fit together (the assistant's reading, to be confirmed):
 
 - A session can end three ways, not two, and the handoff decides which.
-- **`teardown`** is for a handoff that is *resolved*: either the fix is done
-  (`debugComplete`), or the handoff itself confirms that debug is not
-  applicable (analysis work such as a spike, where `suggest` or `flow` already
-  communicated the resolution). In both cases the handoff is sufficient KT, and
-  `teardown` is the step that updates the workspace's attributes (today
-  `skills.md`; the Workspace Feature once H3 exists).
+- Debug has a *disposition* recorded in the handoff (a placeholder name and
+  value set, the assistant's): `pending` (applicable, not yet run), `done`
+  (the fix was applied), `notApplicable` (the type of work has no debug, such as
+  a spike) and `skipped` (debug applies but is not going to be used). `skipped`
+  is an explicit decision written into the handoff, never inferred from debug
+  simply not having run.
+- **`teardown`** is for a handoff that is *resolved*: converged KT and a debug
+  disposition of `done`, `notApplicable` or `skipped`. The handoff is then
+  sufficient KT, and `teardown` is the step that updates the workspace's
+  attributes (today `skills.md`; the Workspace Feature once H3 exists).
 - **`reminderSaved`** (the existing "save as a reminder to resume later" path)
-  is for a handoff whose KT is converged but whose debug is applicable and not
-  done: nothing is resolved yet, so the workspace is not updated and the pending
-  entry stays.
+  is for converged KT with debug `pending`: nothing is resolved yet, so the
+  workspace is not updated and the pending entry stays.
 - **`kill`** is for a handoff that is not confirmed.
 - "Not implicit" is read as: the rule is checked from the handoff, not assumed
-  from the command or the status line.
+  from the command or the status line; that is why `skipped` must be recorded.
 
 What depends on what, per analysis and debugging (placeholder):
 
 | Step | Needs | Produces | Updates the workspace |
 |---|---|---|---|
 | analysis (`suggest`, `flow`) | a handoff of a type of work | KT: root cause and solution (the Scope variant, H2); converged or not | no |
-| `debug` | converged KT, and debug applicable for the type of work | the fix: `debugComplete` | no |
-| `teardown` | resolved: `debugComplete`, or analysis complete with debug not applicable | archive entry and the workspace update | yes: skills now, Workspace Feature later (H3) |
-| `reminderSaved` | converged KT, debug applicable and not done | archive reminder, pending entry kept | no |
+| `debug` | converged KT, and debug disposition `pending` | the fix: `debugComplete`, disposition `done` | no |
+| `teardown` | resolved: converged KT and debug disposition `done`, `notApplicable` or `skipped` | archive entry and the workspace update | yes: skills now, Workspace Feature later (H3) |
+| `reminderSaved` | converged KT, debug disposition `pending` | archive reminder, pending entry kept | no |
 | `kill` | KT not converged | archive only | no |
 
 Placeholder mapping onto the statuses that exist today:
 
-| Status | KT | Debug | Ends with | Today |
+| Status | KT | Debug disposition | Ends with | Today |
 |---|---|---|---|---|
 | `suggestInvestigating` | not converged | not reached | `kill` | `kill` and a reminder both legal |
 | `needsSuggest` | not converged (a blocked debug put the root cause in doubt) | blocked | `kill` | both legal |
-| `readyForSuggest` | converged | pending | reminder, or continue | `teardown` writes a reminder; `tornDown` not legal |
-| `readyForDebug` | converged | pending | reminder, or continue to `debug` | same |
-| `debugInProgress` | converged | in progress | reminder, or continue | same |
-| `debugComplete` | converged, fix applied | done | `save`, then `teardown` | `tornDown` legal; `kill` also legal |
-| none yet | converged, resolved by analysis | not applicable | `save`, then `teardown` | **no status says this** (S10) |
+| `readyForSuggest` | converged | `pending`, or `skipped` / `notApplicable` once recorded | `pending`: reminder or continue; otherwise `save`, then `teardown` | `teardown` writes a reminder; `tornDown` not legal |
+| `readyForDebug` | converged | same | same | same |
+| `debugInProgress` | converged | `pending` (a run is mid-way), or `skipped` | same | same |
+| `debugComplete` | converged, fix applied | `done` | `save`, then `teardown` | `tornDown` legal; `kill` also legal |
+| none yet | converged, resolved by analysis | `notApplicable` | `save`, then `teardown` | **no status says this** (S10) |
 | `noHandoff` | no session | none | none | none |
 
-The row marked "none yet" is the main structural finding: a handoff resolved by
-analysis has no status of its own, so `teardown` cannot be legal for it without
-either a new `HandoffStatus` variant (a placeholder name, such as an
-analysis-complete status beside `debugComplete`, is the assistant's, not the
-owner's) or a typed "debug applicability" declared by the handoff's type of
-work (K7).
+The row marked "none yet" is the main structural finding. `teardown` is legal
+only from `debugComplete`, so a handoff resolved by analysis, or one where
+debug was skipped, cannot be torn down at all. Closing that needs the debug
+disposition recorded in the handoff (K7), and then either a `HandoffStatus`
+variant for "resolved without debug" or `teardown` becoming legal from the
+converged statuses when the disposition allows it. Which of the two is
+open; the names are the assistant's placeholders, not the owner's.
 
 Not implemented, each recorded in the register: no typed KT-converged value
 exists on the handoff object (D9, D10, R10); `suggest` can apply
 `saveConfirmedReady` without a root cause (D9); `tornDown` is legal only from
 `debugComplete` and `killed` from every live status (R9); `teardown` decides
 "resolved" by a yes or no answer, not by the handoff (R9); there is no status
-for a handoff resolved without debug (S10) and no declaration of whether debug
-applies (K7); `teardown` updates `skills.md` only, not a Workspace Feature
+for a handoff resolved without debug (S10) and no record of whether debug is
+pending, done, not applicable or skipped (K7); `teardown` updates `skills.md` only, not a Workspace Feature
 (K1); the Scope shape is one for every kind of work (K3).
 
 Open, and left open on purpose: whether `constraints` are part of a converged
