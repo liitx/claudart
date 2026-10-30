@@ -28,6 +28,7 @@ import '../helpers/unscripted.dart';
 import '../helpers/variant_topology.dart';
 import 'package:claudart/logging/log_file.dart';
 import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 // debug_test.dart — coverage for runDebug.
 //
@@ -189,15 +190,9 @@ void main() {
       final io = _io();
       io.write(workspaceConfigPathFor(_workspace), '{not valid json');
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          executor: _executorWithPlan(
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick), executor: _executorWithPlan(
             onCall: () => fail('a model call was spent'),
-          ),
-          pickFn: unscriptedPick,
-        ),
+          )),
         throwsA(isA<WorkspaceConfigUnreadableException>()),
       );
     });
@@ -205,12 +200,7 @@ void main() {
     test('exits 1 when project is not registered', () async {
       final io = MemoryFileIO();
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick)),
         throwsA(isA<_ExitException>()),
       );
     });
@@ -218,12 +208,7 @@ void main() {
     test('exits 1 when no handoff exists', () async {
       final io = _io(handoff: null);
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick)),
         throwsA(isA<_ExitException>()),
       );
     });
@@ -231,12 +216,7 @@ void main() {
     test('exits 1 when Scope / Files in play is empty', () async {
       final io = _io(handoff: _handoffReadyWithoutScope);
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick)),
         throwsA(isA<_ExitException>()),
       );
     });
@@ -246,13 +226,7 @@ void main() {
     test('exits 1 without reaching the interactive review loop', () async {
       final io = _io();
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-          executor: _executorWithNoOutput(),
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick), executor: _executorWithNoOutput()),
         throwsA(isA<_ExitException>()),
       );
     });
@@ -260,13 +234,7 @@ void main() {
     test('a failed step blocks the session: needsSuggest', () async {
       final io = _io();
       try {
-        await runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-          executor: _executorWithNoOutput(),
-        );
+        await runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick), executor: _executorWithNoOutput());
       } on _ExitException {
         // expected
       }
@@ -290,13 +258,7 @@ void main() {
       final output = <String>[];
       try {
         await runZoned(
-          () => runDebug(
-            io: _io(),
-            projectRootOverride: _projectRoot,
-            exitFn: _throwExit,
-            pickFn: unscriptedPick,
-            executor: _executorWithNoOutput(),
-          ),
+          () => runDebug(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick), executor: _executorWithNoOutput()),
           zoneSpecification: ZoneSpecification(
             print: (_, __, ___, line) => output.add(line),
           ),
@@ -333,13 +295,7 @@ void main() {
             ),
       );
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: unscriptedPick,
-          executor: executor,
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick), executor: executor),
         throwsA(isA<_ExitException>()),
       );
       expect(_statusOf(io), HandoffStatus.needsSuggest);
@@ -362,13 +318,7 @@ void main() {
       final output = <String>[];
       try {
         await runZoned(
-          () => runDebug(
-            io: io,
-            projectRootOverride: _projectRoot,
-            exitFn: _throwExit,
-              pickFn: unscriptedPick,
-            executor: _executorWithNoOutput(),
-          ),
+          () => runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick), executor: _executorWithNoOutput()),
           zoneSpecification: ZoneSpecification(
             print: (_, __, ___, line) => output.add(line),
           ),
@@ -394,13 +344,7 @@ void main() {
           handoff: withHandoffStatus(_handoffReadyWithScope, status),
         );
         var modelCalls = 0;
-        final run = runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          executor: _executorWithPlan(onCall: () => modelCalls++),
-          pickFn: (_) => 0,
-        );
+        final run = runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 0), executor: _executorWithPlan(onCall: () => modelCalls++));
         if (runs) {
           await run;
           expect(_statusOf(io), HandoffStatus.debugComplete);
@@ -448,15 +392,9 @@ void main() {
             );
           },
         );
-        await runDebug(
-          io: _io(
+        await runDebug(seams: CommandSeams(io: _io(
             handoff: _handoffReadyWithScope.replaceFirst('Found it.', text),
-          ),
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          executor: executor,
-          pickFn: (_) => 0,
-        );
+          ), projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 0), executor: executor);
         expect(sent.join('\n').contains('## Root Cause'), told);
       });
     });
@@ -467,13 +405,7 @@ void main() {
       final io = _io();
       expect(_statusOf(io), HandoffStatus.readyForDebug);
 
-      await runDebug(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _throwExit,
-        executor: _executorWithPlan(),
-        pickFn: (_) => 0,
-      );
+      await runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 0), executor: _executorWithPlan());
 
       expect(_statusOf(io), HandoffStatus.debugComplete);
       expect(
@@ -485,13 +417,7 @@ void main() {
 
     test('logs the transitions it applied: command, from, event, to', () async {
       final io = _io();
-      await runDebug(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _throwExit,
-        executor: _executorWithPlan(),
-        pickFn: (_) => 0,
-      );
+      await runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 0), executor: _executorWithPlan());
       expect(loggedMoves(io, _workspace), [
         _move(
           HandoffStatus.readyForDebug,
@@ -509,13 +435,7 @@ void main() {
     test('choosing exit leaves the status debugInProgress', () async {
       final io = _io();
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          executor: _executorWithPlan(),
-          pickFn: (_) => 1,
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 1), executor: _executorWithPlan()),
         throwsA(isA<_ExitException>()),
       );
       expect(_statusOf(io), HandoffStatus.debugInProgress);
@@ -540,13 +460,7 @@ void main() {
       final output = <String>[];
       try {
         await runZoned(
-          () => runDebug(
-            io: _io(projectRoot: root.path),
-            projectRootOverride: root.path,
-            exitFn: _throwExit,
-            executor: _executorWithPlanText(plan),
-            pickFn: (_) => 1,
-          ),
+          () => runDebug(seams: CommandSeams(io: _io(projectRoot: root.path), projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 1), executor: _executorWithPlanText(plan)),
           zoneSpecification: ZoneSpecification(
             print: (_, __, ___, line) => output.add(line),
           ),
@@ -600,13 +514,7 @@ void main() {
     test('an unterminated block blocks the session', () async {
       final io = _io();
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          executor: _executorWithPlanText(truncatedPlan),
-          pickFn: (_) => 0,
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 0), executor: _executorWithPlanText(truncatedPlan)),
         throwsA(
           isA<EditPlanException>().having(
             (e) => e.failure,
@@ -634,13 +542,7 @@ void main() {
       final output = <String>[];
       await expectLater(
         runZoned(
-          () => runDebug(
-            io: _io(),
-            projectRootOverride: _projectRoot,
-            exitFn: _throwExit,
-            executor: _executorWithPlanText(truncatedPlan),
-            pickFn: (_) => 0,
-          ),
+          () => runDebug(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 0), executor: _executorWithPlanText(truncatedPlan)),
           zoneSpecification: ZoneSpecification(
             print: (_, __, ___, line) => output.add(line),
           ),
@@ -663,14 +565,7 @@ void main() {
       final plan = '${WireTag.editFile.openPrefix} path="lib/foo.dart">\n'
           'void a() {}\n${WireTag.editFile.close}';
       await expectLater(
-        runDebug(
-          io: io,
-          projectRootOverride: root.path,
-          exitFn: _throwExit,
-          executor: _executorWithPlanText(plan),
-          pickFn: (_) => 0,
-          dartFileAnalyzer: (_, __) => false,
-        ),
+        runDebug(seams: CommandSeams(io: io, projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0), executor: _executorWithPlanText(plan), dartFileAnalyzer: (_, __) => false),
         throwsA(
           isA<EditPlanException>().having(
             (e) => e.failure,
@@ -723,13 +618,7 @@ void main() {
       int Function(List<String>)? pickFn,
     }) async {
       try {
-        await runDebug(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: pickFn ?? unscriptedPick,
-          executor: executor,
-        );
+        await runDebug(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: pickFn ?? unscriptedPick), executor: executor);
       } on _ExitException {
         // every scenario here ends in an exit
       }

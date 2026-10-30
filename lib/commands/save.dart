@@ -14,6 +14,7 @@ import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
 import '../ui/render.dart' as render;
 import 'claudart_command.dart';
+import 'command_seams.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }
@@ -24,10 +25,11 @@ enum SkillsUpdateResult { written, skipped }
 /// skills.md pending section. Does NOT reset the handoff or remove the symlink
 /// — those are teardown/kill's responsibility.
 Future<SkillsUpdateResult> runSave({
-  FileIO? io,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
+  CommandSeams seams = const CommandSeams(),
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final sw = Stopwatch()..start();

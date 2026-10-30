@@ -24,7 +24,7 @@ context; the register below holds the evidence.
 | Q2b | `handoffObjectTyped` | first part partly done (`HandoffSection`); the value types for step id, workspace, project root, project name remain |
 | Q6 | `noSilentFallbacks` | done except D11 (repeated literals), D13 (typed values) and D16, which fold into Q12, Q17 |
 | Q12 | `shapeTopologyAndBases` | done 2026-10-30: I1 analyzer test built, three pairs consolidated, ratchet 0; the other shape-based bases wait for the Q15 enum data |
-| Q13 | `seamBundle` | not started |
+| Q13 | `seamBundle` | done 2026-10-30: `CommandSeams` (io, projectRootOverride, exitFn, confirmFn, askFn, pickFn) replaces the loose parameters of the nine seam-heavy commands; ratchet 0; the other commands and the runner, executor and mode parameters stay per command |
 | Q14 | `oneSourcePerDatum` | not started |
 | Q15 | `enumFactsAsData` | not started |
 | Q16 | `folderLayout` | not started |
@@ -338,7 +338,7 @@ before the change and pass after.
 | Q10 | `ticketClassificationPrepared` | K2 to K6 | Q4, and the current work complete | a placeholder `SprintTicket` (class or factory constructor) carries the type of work into the handoff; `HandoffTemplate` has one variant per type with Scope as a variant object; a handoff's data updates the Workspace Feature it is allocated to; `suggest` reads only that feature's knowledge. Designed in a parallel claudart session once the owner has vetted the ticket flow; nothing is built before then |
 | Q11 | `fixVerifiedBeforeDone` | S11 | Q2, Q4 | `debug` runs the workspace `afterFixCommand` before it records the work as done and writes the evidence kind into the handoff; the five evidence scenarios of H6 pass; only verified evidence updates the workspace, and suggest-confirmed handoffs end as a reminder |
 | Q12 | `shapeTopologyAndBases` | Y1 | Q1 | the shape invariant I1 as an analyzer-based test with today's pairs as its ratchet; then each family of classes that shares properties gets an abstract base holding them (the `AgentResponse` variants, the `PipelineEvent` subclasses, the workspace config sections) with variants overriding getters or built by one factory |
-| Q13 | `seamBundle` | Y2 | Q12 | invariant I2 at today's count; one bundle type for the injected seams, passed down instead of nine loose parameters; each command takes it and the guards for the model seam and the funnel read it |
+| Q13 | `seamBundle` | Y2 | Q12 | invariant I2 (done 2026-10-30, ratchet 0) at today's count; one bundle type for the injected seams, passed down instead of nine loose parameters; each command takes it and the guards for the model seam and the funnel read it |
 | Q14 | `oneSourcePerDatum` | Y3 | Q13 | invariant I3 with an owner table; git, project identity, workspace, credentials and settings are each reached through one module's accessors, and every other file calls them |
 | Q15 | `enumFactsAsData` | Y4 | Q14 | invariant I4; `HandoffStatus`, `ClaudartCommand`, `FailureType` and `AgentFlow` carry their facts as enhanced-enum constructor fields (a data class per enum where the facts group), and the `\|\|` switches go; the relational `after` stays a function and the proofs P1 to P14 must still pass unchanged |
 | Q16 | `folderLayout` | Y5 | Q14 | invariant I5; loose `lib/` files move into folders by concern, non-command files leave `lib/commands/`, a command's helpers sit beside it; moves are mechanical (imports only) and the whole suite and the topology docs must be unchanged apart from paths |

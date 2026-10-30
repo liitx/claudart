@@ -24,6 +24,7 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
+import 'command_seams.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.
@@ -65,13 +66,14 @@ enum DebugExitKind {
 }
 
 Future<void> runDebug({
-  FileIO? io,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
+  CommandSeams seams = const CommandSeams(),
   PipelineExecutor? executor,
-  int Function(List<String> items)? pickFn,
   DartFileAnalyzer? dartFileAnalyzer,
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final exitFn = seams.exitFn;
+  final pickFn = seams.pickFn;
   final fileIO   = io       ?? const RealFileIO();
   final exit_    = exitFn   ?? exit;
   final pick_    = pickFn   ?? arrowMenu;

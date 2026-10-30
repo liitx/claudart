@@ -19,6 +19,7 @@ import '../session/teardown_utils.dart';
 import '../md_io.dart' show confirmOrEof;
 import '../process_runner.dart';
 import '../ui/render.dart' as render;
+import 'command_seams.dart';
 
 const _shellExecutable = 'sh';
 const _shellCommandFlag = '-c';
@@ -53,15 +54,16 @@ enum RotateResult {
 /// archiving and seeding. If the build fails the rotation is aborted — the
 /// archive already written remains, but the live handoff is not overwritten.
 Future<RotateResult>  runRotate({
-  FileIO? io,
+  CommandSeams seams = const CommandSeams(),
   ProcessRunner? runner,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
-  bool Function(String question)? confirmFn,
-  bool? Function(String question)? askFn,
   Future<bool> Function(String command)? buildFn,
   RunMode mode = RunMode.interactive,
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final exitFn = seams.exitFn;
+  final confirmFn = seams.confirmFn;
+  final askFn = seams.askFn;
   final fileIO = io ?? const RealFileIO();
   final proc = runner ?? const RealProcessRunner();
   final exit_ = exitFn ?? exit;

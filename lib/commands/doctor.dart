@@ -20,6 +20,7 @@ import '../process_runner.dart';
 import '../providers/agent_provider.dart';
 import '../providers/claude_settings_env.dart';
 import '../registry.dart';
+import 'command_seams.dart';
 
 const _gitExecutable = 'git';
 const _ghExecutable = 'gh';
@@ -529,14 +530,15 @@ Future<HarnessCheckOutcome> _checkGitHooksConfigured(
 /// (so it's visible later via `claudart report` instead of only whatever
 /// gets pasted into chat), exits 1 if any failed (0 if clean or skip-only).
 Future<void> runDoctor({
+  CommandSeams seams = const CommandSeams(),
   ProcessRunner? runner,
   Map<String, String>? env,
-  String? projectRootOverride,
-  FileIO? io,
   String? claudeSettingsPath,
   String? workspacePath,
-  Never Function(int code)? exitFn,
 }) async {
+  final projectRootOverride = seams.projectRootOverride;
+  final io = seams.io;
+  final exitFn = seams.exitFn;
   final exit_ = exitFn ?? exit;
   final outcomes = await runDoctorChecks(
     runner: runner,

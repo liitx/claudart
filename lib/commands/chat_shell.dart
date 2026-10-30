@@ -25,6 +25,7 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'flow.dart';
 import 'suggest.dart';
+import 'command_seams.dart';
 
 /// What the user typed. Conversation is the default: only slash commands invoke
 /// structured work; everything else is a [message] to the agent.
@@ -106,11 +107,12 @@ Future<StepResult?> answerChatMessage({
 /// Plain messages are answered by [runner] (defaults to the real `claude` call)
 /// using the session's handoff + skills as context.
 Future<void> runChatShell({
-  FileIO? io,
-  String? projectRootOverride,
+  CommandSeams seams = const CommandSeams(),
   ClaudeRunner? runner,
-  Never Function(int code)? exitFn,
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final run = runner ?? defaultClaudeRunner;

@@ -14,6 +14,7 @@ import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
 import '../helpers/unscripted.dart';
 import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 const _projectRoot = ProjectFixture.root;
 const _workspace = ProjectFixture.workspace;
@@ -138,14 +139,7 @@ void main() {
       Registry.empty().save(io: io);
 
       await expectLater(
-        runLauncher(
-          confirmFn: unscriptedConfirm,
-          
-          io: io,
-          projectRootOverride: null,
-          pickFn: (_) => 0,
-          exitFn: _throwExit,
-        ),
+        runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) => 0, exitFn: _throwExit)),
         throwsA(isA<_ExitException>()),
       );
     });
@@ -155,17 +149,10 @@ void main() {
     test('lists registered projects without error', () async {
       final io = _io(withHandoff: true, withLink: true);
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : ActiveMenu.back.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       expect(pickCall, equals(2));
       handoff_matrix.cover(HandoffStatusType.readyForDebug, HandoffExpectation.debug);
     });
@@ -175,18 +162,11 @@ void main() {
       final io = _io(withHandoff: true, withLink: false, withRealDir: true);
       List<String>? capturedItems;
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: null,
-        pickFn: (items) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (items) {
           capturedItems ??= items;
           pickCall++;
           return pickCall == 1 ? 0 : ActiveMenu.back.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       // Same colour/dot convention _buildProjectItems uses: green ● for
       // linked, dim ○ for not. A real directory must render as linked.
       final projectRow = capturedItems!.firstWhere((i) => i.contains('my-app'));
@@ -197,17 +177,10 @@ void main() {
     test('highlights current project when cwd matches', () async {
       final io = _io(withHandoff: false, withLink: false);
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: _projectRoot,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: _projectRoot, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : FreshMenu.back.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       expect(pickCall, equals(2));
     });
   });
@@ -216,33 +189,20 @@ void main() {
     test('routes to kill when workspace is locked and user confirms', () async {
       final io = _io(withHandoff: true, withLink: true, withLock: true);
       var pickCall = 0;
-      await runLauncher(
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : LockedMenu.kill.index;
-        },
-        confirmFn: (_) => true,
-        exitFn: _throwExit,
-      );
+        }, confirmFn: (_) => true, exitFn: _throwExit));
       expect(isLocked(_workspace, io: io), isFalse);
     });
 
     test('does nothing when locked and user picks Back', () async {
       final io = _io(withHandoff: true, withLink: true, withLock: true);
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : LockedMenu.back.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       expect(isLocked(_workspace, io: io), isTrue);
     });
   });
@@ -251,16 +211,10 @@ void main() {
     test('kill from resume menu leaves the symlink in place', () async {
       final io = _io(withHandoff: true, withLink: true);
       var pickCall = 0;
-      await runLauncher(
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : ActiveMenu.kill.index;
-        },
-        confirmFn: (_) => true,
-        exitFn: _throwExit,
-      );
+        }, confirmFn: (_) => true, exitFn: _throwExit));
       // kill closes the session, it does not deregister the project —
       // unlink is what removes the symlink.
       expect(io.linkExists(_claudeLink), isTrue);
@@ -269,17 +223,10 @@ void main() {
     test('resume picks action without error (display only)', () async {
       final io = _io(withHandoff: true, withLink: true);
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : ActiveMenu.resume.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       expect(io.linkExists(_claudeLink), isTrue);
     });
   });
@@ -288,17 +235,10 @@ void main() {
     test('offers start new session when no handoff', () async {
       final io = _io(withHandoff: false, withLink: false);
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : FreshMenu.back.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       final archived = io.files.keys
           .where((k) => k.startsWith(p.join(_workspace, 'archive')))
           .toList();
@@ -311,13 +251,7 @@ void main() {
       final io = _io();
       const unregisteredRoot = '/projects/other-app';
 
-      await runLauncher(
-        io: io,
-        projectRootOverride: unregisteredRoot,
-        pickFn: (_) => registerChoice(1),
-        confirmFn: (_) => false,
-        exitFn: _throwExit,
-      );
+      await runLauncher(seams: CommandSeams(io: io, projectRootOverride: unregisteredRoot, pickFn: (_) => registerChoice(1), confirmFn: (_) => false, exitFn: _throwExit));
 
       final registry = Registry.load(io: io);
       expect(registry.findByProjectRoot(unregisteredRoot), isNotNull);
@@ -339,17 +273,10 @@ void main() {
       Registry.empty().add(entry).save(io: io);
 
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : FreshMenu.back.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       expect(pickCall, equals(2));
     });
   });
@@ -358,17 +285,10 @@ void main() {
     test('does not crash when sensitivity mode is on', () async {
       final io = _io(withHandoff: false, withLink: false, sensitivityMode: true);
       var pickCall = 0;
-      await runLauncher(
-        confirmFn: unscriptedConfirm,
-        
-        io: io,
-        projectRootOverride: null,
-        pickFn: (_) {
+      await runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : FreshMenu.back.index;
-        },
-        exitFn: _throwExit,
-      );
+        }, exitFn: _throwExit));
       expect(pickCall, equals(2));
     });
   });
@@ -396,17 +316,10 @@ void main() {
       final output = <String>[];
       var pickCall = 0;
       await runZoned(
-        () => runLauncher(
-          confirmFn: unscriptedConfirm,
-          
-          io: io,
-          projectRootOverride: null,
-          pickFn: (_) {
+        () => runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
             pickCall++;
             return pickCall == 1 ? 0 : ActiveMenu.back.index;
-          },
-          exitFn: _throwExit,
-        ),
+          }, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -423,19 +336,13 @@ void main() {
       final output = <String>[];
       var pickCall = 0;
       await runZoned(
-        () => runLauncher(
-          confirmFn: unscriptedConfirm,
-          
-          io: io,
-          // Never matches the real cwd's git root, so this entry is not
-          // "the current project" — its stored branch must be shown as-is.
-          projectRootOverride: null,
-          pickFn: (_) {
+        () => runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, pickFn: (_) {
             pickCall++;
             return pickCall == 1 ? 0 : ActiveMenu.back.index;
-          },
-          exitFn: _throwExit,
-        ),
+          }, exitFn: _throwExit,
+          // Never matches the real cwd's git root, so this entry is not
+          // "the current project" — its stored branch must be shown as-is.
+          projectRootOverride: null)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -453,17 +360,10 @@ void main() {
       final output = <String>[];
       var pickCall = 0;
       await runZoned(
-        () => runLauncher(
-          confirmFn: unscriptedConfirm,
-          
-          io: io,
-          projectRootOverride: null,
-          pickFn: (_) {
+        () => runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
             pickCall++;
             return pickCall == 1 ? 0 : FreshMenu.back.index;
-          },
-          exitFn: _throwExit,
-        ),
+          }, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -479,17 +379,10 @@ void main() {
       final output = <String>[];
       var pickCall = 0;
       await runZoned(
-        () => runLauncher(
-          confirmFn: unscriptedConfirm,
-          
-          io: io,
-          projectRootOverride: null,
-          pickFn: (_) {
+        () => runLauncher(seams: CommandSeams(confirmFn: unscriptedConfirm, io: io, projectRootOverride: null, pickFn: (_) {
             pickCall++;
             return pickCall == 1 ? 0 : ActiveMenu.back.index;
-          },
-          exitFn: _throwExit,
-        ),
+          }, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),

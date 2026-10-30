@@ -10,13 +10,15 @@ import '../session/skills_lookup.dart';
 import '../session/teardown_utils.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
+import 'command_seams.dart';
 
 Future<void> runStatus({
-  FileIO? io,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
+  CommandSeams seams = const CommandSeams(),
   bool prompt = false,
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
 

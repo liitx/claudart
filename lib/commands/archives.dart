@@ -17,13 +17,15 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../workspace/workspace_index.dart';
 import '../ui/render.dart' as render;
+import 'command_seams.dart';
 
 Future<void> runArchives({
-  FileIO? io,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
-  int Function(List<String> items)? pickFn,
+  CommandSeams seams = const CommandSeams(),
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final exitFn = seams.exitFn;
+  final pickFn = seams.pickFn;
   final fileIO = io    ?? const RealFileIO();
   final exit_  = exitFn ?? exit;
   final pick_  = pickFn ?? arrowMenu;

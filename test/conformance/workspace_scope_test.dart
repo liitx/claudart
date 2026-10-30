@@ -14,6 +14,7 @@ import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
 import 'lifecycle_scenarios.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 const _a = defaultLifecycleProject;
 const _b = siblingLifecycleProject;
@@ -177,12 +178,7 @@ void main() {
 
       await expectLater(
         quietly(
-          () => runKill(
-            io: io,
-            projectRootOverride: '/projects/stranger',
-            confirmFn: (_) => true,
-            exitFn: (code) => throw StateError('exit($code)'),
-          ),
+          () => runKill(seams: CommandSeams(io: io, projectRootOverride: '/projects/stranger', confirmFn: (_) => true, exitFn: (code) => throw StateError('exit($code)'))),
         ),
         throwsA(
             isA<StateError>().having((e) => e.message, 'message', 'exit(1)')),

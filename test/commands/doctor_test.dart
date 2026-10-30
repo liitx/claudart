@@ -17,6 +17,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 /// Thrown by the injected exitFn so tests can assert exit-code behaviour
 /// without terminating the process.
@@ -802,13 +803,7 @@ void main() {
     test('exits 0 when every check is ok or skip', () async {
       _ExitException? caught;
       try {
-        await runDoctor(
-          runner: _FakeProcessRunner(_responses()),
-          env: _cleanEnv,
-          projectRootOverride: '/fake/repo',
-          io: MemoryFileIO(),
-          exitFn: _throwExit,
-        );
+        await runDoctor(seams: CommandSeams(projectRootOverride: '/fake/repo', io: MemoryFileIO(), exitFn: _throwExit), runner: _FakeProcessRunner(_responses()), env: _cleanEnv);
       } on _ExitException catch (e) {
         caught = e;
       }
@@ -819,13 +814,7 @@ void main() {
     test('exits 1 when any check fails', () async {
       _ExitException? caught;
       try {
-        await runDoctor(
-          runner: _FakeProcessRunner(_responses(ghAuthed: false)),
-          env: _cleanEnv,
-          projectRootOverride: '/fake/repo',
-          io: MemoryFileIO(),
-          exitFn: _throwExit,
-        );
+        await runDoctor(seams: CommandSeams(projectRootOverride: '/fake/repo', io: MemoryFileIO(), exitFn: _throwExit), runner: _FakeProcessRunner(_responses(ghAuthed: false)), env: _cleanEnv);
       } on _ExitException catch (e) {
         caught = e;
       }

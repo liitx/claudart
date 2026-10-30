@@ -19,6 +19,7 @@ import 'package:test/test.dart';
 import '../helpers/mocks.dart';
 import '../helpers/project_fixture.dart';
 import '../helpers/unscripted.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 const _secret = 'VolumeBloc';
 const _failure = '$_secret exploded in VolumeRepository.load';
@@ -109,13 +110,7 @@ final _failingRuns = <String, _FailingRun>{
         promptFn: unscriptedPrompt,
         pickFn: unscriptedPick,
       )),
-  'debug': (status: 'ready-for-debug', run: (io) => runDebug(
-        io: io,
-        projectRootOverride: ProjectFixture.root,
-        exitFn: _noExit,
-        executor: _failingExecutor(),
-        pickFn: unscriptedPick,
-      )),
+  'debug': (status: 'ready-for-debug', run: (io) => runDebug(seams: CommandSeams(io: io, projectRootOverride: ProjectFixture.root, exitFn: _noExit, pickFn: unscriptedPick), executor: _failingExecutor())),
 };
 
 void main() {

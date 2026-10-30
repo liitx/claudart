@@ -14,6 +14,7 @@ import '../session/session_state.dart';
 import '../session/workspace_guard.dart';
 import '../workspace/workspace_link_state.dart';
 import '../ui/render.dart' as render;
+import 'command_seams.dart';
 
 /// How a `kill` run ended. The name is the outcome written to the interaction
 /// log, so a warned kill, a cancelled one and a refused one can be told apart.
@@ -56,13 +57,14 @@ enum KillOutcome {
 /// it never clears a workspace lock: that means another operation may be
 /// running, and only a person can judge that.
 Future<void> runKill({
-  FileIO? io,
-  String? projectRootOverride,
-  bool Function(String question)? confirmFn,
-  bool? Function(String question)? askFn,
+  CommandSeams seams = const CommandSeams(),
   RunMode mode = RunMode.interactive,
-  Never Function(int code)? exitFn,
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final confirmFn = seams.confirmFn;
+  final askFn = seams.askFn;
+  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
   final headless = mode == RunMode.headless;
   // A caller-supplied confirm always answers; the default reports null at end

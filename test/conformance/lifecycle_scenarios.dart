@@ -34,6 +34,7 @@ import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import 'package:claudart/logging/log_file.dart';
 import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 /// A linked project: its registry name, repo root and claudart workspace.
 typedef LifecycleProject = ({String name, String root, String workspace});
@@ -194,13 +195,7 @@ Future<void> debug(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) =>
-    runDebug(
-      io: io,
-      projectRootOverride: project.root,
-      exitFn: _noExit,
-      executor: _exec('<CHANGES>none</CHANGES>'),
-      pickFn: (_) => 0,
-    );
+    runDebug(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, pickFn: (_) => 0), executor: _exec('<CHANGES>none</CHANGES>'));
 
 /// A debug whose plan cannot be applied: an edit block with no closing tag.
 /// The command blocks the session (needs-suggest) and rethrows the failure;
@@ -210,16 +205,10 @@ Future<void> debugBlocked(
   LifecycleProject project = defaultLifecycleProject,
 }) async {
   try {
-    await runDebug(
-      io: io,
-      projectRootOverride: project.root,
-      exitFn: _noExit,
-      executor: _exec(
+    await runDebug(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, pickFn: (_) => 0), executor: _exec(
         '<CHANGES>x</CHANGES>${WireTag.editFile.openPrefix} '
         'path="lib/a.dart">\nno end',
-      ),
-      pickFn: (_) => 0,
-    );
+      ));
   } on EditPlanException {
     // Expected: the unapplied plan blocks the session.
   }
@@ -229,7 +218,7 @@ Future<void> save(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) =>
-    runSave(io: io, projectRootOverride: project.root, exitFn: _noExit);
+    runSave(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit));
 
 /// An interactive teardown of a handoff whose debug did not run: every
 /// confirmation is answered yes, so debug is recorded as skipped and the
@@ -252,24 +241,13 @@ Future<void> kill(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) =>
-    runKill(
-      io: io,
-      projectRootOverride: project.root,
-      confirmFn: (_) => true,
-      exitFn: _noExit,
-    );
+    runKill(seams: CommandSeams(io: io, projectRootOverride: project.root, confirmFn: (_) => true, exitFn: _noExit));
 
 Future<void> rotate(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) async {
-  await runRotate(
-    io: io,
-    projectRootOverride: project.root,
-    exitFn: _noExit,
-    confirmFn: (_) => true,
-    buildFn: (_) async => true,
-  );
+  await runRotate(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, confirmFn: (_) => true), buildFn: (_) async => true);
 }
 
 Future<void> teardown(

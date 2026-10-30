@@ -11,6 +11,7 @@ import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
 import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 const _projectRoot = ProjectFixture.root;
 const _projectName = 'my-app';
@@ -121,11 +122,7 @@ _Nothing yet.
       // will be null. The command falls back to reading branch from handoff.
       // Status is read-only — it must not mutate the handoff file.
       final handoffBefore = io.read(handoffPathFor(workspace));
-      await runStatus(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _throwExit,
-      );
+      await runStatus(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       // Handoff must be unchanged — status is read-only.
       expect(io.read(handoffPathFor(workspace)), equals(handoffBefore));
       handoff_matrix.cover(HandoffStatusType.suggestInvestigating, HandoffExpectation.suggest);
@@ -221,11 +218,7 @@ _Nothing yet.
       io.write(handoffPathFor(workspace), handoff);
 
       final handoffBefore = io.read(handoffPathFor(workspace));
-      await runStatus(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _throwExit,
-      );
+      await runStatus(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       // Status is read-only — handoff must not be mutated.
       expect(io.read(handoffPathFor(workspace)), equals(handoffBefore));
       handoff_matrix.cover(HandoffStatusType.suggestInvestigating, HandoffExpectation.suggest);
@@ -237,11 +230,7 @@ _Nothing yet.
       final io = MemoryFileIO();
 
       expect(
-        () => runStatus(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-        ),
+        () => runStatus(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 1)),
       );
     });
@@ -250,7 +239,7 @@ _Nothing yet.
       final io = MemoryFileIO();
 
       expect(
-        () => runStatus(io: io, exitFn: _throwExit),
+        () => runStatus(seams: CommandSeams(io: io, exitFn: _throwExit)),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 1)),
       );
     });
@@ -260,11 +249,7 @@ _Nothing yet.
     Future<String> statusText(MemoryFileIO io) async {
       final output = <String>[];
       await runZoned(
-        () => runStatus(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-        ),
+        () => runStatus(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -338,7 +323,7 @@ _Nothing yet.
     Future<List<String>> statusOutput(MemoryFileIO io) async {
       final output = <String>[];
       await runZoned(
-        () => runStatus(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit),
+        () => runStatus(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -469,12 +454,7 @@ $bug
       test('--prompt mode shows no-handoff with the inactive dot', () async {
         final captured = _CapturedStdout();
         await IOOverrides.runZoned(
-          () => runStatus(
-            io: ioWith(bug: blank),
-            projectRootOverride: _projectRoot,
-            exitFn: _throwExit,
-            prompt: true,
-          ),
+          () => runStatus(seams: CommandSeams(io: ioWith(bug: blank), projectRootOverride: _projectRoot, exitFn: _throwExit), prompt: true),
           stdout: () => captured,
         );
         await captured.close();
@@ -501,12 +481,7 @@ $bug
         final io = ioWith(bug: 'some real bug');
         final captured = _CapturedStdout();
         await IOOverrides.runZoned(
-          () => runStatus(
-            io: io,
-            projectRootOverride: _projectRoot,
-            exitFn: _throwExit,
-            prompt: true,
-          ),
+          () => runStatus(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit), prompt: true),
           stdout: () => captured,
         );
         await captured.close();

@@ -6,6 +6,7 @@ import 'package:claudart/registry.dart';
 import 'package:path/path.dart' as p;
 import 'helpers/fake_executors.dart';
 import 'helpers/mocks.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 const _root = '/e2e/claudart';
 const _ws   = '/e2e/ws/claudart';
@@ -123,11 +124,7 @@ void main() {
   group('e2e — save → teardown full workflow', () {
     test('save writes checkpoint with branch name and root cause in skills', () async {
       final io = _makeIO();
-      final result = await runSave(
-        io: io,
-        projectRootOverride: _root,
-        exitFn: (c) => throw Exception('exit($c)'),
-      );
+      final result = await runSave(seams: CommandSeams(io: io, projectRootOverride: _root, exitFn: (c) => throw Exception('exit($c)')));
       expect(result, equals(SkillsUpdateResult.written));
 
       final cps = _checkpoints(io);
@@ -141,11 +138,7 @@ void main() {
     test('teardown after save: archives handoff, resets it, updates skills with pre-populated values', () async {
       final io = _makeIO();
       // First save to produce a checkpoint and seed skills.
-      await runSave(
-        io: io,
-        projectRootOverride: _root,
-        exitFn: (c) => throw Exception('exit($c)'),
-      );
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _root, exitFn: (c) => throw Exception('exit($c)')));
 
       // Teardown — hotFiles and pattern answers are null → accept pre-populated defaults.
       await runTeardown(
@@ -183,11 +176,7 @@ void main() {
 
     test('save checkpoint is preserved after teardown (audit trail)', () async {
       final io = _makeIO();
-      await runSave(
-        io: io,
-        projectRootOverride: _root,
-        exitFn: (c) => throw Exception('exit($c)'),
-      );
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _root, exitFn: (c) => throw Exception('exit($c)')));
       await runTeardown(
         executor: noModelExecutor(),
         io: io,

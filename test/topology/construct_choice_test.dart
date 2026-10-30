@@ -102,7 +102,7 @@ Map<String, String> _libSources() => {
 /// may only go down, to zero, as the code is consolidated.
 const _knownEnumsWithFactSwitches = 13;
 const _knownIntConstantNamespaces = 0;
-const _knownSeamHeavyFunctions = 9;
+const _knownSeamHeavyFunctions = 0;
 
 void main() {
   group('the decision table decides every case', () {

@@ -13,18 +13,20 @@ import 'link.dart';
 import 'setup.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_link_state.dart';
+import 'command_seams.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
 /// Phase 1: loads registry only — shows project list before any workspace is opened.
 /// Phase 2: loads workspace config and handoff only after the user selects a project.
 Future<void> runLauncher({
-  FileIO? io,
-  String? projectRootOverride,
-  int Function(List<String> items)? pickFn,
-  bool Function(String question)? confirmFn,
-  Never Function(int code)? exitFn,
+  CommandSeams seams = const CommandSeams(),
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final pickFn = seams.pickFn;
+  final confirmFn = seams.confirmFn;
+  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final pick_ = pickFn ?? arrowMenu;
@@ -122,12 +124,7 @@ Future<void> runLauncher({
   if (locked) {
     final action = chooseFrom(LockedMenu.values, (m) => m.label, pick_);
     if (action == LockedMenu.kill) {
-      await runKill(
-        io: fileIO,
-        projectRootOverride: selected.projectRoot,
-        confirmFn: confirmFn,
-        exitFn: exitFn,
-      );
+      await runKill(seams: seams.forProjectRoot(selected.projectRoot));
     }
     return;
   }
@@ -140,12 +137,7 @@ Future<void> runLauncher({
       case ActiveMenu.resume:
         _printResumeInstructions(state.status);
       case ActiveMenu.kill:
-        await runKill(
-          io: fileIO,
-          projectRootOverride: selected.projectRoot,
-          confirmFn: confirmFn,
-          exitFn: exitFn,
-        );
+        await runKill(seams: seams.forProjectRoot(selected.projectRoot));
       case ActiveMenu.back:
         break;
     }

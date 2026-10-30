@@ -34,6 +34,7 @@ import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/commands/teardown.dart';
 import 'package:claudart/commands/unlink.dart';
+import 'package:claudart/commands/command_seams.dart';
 
 const _usage = '''
 claudart — Dart CLI for structured project debug and suggestion sessions
@@ -218,7 +219,7 @@ Future<void> _dispatch(
     case ClaudartCommand.chat:
       await runChatShell();
     case ClaudartCommand.archives:
-      await runArchives(projectRootOverride: projectRoot);
+      await runArchives(seams: CommandSeams(projectRootOverride: projectRoot));
     case ClaudartCommand.add:
       await runAdd();
     case ClaudartCommand.init:
@@ -233,10 +234,7 @@ Future<void> _dispatch(
             projectRoot ?? (rest.isNotEmpty ? rest.first : null),
       );
     case ClaudartCommand.status:
-      await runStatus(
-        projectRootOverride: projectRoot,
-        prompt: rest.contains('--prompt'),
-      );
+      await runStatus(seams: CommandSeams(projectRootOverride: projectRoot), prompt: rest.contains('--prompt'));
     case ClaudartCommand.teardown:
       await runTeardown(
         projectRootOverride: projectRoot,
@@ -245,23 +243,17 @@ Future<void> _dispatch(
     case ClaudartCommand.suggest:
       await runSuggest(projectRootOverride: projectRoot);
     case ClaudartCommand.debug:
-      await runDebug(projectRootOverride: projectRoot);
+      await runDebug(seams: CommandSeams(projectRootOverride: projectRoot));
     case ClaudartCommand.flow:
       await runFlow(projectRootOverride: projectRoot);
     case ClaudartCommand.save:
-      await runSave(projectRootOverride: projectRoot);
+      await runSave(seams: CommandSeams(projectRootOverride: projectRoot));
     case ClaudartCommand.rotate:
-      final rotated = await runRotate(
-        projectRootOverride: projectRoot,
-        mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
-      );
+      final rotated = await runRotate(seams: CommandSeams(projectRootOverride: projectRoot), mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive);
       // A failed build gate must be visible to scripts (zedup, CI): exit 1.
       if (rotated == RotateResult.buildFailed) exit(1);
     case ClaudartCommand.kill:
-      await runKill(
-        projectRootOverride: projectRoot,
-        mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
-      );
+      await runKill(seams: CommandSeams(projectRootOverride: projectRoot), mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive);
     case ClaudartCommand.resume:
       await runResume(projectRootOverride: projectRoot);
     case ClaudartCommand.confirmPending:
