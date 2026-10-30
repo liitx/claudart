@@ -15,13 +15,12 @@
 import 'dart:convert';
 
 import '../file_io.dart';
-import '../paths.dart' show homeEnvVar;
 import '../environment.dart';
 
 /// `~/.claude/settings.json` — resolved fresh each call so a test override
 /// of `HOME` is honored without a cached stale path.
 String get defaultClaudeSettingsPath {
-  final home = processEnvironment[homeEnvVar] ?? '';
+  final home = homeDirectory ?? '';
   return '$home/.claude/settings.json';
 }
 

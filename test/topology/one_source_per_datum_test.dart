@@ -17,6 +17,10 @@ enum DatumSource {
     pattern: r'\bProcess\.(run|runSync|start)\(',
     ownerFile: 'lib/process_runner.dart',
   ),
+  homeDirectory(
+    pattern: r"\[homeEnvVar\]|\['HOME'\]",
+    ownerFile: 'lib/environment.dart',
+  ),
   gitExecutable(
     pattern: r"'git'",
     ownerFile: 'lib/git_utils.dart',

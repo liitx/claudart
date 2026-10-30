@@ -650,8 +650,8 @@ Future<void> _recompileIfCli(
   final entryPoint = p.join(_binDirName, '$projectName.dart');
   if (!fileIO.fileExists(p.join(projectRoot, entryPoint))) return;
 
-  final home = processEnvironment[homeEnvVar];
-  if (home == null || home.isEmpty) return;
+  final home = homeDirectory;
+  if (home == null) return;
   final output = p.join(home, _binDirName, projectName);
 
   print('\nRecompiling $projectName ($output)...');

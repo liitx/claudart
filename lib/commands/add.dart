@@ -180,7 +180,7 @@ Future<void> runAdd({
   // 9 — Register in Claude Code's own auto-memory so a session started
   // here already knows the project exists.
   final memoryRoot = claudeMemoryRootOverride ??
-      p.join(processEnvironment[homeEnvVar] ?? '', IdeIntegration.claudeCode.dirName, 'projects');
+      p.join(homeDirectory ?? '', IdeIntegration.claudeCode.dirName, 'projects');
   final projectHash = projectRoot.replaceAll('/', '-');
   final memoryDir = p.join(memoryRoot, projectHash, 'memory');
   fileIO.createDir(memoryDir);

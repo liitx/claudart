@@ -269,7 +269,7 @@ HarnessCheckOutcome _checkProviderEnv(
 /// this check exists for, invisible to any process that inherits the
 /// override correctly and never looks at the fallback at all.
 HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env, FileIO io) {
-  final home = env[homeEnvVar] ?? '';
+  final home = homeDirectoryFrom(env) ?? '';
   final fallbackRoot = p.join(home, '.claudart');
   final value = env[claudartWorkspaceEnvVar];
 
@@ -403,7 +403,7 @@ HarnessCheckOutcome _checkBedrockMetadataDisabled(
 }
 
 HarnessCheckOutcome _checkPathConfiguration(Map<String, String> env) {
-  final home = env[homeEnvVar] ?? '';
+  final home = homeDirectoryFrom(env) ?? '';
   final binDir = '$home/bin';
   final path = env['PATH'] ?? '';
   final onPath = path.split(':').contains(binDir);

@@ -3,6 +3,8 @@ import 'errors/claudart_exception.dart';
 import 'errors/failure_type.dart';
 import 'environment.dart';
 
+export 'environment.dart' show homeEnvVar;
+
 // ── Filename constants ─────────────────────────────────────────────────────
 // Single source of truth for all file/dir names used across claudart + consumers.
 
@@ -41,10 +43,6 @@ enum IdeIntegration {
 /// disagree about which var they meant.
 const String claudartWorkspaceEnvVar = 'CLAUDART_WORKSPACE';
 
-/// `Platform.environment['HOME']`'s key — read from several files
-/// (`doctor.dart`, `claude_settings_env.dart`, `add.dart`, here); named so
-/// none of them carry their own bare copy of it.
-const String homeEnvVar = 'HOME';
 
 /// Extracts the workspace directory from `claudart status` output.
 /// Parses the `Handoff  : <path>/handoff.md` line and returns the parent dir.
@@ -79,8 +77,8 @@ String get workspacesRoot => workspacesRootFor(processEnvironment);
 /// environment.
 String workspacesRootFor(Map<String, String> environment) {
   String home() {
-    final value = environment[homeEnvVar];
-    if (value == null || value.isEmpty) {
+    final value = homeDirectoryFrom(environment);
+    if (value == null) {
       throw ClaudartException(FailureType.homeDirectoryUnset);
     }
     return value;

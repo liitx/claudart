@@ -326,7 +326,7 @@ Future<void> _dispatch(
 }
 
 int _compile() {
-  final home = processEnvironment['HOME'] ?? '';
+  final home = homeDirectory ?? '';
   final out  = '$home/bin/claudart';
   final src  = _resolveClaudartSource();
 
@@ -360,7 +360,7 @@ int _compile() {
 /// Where the path of the claudart source is remembered after a compile. The
 /// one place its location is spelled out; saving and reading both use it.
 File get _savedSourceFile =>
-    File('${processEnvironment['HOME']}/.config/claudart/source');
+    File('${homeDirectory ?? ''}/.config/claudart/source');
 
 void _saveSourcePath(String repoRoot) {
   try {
