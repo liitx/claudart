@@ -6,13 +6,14 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 
 | role \ reach | pure | fileSeam | workspaceBound | processBound |
 |---|---|---|---|---|
-| drivesState | 2 | 1 | 2 | 6 |
+| drivesState | 3 | 1 | 2 | 6 |
 | observesState | 10 | 1 | 4 | 3 |
-| untouched | 77 | 16 | 6 | 24 |
+| untouched | 78 | 16 | 6 | 24 |
 
 ## drivesState x pure
 
 - `lib/commands/support/claudart_command.dart`
+- `lib/session/handoff_listeners.dart`
 - `lib/session/md_io.dart`
 
 ## drivesState x fileSeam
@@ -123,6 +124,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/session/run_mode.dart`
 - `lib/session/skills_lookup.dart`
 - `lib/session/teardown_utils.dart`
+- `lib/session/transition_bus.dart`
 - `lib/similarity/cosine.dart`
 - `lib/templates/archive_entry_template.dart`
 - `lib/templates/changelog_template.dart`

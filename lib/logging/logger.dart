@@ -14,6 +14,7 @@ import '../registry.dart';
 import '../sensitivity/token_map.dart';
 import 'log_file.dart';
 import 'log_protection.dart';
+import '../session/transition_bus.dart';
 
 const int _maxInteractions = 500;
 const int _maxErrors = 200;
@@ -171,6 +172,23 @@ class SessionLogger {
         ...transition.toJson(),
       },
       _maxTransitions,
+    );
+  }
+
+  /// A subscriber to status changes that threw: written to the error log under
+  /// [FailureType.handoffListenerFailed], naming the subscriber and the move.
+  void logListenerFailure({
+    required String command,
+    required HandoffListenerFailure failure,
+  }) {
+    final type = FailureType.handoffListenerFailed;
+    logError(
+      command: command,
+      errorType: type.errorType.name,
+      fingerprint: '${type.errorType.name}.${failure.listener}.${type.name}',
+      reason: '${failure.listener} failed on ${failure.transition.event.name}: '
+          '${failure.error}',
+      suggestion: type.suggestedAction,
     );
   }
 

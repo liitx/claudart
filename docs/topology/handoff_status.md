@@ -59,7 +59,7 @@ Files in `lib/` that mention the event, other than the table itself. "— no cod
 | fixApplied | lib/commands/debug.dart |
 | rotated | lib/commands/rotate.dart |
 | rotatedEmpty | lib/commands/rotate.dart |
-| tornDown | lib/commands/teardown.dart |
+| tornDown | lib/commands/teardown.dart, lib/session/handoff_listeners.dart |
 | reminderSaved | lib/commands/teardown.dart |
 | killed | lib/commands/kill.dart |
 

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/handoff_store.dart';
@@ -106,6 +107,71 @@ void main() {
         fixture.io.read('$_workspace/logs/transitions.jsonl'),
         contains('"rejected":true'),
       );
+    });
+
+    test('apply publishes the move to observers', () async {
+      final fixture = _store(HandoffStatus.readyForDebug);
+      final seen = <HandoffEvent>[];
+      fixture.store.bus.transitions.listen((move) => seen.add(move.event));
+      fixture.store
+          .apply(fixture.io.read(_handoffFile), HandoffEvent.debugStarted);
+      await Future<void>.delayed(Duration.zero);
+      expect(seen, [HandoffEvent.debugStarted]);
+    });
+
+    test('an event a reaction returns is applied by the store, after the move',
+        () async {
+      final fixture = _store(HandoffStatus.debugInProgress);
+      fixture.store.react(
+        'close',
+        (move) async =>
+            move.event == HandoffEvent.fixApplied ? HandoffEvent.tornDown : null,
+      );
+      fixture.store
+          .apply(fixture.io.read(_handoffFile), HandoffEvent.fixApplied);
+      await fixture.store.drain();
+      // A blank handoff is the status noHandoff, which is never written itself.
+      expect(fixture.io.read(_handoffFile), blankHandoff);
+      expect(
+        SessionState.parse(fixture.io.read(_handoffFile)).effectiveStatus,
+        HandoffStatus.noHandoff,
+      );
+      final events = RegExp(r'"event":"(\w+)"')
+          .allMatches(fixture.io.read('$_workspace/logs/transitions.jsonl'))
+          .map((match) => match.group(1))
+          .toList();
+      expect(events, [
+        HandoffEvent.fixApplied.name,
+        HandoffEvent.tornDown.name,
+      ]);
+    });
+
+    test('a reaction that throws is logged under its failure type', () async {
+      final fixture = _store(HandoffStatus.readyForDebug);
+      fixture.store.react('breaks', (move) async => throw StateError('boom'));
+      fixture.store
+          .apply(fixture.io.read(_handoffFile), HandoffEvent.debugStarted);
+      await fixture.store.drain();
+      expect(
+        fixture.io.read('$_workspace/logs/errors.jsonl'),
+        contains(FailureType.handoffListenerFailed.name),
+      );
+      expect(readHandoffStatus(fixture.io.read(_handoffFile)),
+          HandoffStatus.debugInProgress);
+    });
+
+    test('replace of a legal move records it once', () {
+      final fixture = _store(HandoffStatus.debugComplete);
+      fixture.store.replace(
+        blankHandoff,
+        from: HandoffStatus.debugComplete,
+        event: HandoffEvent.tornDown,
+      );
+      final lines = fixture.io
+          .read('$_workspace/logs/transitions.jsonl')
+          .trim()
+          .split('\n');
+      expect(lines, hasLength(1));
     });
 
     test('writeBlank writes the blank handoff', () {

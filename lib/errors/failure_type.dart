@@ -149,6 +149,14 @@ enum FailureType {
     suggestedAction: 'Set HOME, or set CLAUDART_WORKSPACE to an absolute '
                      'directory, then re-run.',
   ),
+  handoffListenerFailed(
+    errorType: ErrorType.session,
+    faultClassOverride: null,
+    label: 'Handoff listener failed',
+    suggestedAction: 'A reaction to a status change threw. The move itself '
+        'was written and recorded; read the reason above, then do by hand '
+        'what that reaction does.',
+  ),
   unexpectedFailure(
     errorType: ErrorType.unclassified,
     faultClassOverride: null,
