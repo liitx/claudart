@@ -67,6 +67,15 @@ void main() {
       expect(ProofNotation.tsGrounded.value, equals('ts-grounded'));
     });
 
+    test('each description names the language it governs', () {
+      expect(ProofNotation.dartGrounded.description, contains('Dart'));
+      expect(ProofNotation.dartGrounded.description, contains('∀/∃/∧/∨/↔'));
+      expect(ProofNotation.tsGrounded.description, contains('∀/∃/∧/∨/↔'));
+      expect(ProofNotation.dartGrounded.description, contains('Never use iff'));
+      expect(ProofNotation.tsGrounded.description, contains('TypeScript'));
+      expect(ProofNotation.generic.description, contains('plain English'));
+    });
+
     test('generic round-trips', () {
       expect(ProofNotation.fromString('generic'), ProofNotation.generic);
       expect(ProofNotation.generic.value, equals('generic'));

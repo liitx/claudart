@@ -19,40 +19,28 @@
 import 'fault_class.dart';
 
 enum ErrorType {
-  scan,
-  archive,
-  session,
-  workspace,
-  pipeline,
+  scan(label: 'Scan', faultClass: FaultClass.environmentFault),
+  archive(label: 'Archive', faultClass: FaultClass.environmentFault),
+  session(label: 'Session', faultClass: FaultClass.environmentFault),
+  workspace(label: 'Workspace', faultClass: FaultClass.environmentFault),
+
+  /// The `claude` subprocess itself is an external tool from claudart's
+  /// perspective -- most pipeline failures are it misbehaving, not claudart's
+  /// own environment. FailureType-level overrides exist for the variants that
+  /// are genuinely config/transient instead (see failure_type.dart's
+  /// faultClassOverride).
+  pipeline(label: 'Pipeline', faultClass: FaultClass.externalServiceFault),
 
   /// A failure no other subsystem claims. It marks a gap in the taxonomy, so
-  /// every occurrence should be given a real [FailureType] and subsystem.
-  unclassified;
+  /// every occurrence should be given a real [FailureType] and subsystem. A
+  /// gap in claudart's own taxonomy, not an outside failure.
+  unclassified(label: 'Unclassified', faultClass: FaultClass.programmerFault);
+
+  const ErrorType({required this.label, required this.faultClass});
+
+  final String label;
 
   /// Parent fault class for this subsystem. The chain rolls bottom-up so
   /// `FailureType.x.errorType.faultClass` resolves to the broadest category.
-  FaultClass get faultClass => switch (this) {
-        ErrorType.scan ||
-        ErrorType.archive ||
-        ErrorType.session ||
-        ErrorType.workspace =>
-          FaultClass.environmentFault,
-        // The `claude` subprocess itself is an external tool from claudart's
-        // perspective -- most pipeline failures are it misbehaving, not
-        // claudart's own environment. FailureType-level overrides exist for
-        // the 2 variants that are genuinely config/transient instead (see
-        // failure_type.dart's effectiveFaultClass).
-        ErrorType.pipeline => FaultClass.externalServiceFault,
-        // A gap in claudart's own taxonomy, not an outside failure.
-        ErrorType.unclassified => FaultClass.programmerFault,
-      };
-
-  String get label => switch (this) {
-        ErrorType.scan => 'Scan',
-        ErrorType.archive => 'Archive',
-        ErrorType.session => 'Session',
-        ErrorType.workspace => 'Workspace',
-        ErrorType.pipeline => 'Pipeline',
-        ErrorType.unclassified => 'Unclassified',
-      };
+  final FaultClass faultClass;
 }

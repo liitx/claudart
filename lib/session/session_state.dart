@@ -5,46 +5,140 @@ import 'handoff_section.dart';
 import 'knowledge_transfer.dart';
 import 'teardown_utils.dart';
 
+const _setupNextStep = 'Run: claudart setup';
+
 /// Typed representation of the handoff status field.
 ///
 /// Replaces all magic string comparisons — the compiler enforces exhaustiveness
 /// in switch expressions and catches typos at compile time.
 enum HandoffStatus {
-  suggestInvestigating,
-  readyForSuggest,
-  readyForDebug,
-  debugInProgress,
-  debugComplete,
-  needsSuggest,
+  suggestInvestigating(
+    value: 'suggest-investigating',
+    nextStep: 'Run /suggest in your editor.',
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.unconverged,
+    killWarning: null,
+    canStartDebug: false,
+    isPersisted: true,
+    expectsSuggest: true,
+  ),
+  readyForSuggest(
+    value: 'ready-for-suggest',
+    nextStep: 'Run /suggest in your editor to begin a new cycle.',
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.converged,
+    killWarning: null,
+    canStartDebug: false,
+    isPersisted: true,
+    expectsSuggest: true,
+  ),
+  readyForDebug(
+    value: 'ready-for-debug',
+    nextStep: 'Run /debug in your editor.',
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.converged,
+    killWarning: null,
+    canStartDebug: true,
+    isPersisted: true,
+    expectsSuggest: false,
+  ),
+  debugInProgress(
+    value: 'debug-in-progress',
+    nextStep: 'Continue with /debug, or run /suggest if you hit a wall.',
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.converged,
+    killWarning: null,
+    canStartDebug: true,
+    isPersisted: true,
+    expectsSuggest: false,
+  ),
+  debugComplete(
+    value: 'debug-complete',
+    nextStep: 'Verify with dart test, then claudart teardown to '
+        'keep what was learned, or claudart rotate for the next issue.',
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.converged,
+    killWarning: 'The fix is applied. kill does not update skills.md, '
+        'so nothing from this session is learned; claudart teardown keeps '
+        'it.',
+    canStartDebug: false,
+    isPersisted: true,
+    expectsSuggest: false,
+  ),
+  needsSuggest(
+    value: 'needs-suggest',
+    nextStep: 'Run /suggest in your editor — debug has a question for you.',
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.none,
+    killWarning: null,
+    canStartDebug: false,
+    isPersisted: true,
+    expectsSuggest: true,
+  ),
 
   /// Zedup-local: emitted when CLAUDART_PROJECT is unset or handoff.md absent.
   /// Never written to disk.
-  noHandoff,
+  noHandoff(
+    value: 'no-handoff',
+    nextStep: _setupNextStep,
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.none,
+    killWarning: null,
+    canStartDebug: false,
+    isPersisted: false,
+    expectsSuggest: true,
+  ),
 
-  unknown;
+  unknown(
+    value: 'unknown',
+    nextStep: _setupNextStep,
+    knowledgeTransferExpectation: KnowledgeTransferExpectation.none,
+    killWarning: null,
+    canStartDebug: false,
+    isPersisted: false,
+    expectsSuggest: true,
+  );
 
-  static HandoffStatus fromString(String s) => switch (s) {
-        'suggest-investigating' => suggestInvestigating,
-        'ready-for-suggest'     => readyForSuggest,
-        'ready-for-debug'       => readyForDebug,
-        'debug-in-progress'     => debugInProgress,
-        'debug-complete'        => debugComplete,
-        'needs-suggest'         => needsSuggest,
-        _                       => unknown,
-      };
+  const HandoffStatus({
+    required this.value,
+    required this.nextStep,
+    required this.knowledgeTransferExpectation,
+    required this.killWarning,
+    required this.canStartDebug,
+    required this.isPersisted,
+    required this.expectsSuggest,
+  });
+
+  /// The status written as [value], or [unknown] for anything else.
+  /// [noHandoff] and [unknown] are display-only — never written to disk, so
+  /// never read back.
+  static HandoffStatus fromString(String s) {
+    for (final status in values) {
+      if (status.isPersisted && status.value == s) return status;
+    }
+    return unknown;
+  }
 
   /// The canonical string value written to and read from handoff.md.
   /// [noHandoff] and [unknown] are display-only — never written to disk.
-  String get value => switch (this) {
-        suggestInvestigating => 'suggest-investigating',
-        readyForSuggest      => 'ready-for-suggest',
-        readyForDebug        => 'ready-for-debug',
-        debugInProgress      => 'debug-in-progress',
-        debugComplete        => 'debug-complete',
-        needsSuggest         => 'needs-suggest',
-        noHandoff            => 'no-handoff',
-        unknown              => 'unknown',
-      };
+  final String value;
+
+  /// What the owner should do next from this status. One text per status, so
+  /// `status`, a rejected command and any later reader say the same thing.
+  final String nextStep;
+
+  /// What this status claims about the handoff's knowledge transfer: the four
+  /// statuses after the root cause is confirmed say it is complete, the one
+  /// still investigating says it is not. `needsSuggest` says nothing: debug has
+  /// a question, and the root cause it was given is still in the file.
+  final KnowledgeTransferExpectation knowledgeTransferExpectation;
+
+  /// What `kill` would lose from this status, or null when it loses nothing.
+  /// A finished fix is the one status whose learning only `teardown` keeps.
+  final String? killWarning;
+
+  /// True when `/debug` may start without an override: the root cause is
+  /// locked (`readyForDebug`) or debug already began (`debugInProgress`).
+  final bool canStartDebug;
+
+  /// False for the display-only variants that are never written to disk.
+  final bool isPersisted;
+
+  /// True when the workflow expects `/suggest` next.
+  final bool expectsSuggest;
 
   /// The status after [event] happens in this status, or null when
   /// docs/design.md's delta table has no such move (the move is rejected).
@@ -193,94 +287,8 @@ enum HandoffStatus {
           },
       };
 
-  /// What the owner should do next from this status. One text per status, so
-  /// `status`, a rejected command and any later reader say the same thing.
-  String get nextStep => switch (this) {
-        suggestInvestigating => 'Run /suggest in your editor.',
-        readyForSuggest => 'Run /suggest in your editor to begin a new cycle.',
-        readyForDebug => 'Run /debug in your editor.',
-        debugInProgress =>
-          'Continue with /debug, or run /suggest if you hit a wall.',
-        debugComplete => 'Verify with dart test, then claudart teardown to '
-            'keep what was learned, or claudart rotate for the next issue.',
-        needsSuggest =>
-          'Run /suggest in your editor — debug has a question for you.',
-        noHandoff || unknown => 'Run: claudart setup',
-      };
-
-  /// What this status claims about the handoff's knowledge transfer: the four
-  /// statuses after the root cause is confirmed say it is complete, the one
-  /// still investigating says it is not. `needsSuggest` says nothing: debug has
-  /// a question, and the root cause it was given is still in the file.
-  KnowledgeTransferExpectation get knowledgeTransferExpectation =>
-      switch (this) {
-        readyForSuggest ||
-        readyForDebug ||
-        debugInProgress ||
-        debugComplete =>
-          KnowledgeTransferExpectation.converged,
-        suggestInvestigating => KnowledgeTransferExpectation.unconverged,
-        needsSuggest ||
-        noHandoff ||
-        unknown =>
-          KnowledgeTransferExpectation.none,
-      };
-
-  /// What `kill` would lose from this status, or null when it loses nothing.
-  /// A finished fix is the one status whose learning only `teardown` keeps.
-  String? get killWarning => switch (this) {
-        debugComplete => 'The fix is applied. kill does not update skills.md, '
-            'so nothing from this session is learned; claudart teardown keeps '
-            'it.',
-        suggestInvestigating ||
-        readyForSuggest ||
-        readyForDebug ||
-        debugInProgress ||
-        needsSuggest ||
-        noHandoff ||
-        unknown =>
-          null,
-      };
-
-  /// True when `/debug` may start without an override: the root cause is
-  /// locked (`readyForDebug`) or debug already began (`debugInProgress`).
-  bool get canStartDebug => switch (this) {
-        readyForDebug ||
-        debugInProgress => true,
-        suggestInvestigating ||
-        readyForSuggest ||
-        debugComplete ||
-        needsSuggest ||
-        noHandoff ||
-        unknown => false,
-      };
-
-  /// False for the display-only variants that are never written to disk.
-  bool get isPersisted => switch (this) {
-        noHandoff ||
-        unknown => false,
-        suggestInvestigating ||
-        readyForSuggest ||
-        readyForDebug ||
-        debugInProgress ||
-        debugComplete ||
-        needsSuggest => true,
-      };
-
   /// Display label used in TUI status badges.
   String get label => value;
-
-  /// True when the workflow expects `/suggest` next.
-  bool get expectsSuggest => switch (this) {
-        suggestInvestigating ||
-        readyForSuggest ||
-        needsSuggest ||
-        noHandoff ||
-        unknown => true,
-        readyForDebug ||
-        debugInProgress ||
-        debugComplete => false,
-      };
 
   /// True when the workflow expects `/debug` next. The same set as
   /// [canStartDebug]: one definition, kept as a named alias because zedup's

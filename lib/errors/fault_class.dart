@@ -25,42 +25,48 @@
 // confirmed proven in real code there before being adopted here.
 
 enum FaultClass {
-  environmentFault,
-  configFault,
-  externalServiceFault,
-  transientFault,
-  programmerFault;
+  environmentFault(
+    label: 'Environment fault',
+    severity: FaultSeverity.error,
+    retryable: false,
+  ),
+  configFault(
+    label: 'Config fault',
+    severity: FaultSeverity.error,
+    retryable: false,
+  ),
+  externalServiceFault(
+    label: 'External service fault',
+    severity: FaultSeverity.error,
+    retryable: false,
+  ),
+  transientFault(
+    label: 'Transient fault',
+    severity: FaultSeverity.warn,
+    retryable: true,
+  ),
+  programmerFault(
+    label: 'Programmer fault',
+    severity: FaultSeverity.fatal,
+    retryable: false,
+  );
 
-  String get label => switch (this) {
-        FaultClass.environmentFault => 'Environment fault',
-        FaultClass.configFault => 'Config fault',
-        FaultClass.externalServiceFault => 'External service fault',
-        FaultClass.transientFault => 'Transient fault',
-        FaultClass.programmerFault => 'Programmer fault',
-      };
+  const FaultClass({
+    required this.label,
+    required this.severity,
+    required this.retryable,
+  });
+
+  final String label;
 
   /// Severity ordering: info < warn < error < fatal.
   /// Programmer faults are fatal — they signal an invariant violation.
   /// Transient faults are warn — caller usually retries.
-  /// Everything else defaults to error.
-  FaultSeverity get severity => switch (this) {
-        FaultClass.programmerFault => FaultSeverity.fatal,
-        FaultClass.transientFault => FaultSeverity.warn,
-        FaultClass.environmentFault ||
-        FaultClass.configFault ||
-        FaultClass.externalServiceFault =>
-          FaultSeverity.error,
-      };
+  /// Everything else is error.
+  final FaultSeverity severity;
 
   /// True when retry-with-same-input could succeed without user action.
-  bool get retryable => switch (this) {
-        FaultClass.transientFault => true,
-        FaultClass.environmentFault ||
-        FaultClass.configFault ||
-        FaultClass.externalServiceFault ||
-        FaultClass.programmerFault =>
-          false,
-      };
+  final bool retryable;
 }
 
 enum FaultSeverity {

@@ -100,7 +100,7 @@ Map<String, String> _libSources() => {
 
 /// Independent literals: how many cases each detector may still report. Each
 /// may only go down, to zero, as the code is consolidated.
-const _knownEnumsWithFactSwitches = 13;
+const _knownEnumsWithFactSwitches = 0;
 const _knownIntConstantNamespaces = 0;
 const _knownSeamHeavyFunctions = 0;
 

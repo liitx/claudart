@@ -425,37 +425,22 @@ void _updateSkills({
 }
 
 enum TeardownCategory {
-  apiIntegration,
-  concurrency,
-  configuration,
-  dataParsing,
-  ioFilesystem,
-  stateManagement,
-  general,
-  other;
+  apiIntegration(value: 'api-integration', area: 'api'),
+  concurrency(value: 'concurrency', area: 'async'),
+  configuration(value: 'configuration', area: 'config'),
+  dataParsing(value: 'data-parsing', area: 'data'),
+  ioFilesystem(value: 'io-filesystem', area: 'io'),
+  stateManagement(value: 'state-management', area: 'state'),
+  general(value: 'general', area: 'fix'),
+  other(value: 'other', area: 'fix');
+
+  const TeardownCategory({required this.value, required this.area});
 
   /// Canonical string written to skills.md.
-  String get value => switch (this) {
-        apiIntegration  => 'api-integration',
-        concurrency     => 'concurrency',
-        configuration   => 'configuration',
-        dataParsing     => 'data-parsing',
-        ioFilesystem    => 'io-filesystem',
-        stateManagement => 'state-management',
-        general         => 'general',
-        other           => 'other',
-      };
+  final String value;
 
   /// Commit area label for buildCommitMessage.
-  String get area => switch (this) {
-        apiIntegration  => 'api',
-        concurrency     => 'async',
-        configuration   => 'config',
-        ioFilesystem    => 'io',
-        stateManagement => 'state',
-        dataParsing     => 'data',
-        general || other => 'fix',
-      };
+  final String area;
 
   /// Display label shown in the interactive menu.
   String get label => this == other ? 'other (type manually)' : value;

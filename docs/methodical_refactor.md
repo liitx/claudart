@@ -26,7 +26,7 @@ context; the register below holds the evidence.
 | Q12 | `shapeTopologyAndBases` | done 2026-10-30: I1 analyzer test built, three pairs consolidated, ratchet 0; the other shape-based bases wait for the Q15 enum data |
 | Q13 | `seamBundle` | done 2026-10-30: `CommandSeams` (io, projectRootOverride, exitFn, confirmFn, askFn, pickFn) replaces the loose parameters of the nine seam-heavy commands; ratchet 0; the other commands and the runner, executor and mode parameters stay per command |
 | Q14 | `oneSourcePerDatum` | done for the environment, home directory, processes, git executable and the project lookup (`lookupProject`, `requireProject`; six files with their own lookup are in a ledger with the reason); credentials, settings and `workspace.json` access remain |
-| Q15 | `enumFactsAsData` | not started |
+| Q15 | `enumFactsAsData` | done 2026-10-30: the 13 enums state their facts as constructor fields (facts a new variant must decide are required arguments); the relational `HandoffStatus.after` stays a switch; `CategorizeTag` computes its values from the other enums once; ratchet 13 to 0 |
 | Q16 | `folderLayout` | not started |
 | Q17 | `userTextFromConfig` | not started |
 | Q3, Q4, Q5 | one writer, the asynchronous stream, logs for every command | not started; recommended to wait for Q12 to Q15: writing the writer and the stream on today's duplicated seams and per-variant switches would mean writing them twice |

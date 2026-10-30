@@ -73,9 +73,27 @@ enum WorkspaceRole {
 ///
 /// Governs how agents write invariants and proofs in comments and docs.
 enum ProofNotation {
-  dartGrounded,
-  tsGrounded,
-  generic;
+  dartGrounded(
+    value: 'dart-grounded',
+    description: 'Use ∀/∃/∧/∨/↔ with Dart expressions. '
+        'Never use iff — express bidirectional logic as ↔ with Dart on both '
+        'sides.',
+  ),
+  tsGrounded(
+    value: 'ts-grounded',
+    description: 'Use ∀/∃/∧/∨/↔ with TypeScript expressions.',
+  ),
+  generic(
+    value: 'generic',
+    description: 'Use plain English for invariants.',
+  );
+
+  const ProofNotation({required this.value, required this.description});
+
+  final String value;
+
+  /// Human-readable description loaded into scaffold.md.
+  final String description;
 
   /// The notation written as [s], or null when [s] names none: an unknown
   /// notation is never taken for `generic`.
@@ -85,22 +103,6 @@ enum ProofNotation {
     }
     return null;
   }
-
-  String get value => switch (this) {
-        dartGrounded => 'dart-grounded',
-        tsGrounded => 'ts-grounded',
-        generic => 'generic',
-      };
-
-  /// Human-readable description loaded into scaffold.md.
-  String get description => switch (this) {
-        dartGrounded =>
-          'Use ∀/∃/∧/∨/↔ with Dart expressions. '
-              'Never use iff — express bidirectional logic as ↔ with Dart on both sides.',
-        tsGrounded =>
-          'Use ∀/∃/∧/∨/↔ with TypeScript expressions.',
-        generic => 'Use plain English for invariants.',
-      };
 }
 
 // ---------------------------------------------------------------------------

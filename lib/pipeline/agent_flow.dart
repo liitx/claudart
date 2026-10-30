@@ -40,44 +40,80 @@ const String _slashPrefix = '/';
 enum AgentFlow {
   /// Deep exploration + knowledge transfer — root cause, scope, constraints.
   /// Steps are built dynamically in suggest.dart; [steps] lists them all.
-  suggest(hasCommandFile: true),
+  suggest(
+    hasCommandFile: true,
+    hasSlashCommand: true,
+  ),
 
   /// Deterministic scoped implementation — minimal diff, no exploration.
-  debug(hasCommandFile: true),
+  debug(
+    hasCommandFile: true,
+    hasSlashCommand: true,
+  ),
 
   /// Session setup — workspace init, handoff scaffold.
-  setup(hasCommandFile: true),
+  setup(
+    hasCommandFile: true,
+    hasSlashCommand: true,
+  ),
 
   /// Checkpoint session — snapshot handoff, deposit facts to skills.
-  save(hasCommandFile: true),
+  save(
+    hasCommandFile: true,
+    hasSlashCommand: true,
+  ),
 
   /// Session teardown — close workspace, update project README.
-  teardown(hasCommandFile: true),
+  teardown(
+    hasCommandFile: true,
+    hasSlashCommand: true,
+  ),
 
   /// Agent-constructed session — user provides freeform prompt; agents
   /// classify, plan, get approval, and construct the handoff automatically.
   /// Experimental variant of suggest.
-  flow(hasCommandFile: true),
+  flow(
+    hasCommandFile: true,
+    hasSlashCommand: true,
+  ),
 
   /// Constrained single-doc lookup — fast, targeted reference answer.
-  research(hasCommandFile: false),
+  research(
+    hasCommandFile: false,
+    hasSlashCommand: true,
+  ),
 
   /// Conversational — no context injection, balanced default.
-  free(hasCommandFile: false),
+  free(
+    hasCommandFile: false,
+    hasSlashCommand: false,
+  ),
 
   /// CLI shell-out — no API call, no pipeline steps.
   /// Used by zedup for slash commands that delegate to claudart CLI directly
   /// (e.g. /save, /status, /teardown).
-  cli(hasCommandFile: false),
+  cli(
+    hasCommandFile: false,
+    hasSlashCommand: false,
+  ),
 
   /// Visual design review + spec generation. Routed by the planner when
   /// the scoped paths classify as design surfaces (widgets/painters/theme).
-  guiDesign(hasCommandFile: false);
+  guiDesign(
+    hasCommandFile: false,
+    hasSlashCommand: false,
+  );
 
-  const AgentFlow({required this.hasCommandFile});
+  const AgentFlow({
+    required this.hasCommandFile,
+    required this.hasSlashCommand,
+  });
 
   /// Whether this flow installs a slash command .md file via `claudart link`.
   final bool hasCommandFile;
+
+  /// Whether `/<name>` is a recognized slash command for this flow.
+  final bool hasSlashCommand;
 
   /// Every step this flow runs, in order, dynamic steps included. Steps
   /// whose label depends on a file count or pass number are built with a
@@ -110,24 +146,6 @@ enum AgentFlow {
         AgentFlow.cli ||
         AgentFlow.guiDesign =>
           const [],
-      };
-
-  /// Whether `/<name>` is a recognized slash command for this flow.
-  /// Enforced by the exhaustive switch — adding a variant without an arm is
-  /// a compile error.
-  bool get hasSlashCommand => switch (this) {
-        AgentFlow.suggest ||
-        AgentFlow.debug ||
-        AgentFlow.setup ||
-        AgentFlow.save ||
-        AgentFlow.teardown ||
-        AgentFlow.flow ||
-        AgentFlow.research =>
-          true,
-        AgentFlow.free ||
-        AgentFlow.cli ||
-        AgentFlow.guiDesign =>
-          false,
       };
 
   /// The claudart CLI args for this flow: `['claudart', name]`.
