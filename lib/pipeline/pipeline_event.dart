@@ -27,6 +27,7 @@ import '../errors/failure_type.dart';
 import 'agent_model.dart';
 import 'model_observation.dart';
 import 'pipeline_context.dart';
+import 'step_telemetry.dart';
 import 'usage.dart';
 
 /// One value per [PipelineEvent] variant — the closed set a matrix over the
@@ -169,7 +170,9 @@ final class AgentStarted extends PipelineEvent {
 /// A pipeline step completed successfully.
 final class AgentCompleted extends PipelineEvent {
   final String stepId;
-  final Usage usage;
+  final StepTelemetry telemetry;
+
+  Usage get usage => telemetry.usage;
 
   /// True when the step's `postProcess` changed its output. `run()` never
   /// writes to stdout itself (see this file's own header contract) — this
@@ -178,37 +181,37 @@ final class AgentCompleted extends PipelineEvent {
   /// directly inside the generator.
   final bool postProcessRewrote;
 
-  /// Extended-thinking content the model produced before answering, if any.
-  /// Per-step only — never accumulated onto [PipelineContext.usage], unlike
-  /// [Usage.thinkingTokens] which is a real additive count.
-  final String? thinking;
-
-  /// Why the model stopped: `end_turn`, `tool_use`, `max_tokens`, etc.
-  final String? stopReason;
-
-  /// Wall-clock duration of this step's call, in milliseconds.
-  final int? durationMs;
-
-  /// Number of agentic turns (tool-call round trips) this step's call took.
-  final int? numTurns;
-
+  /// Thinking content is per-step only — never accumulated onto
+  /// [PipelineContext.usage], unlike [Usage.thinkingTokens] which is a real
+  /// additive count.
+  String? get thinking => telemetry.thinking;
+  String? get stopReason => telemetry.stopReason;
+  int? get durationMs => telemetry.durationMs;
+  int? get numTurns => telemetry.numTurns;
   /// The model the step intended, and the models it actually ran on (from the
   /// stream). Together they are the per-step model record.
   /// Null only for events built by a consumer that does not know it.
   final AgentModel? intendedModel;
-  final List<ModelObservation> models;
+  List<ModelObservation> get models => telemetry.models;
 
-  const AgentCompleted({
+  AgentCompleted({
     required this.stepId,
-    required this.usage,
+    required Usage usage,
     this.intendedModel,
-    this.models = const [],
+    List<ModelObservation> models = const [],
     this.postProcessRewrote = false,
-    this.thinking,
-    this.stopReason,
-    this.durationMs,
-    this.numTurns,
-  });
+    String? thinking,
+    String? stopReason,
+    int? durationMs,
+    int? numTurns,
+  }) : telemetry = StepTelemetry(
+          usage: usage,
+          thinking: thinking,
+          stopReason: stopReason,
+          durationMs: durationMs,
+          numTurns: numTurns,
+          models: models,
+        );
 }
 
 /// A pipeline step failed (runner returned null).

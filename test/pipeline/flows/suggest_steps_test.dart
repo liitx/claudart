@@ -13,7 +13,7 @@ import 'package:test/test.dart';
 const _projectRoot = '/tmp/test-project';
 
 PipelineContext _ctx({required String reasonerOut, required String plannerOut}) =>
-    PipelineContext(
+    const PipelineContext(
       projectRoot: _projectRoot,
       bug: '',
       expected: '',

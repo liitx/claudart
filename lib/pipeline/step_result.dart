@@ -10,6 +10,7 @@
 // who doesn't care about the new fields.
 
 import 'model_observation.dart';
+import 'step_telemetry.dart';
 import 'usage.dart';
 
 class StepResult {
@@ -17,33 +18,29 @@ class StepResult {
   /// and matched against routes.
   final String text;
 
-  final Usage usage;
+  final StepTelemetry telemetry;
 
-  /// Extended-thinking content, if the model produced any — captured from
-  /// `thinking_delta` stream events, not present in every response (depends
-  /// on whether the model chose to reason before answering).
-  final String? thinking;
+  Usage get usage => telemetry.usage;
+  String? get thinking => telemetry.thinking;
+  String? get stopReason => telemetry.stopReason;
+  int? get durationMs => telemetry.durationMs;
+  int? get numTurns => telemetry.numTurns;
+  List<ModelObservation> get models => telemetry.models;
 
-  /// Why the model stopped: `end_turn`, `tool_use`, `max_tokens`, etc.
-  final String? stopReason;
-
-  /// Wall-clock duration of the call, from the CLI's own `duration_ms`.
-  final int? durationMs;
-
-  /// Number of agentic turns (tool-call round trips) this call took.
-  final int? numTurns;
-
-  /// The models this call actually ran on, from the result line's
-  /// `modelUsage`. Empty when the CLI did not report any.
-  final List<ModelObservation> models;
-
-  const StepResult({
+  StepResult({
     required this.text,
-    required this.usage,
-    this.thinking,
-    this.stopReason,
-    this.durationMs,
-    this.numTurns,
-    this.models = const [],
-  });
+    required Usage usage,
+    String? thinking,
+    String? stopReason,
+    int? durationMs,
+    int? numTurns,
+    List<ModelObservation> models = const [],
+  }) : telemetry = StepTelemetry(
+          usage: usage,
+          thinking: thinking,
+          stopReason: stopReason,
+          durationMs: durationMs,
+          numTurns: numTurns,
+          models: models,
+        );
 }

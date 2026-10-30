@@ -139,6 +139,16 @@ sealed class AgentResponse {
   StateHue get hue;
 }
 
+/// An emission about one subtask in one workspace — the shared shape of
+/// [Progress], [Action] and [Result].
+sealed class SubtaskResponse extends AgentResponse {
+  final String workspace;
+  final String subtask;
+
+  const SubtaskResponse(super.speaker,
+      {required this.workspace, required this.subtask});
+}
+
 /// Goal + priority-ordered subtasks across workspaces.
 final class Plan extends AgentResponse {
   final String goal;
@@ -155,16 +165,14 @@ final class Plan extends AgentResponse {
 }
 
 /// Where a subtask is in its flow, and whether it is blocked.
-final class Progress extends AgentResponse {
-  final String workspace;
-  final String subtask;
+final class Progress extends SubtaskResponse {
   final AgentFlow flow;
   final bool blocked;
 
   const Progress({
     required Speaker speaker,
-    required this.workspace,
-    required this.subtask,
+    required super.workspace,
+    required super.subtask,
     required this.flow,
     required this.blocked,
   }) : super(speaker);
@@ -203,17 +211,15 @@ final class Question extends AgentResponse {
 
 /// A concrete code action by a subagent — created/edited/ran something, with a
 /// one-line note on what it does.
-final class Action extends AgentResponse {
-  final String workspace;
-  final String subtask;
+final class Action extends SubtaskResponse {
   final ActionVerb verb;
   final String target;
   final String summary;
 
   const Action({
     required Speaker speaker,
-    required this.workspace,
-    required this.subtask,
+    required super.workspace,
+    required super.subtask,
     required this.verb,
     required this.target,
     this.summary = '',
@@ -227,16 +233,14 @@ final class Action extends AgentResponse {
 }
 
 /// A completed subtask artifact.
-final class Result extends AgentResponse {
-  final String workspace;
-  final String subtask;
+final class Result extends SubtaskResponse {
   final List<String> filesTouched;
   final String summary;
 
   const Result({
     required Speaker speaker,
-    required this.workspace,
-    required this.subtask,
+    required super.workspace,
+    required super.subtask,
     required this.filesTouched,
     required this.summary,
   }) : super(speaker);

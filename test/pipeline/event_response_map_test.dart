@@ -27,9 +27,9 @@ void main() {
     });
 
     test('AgentCompleted → Result carrying the step id', () {
-      const event = AgentCompleted(
+      final event = AgentCompleted(
         stepId: 'reader',
-        usage:  Usage(input: 50, output: 20, cost: 0.0005, cacheRead: 0),
+        usage:  const Usage(input: 50, output: 20, cost: 0.0005, cacheRead: 0),
       );
       final r = toResponse(event, speaker: speaker, workspace: ws);
       expect(r, isA<Result>());

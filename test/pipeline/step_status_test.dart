@@ -27,7 +27,7 @@ void main() {
     });
 
     test('AgentCompleted maps to done', () {
-      const event = AgentCompleted(stepId: 'a', usage: Usage());
+      final event = AgentCompleted(stepId: 'a', usage: const Usage());
       expect(StepStatusFromEvent.fromEvent(event), equals(StepStatus.done));
     });
 

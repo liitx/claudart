@@ -51,3 +51,8 @@ dev_dependencies:
   # we actually exercise: fold just that subset into dartrix natively and
   # drop this dependency -- not decided or started yet.
   mutation_test: ^1.8.0
+  # Dev-only: parses Dart source (no resolution) for the construct-choice
+  # detectors in test/helpers (shared-shape analysis). Already in the tree via
+  # custom_lint_builder, so it adds no new package; named so the test import is
+  # a declared dependency, not a transitive one.
+  analyzer: ^8.1.1

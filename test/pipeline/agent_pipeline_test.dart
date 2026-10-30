@@ -36,7 +36,7 @@ final _applierXml  = _fixture('applier_output.xml');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-PipelineContext _baseCtx() => PipelineContext(
+PipelineContext _baseCtx() => const PipelineContext(
       projectRoot: '/tmp/test_project',
       bug:         'Label is null when not provided',
       expected:    'Widget shows default label',

@@ -20,22 +20,24 @@ import '../session/workspace_guard.dart';
 import '../workspace/workspace_link_state.dart';
 import 'claudart_command.dart';
 
-/// One linked workspace and where its session stands.
+/// One linked workspace and where its session stands. The registry entry holds
+/// what is registered about it (name, roots, last session); the summary adds
+/// only what was observed, so those facts are read from one place.
 class WorkspaceSummary {
   const WorkspaceSummary({
-    required this.name,
-    required this.projectRoot,
-    required this.workspacePath,
+    required this.entry,
     required this.status,
     required this.linkState,
     required this.locked,
-    required this.lastSession,
     required this.isCurrent,
   });
 
-  final String name;
-  final String projectRoot;
-  final String workspacePath;
+  final RegistryEntry entry;
+
+  String get name => entry.name;
+  String get projectRoot => entry.projectRoot;
+  String get workspacePath => entry.workspacePath;
+  String get lastSession => entry.lastSession;
 
   /// The status to show: [SessionState.effectiveStatus], so a blank handoff is
   /// [HandoffStatus.noHandoff].
@@ -44,7 +46,6 @@ class WorkspaceSummary {
 
   /// An operation holds (or crashed holding) the workspace lock.
   final bool locked;
-  final String lastSession;
 
   /// The workspace whose project root is the current directory.
   final bool isCurrent;
@@ -151,13 +152,10 @@ List<WorkspaceSummary> summarizeWorkspaces(
   return [
     for (final entry in entries)
       WorkspaceSummary(
-        name: entry.name,
-        projectRoot: entry.projectRoot,
-        workspacePath: entry.workspacePath,
+        entry: entry,
         status: _statusOf(entry.workspacePath, io),
         linkState: linkStateOf(io, entry.projectRoot),
         locked: isLocked(entry.workspacePath, io: io),
-        lastSession: entry.lastSession,
         isCurrent: entry.projectRoot == currentProjectRoot,
       ),
   ];

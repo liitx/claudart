@@ -890,9 +890,9 @@ void main() {
         displayStep: 2,
         displayTotal: 4,
       ),
-      PipelineEventKind.agentCompleted: const AgentCompleted(
+      PipelineEventKind.agentCompleted: AgentCompleted(
         stepId: 'reader',
-        usage: Usage(),
+        usage: const Usage(),
         durationMs: 1234,
       ),
       PipelineEventKind.agentFailed: const AgentFailed(
@@ -1045,11 +1045,11 @@ void main() {
       final subscription =
           logger.logPipelineEvents(controller.stream, command: 'debug');
       final done = subscription.asFuture<void>();
-      controller.add(const AgentCompleted(
+      controller.add(AgentCompleted(
         stepId: 'reader',
-        usage: Usage(),
+        usage: const Usage(),
         intendedModel: AgentModel.haiku,
-        models: [ModelObservation(observedModelId: 'claude-future-9')],
+        models: [const ModelObservation(observedModelId: 'claude-future-9')],
       ));
       await controller.close();
       await done;

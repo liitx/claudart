@@ -94,9 +94,9 @@ void main() {
           StepMode mode = StepMode.project,
         }) async {
           calls++;
-          return const StepResult(
+          return StepResult(
             text: 'from injected runner',
-            usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
           );
         },
       );
@@ -153,9 +153,9 @@ void main() {
           StepMode mode = StepMode.project,
         }) async {
           calls++;
-          return const StepResult(
+          return StepResult(
             text: 'from injected runner',
-            usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
           );
         },
       );

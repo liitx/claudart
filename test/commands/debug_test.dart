@@ -163,9 +163,9 @@ PipelineExecutor _executorWithPlan({void Function()? onCall}) =>
         StepMode mode = StepMode.project,
       }) async {
         onCall?.call();
-        return const StepResult(
+        return StepResult(
           text: '<CHANGES>no file edits needed</CHANGES>',
-          usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+          usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
         );
       },
     );
@@ -442,9 +442,9 @@ void main() {
             StepMode mode = StepMode.project,
           }) async {
             sent.add(message);
-            return const StepResult(
+            return StepResult(
               text: '<CHANGES>no file edits needed</CHANGES>',
-              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
             );
           },
         );

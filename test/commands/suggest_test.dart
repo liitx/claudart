@@ -160,14 +160,14 @@ PipelineExecutor _executorWithAnalysis({void Function()? onCall}) =>
         StepMode mode = StepMode.project,
       }) async {
         onCall?.call();
-        return const StepResult(
+        return StepResult(
           text: '<ROOT_CAUSE>$_rootCause</ROOT_CAUSE>'
               '<SCOPE_FILES>- `lib/foo.dart`</SCOPE_FILES>'
               '<SCOPE_ENTRIES>foo()</SCOPE_ENTRIES>'
               '<SCOPE_CLASSES>Foo</SCOPE_CLASSES>'
               '<MUST_NOT_TOUCH>lib/bar.dart</MUST_NOT_TOUCH>'
               '<CONSTRAINTS>keep API</CONSTRAINTS>',
-          usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+          usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
         );
       },
     );

@@ -33,9 +33,9 @@ final Map<PipelineEventKind, _EventCase> _casesByKind = {
     ),
   ),
   PipelineEventKind.agentCompleted: (
-    event: const AgentCompleted(
+    event: AgentCompleted(
       stepId: 'reasoner',
-      usage: Usage(),
+      usage: const Usage(),
       durationMs: 1234,
     ),
     record: (
@@ -134,7 +134,7 @@ void main() {
 
     test('a completed step with no duration logs a null detail', () {
       expect(
-        const AgentCompleted(stepId: 'reader', usage: Usage())
+        AgentCompleted(stepId: 'reader', usage: const Usage())
             .logRecord
             .detail,
         isNull,

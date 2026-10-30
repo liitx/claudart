@@ -138,9 +138,9 @@ void main() {
           }) async {
             receivedTools = allowedTools;
             receivedHelperModel = helperModel;
-            return const StepResult(
+            return StepResult(
               text: 'ok',
-              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
             );
           },
         );
@@ -375,9 +375,9 @@ void main() {
                 result,
           );
 
-      const answer = StepResult(
+      final answer = StepResult(
         text: 'answer',
-        usage: Usage(input: 1, output: 1),
+        usage: const Usage(input: 1, output: 1),
         models: [observed],
       );
 
@@ -492,9 +492,9 @@ void main() {
           required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
-            const StepResult(
+            StepResult(
               text: 'answer',
-              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
               thinking: 'reasoning text',
               stopReason: 'end_turn',
               durationMs: 4321,
@@ -537,9 +537,9 @@ void main() {
           required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
-            const StepResult(
+            StepResult(
               text: 'answer',
-              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
             ),
       );
 

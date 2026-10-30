@@ -76,9 +76,9 @@ void main() {
           workingDir: ProjectFixture.root,
         );
 
-    const reply = StepResult(
+    final reply = StepResult(
       text: 'the reply',
-      usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+      usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
     );
 
     test('runs on sonnet, never haiku', () async {
