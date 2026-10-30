@@ -8,6 +8,17 @@ import 'terminal_support.dart';
 /// Items may contain ANSI codes — the menu renderer applies selection styling
 /// on top of them. When stdin is not a usable TTY (CI, pipe, `/dev/null`)
 /// falls back to a numbered prompt so behaviour is always well-defined.
+/// The choice the owner made from [choices], shown as their [label]s, via
+/// [pick] (a menu that returns an index). One place turns a pick back into the
+/// choice, so no menu compares an index to a number; an index that names no
+/// choice is a range error.
+T chooseFrom<T>(
+  List<T> choices,
+  String Function(T choice) label,
+  int Function(List<String> items) pick,
+) =>
+    choices[pick([for (final choice in choices) label(choice)])];
+
 int arrowMenu(List<String> items, {int startIndex = 0}) {
   assert(items.isNotEmpty, 'arrowMenu requires at least one item');
   assert(startIndex >= 0 && startIndex < items.length);

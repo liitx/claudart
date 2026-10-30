@@ -114,6 +114,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | Y4 | `enumFactsAreSwitchesNotData` | Facts about an enum's variants are written as `switch` arms alternated with `\|\|` (275 such lines in 12 files: 105 in `claudart_command.dart`, 100 in `session_state.dart`, 27 in `failure_type.dart`), and 85 switches test status-like subjects, instead of each variant carrying its facts as constructor data on an enhanced enum (a data class the enum holds) and consumers reading the field | `claudart_command.dart`, `session_state.dart`, `failure_type.dart`, `agent_flow.dart` | open |
 | Y5 | `folderLayoutLooseAndMixed` | 14 files sit loose in `lib/` (`paths`, `registry`, `config`, `git_utils`, `file_io`, `process_runner`, `md_io`, `pubspec_utils`, `ignore_rules`, `dependency_config`, `knowledge_templates`, `portability_gap`, `version`, the barrel), and `lib/commands/` holds files that are not commands (`failure_boundary`, `project_selector`, `scope_files`, `claudart_command`) while helpers of one command (doctor's) live in other folders | `lib/` layout | open |
 | Y6 | `userTextWrittenInCommands` | Text a user reads is written inline in the commands: 410 `print` calls and 1086 string literals of 12 or more characters in `lib/commands/`, with no single place (a config file with accessors) that owns it, so the same intention is worded in several places | `lib/commands/*.dart` | open |
+| Y7 | `integerConstantsStandInForAnEnum` | A menu whose choices were integer constants compared to a pick (`_SetupMenu` in `setup.dart`; the launch menus before D1), so a wrong constant compiled and was silently ignored, and the tests had to copy the constants because they were private. Closed: `SetupMenu` is a public enum owning its labels, one shared `chooseFrom` in `lib/ui/menu.dart` turns a pick into the choice (launch and setup both use it, and a pick naming no choice is a range error), and the copied constants in the tests are gone. The construct-choice detector now holds this count at zero | `setup.dart`, `menu.dart`, `choose_from_test.dart`, `construct_choice_test.dart` | closed |
 | D14 | `titleMemberNamesAreOnlyText` | A test title written `'$Type.member'` references the type for real (`$Type` is the type's `toString()`, so a rename breaks it) but the member after the dot is plain text: renaming the member leaves the title naming something that is gone. 31 titles use `$Type`; 22 add a `.member`. Related: `$Type` is a `Type` interpolated, not a `String`; it is stable on the VM and for the compiled CLI, but not under obfuscation or dart2js minification and it carries type arguments (`List<int>`), so it is a test-title device, not a way to name types in `lib/`; and braces (`${Type}`) are forbidden by `unnecessary_brace_in_string_interps` for a plain identifier and needed only for an expression such as `${status.name}`. Closed for the member part in this step by a guard that fails when a titled member is not written in the type's file; the guard found no stale title and a seeded one trips it | `literal_ownership_topology_test.dart`, `make liveness` seed T8 | closed (guard); `Type` naming outside titles accepted with the reason above |
 
 ### Binding and source of truth
@@ -251,6 +252,7 @@ variant is not in the proposals below.
 | Y4 | drivesState x workspaceBound; untouched x pure; drivesState x pure | existing |
 | Y5 | — | new: CodeTree |
 | Y6 | drivesState x processBound; untouched x processBound; observesState x processBound | existing |
+| Y7 | drivesState x processBound | existing |
 | D13 | drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x pure; drivesState x processBound | existing |
 | D14 | — | new: CodeTree |
 | B1 | untouched x processBound | existing |
@@ -588,6 +590,83 @@ section below. Nothing was skipped silently; the exceptions are named.
 | `make test-only-census` | 12 symbols used only by tests, unchanged (advisory) |
 | mutation testing | run per slice on every `lib/` file this refactor touched, none with a survivor in a changed line, except `teardown.dart` (hangs the tool, upstream issue #77) and `flow.dart` (timed out earlier). A whole-branch `make mutation-test-changed` was started and stopped after five files: it re-measures older, untouched code at about three minutes a file (about three hours), and those survivors are already recorded as M4 |
 | the proofs (P1 to P9) | 113 cases pass; two deliberate breaks of the table were caught (see the proofs section) |
+
+### Construct selection proof: which Dart construct fits a case (2026-10-29)
+
+The owner's request: a proof that, for a given case, says whether it needs a
+switch, an if, a guard, an extension, a factory, an abstract class, a class, an
+enum and so on, so the best fit is used when passing data and extending things.
+It is `test/helpers/construct_choice.dart` (the decision table) and
+`test/topology/construct_choice_test.dart` (the proof and the detectors).
+
+A case is ten facts: whether the alternatives are a closed set, whether they
+carry different data, how many places branch on them (none, one, many), whether
+each yields a plain value, whether types share properties, whether the instance
+is chosen by input, whether the type can be edited, how many outcomes there are
+(one, two, three or more), whether the failing branch ends the function, and
+whether three or more related values travel together. The facts come from small
+finite domains, so the whole space is 2^7 x 3 x 3 x 2 = 2304 cases.
+
+The table is an ordered list of thirteen named rules; the first that applies
+decides:
+
+| Rule | When | Construct |
+|---|---|---|
+| `guardForPrecondition` | the failing branch ends the function and there are two or fewer outcomes | guard clause |
+| `bundleForRelatedParameters` | three or more related values are passed together | one class or record |
+| `sealedForDifferingData` | a closed set whose variants carry different data | sealed hierarchy |
+| `enumFieldForRepeatedFacts` | a closed set, no per-variant data, branched on in many places, each yielding a plain value | enhanced enum constructor field |
+| `sealedForRepeatedBehavior` | the same, but the result is behavior | sealed hierarchy, variants override the method |
+| `switchForOneMapping` | a closed set, no data, one place decides | one switch |
+| `enumForClosedSetWithoutData` | a closed set, no data, nothing branches on it yet | plain enum |
+| `baseForSharedProperties` | two or more types hold the same properties | abstract base class |
+| `factoryForChoiceByInput` | which instance gets built depends on an input | factory constructor |
+| `extensionForUneditableType` | behavior must be added from outside | extension method |
+| `ternaryForTwoValues` | two outcomes that are plain values | conditional expression |
+| `ifElseForTwoBranches` | two real branches | if and else |
+| `switchForManyBranches` | three or more outcomes | switch |
+| `nothingToDecide` | one outcome | no branching |
+
+What the proof establishes, over every one of the 2304 cases:
+
+- **Totality:** every case is decided by some rule (a case no rule decides throws,
+  and 18 tests, one per setting of the three graded facts, check all 128 yes-or-no
+  combinations of each).
+- **No dead rule, no dead construct:** every rule is the deciding rule for some
+  case, and every construct is chosen for some case.
+- **The best-practice properties:** a precondition with two or fewer outcomes is
+  a guard; three or more related values are a bundle unless a guard applies; a
+  closed set whose variants carry different data is sealed; facts repeated at
+  many sites are enum fields and never another switch; behavior that differs per
+  variant at many places is overridden on the variants; a switch over a closed
+  set appears only where one place maps the variants; and a repeated decision
+  never falls back from a field to a switch.
+- **Named cases:** twelve real situations in this repo are each pinned to the
+  construct they call for (the status next-step text is an enum field, the agent
+  response variants are sealed, "stop when the project is not registered" is a
+  guard, nine seams are a bundle, a menu of integer constants is an enum, and so
+  on).
+
+The proof found a hole while it was being written: the first table had no rule
+for behavior (not a plain value) repeated at many places, and the switch property
+failed on it; `sealedForRepeatedBehavior` was added. Two breaks show it can fail:
+disabling the enum-field rule fails the proof, and adding an enum with two getter
+switches fails the detector.
+
+The detectors turn real code into facts so the same table judges it. Three run
+today, each held at a floor that may only go down:
+
+| Detector | Case found | Construct the table gives | Count now |
+|---|---|---|---|
+| `enumsWithFactSwitches` | an enum stating two or more facts as getters that switch on `this` (Y4) | enhanced enum field | 13 (`HandoffStatus` 7, `ClaudartCommand` 6, `FailureType` 4, `DesignSurface` 4, `StepRole` 3, `FaultClass` 3, `CategorizeTag` 3, and six more with 2) |
+| `intConstantNamespaces` | a class of integer constants standing in for an enum (Y7) | plain enum | 0 (was 1) |
+| `seamHeavyFunctions` | a function with three or more seam parameters (Y2) | bundle type | 9 (`runRotate` 7, `runKill` 6, `runLauncher` 5, `runDebug` 5, `runDoctor` 4, `runChatShell` 4, `runArchives` 4, `runStatus` 3, and one more) |
+
+Not yet detected, said plainly: shared properties between classes (I1, needs an
+analyzer pass, not a regex), single source per datum (I3), layout (I5), inline
+text (I6), boolean flag parameters that select behavior, and an if-else chain on
+one variable that should be a switch. Each is a fact the table already has a rule
+for; what is missing is the detector.
 
 ### Proofs against missed consolidation (defined 2026-10-28, owner's direction)
 

@@ -52,13 +52,6 @@ class _ExitException implements Exception {
 
 Never _throwExit(int code) => throw _ExitException(code);
 
-// ── Menu constants ────────────────────────────────────────────────────────────
-// _SetupMenu is private in setup.dart — reproduced here so tests use named
-// values, not magic numbers.
-const _menuResume     = 0;
-const _menuStartFresh = 1;
-const _menuBack       = 2;
-
 // ── Active handoff fixture ────────────────────────────────────────────────────
 
 const _activeHandoff = '''# Agent Handoff — $_projectName
@@ -273,7 +266,7 @@ void main() {
             projectRootOverride: null,
             confirmFn: (_) => true,
             promptFn: _prompts([]),
-            pickFn: (_) => _menuBack,
+            pickFn: (_) => SetupMenu.back.index,
             exitFn: _throwExit,
           ),
           zoneSpecification: ZoneSpecification(
@@ -300,7 +293,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuResume,
+          pickFn: (_) => SetupMenu.resume.index,
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 0)),
@@ -316,7 +309,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuResume,
+          pickFn: (_) => SetupMenu.resume.index,
           exitFn: _throwExit,
         );
       } on _ExitException {/*expected*/}
@@ -333,7 +326,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuBack,
+          pickFn: (_) => SetupMenu.back.index,
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 0)),
@@ -348,7 +341,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuBack,
+          pickFn: (_) => SetupMenu.back.index,
           exitFn: _throwExit,
         );
       } on _ExitException {/*expected*/}
@@ -365,7 +358,7 @@ void main() {
             projectRootOverride: _projectRoot,
             confirmFn: (_) => true,
             promptFn: _prompts([]),
-            pickFn: (_) => _menuBack,
+            pickFn: (_) => SetupMenu.back.index,
             exitFn: _throwExit,
           ),
           zoneSpecification: ZoneSpecification(
@@ -385,7 +378,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_freshPrompts),
-        pickFn: (_) => _menuStartFresh,
+        pickFn: (_) => SetupMenu.startFresh.index,
         exitFn: _throwExit,
       );
       final handoff = io.read(handoffPathFor(_workspace));
@@ -530,7 +523,7 @@ void main() {
     test('a first setup logs setup from noHandoff into suggestInvestigating',
         () async {
       final io = _io();
-      await setup(io, menuChoice: _menuStartFresh);
+      await setup(io, menuChoice: SetupMenu.startFresh.index);
       expect(loggedMoves(io, _workspace), [
         {
           'command': ClaudartCommand.setup.name,
@@ -545,7 +538,7 @@ void main() {
         'lacks, from the status it overwrote', () async {
       final io = _io(handoff: _activeHandoff);
       final overwritten = SessionState.parse(_activeHandoff).status;
-      await setup(io, menuChoice: _menuStartFresh);
+      await setup(io, menuChoice: SetupMenu.startFresh.index);
       expect(loggedMoves(io, _workspace), [
         {
           'command': ClaudartCommand.setup.name,
@@ -564,7 +557,7 @@ void main() {
       final output = <String>[];
       await expectLater(
         runZoned(
-          () => setup(io, menuChoice: _menuBack),
+          () => setup(io, menuChoice: SetupMenu.back.index),
           zoneSpecification: ZoneSpecification(
             print: (_, __, ___, line) => output.add(line),
           ),
@@ -580,7 +573,7 @@ void main() {
     test('backing out of the menu logs nothing', () async {
       final io = _io(handoff: _activeHandoff);
       await expectLater(
-        setup(io, menuChoice: _menuBack),
+        setup(io, menuChoice: SetupMenu.back.index),
         throwsA(isA<_ExitException>()),
       );
       expect(loggedMoves(io, _workspace), isEmpty);
@@ -682,7 +675,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false,
           promptFn: _prompts(_freshPrompts),
-          pickFn: (_) => _menuStartFresh,
+          pickFn: (_) => SetupMenu.startFresh.index,
           exitFn: _throwExit,
         );
       } on _ExitException {/*expected*/}

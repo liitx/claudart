@@ -88,21 +88,17 @@ Future<void> runSetup({
       print('  Bug    : ${_truncate(state.bug.text)}');
       print('');
 
-      final choice = pick_([
-        '${ansi.c(ansi.green, 'Continue')}  resume existing session',
-        '${ansi.c(ansi.yellow, 'Start fresh')}  overwrite handoff with new context',
-        'Back',
-      ]);
-
-      if (choice == _SetupMenu.back) {
-        print('\nSetup cancelled.\n');
-        exit_(0);
+      final choice = chooseFrom(SetupMenu.values, (m) => m.label, pick_);
+      switch (choice) {
+        case SetupMenu.back:
+          print('\nSetup cancelled.\n');
+          exit_(0);
+        case SetupMenu.resume:
+          print('\nOpen your editor and run /suggest or /debug to continue.\n');
+          exit_(0);
+        case SetupMenu.startFresh:
+          break;
       }
-      if (choice == _SetupMenu.resume) {
-        print('\nOpen your editor and run /suggest or /debug to continue.\n');
-        exit_(0);
-      }
-      assert(choice == _SetupMenu.startFresh);
       startedFrom = state.status;
       final archivedName = archiveCurrentHandoff(workspace: workspace, io: fileIO);
       if (archivedName != null) {
@@ -225,10 +221,20 @@ Future<void> runSetup({
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
 
-abstract final class _SetupMenu {
-  static const resume = 0;
-  static const startFresh = 1; // fall-through: proceeds to questions
-  static const back = 2;
+/// The choices offered when a session already exists for the project.
+enum SetupMenu {
+  resume,
+
+  /// Overwrites the handoff and proceeds to the questions.
+  startFresh,
+  back;
+
+  String get label => switch (this) {
+        resume => '${ansi.c(ansi.green, 'Continue')}  resume existing session',
+        startFresh => '${ansi.c(ansi.yellow, 'Start fresh')}  '
+            'overwrite handoff with new context',
+        back => 'Back',
+      };
 }
 
 

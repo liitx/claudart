@@ -120,7 +120,7 @@ Future<void> runLauncher({
   // ── Action menu ───────────────────────────────────────────────────────────
 
   if (locked) {
-    final action = _choose(LockedMenu.values, (m) => m.label, pick_);
+    final action = chooseFrom(LockedMenu.values, (m) => m.label, pick_);
     if (action == LockedMenu.kill) {
       await runKill(
         io: fileIO,
@@ -135,7 +135,7 @@ Future<void> runLauncher({
   final hasActive = state != null && state.hasActiveContent;
 
   if (hasActive) {
-    final action = _choose(ActiveMenu.values, (m) => m.label, pick_);
+    final action = chooseFrom(ActiveMenu.values, (m) => m.label, pick_);
     switch (action) {
       case ActiveMenu.resume:
         _printResumeInstructions(state.status);
@@ -150,7 +150,7 @@ Future<void> runLauncher({
         break;
     }
   } else {
-    final action = _choose(FreshMenu.values, (m) => m.label, pick_);
+    final action = chooseFrom(FreshMenu.values, (m) => m.label, pick_);
     if (action == FreshMenu.start) {
       await runSetup(projectRootOverride: selected.projectRoot);
     }
@@ -167,14 +167,6 @@ int registerChoice(int entryCount) => entryCount;
 // Each menu is an enum that owns its labels, in the order they are shown; a
 // pick (an index) is turned back into the choice by [_choose], so no code
 // compares an index to a number.
-
-/// The choice the owner made from [choices], shown as [label]s, via [pick].
-T _choose<T>(
-  List<T> choices,
-  String Function(T choice) label,
-  int Function(List<String> items) pick,
-) =>
-    choices[pick([for (final choice in choices) label(choice)])];
 
 /// Locked-workspace menu choices.
 enum LockedMenu {
