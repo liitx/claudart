@@ -7,6 +7,7 @@ import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/handoff_transition.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/session/transition_bus.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 HandoffTransition _move(HandoffEvent event) => HandoffTransition(
@@ -52,40 +53,46 @@ void main() {
   });
 
   group('observers', () {
-    test('the transitions stream shows every published move, later', () async {
-      final bus = busOf();
-      final seen = <HandoffEvent>[];
-      bus.transitions.listen((move) => seen.add(move.event));
-      bus
-        ..publish(_move(HandoffEvent.debugStarted))
-        ..publish(_move(HandoffEvent.killed));
-      expect(seen, isEmpty);
-      await Future<void>.delayed(Duration.zero);
-      expect(seen, [HandoffEvent.debugStarted, HandoffEvent.killed]);
+    test('the transitions stream shows every published move, later', () {
+      fakeAsync((async) {
+        final bus = busOf();
+        final seen = <HandoffEvent>[];
+        bus.transitions.listen((move) => seen.add(move.event));
+        bus
+          ..publish(_move(HandoffEvent.debugStarted))
+          ..publish(_move(HandoffEvent.killed));
+        expect(seen, isEmpty);
+        async.flushMicrotasks();
+        expect(seen, [HandoffEvent.debugStarted, HandoffEvent.killed]);
+      });
     });
   });
 
   group('order', () {
-    test('reactions see moves in the order they were published', () async {
-      final bus = busOf();
-      final seen = <HandoffEvent>[];
-      bus.react('slow first', (move) async {
-        if (move.event == HandoffEvent.debugStarted) {
-          await Future<void>.delayed(const Duration(milliseconds: 30));
-        }
-        seen.add(move.event);
-        return null;
+    test('reactions see moves in the order they were published', () {
+      fakeAsync((async) {
+        final bus = busOf();
+        final seen = <HandoffEvent>[];
+        bus.react('slow first', (move) async {
+          if (move.event == HandoffEvent.debugStarted) {
+            await Future<void>.delayed(const Duration(milliseconds: 30));
+          }
+          seen.add(move.event);
+          return null;
+        });
+        bus
+          ..publish(_move(HandoffEvent.debugStarted))
+          ..publish(_move(HandoffEvent.fixApplied))
+          ..publish(_move(HandoffEvent.killed));
+        async.elapse(const Duration(milliseconds: 29));
+        expect(seen, isEmpty);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(seen, [
+          HandoffEvent.debugStarted,
+          HandoffEvent.fixApplied,
+          HandoffEvent.killed,
+        ]);
       });
-      bus
-        ..publish(_move(HandoffEvent.debugStarted))
-        ..publish(_move(HandoffEvent.fixApplied))
-        ..publish(_move(HandoffEvent.killed));
-      await bus.drain();
-      expect(seen, [
-        HandoffEvent.debugStarted,
-        HandoffEvent.fixApplied,
-        HandoffEvent.killed,
-      ]);
     });
 
     test('an event a reaction returns is queued behind moves already published',
@@ -111,19 +118,25 @@ void main() {
   });
 
   group('drain', () {
-    test('a slow reaction has not finished until the bus is drained', () async {
-      final bus = busOf();
-      var finished = false;
-      bus.react('slow', (move) async {
-        await Future<void>.delayed(const Duration(milliseconds: 40));
-        finished = true;
-        return null;
+    test('drain completes only when a slow reaction has finished', () {
+      fakeAsync((async) {
+        final bus = busOf();
+        var finished = false;
+        bus.react('slow', (move) async {
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          finished = true;
+          return null;
+        });
+        bus.publish(_move(HandoffEvent.debugStarted));
+        var drained = false;
+        bus.drain().then((_) => drained = true);
+        async.elapse(const Duration(milliseconds: 39));
+        expect(finished, isFalse);
+        expect(drained, isFalse);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(finished, isTrue);
+        expect(drained, isTrue);
       });
-      bus.publish(_move(HandoffEvent.debugStarted));
-      await Future<void>.delayed(Duration.zero);
-      expect(finished, isFalse);
-      await bus.drain();
-      expect(finished, isTrue);
     });
 
     test('drain waits for the moves a reaction caused', () async {
