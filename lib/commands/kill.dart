@@ -1,11 +1,9 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../logging/logger.dart';
 import '../md_io.dart' show confirmOrEof, readHandoffStatus;
 import '../paths.dart';
-import '../registry.dart';
 import 'claudart_command.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
@@ -15,6 +13,7 @@ import '../session/workspace_guard.dart';
 import '../workspace/workspace_link_state.dart';
 import '../ui/render.dart' as render;
 import 'command_seams.dart';
+import 'project_resolution.dart';
 
 /// How a `kill` run ended. The name is the outcome written to the interaction
 /// log, so a warned kill, a cancelled one and a refused one can be told apart.
@@ -61,7 +60,6 @@ Future<void> runKill({
   RunMode mode = RunMode.interactive,
 }) async {
   final io = seams.io;
-  final projectRootOverride = seams.projectRootOverride;
   final confirmFn = seams.confirmFn;
   final askFn = seams.askFn;
   final exitFn = seams.exitFn;
@@ -100,22 +98,12 @@ Future<void> runKill({
 
   print(render.header('CLAUDART SESSION KILL'));
 
-  // 1 — Detect project root.
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-  if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project.\n');
-    exit_(1);
-  }
-
-  // 2 — Registry lookup.
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('\n✗ No claudart session found for this project.');
-    print('  Run `claudart setup` to start one.\n');
-    exit_(1);
-  }
+  // 1 — Detect project root and look it up in the registry.
+  final project = requireProject(seams, withGitContext: true);
+  final projectRoot = project.projectRoot;
+  final registry = project.registry;
+  final entry = project.entry;
+  final gitCtx = project.gitContext;
   print('Project  : ${entry.name}');
   final recorder = SessionLogger.forEntry(entry, io: fileIO);
   logger = recorder;

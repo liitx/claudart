@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../paths.dart';
-import '../registry.dart';
 import '../session/sync_check.dart';
+import 'project_resolution.dart';
+import 'command_seams.dart';
 
 /// Runs a preflight sync check for [operation] and prints results.
 ///
@@ -22,22 +22,18 @@ Future<void> runPreflightCmd(
   final exit_ = exitFn ?? exit;
 
   // 1 — Git context: project root + current branch in one call.
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+    withGitContext: true,
+  );
+  final entry = project.entry;
+  final gitCtx = project.gitContext;
   final currentBranch =
       gitCtx?.branch; // null when override is used (e.g. tests)
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart setup` to start one.');
-    exit_(1);
-  }
   print('Project  : ${entry.name}');
 
   final workspace = entry.workspacePath;

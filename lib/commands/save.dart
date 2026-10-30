@@ -2,11 +2,9 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../logging/logger.dart';
 import '../md_io.dart' show applyHandoffEvent;
 import '../paths.dart';
-import '../registry.dart';
 import '../sensitivity/abstractor.dart';
 import '../templates/handoff_template.dart' show stampHandoffUpdated;
 import '../session/handoff_event.dart';
@@ -15,6 +13,7 @@ import '../session/teardown_utils.dart';
 import '../ui/render.dart' as render;
 import 'claudart_command.dart';
 import 'command_seams.dart';
+import 'project_resolution.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }
@@ -28,7 +27,6 @@ Future<SkillsUpdateResult> runSave({
   CommandSeams seams = const CommandSeams(),
 }) async {
   final io = seams.io;
-  final projectRootOverride = seams.projectRootOverride;
   final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
@@ -37,20 +35,10 @@ Future<SkillsUpdateResult> runSave({
   print(render.header('CLAUDART SAVE'));
 
   // 1 — Registry lookup.
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-  if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project.\n');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('\n✗ No claudart session found for this project.');
-    print('  Run `claudart setup` to start one.\n');
-    exit_(1);
-  }
+  final project = requireProject(seams, withGitContext: true);
+  final entry = project.entry;
+  final registry = project.registry;
+  final gitCtx = project.gitContext;
   print('Project  : ${entry.name}');
 
   final workspace = entry.workspacePath;

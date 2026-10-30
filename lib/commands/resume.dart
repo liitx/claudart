@@ -9,13 +9,13 @@ import 'dart:io';
 import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../md_io.dart';
 import '../paths.dart';
-import '../registry.dart';
 import '../session/teardown_utils.dart' show readSubSection;
 import '../workspace/workspace_index.dart';
 import 'setup.dart';
+import 'project_resolution.dart';
+import 'command_seams.dart';
 
 Future<void> runResume({
   FileIO? io,
@@ -29,18 +29,14 @@ Future<void> runResume({
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+  );
+  final entry = project.entry;
   print('Project  : ${entry.name}');
 
   final workspace = entry.workspacePath;

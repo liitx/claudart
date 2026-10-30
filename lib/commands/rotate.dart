@@ -4,12 +4,10 @@ import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../config.dart';
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../logging/logger.dart';
 import 'claudart_command.dart';
 import '../templates/handoff_template.dart';
 import '../paths.dart';
-import '../registry.dart';
 import '../session/archive_entry.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
@@ -20,6 +18,7 @@ import '../md_io.dart' show confirmOrEof;
 import '../process_runner.dart';
 import '../ui/render.dart' as render;
 import 'command_seams.dart';
+import 'project_resolution.dart';
 
 const _shellExecutable = 'sh';
 const _shellCommandFlag = '-c';
@@ -60,7 +59,6 @@ Future<RotateResult>  runRotate({
   RunMode mode = RunMode.interactive,
 }) async {
   final io = seams.io;
-  final projectRootOverride = seams.projectRootOverride;
   final exitFn = seams.exitFn;
   final confirmFn = seams.confirmFn;
   final askFn = seams.askFn;
@@ -75,20 +73,10 @@ Future<RotateResult>  runRotate({
   print(render.header('CLAUDART ROTATE'));
 
   // 1 — Registry lookup.
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it.');
-    exit_(1);
-  }
+  final project = requireProject(seams, withGitContext: true);
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
+  final gitCtx = project.gitContext;
   print('Project  : ${entry.name}');
 
   final workspace = entry.workspacePath;

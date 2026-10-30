@@ -6,9 +6,9 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 
 | role \ reach | pure | fileSeam | workspaceBound | processBound |
 |---|---|---|---|---|
-| drivesState | 2 | 0 | 1 | 7 |
-| observesState | 10 | 1 | 3 | 4 |
-| untouched | 75 | 15 | 5 | 25 |
+| drivesState | 2 | 0 | 2 | 6 |
+| observesState | 10 | 1 | 4 | 3 |
+| untouched | 75 | 16 | 6 | 24 |
 
 ## drivesState x pure
 
@@ -21,6 +21,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 
 ## drivesState x workspaceBound
 
+- `lib/commands/save.dart`
 - `lib/session/session_state.dart`
 
 ## drivesState x processBound
@@ -28,7 +29,6 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/commands/debug.dart`
 - `lib/commands/kill.dart`
 - `lib/commands/rotate.dart`
-- `lib/commands/save.dart`
 - `lib/commands/setup.dart`
 - `lib/commands/suggest.dart`
 - `lib/commands/teardown.dart`
@@ -53,13 +53,13 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 ## observesState x workspaceBound
 
 - `lib/commands/hook.dart`
+- `lib/commands/status.dart`
 - `lib/session/session_ops.dart`
 - `lib/session/sync_check.dart`
 
 ## observesState x processBound
 
 - `lib/commands/launch.dart`
-- `lib/commands/status.dart`
 - `lib/commands/workspaces.dart`
 - `lib/knowledge_templates.dart`
 
@@ -144,6 +144,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 ## untouched x fileSeam
 
 - `lib/codegen/artifact_state.dart`
+- `lib/commands/confirm_pending.dart`
 - `lib/commands/map_cmd.dart`
 - `lib/commands/project_selector.dart`
 - `lib/commands/scan.dart`
@@ -161,6 +162,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 
 ## untouched x workspaceBound
 
+- `lib/commands/preflight_cmd.dart`
 - `lib/commands/scope_files.dart`
 - `lib/config.dart`
 - `lib/paths.dart`
@@ -174,14 +176,13 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/commands/archives.dart`
 - `lib/commands/chat_shell.dart`
 - `lib/commands/command_seams.dart`
-- `lib/commands/confirm_pending.dart`
 - `lib/commands/doctor.dart`
 - `lib/commands/experiment.dart`
 - `lib/commands/failure_boundary.dart`
 - `lib/commands/flow.dart`
 - `lib/commands/init.dart`
 - `lib/commands/link.dart`
-- `lib/commands/preflight_cmd.dart`
+- `lib/commands/project_resolution.dart`
 - `lib/commands/report.dart`
 - `lib/commands/resume.dart`
 - `lib/commands/unlink.dart`

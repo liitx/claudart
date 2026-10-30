@@ -1,45 +1,30 @@
 import 'dart:io';
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../logging/logger.dart';
 import '../pipeline/model_observation.dart' show describeModelRecord;
 import '../paths.dart';
-import '../registry.dart';
 import '../session/session_state.dart';
 import '../session/skills_lookup.dart';
 import '../session/teardown_utils.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'command_seams.dart';
+import 'project_resolution.dart';
 
 Future<void> runStatus({
   CommandSeams seams = const CommandSeams(),
   bool prompt = false,
 }) async {
   final io = seams.io;
-  final projectRootOverride = seams.projectRootOverride;
-  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
 
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-  final currentBranch = gitCtx?.branch;
-
-  if (projectRoot == null) {
-    if (prompt) return; // silent in prompt mode — not in a registered project
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    if (prompt) return; // silent in prompt mode
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it.');
-    exit_(1);
-  }
+  // Silent in prompt mode — not in a registered project.
+  final project = prompt
+      ? lookupProject(seams, withGitContext: true)
+      : requireProject(seams, withGitContext: true);
+  if (project == null) return;
+  final entry = project.entry;
+  final currentBranch = project.gitContext?.branch;
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);

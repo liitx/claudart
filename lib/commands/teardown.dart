@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../logging/logger.dart';
 import 'claudart_command.dart';
 import '../templates/handoff_template.dart';
@@ -11,7 +10,6 @@ import '../pipeline/flows/teardown_steps.dart';
 import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
-import '../registry.dart';
 import '../session/debug_disposition.dart';
 import '../session/handoff_placeholder.dart';
 import '../session/knowledge_transfer.dart';
@@ -26,6 +24,8 @@ import '../ui/menu.dart';
 import '../util/prompt_with_default.dart';
 import '../ui/render.dart' as render;
 import '../ui/ansi.dart' as ansi;
+import 'project_resolution.dart';
+import 'command_seams.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.
@@ -57,21 +57,16 @@ Future<void> runTeardown({
     print('  ${ansi.dim}headless — every decision below resolves itself; verify the summary at the end${ansi.reset}\n');
   }
 
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it.');
-    exit_(1);
-  }
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+    withGitContext: true,
+  );
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
   print('Project  : ${entry.name}');
 
   final workspace = entry.workspacePath;

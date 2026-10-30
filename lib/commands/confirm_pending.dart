@@ -1,9 +1,9 @@
 import 'dart:io';
 import '../file_io.dart';
-import '../git_utils.dart';
-import '../registry.dart';
 import '../session/pending_confirmation.dart';
 import '../ui/render.dart' as render;
+import 'project_resolution.dart';
+import 'command_seams.dart';
 
 /// Sets or clears the pending confirmation for the current project's
 /// workspace. A skill's confirmation-gate step (see
@@ -23,19 +23,14 @@ Future<void> runConfirmPending(
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` first.');
-    exit_(1);
-  }
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+  );
+  final entry = project.entry;
   print('Project  : ${entry.name}');
 
   final workspace = entry.workspacePath;

@@ -4,7 +4,6 @@ import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../config.dart' show loadWorkspaceConfig;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../logging/logger.dart';
 import 'claudart_command.dart';
 import '../md_io.dart';
@@ -16,7 +15,6 @@ import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
-import '../registry.dart';
 import '../session/debug_disposition.dart';
 import '../session/handoff_event.dart';
 import '../session/invalid_handoff_transition_exception.dart';
@@ -25,6 +23,7 @@ import '../ui/render.dart' as render;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 import 'command_seams.dart';
+import 'project_resolution.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.
@@ -71,7 +70,6 @@ Future<void> runDebug({
   DartFileAnalyzer? dartFileAnalyzer,
 }) async {
   final io = seams.io;
-  final projectRootOverride = seams.projectRootOverride;
   final exitFn = seams.exitFn;
   final pickFn = seams.pickFn;
   final fileIO   = io       ?? const RealFileIO();
@@ -91,18 +89,24 @@ Future<void> runDebug({
 
   // ── Locate project ──────────────────────────────────────────────────────────
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    leave(DebugExitKind.notInGitRepository);
+  ProjectLookupFailure? lookupFailure;
+  final project = lookupProject(
+    seams,
+    onFailure: (failure) => lookupFailure = failure,
+  );
+  if (project == null) {
+    final failure = lookupFailure!;
+    for (final line in failure.lines) {
+      print(line);
+    }
+    leave(switch (failure) {
+      ProjectLookupFailure.notInGitRepository =>
+        DebugExitKind.notInGitRepository,
+      ProjectLookupFailure.notRegistered => DebugExitKind.projectNotRegistered,
+    });
   }
-
-  final registry = Registry.load(io: fileIO);
-  final entry    = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    leave(DebugExitKind.projectNotRegistered);
-  }
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
   print('Project  : ${entry.name}');
   final logger = SessionLogger.forEntry(entry, io: fileIO);
   exitLogger = logger;

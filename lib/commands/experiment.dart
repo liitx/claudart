@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../paths.dart';
-import '../registry.dart';
 import '../process_runner.dart';
+import 'command_seams.dart';
+import 'project_resolution.dart';
 
 /// Runs an experiment: executes [command] with [args], tees stdout/stderr to a
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the
@@ -35,17 +35,11 @@ Future<void> runExperiment(
   final cmdArgs = args.sublist(sepIdx + 1);
 
   // ── Resolve workspace ──────────────────────────────────────────────────────
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  String experimentsDir;
-  if (projectRoot != null) {
-    final registry = Registry.load(io: fileIO);
-    final entry = registry.findByProjectRoot(projectRoot);
-    experimentsDir = entry != null
-        ? experimentsDirFor(entry.workspacePath)
-        : experimentsDirFor(workspacesRoot);
-  } else {
-    experimentsDir = experimentsDirFor(workspacesRoot);
-  }
+  final entry = lookupProject(
+    CommandSeams(io: fileIO, projectRootOverride: projectRootOverride),
+  )?.entry;
+  final experimentsDir =
+      experimentsDirFor(entry?.workspacePath ?? workspacesRoot);
 
   // ── Build log file path ────────────────────────────────────────────────────
   final ts = DateTime.now()

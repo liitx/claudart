@@ -25,7 +25,7 @@ context; the register below holds the evidence.
 | Q6 | `noSilentFallbacks` | done except D11 (repeated literals), D13 (typed values) and D16, which fold into Q12, Q17 |
 | Q12 | `shapeTopologyAndBases` | done 2026-10-30: I1 analyzer test built, three pairs consolidated, ratchet 0; the other shape-based bases wait for the Q15 enum data |
 | Q13 | `seamBundle` | done 2026-10-30: `CommandSeams` (io, projectRootOverride, exitFn, confirmFn, askFn, pickFn) replaces the loose parameters of the nine seam-heavy commands; ratchet 0; the other commands and the runner, executor and mode parameters stay per command |
-| Q14 | `oneSourcePerDatum` | partly done 2026-10-30: environment, home directory, spawned processes and the git executable each have one owning file, enforced by `one_source_per_datum_test.dart`; project identity, workspace, credentials and settings remain |
+| Q14 | `oneSourcePerDatum` | done for the environment, home directory, processes, git executable and the project lookup (`lookupProject`, `requireProject`; six files with their own lookup are in a ledger with the reason); credentials, settings and `workspace.json` access remain |
 | Q15 | `enumFactsAsData` | not started |
 | Q16 | `folderLayout` | not started |
 | Q17 | `userTextFromConfig` | not started |

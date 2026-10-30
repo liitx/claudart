@@ -9,39 +9,27 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../paths.dart';
-import '../registry.dart';
 import '../session/archive_entry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../workspace/workspace_index.dart';
 import '../ui/render.dart' as render;
 import 'command_seams.dart';
+import 'project_resolution.dart';
 
 Future<void> runArchives({
   CommandSeams seams = const CommandSeams(),
 }) async {
   final io = seams.io;
-  final projectRootOverride = seams.projectRootOverride;
   final exitFn = seams.exitFn;
   final pickFn = seams.pickFn;
   final fileIO = io    ?? const RealFileIO();
   final exit_  = exitFn ?? exit;
   final pick_  = pickFn ?? arrowMenu;
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry    = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
+  final project = requireProject(seams);
+  final entry = project.entry;
   print('Project  : ${entry.name}');
 
   final workspace = entry.workspacePath;

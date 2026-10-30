@@ -50,6 +50,19 @@ List<String> directReaders(DatumSource source, Map<String, String> sources) {
   ]..sort();
 }
 
+/// Files that look a project up in the registry themselves, each because it
+/// differs from the shared lookup (`lookupProject`): it creates the entry,
+/// tolerates an unreadable registry, adds a check between the two steps, or
+/// lists every project.
+const _ownLookupLedger = {
+  'lib/commands/doctor.dart',
+  'lib/commands/failure_boundary.dart',
+  'lib/commands/launch.dart',
+  'lib/commands/link.dart',
+  'lib/commands/setup.dart',
+  'bin/claudart.dart',
+};
+
 Map<String, String> _readSources() => {
       for (final root in ['lib', 'bin'])
         for (final file in Directory(root)
@@ -81,6 +94,19 @@ void main() {
     });
 
     final sources = _readSources();
+
+    test('a project is looked up by lookupProject unless the ledger says why',
+        () {
+      final readers = [
+        for (final entry in sources.entries)
+          if (!entry.key.endsWith('registry.dart') &&
+              !entry.key.endsWith('project_resolution.dart') &&
+              entry.value.contains('.findByProjectRoot('))
+            entry.key,
+      ]..sort();
+      expect(readers.toSet().difference(_ownLookupLedger), isEmpty);
+    });
+
     for (final source in DatumSource.values) {
       test('${source.name} is read only through ${source.ownerFile}', () {
         expect(directReaders(source, sources), isEmpty);

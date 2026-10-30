@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:claudart/commands/command_seams.dart';
 import 'package:claudart/commands/claudart_command.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:test/test.dart';
@@ -206,8 +207,11 @@ void main() {
         if (!command.supportsProjectSelector) return;
         final path = _sourceFor(command);
         expect(path, isNotNull);
+        // The parameter itself, or the CommandSeams bundle that holds it.
+        final source = File(path!).readAsStringSync();
         expect(
-          File(path!).readAsStringSync().contains('projectRootOverride'),
+          source.contains('projectRootOverride') ||
+              source.contains('$CommandSeams'),
           isTrue,
         );
       });

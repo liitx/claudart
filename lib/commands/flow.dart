@@ -24,12 +24,13 @@ import '../pipeline/pipeline_context.dart';
 import '../pipeline/route_tag.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
-import '../registry.dart';
 import '../util/enum_util.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
+import 'project_resolution.dart';
+import 'command_seams.dart';
 
 Future<void> runFlow({
   FileIO? io,
@@ -48,18 +49,15 @@ Future<void> runFlow({
 
   // ── Locate project ─────────────────────────────────────────────────────────
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry    = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+  );
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
   print('Project  : ${entry.name}');
 
   final workspace    = entry.workspacePath;

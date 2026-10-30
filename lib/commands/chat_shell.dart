@@ -13,19 +13,18 @@
 import 'dart:io';
 
 import '../file_io.dart';
-import '../git_utils.dart';
 import '../md_io.dart' show readSection;
 import '../paths.dart';
 import '../pipeline/agent_model.dart';
 import '../pipeline/step_result.dart' show StepResult;
 import '../pipeline/step_role.dart';
 import '../pipeline/pipeline_executor.dart' show ClaudeRunner, defaultClaudeRunner;
-import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'flow.dart';
 import 'suggest.dart';
 import 'command_seams.dart';
+import 'project_resolution.dart';
 
 /// What the user typed. Conversation is the default: only slash commands invoke
 /// structured work; everything else is a [message] to the agent.
@@ -111,15 +110,12 @@ Future<void> runChatShell({
   ClaudeRunner? runner,
 }) async {
   final io = seams.io;
-  final projectRootOverride = seams.projectRootOverride;
   final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final run = runner ?? defaultClaudeRunner;
 
-  final root = projectRootOverride ?? detectGitContext()?.root;
-  final entry =
-      root != null ? Registry.load(io: fileIO).findByProjectRoot(root) : null;
+  final entry = lookupProject(seams)?.entry;
 
   print(render.header('CLAUDART'));
   if (entry == null) {
