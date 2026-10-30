@@ -18,6 +18,7 @@ import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
 
 Future<void> runArchives({
   CommandSeams seams = const CommandSeams(),
@@ -64,10 +65,7 @@ Future<void> runArchives({
   switch (action) {
     case 0:
       if (_resume(fileIO, workspace, selected)) {
-        print(
-          '\n${ansi.green}✓${ansi.reset}  Handoff restored from ${ansi.dim}${selected.handoffFile}${ansi.reset}\n'
-          '  Next: open /suggest or /debug to continue.\n',
-        );
+        print(UserText.archivesHandoffRestored.styled({'handoffFile': selected.handoffFile}));
       }
     case 1:
       _view(fileIO, workspace, selected);
@@ -97,7 +95,7 @@ bool _resume(FileIO fileIO, String workspace, ArchiveEntry e) {
   final src  = p.join(archiveDirFor(workspace), e.handoffFile);
   final dest = handoffPathFor(workspace);
   if (!fileIO.fileExists(src)) {
-    print('${ansi.red}✗${ansi.reset}  Snapshot file not found: $src');
+    print(UserText.archivesSnapshotFileNotFound.styled({'src': src}));
     return false;
   }
   fileIO.write(dest, fileIO.read(src));
@@ -107,13 +105,13 @@ bool _resume(FileIO fileIO, String workspace, ArchiveEntry e) {
 void _view(FileIO fileIO, String workspace, ArchiveEntry e) {
   final src = p.join(archiveDirFor(workspace), e.handoffFile);
   if (!fileIO.fileExists(src)) {
-    print('${ansi.red}✗${ansi.reset}  Snapshot file not found: $src');
+    print(UserText.archivesSnapshotFileNotFound.styled({'src': src}));
     return;
   }
-  print('\n${ansi.dim}── ${e.handoffFile} ──${ansi.reset}\n');
+  print(UserText.archiveHeadingLine.styled({'handoffFile': e.handoffFile}));
   print(fileIO.read(src));
   if (e.skillsDelta != null) {
-    print('\n${ansi.dim}── Skills delta ──${ansi.reset}');
+    print(UserText.archivesSkillsDelta.styled({}));
     print(e.skillsDelta);
   }
   print('');

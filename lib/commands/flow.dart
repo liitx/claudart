@@ -32,6 +32,7 @@ import '../workspace/workspace_config.dart';
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
 
 Future<void> runFlow({
   FileIO? io,
@@ -107,7 +108,7 @@ Future<void> runFlow({
       ]);
 
       if (resumeChoice == 2) {
-        print('\n  Checkpoint kept at:\n  ${ansi.dim}$checkpointPath${ansi.reset}\n');
+        print(UserText.flowCheckpointKeptAt.styled({'checkpointPath': checkpointPath}));
         exit_(0);
       }
 
@@ -144,10 +145,10 @@ Future<void> runFlow({
       checkpointFile.deleteSync();
       return;
     } on FormatException {
-      print('  ${ansi.dim}Checkpoint unreadable — starting fresh.${ansi.reset}\n');
+      print(UserText.flowCheckpointUnreadableStartingFresh.styled({}));
       checkpointFile.deleteSync();
     } on TypeError {
-      print('  ${ansi.dim}Checkpoint unreadable — starting fresh.${ansi.reset}\n');
+      print(UserText.flowCheckpointUnreadableStartingFresh.styled({}));
       checkpointFile.deleteSync();
     }
   }
@@ -155,11 +156,7 @@ Future<void> runFlow({
   // ── Collect prompt ─────────────────────────────────────────────────────────
 
   print(render.header('CLAUDART FLOW  ${ansi.dim}[experimental]${ansi.reset}'));
-  print(
-    '  Enter your prompt. An agent will classify intent, generate a\n'
-    '  dependency-ordered plan, and construct the handoff automatically.\n'
-    '  ${ansi.dim}Type your task description and press enter.${ansi.reset}\n',
-  );
+  print(UserText.flowPromptInvitation.styled());
   final taskPrompt = prompt_('  →', optional: true)?.trim() ?? '';
   if (taskPrompt.isEmpty) {
     print(UserText.flowNoPromptEnteredAborted.template);
@@ -296,11 +293,7 @@ Future<PipelineContext> _runPhase2(
 
   if (result[PipelineSlot.flowExit] == 'true') {
     _saveCheckpoint(result, checkpointPath);
-    print(
-      '\n  ${ansi.green}✓${ansi.reset}  Checkpoint saved  '
-      '${ansi.dim}→${ansi.reset}  $checkpointPath\n'
-      '  Resume with:  ${ansi.bold}claudart flow${ansi.reset}\n',
-    );
+    print(UserText.flowCheckpointSaved.styled({'checkpointPath': checkpointPath}));
     exit_(0);
   }
 
@@ -323,10 +316,7 @@ Future<void> _writeHandoff(
   final handoffContent =
       tagOrNull(ctx[PipelineSlot.construct] ?? '', RouteTag.handoff.wireTag);
   if (handoffContent == null || handoffContent.isEmpty) {
-    print(
-      '\n  ${ansi.red}✗${ansi.reset}  Construct step produced no handoff.\n'
-      '  Is claude CLI installed and authenticated?\n',
-    );
+    print(UserText.flowConstructProducedNoHandoff.styled());
     exit_(1);
   }
 
@@ -347,7 +337,7 @@ Future<void> _writeHandoff(
     '\x1B[2K\r  ${ansi.green}✓${ansi.reset}  Handoff written  '
     '${ansi.dim}→${ansi.reset}  $handoffPath\n\n',
   );
-  print('  Next:  ${ansi.bold}claudart save${ansi.reset}  ${ansi.dim}→${ansi.reset}  then /suggest in Zed\n');
+  print(UserText.flowNextClaudartSaveThenSuggestIn.styled({}));
 }
 
 // ── Checkpoint I/O ────────────────────────────────────────────────────────────

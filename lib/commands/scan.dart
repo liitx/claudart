@@ -64,8 +64,7 @@ Future<void> runScan({
       io: fileIO,
     );
   } on ScanThresholdException catch (e) {
-    print('\n⚠  Threshold exceeded: ${e.filesFound} files found '
-        '(threshold: ${e.threshold})');
+    print(UserText.scanThresholdExceeded.format({'filesFound': e.filesFound, 'threshold': e.threshold}));
     print(UserText.scanReason.format({'reason': e.reason}));
     print(UserText.scanSuggestions.template);
     for (final s in e.suggestions) {
@@ -102,12 +101,19 @@ Future<void> runScan({
     final range = tokens.isNotEmpty
         ? '${tokens.first}–${tokens.last}'
         : '';
-    print('  ✓ $count ${entry.key}${count == 1 ? '' : 's'}'
-        '${range.isNotEmpty ? '       → $range' : ''}');
+    print(UserText.scanTokenCountRange.format({
+      'count': count,
+      'kind': entry.key,
+      'plural': count == 1 ? '' : UserText.pluralSuffix.template,
+      'range': range.isNotEmpty ? UserText.scanTokenRange.format({'range': range}) : '',
+    }));
   }
 
   if (newTokens > 0) {
-    print('  + $newTokens new token${newTokens == 1 ? '' : 's'} since last scan');
+    print(UserText.scanNewTokens.format({
+      'newTokens': newTokens,
+      'plural': newTokens == 1 ? '' : UserText.pluralSuffix.template,
+    }));
   }
   print(UserText.scanTokenMapUpdated.format({'tokenMapPath': tokenMapPath}));
 

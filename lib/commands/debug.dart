@@ -25,6 +25,7 @@ import '../workspace/workspace_config.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.
@@ -151,10 +152,7 @@ Future<void> runDebug({
   final files     = readScopeFiles(scope: scope, projectRoot: projectRoot, workspace: workspace, io: fileIO);
 
   if (files.isEmpty) {
-    print(
-      '\n✗ No files listed in ## Scope / Files in play.\n'
-      '  Run `claudart suggest` first to populate the scope.\n',
-    );
+    print(UserText.noScopeFilesRunSuggest.template);
     leave(DebugExitKind.emptyScope);
   }
 
@@ -199,15 +197,7 @@ Future<void> runDebug({
   // ── Header ──────────────────────────────────────────────────────────────────
 
   print(render.header('CLAUDART DEBUG'));
-  print(
-    '  ${ansi.dim}[1] Classify${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[2] Read files${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[3] Implement${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[4] Write files${ansi.reset}\n',
-  );
+  print(UserText.stageBar.styled());
 
   // ── Build context: prepend root cause + expected to bug ─────────────────────
 
@@ -283,19 +273,19 @@ Future<void> runDebug({
     () async => parseEditFiles(ctx.implementerOut),
   );
 
-  print('\n  ${ansi.dim}──────────────────────────────────────${ansi.reset}');
-  print('  ${ansi.dim}  Total  ${ctx.usage.format()}${ansi.reset}\n');
+  print(UserText.usageRule.styled({}));
+  print(UserText.debugTotal.styled({'format': ctx.usage.format()}));
 
   print(render.header('DEBUG PLAN — REVIEW BEFORE WRITE'));
   _printSection('CHANGES', changes);
 
-  print('  ${ansi.bold}FILES TO WRITE${ansi.reset}');
-  print('  ${ansi.dim}─────────────${ansi.reset}');
+  print(UserText.debugFilesToWrite.styled({}));
+  print(UserText.filesToWriteRule.styled({}));
   for (final f in editTags) {
     final abs    = p.join(projectRoot, f.path);
     final exists = File(abs).existsSync();
     final tag    = exists ? ansi.c(ansi.yellow, 'MOD') : ansi.c(ansi.green, 'NEW');
-    print(UserText.debugText.format({'tag': tag, 'path': f.path}));
+    print(UserText.debugFileTagLine.format({'tag': tag, 'path': f.path}));
   }
   print('');
 
@@ -340,15 +330,15 @@ Future<void> runDebug({
     '  $written file${written == 1 ? '' : 's'} written'
     '  ${ansi.dim}→${ansi.reset}  status: debug-complete\n\n',
   );
-  print('  Next:  ${ansi.bold}claudart save${ansi.reset}  ${ansi.dim}→${ansi.reset}  then run tests\n');
+  print(UserText.debugNextClaudartSaveThenRunTests.styled({}));
 }
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 
 void _printSection(String title, String body) {
   final under = '─' * title.length;
-  print('  ${ansi.bold}$title${ansi.reset}');
-  print('  ${ansi.dim}$under${ansi.reset}');
+  print(UserText.styledTitle.styled({'title': title}));
+  print(UserText.styledUnderline.styled({'under': under}));
   for (final line in body.trim().split('\n')) {
     print(line.isEmpty ? '' : '    $line');
   }

@@ -127,7 +127,7 @@ Future<void> runChatShell({
   final systemPrompt = _chatSystemPrompt(fileIO, entry.workspacePath);
   final history = <String>[]; // alternating "you: …" / "claudart: …" turns
 
-  print('  workspace: ${ansi.c(ansi.bold, entry.name)}');
+  print(UserText.chatWorkspaceLine.format({'name': ansi.c(ansi.bold, entry.name)}));
   print(ansi.c(ansi.dim, '  $_commandHint\n'));
 
   await runChatLoop(
@@ -148,7 +148,10 @@ Future<void> runChatShell({
         return;
       }
       history.add('claudart: ${reply.text}');
-      print('\n${ansi.c(ansi.cyan, 'claudart')}  ${reply.text}\n');
+      print(UserText.chatReply.format({
+        'speaker': ansi.c(ansi.cyan, UserText.chatSpeakerName.template),
+        'reply': reply.text,
+      }));
     },
   );
 }

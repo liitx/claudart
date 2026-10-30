@@ -109,11 +109,14 @@ Future<void> runLink(
   bool? decided = wantsSensitive ? true : (wantsNoSensitive ? false : null);
 
   if (decided != null) {
-    print('\n  Sensitivity mode: ${decided ? 'ON' : 'OFF'} '
-        '(${wantsSensitive ? _sensitiveFlag : _noSensitiveFlag})');
+    print(UserText.linkSensitivityModeDecided.format({
+      'mode': (decided ? UserText.on : UserText.off).template,
+      'flag': wantsSensitive ? _sensitiveFlag : _noSensitiveFlag,
+    }));
   } else if (existing != null) {
-    print('\n  Sensitivity mode is currently: '
-        '${currentSensitivity ? 'ON' : 'OFF'}');
+    print(UserText.linkSensitivityModeCurrently.format({
+      'mode': (currentSensitivity ? UserText.on : UserText.off).template,
+    }));
     final change = ask('Change sensitivity mode?');
     decided = change == null
         ? null
@@ -123,8 +126,7 @@ Future<void> runLink(
   }
 
   if (decided == null) {
-    print('\n✗ No input available to answer the sensitivity-mode question, '
-        'so nothing was changed.');
+    print(UserText.linkNoInputForSensitivityQuestion.template);
     print(UserText.linkReRunInATerminalOr.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag}));
     exit_(1);
   }
@@ -136,8 +138,7 @@ Future<void> runLink(
     ownerMarkedSensitive: ownerMarkedSensitive,
   );
   if (sensitivityMode && !decided) {
-    print('\n  workspace.json marks this project sensitive, so it stays '
-        'sensitive.');
+    print(UserText.linkOwnerMarkedSensitive.template);
   }
 
   // 6 — Write or update registry entry.
@@ -285,8 +286,7 @@ void _regenerateClaudeSettings({
       debugTrace: debugTrace,
     );
   } on FormatException {
-    print('⚠  $path is not a JSON object, so the claudart hook was not added. '
-        'Fix the file and run `claudart link` again.');
+    print(UserText.linkHookNotAddedNotJsonObject.format({'path': path}));
     return;
   }
   if (merged != existing) fileIO.write(path, merged);
@@ -417,8 +417,10 @@ void _seedWorkspaceConfig({
   final typedRole =
       roleInput == null ? null : WorkspaceRole.fromString(roleInput);
   if (roleInput != null && typedRole == null) {
-    print('  "$roleInput" is not a role; using '
-        '${WorkspaceRole.contributor.name}.');
+    print(UserText.linkRoleNotRecognised.format({
+      'roleInput': roleInput,
+      'role': WorkspaceRole.contributor.name,
+    }));
   }
   final role = typedRole ?? WorkspaceRole.contributor;
 
@@ -606,7 +608,7 @@ void _ensureGitignore(String projectRoot, FileIO fileIO) {
       : '${current.trimRight()}\n${missing.join('\n')}\n';
 
   fileIO.write(path, current);
-  print('  .gitignore: added ${missing.join(', ')}');
+  print(UserText.linkGitignoreAdded.format({'entries': missing.join(', ')}));
 }
 
 const _githooksDirName = '.githooks';
@@ -664,7 +666,7 @@ Future<void> _recompileIfCli(
     print(UserText.linkRecompiled.format({'projectName': projectName}));
   } else {
     print(UserText.linkFailedToRecompileFixTheBuild.format({'projectName': projectName}));
-    print(UserText.linkText.format({'stderr': result.stderr}));
+    print(UserText.stderrLine.format({'stderr': result.stderr}));
   }
 }
 

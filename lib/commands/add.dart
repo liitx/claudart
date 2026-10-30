@@ -92,7 +92,10 @@ Future<void> runAdd({
   final defaultSdk = _detectDartSdkConstraint(pubspecContent);
   final defaultUsesDartrix = detectsDartrixDependency(pubspecContent);
 
-  print('\n  Author  : ${author.name ?? '(not set)'} <${author.email ?? '(not set)'}>');
+  print(UserText.addAuthorLine.format({
+    'name': author.name ?? UserText.notSet.template,
+    'email': author.email ?? UserText.notSet.template,
+  }));
 
   // 3 — Questionnaire.
   final projectName = prompt_('Project name', defaultValue: defaultName) ?? defaultName;

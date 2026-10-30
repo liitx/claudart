@@ -170,7 +170,7 @@ Future<void> runKill({
     clearLock(workspace, io: fileIO);
     leave(KillOutcome.closeFailed, 1);
   } on WorkspaceLockedException catch (e) {
-    print(UserText.killText3.format({'toString': e.toString()}));
+    print(UserText.errorMessageLine.format({'toString': e.toString()}));
     leave(KillOutcome.workspaceLocked, 1);
   }
 
@@ -194,19 +194,19 @@ Future<void> runKill({
 
   sw.stop();
   print(UserText.killSessionKilledMs.format({'name': entry.name, 'elapsedMilliseconds': sw.elapsedMilliseconds}));
-  print('  Handoff archived to ${p.join(workspace, 'archive')}');
+  print(UserText.killHandoffArchivedTo.format({'archivePath': p.join(workspace, 'archive')}));
   print(UserText.killHandoffResetToBlank.template);
   print(UserText.killRunClaudartSetupToStartA.template);
 }
 
 void _printSessionSummary(String name, SessionState state, String? liveBranch) {
-  print(UserText.killText.template);
+  print(UserText.ruleLeadingBlank.template);
   print(UserText.killSession.format({'name': name}));
   print(UserText.killBranch.format({'branch': liveBranch ?? state.branch}));
   print(UserText.killStatus.format({'value': state.effectiveStatus.value}));
   print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
   final warning = state.effectiveStatus.killWarning;
-  if (warning != null) print(UserText.killText4.format({'warning': warning}));
+  if (warning != null) print(UserText.warningLine.format({'warning': warning}));
   if (state.hasActiveContent) {
     print(UserText.killDebugProgressRecordedThisWorkWill.template);
     if (!state.attempted.isBlank) {
@@ -218,7 +218,7 @@ void _printSessionSummary(String name, SessionState state, String? liveBranch) {
   } else {
     print(UserText.killNoDebugProgressRecordedFreshSession.template);
   }
-  print(UserText.killText2.template);
+  print(UserText.rule.template);
 }
 
 String _truncate(String s, {int max = 72}) =>

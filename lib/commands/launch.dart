@@ -105,7 +105,7 @@ Future<void> runLauncher({
     // A blank handoff is no-handoff, not its stale Status line.
     final shown = state.effectiveStatus;
     final statusColour = render.statusColour(shown);
-    print('  Status : ${ansi.c(statusColour, shown.value)}');
+    print(UserText.statusValueLine.format({'status': ansi.c(statusColour, shown.value)}));
     if (state.hasActiveContent) {
       print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
     }
@@ -115,7 +115,9 @@ Future<void> runLauncher({
 
   if (locked) {
     final op = interruptedOperation(workspace, io: fileIO) ?? 'unknown';
-    print('  ${ansi.c(ansi.yellow, '⚠  Interrupted during: $op')}');
+    final interrupted =
+        UserText.launchInterruptedDuring.format({'operation': op});
+    print(UserText.indentedLine.format({'line': ansi.c(ansi.yellow, interrupted)}));
   }
 
   print('');

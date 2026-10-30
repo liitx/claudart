@@ -61,7 +61,7 @@ Future<void> runStatus({
   printProjectLine(entry);
   print(UserText.statusBranch.format({'branch': currentBranch ?? state.branch}));
   final statusColour = render.statusColour(shown);
-  print('Status   : ${ansi.c(statusColour, shown.value)}');
+  print(UserText.statusLine.format({'status': ansi.c(statusColour, shown.value)}));
   print(UserText.statusBug.format({'text': _truncate(state.bug.text)}));
   print(UserText.statusRootCause.format({'text': _truncate(state.rootCause.text)}));
   if (shown == HandoffStatus.debugInProgress ||
@@ -77,7 +77,7 @@ Future<void> runStatus({
     if (patterns.isNotEmpty) {
       print(UserText.statusRelevantPastPatterns.template);
       for (final pattern in patterns) {
-        print(UserText.statusText.format({'max': _truncate(pattern, max: 100)}));
+        print(UserText.indentedMaximum.format({'max': _truncate(pattern, max: 100)}));
       }
     }
   }
@@ -85,7 +85,9 @@ Future<void> runStatus({
   if (currentBranch != null &&
       state.branch != 'unknown' &&
       currentBranch != state.branch) {
-    print('\n${ansi.c(ansi.yellow, '⚠️  Current branch "$currentBranch" differs from handoff branch "${state.branch}".')}');
+    final differs = UserText.statusBranchDiffers
+        .format({'currentBranch': currentBranch, 'handoffBranch': state.branch});
+    print(UserText.leadingBlankLine.format({'line': ansi.c(ansi.yellow, differs)}));
   }
 
   print('');
@@ -98,12 +100,12 @@ Future<void> runStatus({
   if (modelRecords.isNotEmpty) {
     print(UserText.statusModelsNewestPerStep.template);
     for (final record in modelRecords) {
-      print(UserText.statusText2.format({'record': describeModelRecord(record)}));
+      print(UserText.statusModelRecordLine.format({'record': describeModelRecord(record)}));
     }
   }
 
-  print('\nNext step:');
-  print(UserText.statusText3.format({'nextStep': shown.nextStep}));
+  print(UserText.nextStepHeading.template);
+  print(UserText.statusNextStepLine.format({'nextStep': shown.nextStep}));
   print('');
 }
 

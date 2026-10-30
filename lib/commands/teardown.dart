@@ -23,10 +23,10 @@ import '../session/workspace_guard.dart';
 import '../ui/menu.dart';
 import '../util/prompt_with_default.dart';
 import '../ui/render.dart' as render;
-import '../ui/ansi.dart' as ansi;
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.
@@ -55,7 +55,7 @@ Future<void> runTeardown({
 
   print(render.header('CLAUDART SESSION TEARDOWN'));
   if (headless) {
-    print('  ${ansi.dim}headless — every decision below resolves itself; verify the summary at the end${ansi.reset}\n');
+    print(UserText.teardownHeadlessEveryDecisionBelowResolvesItself.styled({}));
   }
 
   final project = requireProject(
@@ -293,11 +293,20 @@ Future<void> runTeardown({
     print('\n${render.divider()}');
     print(UserText.teardownHeadlessDecisionsVerifyBeforeTrustingThe.template);
     print(render.divider());
-    print('  Record type : ${archiveKind == ArchiveKind.archive ? 'archive (resolved)' : 'reminder'}');
+    print(UserText.teardownRecordTypeLine.format({
+      'recordType': (archiveKind == ArchiveKind.archive
+              ? UserText.teardownRecordTypeArchive
+              : UserText.teardownRecordTypeReminder)
+          .template,
+    }));
     print(UserText.teardownCategory.format({'category': category}));
     print(UserText.teardownFixSummary.format({'fixSummary': fixSummary}));
-    print('  Hot files   : ${hotFiles ?? 'unspecified'}');
-    print('  Cold files  : ${coldFiles ?? '(none)'}');
+    print(UserText.teardownHotFilesLine.format({
+      'hotFiles': hotFiles ?? UserText.teardownHotFilesUnspecified.template,
+    }));
+    print(UserText.teardownColdFilesLine.format({
+      'coldFiles': coldFiles ?? UserText.teardownColdFilesNone.template,
+    }));
     print(UserText.teardownRootCause.format({'pattern': pattern}));
     print(UserText.teardownFixPattern.format({'fixPattern': fixPattern}));
     print(render.divider());
@@ -351,7 +360,7 @@ Future<void> runTeardown({
       fileIO.write(handoffFile, blankHandoff);
     }, io: fileIO);
   } on WorkspaceLockedException catch (e) {
-    print(UserText.killText3.format({'toString': e.toString()}));
+    print(UserText.errorMessageLine.format({'toString': e.toString()}));
     exit_(1);
   }
 

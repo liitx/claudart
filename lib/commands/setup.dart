@@ -85,9 +85,9 @@ Future<void> runSetup({
     final state = SessionState.parse(existing);
     if (state.hasActiveContent) {
       final statusColour = render.statusColour(state.status);
-      print(UserText.setupText.format({'name': entry.name}));
+      print(UserText.projectHeadingRule.format({'name': entry.name}));
       print(UserText.killBranch.format({'branch': gitCtx?.branch ?? state.branch}));
-      print('  Status : ${ansi.c(statusColour, state.status.value)}');
+      print(UserText.statusValueLine.format({'status': ansi.c(statusColour, state.status.value)}));
       print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
       print('');
 
@@ -150,7 +150,7 @@ Future<void> runSetup({
   // Confirm before writing.
   print('\n${render.divider()}');
   print(UserText.setupProject.format({'name': entry.name}));
-  print(UserText.setupBranch2.format({'branch': branch}));
+  print(UserText.branchLine.format({'branch': branch}));
   print(UserText.setupBug.format({'bug': bug}));
   print(UserText.setupExpected.format({'expected': expected}));
   if (files != null) print(UserText.setupFiles.format({'files': files}));
@@ -158,7 +158,7 @@ Future<void> runSetup({
   print(render.divider());
 
   if (!confirm_('Write handoff with this context?')) {
-    print(UserText.setupSetupCancelled2.template);
+    print(UserText.setupCancelledLeadingBlank.template);
     exit_(0);
   }
 
@@ -216,8 +216,8 @@ Future<void> runSetup({
   );
 
   print(UserText.setupHandoffWrittenTo.format({'handoffFile': handoffFile}));
-  print('\nNext step:');
-  print(UserText.setupOpenYourEditorAndRunSuggest2.template);
+  print(UserText.nextStepHeading.template);
+  print(UserText.setupOpenEditorRunSuggestToExplore.template);
   print(UserText.setupOrRunDebugIfYouAlready.template);
 }
 

@@ -38,7 +38,9 @@ Future<void> runConfirmPending(
 
   if (args.contains('--clear')) {
     PendingConfirmationStore.clear(workspace, io: fileIO);
-    print('${render.header('CONFIRM PENDING')}\n\n✓ Cleared.');
+    print(render.header(UserText.confirmPendingTitle.template));
+    print('');
+    print(UserText.confirmPendingCleared.template);
     return;
   }
 
@@ -60,8 +62,9 @@ Future<void> runConfirmPending(
     io: fileIO,
   );
 
-  print('${render.header('CONFIRM PENDING')}\n\n'
-      '✓ Set — will run `$onConfirm` when the user confirms.');
+  print(render.header(UserText.confirmPendingTitle.template));
+  print('');
+  print(UserText.confirmPendingSet.format({'onConfirm': onConfirm}));
 }
 
 String? _valueOf(List<String> args, String flag) {

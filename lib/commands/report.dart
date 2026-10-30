@@ -67,8 +67,8 @@ Future<void> runReport({
       final filed = e[_keyFiled] as bool? ?? false;
       final issueId = e[_keyIssueId];
       final marker = filed && issueId != null ? ' [#$issueId]' : '';
-      print(UserText.reportText.format({'fp': fp, 'count': count, 'marker': marker}));
-      if (reason.isNotEmpty) print(UserText.reportText2.format({'reason': reason}));
+      print(UserText.reportFingerprintLine.format({'fp': fp, 'count': count, 'marker': marker}));
+      if (reason.isNotEmpty) print(UserText.reportReasonLine.format({'reason': reason}));
     }
   } else {
     print(UserText.reportNoErrorsRecorded.template);

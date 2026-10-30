@@ -52,8 +52,10 @@ Future<void> runPreflightCmd(
   // 4 — Parse operation string once at boundary.
   final op = ClaudartOperation.fromString(operation);
   if (op == null) {
-    print('✗ Unknown operation "$operation". Use one of: '
-        '${ClaudartOperation.values.map((o) => o.name).join(', ')}.');
+    print(UserText.preflightUnknownOperation.format({
+      'operation': operation,
+      'operations': ClaudartOperation.values.map((o) => o.name).join(', '),
+    }));
     exit_(1);
   }
 

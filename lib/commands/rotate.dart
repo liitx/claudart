@@ -97,10 +97,10 @@ Future<RotateResult>  runRotate({
   }
 
   // 2 — Show current session summary.
-  print(UserText.killText.template);
+  print(UserText.ruleLeadingBlank.template);
   print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
   print(UserText.killBranch.format({'branch': gitCtx?.branch ?? state.branch}));
-  print(UserText.rotateText.template);
+  print(UserText.ruleTrailingBlank.template);
 
   // 3 — Confirm before any destructive action.
   //

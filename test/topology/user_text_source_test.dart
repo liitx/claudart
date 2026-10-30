@@ -7,17 +7,29 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 /// A sentence of twelve characters or more passed straight to `print`.
-final _printedLiteral = RegExp('''print\\(\\s*(['"])(?:(?!\\1).){12,}\\1''');
+final _printedLiteral = RegExp('''print\\(\\s*(['"])((?:(?!\\1).){12,})\\1''');
+
+/// What is left of a printed literal once interpolations, escapes, spaces and
+/// drawing characters go: the words it writes itself.
+String _ownWords(String literal) => literal
+    .replaceAll(RegExp(r'\$\{[^}]*\}|\$\w+'), '')
+    .replaceAll(RegExp(r'\\.'), '')
+    .replaceAll(RegExp(r'[^A-Za-z]'), '');
 
 /// Sentences printed from a literal in `lib/commands`, and the files that
 /// hold them.
 Map<String, int> printedLiteralsByFile(Map<String, String> sources) => {
       for (final entry in sources.entries)
-        if (_printedLiteral.allMatches(entry.value).isNotEmpty)
-          entry.key: _printedLiteral.allMatches(entry.value).length,
+        if (_wordy(entry.value).isNotEmpty) entry.key: _wordy(entry.value).length,
     };
 
-const _knownPrintedLiterals = 71;
+/// The printed literals of [source] that write words of their own.
+List<String> _wordy(String source) => [
+      for (final match in _printedLiteral.allMatches(source))
+        if (_ownWords(match.group(2)!).length >= 3) match.group(0)!,
+    ];
+
+const _knownPrintedLiterals = 0;
 
 void main() {
   group('user text', () {
@@ -28,6 +40,13 @@ void main() {
       );
       expect(
         printedLiteralsByFile({'a': 'print(UserText.killCancelled.template);'}),
+        isEmpty,
+      );
+    });
+
+    test('a rule or a divider is not a sentence', () {
+      expect(
+        printedLiteralsByFile({'a': "print('\\n\${render.divider()}');"}),
         isEmpty,
       );
     });
