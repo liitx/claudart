@@ -25,6 +25,7 @@ import '../ui/line_editor.dart' as editor;
 import '../ui/render.dart' as render;
 import 'link.dart' show createProjectLinks;
 import '../config/environment.dart';
+import '../generated/user_text.g.dart';
 
 /// Project shape — drives `claudeTemplate`'s optional Flutter constraint
 /// line. Not named `WorkspaceConfig` — that name belongs to
@@ -78,7 +79,7 @@ Future<void> runAdd({
   // 1 — Detect project root.
   final projectRoot = projectRootOverride ?? detectGitContext()?.root;
   if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project root.\n');
+    print(UserText.notInGitRepositoryRoot.template);
     exit_(1);
   }
 
@@ -195,15 +196,15 @@ Future<void> runAdd({
     fileIO.write(memoryIndexPath, '${existingIndex.trimRight()}\n$indexLine\n');
   }
 
-  print('\n✓ Scaffolded: ${answers.projectName}');
-  print('  PLAN.md   : $planPath');
-  print('  CLAUDE.md : $claudeMdPath');
-  print('  Workspace : $workspace');
+  print(UserText.addScaffolded.format({'projectName': answers.projectName}));
+  print(UserText.addPlanMd.format({'planPath': planPath}));
+  print(UserText.addClaudeMd.format({'claudeMdPath': claudeMdPath}));
+  print(UserText.addWorkspace.format({'workspace': workspace}));
   if (!links.symlinkSkipped) {
-    print('  Symlink   : ${links.symlinkPath} → ${links.symlinkTarget}');
+    print(UserText.addSymlink.format({'symlinkPath': links.symlinkPath, 'symlinkTarget': links.symlinkTarget}));
   }
-  print('  Memory    : $memoryFilePath');
-  print('\nRun `claudart setup` to begin a session.\n');
+  print(UserText.addMemory.format({'memoryFilePath': memoryFilePath}));
+  print(UserText.beginSessionHint.template);
 }
 
 // ── pubspec.yaml detection — plain string/regex, no yaml package dep ────────

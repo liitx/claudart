@@ -19,6 +19,7 @@ import '../templates/readme_template.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
 import '../config/environment.dart';
+import '../generated/user_text.g.dart';
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
@@ -59,15 +60,15 @@ Future<void> runLink(
   final unknownFlags = args.where((a) =>
       a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag && a != _recompileFlag);
   if (unknownFlags.isNotEmpty) {
-    print('\n✗ Unknown option: ${unknownFlags.first}');
-    print('  Usage: claudart link [project-name] [$_sensitiveFlag | $_noSensitiveFlag] [$_recompileFlag]\n');
+    print(UserText.linkUnknownOption.format({'first': unknownFlags.first}));
+    print(UserText.linkUsageClaudartLinkProjectName.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag, 'recompileFlag': _recompileFlag}));
     exit_(1);
   }
   final wantsSensitive = args.contains(_sensitiveFlag);
   final wantsNoSensitive = args.contains(_noSensitiveFlag);
   final wantsRecompile = args.contains(_recompileFlag);
   if (wantsSensitive && wantsNoSensitive) {
-    print('\n✗ Pass only one of $_sensitiveFlag / $_noSensitiveFlag.\n');
+    print(UserText.linkPassOnlyOneOf.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag}));
     exit_(1);
   }
   final positional = args.where((a) => !a.startsWith('--')).toList();
@@ -77,7 +78,7 @@ Future<void> runLink(
   // 1 — Detect project root.
   final projectRoot = resolveProjectRoot(override: projectRootOverride);
   if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project root.\n');
+    print(UserText.notInGitRepositoryRoot.template);
     exit_(1);
   }
 
@@ -88,16 +89,16 @@ Future<void> runLink(
           ? p.basename(projectRootOverride)
           : _detectProjectName(projectRoot));
 
-  print('\n  Project : $projectName');
-  print('  Root    : $projectRoot');
+  print(UserText.linkProject.format({'projectName': projectName}));
+  print(UserText.linkRoot.format({'projectRoot': projectRoot}));
 
   // 3 — Load registry and check for existing entry.
   var registry = Registry.load(io: fileIO);
   final existing = registry.findByProjectRoot(projectRoot);
 
   if (existing != null && existing.name != projectName) {
-    print('\n⚠  This project is already registered as "${existing.name}".');
-    print('   Re-linking under the same name.');
+    print(UserText.linkThisProjectIsAlreadyRegisteredAs.format({'name': existing.name}));
+    print(UserText.linkReLinkingUnderTheSameName.template);
   }
 
   final effectiveName = existing?.name ?? projectName;
@@ -124,7 +125,7 @@ Future<void> runLink(
   if (decided == null) {
     print('\n✗ No input available to answer the sensitivity-mode question, '
         'so nothing was changed.');
-    print('  Re-run in a terminal, or pass $_sensitiveFlag or $_noSensitiveFlag.\n');
+    print(UserText.linkReRunInATerminalOr.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag}));
     exit_(1);
   }
   final ownerMarkedSensitive =
@@ -210,17 +211,16 @@ Future<void> runLink(
   // Always non-null: every ClaudartArtifact.values entry is visited before
   // this line, and the commandTemplates case always assigns it.
   final resolvedLinks = links!;
-  print('\n✓ Registered: $effectiveName');
-  print('  Workspace : $workspace');
+  print(UserText.linkRegistered.format({'effectiveName': effectiveName}));
+  print(UserText.addWorkspace.format({'workspace': workspace}));
   if (resolvedLinks.symlinkSkipped) {
-    print(
-        '  Commands  : .claude/commands/ (source directory, no symlink needed)');
+    print(UserText.linkCommandsClaudeCommandsSourceDirectoryNo.template);
   } else {
-    print('  Symlink   : ${resolvedLinks.symlinkPath} → ${resolvedLinks.symlinkTarget}');
+    print(UserText.addSymlink.format({'symlinkPath': resolvedLinks.symlinkPath, 'symlinkTarget': resolvedLinks.symlinkTarget}));
   }
-  print('  Cursor    : ${resolvedLinks.cursorCmdsLink} → ${resolvedLinks.workspaceCmdsDir}');
-  if (sensitivityMode) print('  Sensitivity mode: ON');
-  print('\nRun `claudart setup` to begin a session.\n');
+  print(UserText.linkCursor.format({'cursorCmdsLink': resolvedLinks.cursorCmdsLink, 'workspaceCmdsDir': resolvedLinks.workspaceCmdsDir}));
+  if (sensitivityMode) print(UserText.linkSensitivityModeOn.template);
+  print(UserText.beginSessionHint.template);
 }
 
 // ── ClaudartArtifact regeneration ───────────────────────────────────────────
@@ -399,8 +399,8 @@ void _seedWorkspaceConfig({
 
   final wantsToCreate = ask('workspace.json missing for this project — create it now?');
   if (wantsToCreate != true) {
-    print('\n  workspace.json not created — `claudart setup` needs it.');
-    print('  Re-run `claudart link` in a terminal to create it.');
+    print(UserText.linkWorkspaceJsonNotCreatedClaudartSetup.template);
+    print(UserText.linkReRunClaudartLinkInA.template);
     return;
   }
 
@@ -408,7 +408,7 @@ void _seedWorkspaceConfig({
   final email = prompt_('Owner email');
   final handle = prompt_('Owner handle (e.g. GitHub username)');
   if (name == null || email == null || handle == null) {
-    print('\n  No input available — workspace.json not created.');
+    print(UserText.linkNoInputAvailableWorkspaceJsonNot.template);
     return;
   }
   final strict = ask('Enforce strict architectural validation for this project?') ?? false;
@@ -457,7 +457,7 @@ void _seedWorkspaceConfig({
     ),
   ).write(workspace, io: fileIO);
 
-  print('\n  ✓ workspace.json created — review `owner` before running `claudart setup`.');
+  print(UserText.linkWorkspaceJsonCreatedReviewOwnerBefore.template);
 }
 
 /// Result of [createProjectLinks] — the paths its caller reports to the user.
@@ -490,14 +490,14 @@ ProjectLinks createProjectLinks({
   final symlinkTarget = p.join(workspace, IdeIntegration.claudeCode.dirName);
 
   if (fileIO.linkExists(symlinkPath)) {
-    print('\n⚠  Removing existing ${IdeIntegration.claudeCode.dirName} symlink.');
+    print(UserText.linkRemovingExistingSymlink.format({'dirName': IdeIntegration.claudeCode.dirName}));
     fileIO.deleteLink(symlinkPath);
   }
 
   final symlinkSkipped = fileIO.dirExists(symlinkPath);
   if (symlinkSkipped) {
-    print('\n⚠  ${IdeIntegration.claudeCode.dirName}/ is a real directory — symlink skipped.');
-    print('  Slash commands in ${IdeIntegration.claudeCode.dirName}/commands/ are already available.');
+    print(UserText.linkIsARealDirectorySymlinkSkipped.format({'dirName': IdeIntegration.claudeCode.dirName}));
+    print(UserText.linkSlashCommandsInCommandsAreAlready.format({'dirName': IdeIntegration.claudeCode.dirName}));
   } else {
     fileIO.createLink(symlinkPath, symlinkTarget);
   }
@@ -654,17 +654,17 @@ Future<void> _recompileIfCli(
   if (home == null) return;
   final output = p.join(home, _binDirName, projectName);
 
-  print('\nRecompiling $projectName ($output)...');
+  print(UserText.linkRecompiling.format({'projectName': projectName, 'output': output}));
   final result = await proc.run(
     _dartExecutable,
     [..._compileArgs, entryPoint, _compileOutputFlag, output],
     workingDirectory: projectRoot,
   );
   if (result.exitCode == 0) {
-    print('✓ Recompiled $projectName.');
+    print(UserText.linkRecompiled.format({'projectName': projectName}));
   } else {
-    print('✗ Failed to recompile $projectName — fix the build, then re-run `claudart link`.');
-    print('  ${result.stderr}');
+    print(UserText.linkFailedToRecompileFixTheBuild.format({'projectName': projectName}));
+    print(UserText.linkText.format({'stderr': result.stderr}));
   }
 }
 
@@ -674,7 +674,7 @@ Future<void> _recompileIfCli(
 void _writeCommandFile(FileIO fileIO, String path, String content) {
   if (fileIO.fileExists(path) &&
       !isClaudartGeneratedCommand(fileIO.read(path))) {
-    print('  ⚠  Skipped $path — not a claudart-generated file.');
+    print(UserText.linkSkippedNotAClaudartGeneratedFile.format({'path': path}));
     return;
   }
   fileIO.write(path, content);

@@ -4,6 +4,7 @@ import '../config/paths.dart';
 import '../io/process_runner.dart';
 import '../ui/render.dart' as render;
 import '../logging/log_file.dart';
+import '../generated/user_text.g.dart';
 
 const _ghRepo = 'liitx/claudart';
 const _issueLabelBase = 'claudart-generated';
@@ -42,8 +43,8 @@ Future<void> runReport({
   final errors = _readJsonl(fileIO, errorsPath);
 
   print(render.header('CLAUDART DIAGNOSTIC REPORT'));
-  print('Interactions logged : ${interactions.length}');
-  print('Error entries       : ${errors.length}');
+  print(UserText.reportInteractionsLogged.format({'length': interactions.length}));
+  print(UserText.reportErrorEntries.format({'length': errors.length}));
 
   if (interactions.isNotEmpty) {
     final commands = <String, int>{};
@@ -51,14 +52,14 @@ Future<void> runReport({
       final cmd = e[_keyCommand] as String? ?? _unknownValue;
       commands[cmd] = (commands[cmd] ?? 0) + 1;
     }
-    print('\nCommand usage:');
+    print(UserText.reportCommandUsage.template);
     for (final entry in commands.entries) {
-      print('  ${entry.key.padRight(16)} ${entry.value}x');
+      print(UserText.reportX.format({'padRight': entry.key.padRight(16), 'value': entry.value}));
     }
   }
 
   if (errors.isNotEmpty) {
-    print('\nErrors by fingerprint:');
+    print(UserText.reportErrorsByFingerprint.template);
     for (final e in errors) {
       final fp = e[_keyFingerprint] as String? ?? '?';
       final count = e[_keyCount] as int? ?? 1;
@@ -66,22 +67,22 @@ Future<void> runReport({
       final filed = e[_keyFiled] as bool? ?? false;
       final issueId = e[_keyIssueId];
       final marker = filed && issueId != null ? ' [#$issueId]' : '';
-      print('  $fp  (×$count)$marker');
-      if (reason.isNotEmpty) print('    └─ $reason');
+      print(UserText.reportText.format({'fp': fp, 'count': count, 'marker': marker}));
+      if (reason.isNotEmpty) print(UserText.reportText2.format({'reason': reason}));
     }
   } else {
-    print('\n✓ No errors recorded.');
+    print(UserText.reportNoErrorsRecorded.template);
   }
 
   if (!fileIssue || errors.isEmpty) {
     if (fileIssue && errors.isEmpty) {
-      print('\n✓ No errors to file.\n');
+      print(UserText.reportNoErrorsToFile.template);
     }
     return;
   }
 
   // File/update issues via gh CLI
-  print('\nFiling issues to $_ghRepo...');
+  print(UserText.reportFilingIssuesTo.format({'ghRepo': _ghRepo}));
   final updatedErrors = List<Map<String, dynamic>>.from(
     errors.map((e) => Map<String, dynamic>.from(e)),
   );
@@ -101,11 +102,11 @@ Future<void> runReport({
         _bodyFlag, body,
       ]);
       if (result.exitCode == 0) {
-        print('  ↺ Updated #$existingId ($fp)');
+        print(UserText.reportUpdated.format({'existingId': existingId, 'fp': fp}));
         entry[_keyCount] = (entry[_keyCount] as int? ?? 1) + 1;
         entry['lastSeen'] = DateTime.now().toUtc().toIso8601String();
       } else {
-        print('  ✗ Failed to comment on #$existingId: ${result.stderr}');
+        print(UserText.reportFailedToCommentOn.format({'existingId': existingId, 'stderr': result.stderr}));
       }
     } else {
       // File new issue
@@ -125,9 +126,9 @@ Future<void> runReport({
         final issueId = issueUrl.split('/').last;
         entry[_keyFiled] = true;
         entry[_keyIssueId] = issueId;
-        print('  ✓ Filed #$issueId ($fp)');
+        print(UserText.reportFiled.format({'issueId': issueId, 'fp': fp}));
       } else {
-        print('  ✗ Failed to file issue for $fp: ${result.stderr}');
+        print(UserText.reportFailedToFileIssueFor.format({'fp': fp, 'stderr': result.stderr}));
       }
     }
   }
@@ -135,7 +136,7 @@ Future<void> runReport({
   // Write updated errors back
   final content = '${updatedErrors.map(jsonEncode).join('\n')}\n';
   fileIO.write(errorsPath, content);
-  print('\nReport complete.\n');
+  print(UserText.reportReportComplete.template);
 }
 
 String _buildIssueBody(Map<String, dynamic> entry) {

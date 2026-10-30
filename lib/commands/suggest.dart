@@ -25,6 +25,7 @@ import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
 
 Future<void> runSuggest({
   FileIO? io,
@@ -52,7 +53,7 @@ Future<void> runSuggest({
   );
   final projectRoot = project.projectRoot;
   final entry = project.entry;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace    = entry.workspacePath;
   final wsConfig     = WorkspaceConfig.load(workspace, io: fileIO);
@@ -71,7 +72,7 @@ Future<void> runSuggest({
   final handoffFile  = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
-    print('✗ No handoff found. Run `claudart setup` first.');
+    print(UserText.suggestNoHandoffFoundRunClaudartSetup.template);
     exit_(1);
   }
 
@@ -176,7 +177,7 @@ Future<void> runSuggest({
   );
 
   if (ctx.readerOut.isEmpty) {
-    print('     Is claude CLI installed and authenticated?');
+    print(UserText.debugIsClaudeCliInstalledAndAuthenticated.template);
     exit_(1);
   }
 
@@ -220,7 +221,7 @@ Future<void> runSuggest({
     if (choice == 0) break;
 
     if (choice == 2) {
-      print('\n  Exit — handoff not written.\n');
+      print(UserText.suggestExitHandoffNotWritten.template);
       exit_(0);
     }
 

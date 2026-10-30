@@ -11,6 +11,7 @@ import '../templates/save_template.dart';
 import '../templates/teardown_template.dart';
 import '../ui/render.dart' as render;
 import '../io/process_runner.dart';
+import '../generated/user_text.g.dart';
 
 Future<void> runInit(List<String> args) async {
   final parser = ArgParser()
@@ -28,13 +29,13 @@ Future<void> runInit(List<String> args) async {
 
 Future<void> _initWorkspace() async {
   print(render.header('CLAUDART WORKSPACE INIT'));
-  print('\nWorkspace: $claudeDir');
+  print(UserText.initWorkspace.format({'claudeDir': claudeDir}));
 
   // Check if already initialized
   if (Directory(genericKnowledgeDir).existsSync()) {
-    print('\n⚠  Workspace already initialized.');
+    print(UserText.initWorkspaceAlreadyInitialized.template);
     if (!confirm('Re-initialize and overwrite starter files?')) {
-      print('\nAborted. Run `claudart init --project <name>` to add a project.\n');
+      print(UserText.initAbortedRunClaudartInitProjectName.template);
       exit(0);
     }
   }
@@ -69,35 +70,35 @@ Future<void> _initWorkspace() async {
   _writeIfAbsent(handoffPath, blankHandoff);
   _writeIfAbsent(skillsPath, _blankSkills);
 
-  print('\n✓ Generic knowledge files written to $genericKnowledgeDir');
-  print('✓ Slash commands written to $claudeCommandsDir');
-  print('\nNext: register your project with:');
-  print('  claudart init --project <your-project-name>\n');
+  print(UserText.initGenericKnowledgeFilesWrittenTo.format({'genericKnowledgeDir': genericKnowledgeDir}));
+  print(UserText.initSlashCommandsWrittenTo.format({'claudeCommandsDir': claudeCommandsDir}));
+  print(UserText.initNextRegisterYourProjectWith.template);
+  print(UserText.initClaudartInitProjectYourProjectName.template);
 }
 
 Future<void> _initProject(String name) async {
   print(render.header('CLAUDART PROJECT INIT: $name'));
 
   if (!Directory(genericKnowledgeDir).existsSync()) {
-    print('\n✗ Workspace not initialized. Run `claudart init` first.\n');
+    print(UserText.initWorkspaceNotInitializedRunClaudartInit.template);
     exit(1);
   }
 
   final projectFile = p.join(projectsKnowledgeDir, '$name.md');
 
   if (File(projectFile).existsSync()) {
-    print('\n⚠  Project knowledge file already exists: $projectFile');
+    print(UserText.initProjectKnowledgeFileAlreadyExists.format({'projectFile': projectFile}));
     if (!confirm('Overwrite with a fresh template?')) {
-      print('\nKept existing file.\n');
+      print(UserText.initKeptExistingFile.template);
       exit(0);
     }
   }
 
   writeFile(projectFile, projectTemplate(name));
 
-  print('\n✓ Project knowledge file created: $projectFile');
-  print('\nNext: from your project root, run:');
-  print('  claudart link $name\n');
+  print(UserText.initProjectKnowledgeFileCreated.format({'projectFile': projectFile}));
+  print(UserText.initNextFromYourProjectRootRun.template);
+  print(UserText.initClaudartLink.format({'name': name}));
 }
 
 void _writeIfAbsent(String path, String content) {

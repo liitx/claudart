@@ -16,6 +16,7 @@ import '../workspace/workspace_index.dart';
 import 'setup.dart';
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
 
 Future<void> runResume({
   FileIO? io,
@@ -37,12 +38,12 @@ Future<void> runResume({
     ),
   );
   final entry = project.entry;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final archives = loadIndex(workspace, io: fileIO);
   if (archives.isEmpty) {
-    print('\nNo archives found for this project. Run `claudart setup` instead.\n');
+    print(UserText.resumeNoArchivesFoundForThisProject.template);
     exit_(0);
   }
 
@@ -50,7 +51,7 @@ Future<void> runResume({
   final snapshotPath = p.join(archiveDirFor(workspace), newest.handoffFile);
   final snapshot = fileIO.fileExists(snapshotPath) ? fileIO.read(snapshotPath) : '';
 
-  print('Resuming from: ${newest.handoffFile} (${newest.branch})\n');
+  print(UserText.resumeResumingFrom.format({'handoffFile': newest.handoffFile, 'branch': newest.branch}));
 
   await runSetup(
     io: fileIO,

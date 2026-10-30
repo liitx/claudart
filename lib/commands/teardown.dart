@@ -26,6 +26,7 @@ import '../ui/render.dart' as render;
 import '../ui/ansi.dart' as ansi;
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.
@@ -67,7 +68,7 @@ Future<void> runTeardown({
   );
   final projectRoot = project.projectRoot;
   final entry = project.entry;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
@@ -75,7 +76,7 @@ Future<void> runTeardown({
       fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
 
   if (handoff.isEmpty) {
-    print('\nNo active handoff found. Nothing to tear down.\n');
+    print(UserText.teardownNoActiveHandoffFoundNothingTo.template);
     exit_(0);
   }
 
@@ -88,12 +89,12 @@ Future<void> runTeardown({
 
   // Show session summary before confirming.
   print('\n${render.divider()}');
-  print('  Bug     : ${_truncate(bug)}');
-  print('  Cause   : ${_truncate(rootCause)}');
+  print(UserText.teardownBug.format({'bug': _truncate(bug)}));
+  print(UserText.teardownCause.format({'rootCause': _truncate(rootCause)}));
   if (!HandoffPlaceholder.isBlank(changedFiles)) {
-    print('  Changed : ${_truncate(changedFiles)}');
+    print(UserText.teardownChanged.format({'changedFiles': _truncate(changedFiles)}));
   }
-  print('  Branch  : $branch');
+  print(UserText.teardownBranch.format({'branch': branch}));
   print('${render.divider()}\n');
 
   // Headless resolves "confirmed resolved?" from the handoff's own typed
@@ -139,10 +140,10 @@ Future<void> runTeardown({
         // write happens with no human prompt too, so what's about to be
         // archived must be visible first, not just discoverable after.
         print('\n${render.divider()}');
-        print('Headless decision — verify before trusting the archive:');
+        print(UserText.teardownHeadlessDecisionVerifyBeforeTrustingThe.template);
         print(render.divider());
-        print('  Record type : reminder (not confirmed resolved)');
-        print('  Description : ${_truncate(resolvedDescription)}');
+        print(UserText.teardownRecordTypeReminderNotConfirmedResolved.template);
+        print(UserText.teardownDescription.format({'resolvedDescription': _truncate(resolvedDescription)}));
         print(render.divider());
       }
       writeArchiveEntry(
@@ -153,9 +154,9 @@ Future<void> runTeardown({
         description: resolvedDescription,
         io:          fileIO,
       );
-      print('\n✓ Reminder saved. Run `claudart archives` to resume.\n');
+      print(UserText.teardownReminderSavedRunClaudartArchivesTo.template);
     }
-    print('\nCome back when the fix is confirmed. Continue with /debug or /suggest.\n');
+    print(UserText.teardownComeBackWhenTheFixIs.template);
     exit_(0);
   }
 
@@ -198,7 +199,7 @@ Future<void> runTeardown({
     archiveKind = ArchiveKind.archive;
   } else {
     print('\n${render.divider()}');
-    print('Session record type:');
+    print(UserText.teardownSessionRecordType.template);
     print('${render.divider()}\n');
     final kindChoice = pick_(['archive (resolved — skills updated)', 'reminder (note for future reference)']);
     archiveKind = kindChoice == 1 ? ArchiveKind.reminder : ArchiveKind.archive;
@@ -227,7 +228,7 @@ Future<void> runTeardown({
     category = cat.value;
     area = cat.area;
   } else {
-    print('\nCategorize this session for skills.md:');
+    print(UserText.teardownCategorizeThisSessionForSkillsMd.template);
     final categoryChoice = pick_(_kCategories, startIndex: startIdx);
     final cat            = TeardownCategory.values[categoryChoice];
     if (cat == TeardownCategory.other) {
@@ -290,15 +291,15 @@ Future<void> runTeardown({
 
   if (headless) {
     print('\n${render.divider()}');
-    print('Headless decisions — verify before trusting the archive:');
+    print(UserText.teardownHeadlessDecisionsVerifyBeforeTrustingThe.template);
     print(render.divider());
     print('  Record type : ${archiveKind == ArchiveKind.archive ? 'archive (resolved)' : 'reminder'}');
-    print('  Category    : $category');
-    print('  Fix summary : $fixSummary');
+    print(UserText.teardownCategory.format({'category': category}));
+    print(UserText.teardownFixSummary.format({'fixSummary': fixSummary}));
     print('  Hot files   : ${hotFiles ?? 'unspecified'}');
     print('  Cold files  : ${coldFiles ?? '(none)'}');
-    print('  Root cause  : $pattern');
-    print('  Fix pattern : $fixPattern');
+    print(UserText.teardownRootCause.format({'pattern': pattern}));
+    print(UserText.teardownFixPattern.format({'fixPattern': fixPattern}));
     print(render.divider());
   }
 
@@ -350,7 +351,7 @@ Future<void> runTeardown({
       fileIO.write(handoffFile, blankHandoff);
     }, io: fileIO);
   } on WorkspaceLockedException catch (e) {
-    print('\n✗ ${e.toString()}\n');
+    print(UserText.killText3.format({'toString': e.toString()}));
     exit_(1);
   }
 
@@ -369,15 +370,15 @@ Future<void> runTeardown({
   final commitMsg = buildCommitMessage(area, bug, rootCause, fixSummary!);
 
   if (archiveKind != ArchiveKind.reminder) {
-    print('\n✓ Skills updated: ${skillsPathFor(workspace)}');
+    print(UserText.teardownSkillsUpdated.format({'workspace': skillsPathFor(workspace)}));
   }
-  print('✓ Handoff archived: $archiveFile');
-  print('✓ Handoff reset.\n');
+  print(UserText.teardownHandoffArchived.format({'archiveFile': archiveFile}));
+  print(UserText.teardownHandoffReset.template);
   print(render.divider());
-  print('Suggested commit message:\n');
+  print(UserText.teardownSuggestedCommitMessage.template);
   print(commitMsg);
   print(render.divider());
-  print('\nRemember: do not push to remote. Open a merge request from your branch.\n');
+  print(UserText.teardownRememberDoNotPushToRemote.template);
 }
 
 void _updateSkills({

@@ -7,27 +7,33 @@
 
 import 'dart:io' show exit;
 
+import '../../generated/user_text.g.dart';
 import '../../io/file_io.dart';
 import '../../io/git_utils.dart';
 import '../../registry.dart';
 import 'command_seams.dart';
 
-/// Why a project could not be found.
+/// Why a project could not be found, and what the user is told.
 enum ProjectLookupFailure {
-  notInGitRepository,
-  notRegistered;
+  notInGitRepository(texts: [UserText.notInGitRepository]),
+  notRegistered(
+    texts: [
+      UserText.projectNotRegisteredHeadline,
+      UserText.projectNotRegisteredHint,
+    ],
+  );
+
+  const ProjectLookupFailure({required this.texts});
 
   /// What the user is told, one line each.
-  List<String> get lines => switch (this) {
-        notInGitRepository => const [
-            '✗ Not inside a git repository. Cannot detect project.',
-          ],
-        notRegistered => const [
-            '✗ No claudart session found for this project.',
-            '  Run `claudart link` to register it.',
-          ],
-      };
+  final List<UserText> texts;
+
+  List<String> get lines => [for (final text in texts) text.template];
 }
+
+/// Tells the user which project the command is acting on.
+void printProjectLine(RegistryEntry entry) =>
+    print(UserText.projectLine.format({'name': entry.name}));
 
 /// A project found in the registry.
 class ResolvedProject {

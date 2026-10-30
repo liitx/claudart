@@ -5,6 +5,7 @@ import '../config/paths.dart';
 import '../session/sync_check.dart';
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
 
 /// Runs a preflight sync check for [operation] and prints results.
 ///
@@ -34,7 +35,7 @@ Future<void> runPreflightCmd(
   final gitCtx = project.gitContext;
   final currentBranch =
       gitCtx?.branch; // null when override is used (e.g. tests)
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
 
@@ -81,7 +82,7 @@ Future<void> runPreflightCmd(
 
   // 6 — Print results.
   if (result.isClean) {
-    print('✓ Preflight clean — no issues found.');
+    print(UserText.preflightCmdPreflightCleanNoIssuesFound.template);
     exit_(0);
   }
 

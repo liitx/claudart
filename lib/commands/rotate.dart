@@ -19,6 +19,7 @@ import '../io/process_runner.dart';
 import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 const _shellExecutable = 'sh';
 const _shellCommandFlag = '-c';
@@ -77,13 +78,13 @@ Future<RotateResult>  runRotate({
   final projectRoot = project.projectRoot;
   final entry = project.entry;
   final gitCtx = project.gitContext;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
-    print('\n⚠  No handoff found in workspace. Nothing to rotate.\n');
+    print(UserText.rotateNoHandoffFoundInWorkspaceNothing.template);
     return RotateResult.noHandoff;
   }
 
@@ -91,15 +92,15 @@ Future<RotateResult>  runRotate({
   final state = SessionState.parse(handoff);
 
   if (!state.hasActiveContent) {
-    print('\n⚠  Handoff is blank. Start a session with /suggest first.\n');
+    print(UserText.rotateHandoffIsBlankStartASession.template);
     return RotateResult.noHandoff;
   }
 
   // 2 — Show current session summary.
-  print('\n───────────────────────────────────────');
-  print('  Bug    : ${_truncate(state.bug.text)}');
-  print('  Branch : ${gitCtx?.branch ?? state.branch}');
-  print('───────────────────────────────────────\n');
+  print(UserText.killText.template);
+  print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
+  print(UserText.killBranch.format({'branch': gitCtx?.branch ?? state.branch}));
+  print(UserText.rotateText.template);
 
   // 3 — Confirm before any destructive action.
   //
@@ -110,16 +111,16 @@ Future<RotateResult>  runRotate({
   // `--headless` is the explicit way to say "don't ask", and plain end of
   // input stops here. A piped answer still counts as an answer.
   if (mode == RunMode.headless) {
-    print('(headless — proceeding without confirmation)\n');
+    print(UserText.rotateHeadlessProceedingWithoutConfirmation.template);
   } else {
     final answer = ask('Archive this session and rotate to the next issue?');
     if (answer == null) {
-      print('\n✗ No input available to confirm the rotation, so nothing was changed.');
-      print('  Re-run in a terminal, or pass --headless to proceed without asking.\n');
+      print(UserText.rotateNoInputAvailableToConfirmThe.template);
+      print(UserText.rotateReRunInATerminalOr.template);
       exit_(1);
     }
     if (!answer) {
-      print('\nRotate cancelled.\n');
+      print(UserText.rotateRotateCancelled.template);
       return RotateResult.cancelled;
     }
   }
@@ -144,14 +145,14 @@ Future<RotateResult>  runRotate({
   // from the workspace config.json, defaulting to 'make rebuild'.
   final config = _loadConfig(fileIO, workspace);
   final build_ = buildFn ?? (command) => _defaultBuild(command, projectRoot, proc);
-  print('\nRunning build gate: ${config.afterFixCommand}');
+  print(UserText.rotateRunningBuildGate.format({'afterFixCommand': config.afterFixCommand}));
   final buildOk = await build_(config.afterFixCommand);
   if (!buildOk) {
-    print('✗ Build failed. Fix the build before rotating.');
-    print('  (gate: `${config.afterFixCommand}` — change it with "afterFixCommand" in ${configPathFor(workspace)})\n');
+    print(UserText.rotateBuildFailedFixTheBuildBefore.template);
+    print(UserText.rotateGateChangeItWithAfterfixcommandIn.format({'afterFixCommand': config.afterFixCommand, 'workspace': configPathFor(workspace)}));
     return RotateResult.buildFailed;
   }
-  print('✓ Build passed.\n');
+  print(UserText.rotateBuildPassed.template);
 
   // Records the move once the build gate has passed and the handoff is about
   // to change. Not enforced: rotate is deliberately permissive, so a status
@@ -167,8 +168,8 @@ Future<RotateResult>  runRotate({
   if (pending.isEmpty) {
     recordMove(HandoffEvent.rotatedEmpty);
     fileIO.write(handoffFile, blankHandoff);
-    print('✓ Archived  : ${p.basename(archiveFile)}');
-    print('✓ All pending issues cleared. Handoff reset.\n');
+    print(UserText.rotateArchived.format({'archiveFile': p.basename(archiveFile)}));
+    print(UserText.rotateAllPendingIssuesClearedHandoffReset.template);
     return RotateResult.noNextIssue;
   }
 
@@ -187,12 +188,12 @@ Future<RotateResult>  runRotate({
   recordMove(HandoffEvent.rotated);
   fileIO.write(handoffFile, newHandoff);
 
-  print('✓ Archived  : ${p.basename(archiveFile)}');
-  print('✓ Next issue: ${_truncate(nextBug)}');
+  print(UserText.rotateArchived.format({'archiveFile': p.basename(archiveFile)}));
+  print(UserText.rotateNextIssue.format({'nextBug': _truncate(nextBug)}));
   if (remaining.isNotEmpty) {
-    print('  Queued    : ${remaining.length} more issue(s) in Pending Issues.');
+    print(UserText.rotateQueuedMoreIssueSInPending.format({'length': remaining.length}));
   }
-  print('\nRun /suggest to continue.\n');
+  print(UserText.rotateRunSuggestToContinue.template);
 
   return RotateResult.rotated;
 }

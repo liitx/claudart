@@ -17,6 +17,7 @@ import '../workspace/workspace_index.dart';
 import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 Future<void> runArchives({
   CommandSeams seams = const CommandSeams(),
@@ -30,13 +31,13 @@ Future<void> runArchives({
 
   final project = requireProject(seams);
   final entry = project.entry;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final entries   = loadIndex(workspace, io: fileIO);
 
   if (entries.isEmpty) {
-    print('\nNo archives found for this project.\n');
+    print(UserText.archivesNoArchivesFoundForThisProject.template);
     exit_(0);
   }
 
@@ -49,7 +50,7 @@ Future<void> runArchives({
 
   final chosen = pick_(labels);
   if (chosen >= entries.length) {
-    print('\nCancelled.\n');
+    print(UserText.archivesCancelled.template);
     exit_(0);
   }
 
@@ -71,7 +72,7 @@ Future<void> runArchives({
     case 1:
       _view(fileIO, workspace, selected);
     case _:
-      print('\nCancelled.\n');
+      print(UserText.archivesCancelled.template);
   }
 }
 

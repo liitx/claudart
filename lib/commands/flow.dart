@@ -31,6 +31,7 @@ import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
 
 Future<void> runFlow({
   FileIO? io,
@@ -58,7 +59,7 @@ Future<void> runFlow({
   );
   final projectRoot = project.projectRoot;
   final entry = project.entry;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace    = entry.workspacePath;
   final wsConfig     = WorkspaceConfig.load(workspace, io: fileIO);
@@ -87,7 +88,7 @@ Future<void> runFlow({
 
   if (checkpointFile.existsSync()) {
     print(render.header('CLAUDART FLOW  ${ansi.dim}[resume]${ansi.reset}'));
-    print('  A saved checkpoint was found from a previous session.\n');
+    print(UserText.flowASavedCheckpointWasFoundFrom.template);
 
     try {
       final json    = jsonDecode(checkpointFile.readAsStringSync()) as Map<String, dynamic>;
@@ -161,7 +162,7 @@ Future<void> runFlow({
   );
   final taskPrompt = prompt_('  →', optional: true)?.trim() ?? '';
   if (taskPrompt.isEmpty) {
-    print('\n  No prompt entered. Aborted.\n');
+    print(UserText.flowNoPromptEnteredAborted.template);
     exit_(0);
   }
 
@@ -304,7 +305,7 @@ Future<PipelineContext> _runPhase2(
   }
 
   if (result[PipelineSlot.approved] != 'true') {
-    print('\n  Flow aborted — handoff not written.\n');
+    print(UserText.flowFlowAbortedHandoffNotWritten.template);
     exit_(0);
   }
 

@@ -14,6 +14,7 @@ import 'setup.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_link_state.dart';
 import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
@@ -41,12 +42,12 @@ Future<void> runLauncher({
   final currentBranch = gitCtx?.branch;
 
   if (registry.isEmpty) {
-    print('\nNo projects registered yet.');
+    print(UserText.launchNoProjectsRegisteredYet.template);
     if (currentRoot != null) {
-      print('  Current directory: $currentRoot');
-      print('\nRun `claudart link` from your project to register it.\n');
+      print(UserText.launchCurrentDirectory.format({'currentRoot': currentRoot}));
+      print(UserText.launchRunClaudartLinkFromYourProject.template);
     } else {
-      print('\nNavigate to a project directory and run `claudart link`.\n');
+      print(UserText.launchNavigateToAProjectDirectoryAnd.template);
     }
     exit_(0);
   }
@@ -100,16 +101,16 @@ Future<void> runLauncher({
     final isCurrentProject =
         currentEntry != null && selected.workspacePath == currentEntry.workspacePath;
     final branch = (isCurrentProject ? currentBranch : null) ?? state.branch;
-    print('  Branch : $branch');
+    print(UserText.killBranch.format({'branch': branch}));
     // A blank handoff is no-handoff, not its stale Status line.
     final shown = state.effectiveStatus;
     final statusColour = render.statusColour(shown);
     print('  Status : ${ansi.c(statusColour, shown.value)}');
     if (state.hasActiveContent) {
-      print('  Bug    : ${_truncate(state.bug.text)}');
+      print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
     }
   } else {
-    print('  No active session.');
+    print(UserText.launchNoActiveSession.template);
   }
 
   if (locked) {
@@ -241,19 +242,19 @@ void _printResumeInstructions(HandoffStatus status) {
   print('');
   switch (status) {
     case HandoffStatus.suggestInvestigating:
-      print('Open your editor and run /suggest to continue exploration.');
+      print(UserText.launchOpenYourEditorAndRunSuggest.template);
     case HandoffStatus.readyForSuggest:
-      print('Ready for a new suggest cycle. Run /suggest to begin.');
+      print(UserText.launchReadyForANewSuggestCycle.template);
     case HandoffStatus.readyForDebug:
-      print('Root cause identified. Run /debug to implement the fix.');
+      print(UserText.launchRootCauseIdentifiedRunDebugTo.template);
     case HandoffStatus.debugInProgress:
-      print('Fix in progress. Run /debug to continue.');
+      print(UserText.launchFixInProgressRunDebugTo.template);
     case HandoffStatus.debugComplete:
-      print('Debug complete. Run /save then verify with dart test.');
+      print(UserText.launchDebugCompleteRunSaveThenVerify.template);
     case HandoffStatus.needsSuggest:
-      print('Debug hit a blocker. Run /suggest for broader exploration.');
+      print(UserText.launchDebugHitABlockerRunSuggest.template);
     case HandoffStatus.unknown || HandoffStatus.noHandoff:
-      print('Run /suggest to begin or /debug if root cause is known.');
+      print(UserText.launchRunSuggestToBeginOrDebug.template);
   }
   print('');
 }

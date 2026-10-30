@@ -14,6 +14,7 @@ import '../ui/render.dart' as render;
 import 'support/claudart_command.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }
@@ -39,14 +40,14 @@ Future<SkillsUpdateResult> runSave({
   final entry = project.entry;
   final registry = project.registry;
   final gitCtx = project.gitContext;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
 
   // 2 — Read handoff.
   if (!fileIO.fileExists(handoffFile)) {
-    print('\n⚠  No handoff found in workspace. Nothing to checkpoint.\n');
+    print(UserText.saveNoHandoffFoundInWorkspaceNothing.template);
     exit_(0);
   }
 
@@ -163,34 +164,34 @@ void _printReport(
   SkillsUpdateResult skillsResult,
   int durationMs,
 ) {
-  print('\n✓ Checkpoint: ${p.basename(checkpointFile)}  (${durationMs}ms)');
-  print('  Branch : ${liveBranch ?? state.branch}');
+  print(UserText.saveCheckpointMs.format({'checkpointFile': p.basename(checkpointFile), 'durationMs': durationMs}));
+  print(UserText.killBranch.format({'branch': liveBranch ?? state.branch}));
   // A blank handoff is no-handoff, not its stale Status line.
   final shown = state.effectiveStatus;
-  print('  Status : ${shown.value}');
+  print(UserText.killStatus.format({'value': shown.value}));
 
   if (skillsResult == SkillsUpdateResult.written) {
-    print('  Skills : pending entry written (root cause confirmed)');
+    print(UserText.saveSkillsPendingEntryWrittenRootCause.template);
   } else {
-    print('  Skills : skipped (root cause not yet confirmed)');
+    print(UserText.saveSkillsSkippedRootCauseNotYet.template);
   }
 
   print('');
   switch (shown) {
     case HandoffStatus.suggestInvestigating:
-      print('Continue exploring. Run /save again when root cause is confirmed.');
+      print(UserText.saveContinueExploringRunSaveAgainWhen.template);
     case HandoffStatus.readyForSuggest:
-      print('Run /suggest to continue.');
+      print(UserText.saveRunSuggestToContinue.template);
     case HandoffStatus.readyForDebug:
-      print('Root cause locked. Run /debug to implement the fix.');
+      print(UserText.saveRootCauseLockedRunDebugTo.template);
     case HandoffStatus.debugInProgress:
-      print('Fix in progress. Run /save again after confirming the fix.');
+      print(UserText.saveFixInProgressRunSaveAgain.template);
     case HandoffStatus.debugComplete:
-      print('Debug complete. Verify with dart test, then claudart teardown.');
+      print(UserText.saveDebugCompleteVerifyWithDartTest.template);
     case HandoffStatus.needsSuggest ||
          HandoffStatus.unknown ||
          HandoffStatus.noHandoff:
-      print('Run /suggest or /debug to continue.');
+      print(UserText.saveRunSuggestOrDebugToContinue.template);
   }
   print('');
 }

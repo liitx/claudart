@@ -7,6 +7,7 @@ import '../scanner/scan_threshold_exception.dart';
 import '../sensitivity/token_map.dart';
 import '../logging/logger.dart';
 import '../ui/render.dart' as render;
+import '../generated/user_text.g.dart';
 
 /// Runs an explicit on-demand scan of the project.
 /// [scope] overrides the default scan scope (`ScanScope.lib`, `ScanScope.full`,
@@ -27,7 +28,7 @@ Future<void> runScan({
   final fileIO = io ?? const RealFileIO();
 
   if (projectRootOverride == null) {
-    print('\n✗ No project linked. Run `claudart link` first.\n');
+    print(UserText.scanNoProjectLinkedRunClaudartLink.template);
     return;
   }
 
@@ -36,7 +37,7 @@ Future<void> runScan({
   final sensitivityMode = sensitivityModeOverride ?? false;
 
   print(render.header('SENSITIVITY SCAN'));
-  print('Scanning $projectRoot/$effectiveScope...');
+  print(UserText.scanScanning.format({'projectRoot': projectRoot, 'effectiveScope': effectiveScope}));
 
   final tokenMapPath = workspacePath != null
       ? tokenMapPathFor(workspacePath)
@@ -65,8 +66,8 @@ Future<void> runScan({
   } on ScanThresholdException catch (e) {
     print('\n⚠  Threshold exceeded: ${e.filesFound} files found '
         '(threshold: ${e.threshold})');
-    print('   Reason: ${e.reason}');
-    print('\nSuggestions:');
+    print(UserText.scanReason.format({'reason': e.reason}));
+    print(UserText.scanSuggestions.template);
     for (final s in e.suggestions) {
       print('  • $s');
     }
@@ -108,7 +109,7 @@ Future<void> runScan({
   if (newTokens > 0) {
     print('  + $newTokens new token${newTokens == 1 ? '' : 's'} since last scan');
   }
-  print('Token map updated: $tokenMapPath');
+  print(UserText.scanTokenMapUpdated.format({'tokenMapPath': tokenMapPath}));
 
   logger.logInteraction(
     command: 'scan',

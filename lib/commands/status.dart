@@ -10,6 +10,7 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 Future<void> runStatus({
   CommandSeams seams = const CommandSeams(),
@@ -33,7 +34,7 @@ Future<void> runStatus({
 
   if (content.isEmpty) {
     if (prompt) return;
-    print('\nNo active handoff. Run: claudart setup\n');
+    print(UserText.statusNoActiveHandoffRunClaudartSetup.template);
     return;
   }
 
@@ -57,15 +58,15 @@ Future<void> runStatus({
           'What is still unresolved');
 
   print(render.header('CLAUDART SESSION STATUS'));
-  print('Project  : ${entry.name}');
-  print('Branch   : ${currentBranch ?? state.branch}');
+  printProjectLine(entry);
+  print(UserText.statusBranch.format({'branch': currentBranch ?? state.branch}));
   final statusColour = render.statusColour(shown);
   print('Status   : ${ansi.c(statusColour, shown.value)}');
-  print('Bug      : ${_truncate(state.bug.text)}');
-  print('Root cause: ${_truncate(state.rootCause.text)}');
+  print(UserText.statusBug.format({'text': _truncate(state.bug.text)}));
+  print(UserText.statusRootCause.format({'text': _truncate(state.rootCause.text)}));
   if (shown == HandoffStatus.debugInProgress ||
       shown == HandoffStatus.needsSuggest) {
-    print('Unresolved: ${_truncate(unresolved)}');
+    print(UserText.statusUnresolved.format({'unresolved': _truncate(unresolved)}));
   }
 
   final skillsFile = skillsPathFor(workspace);
@@ -74,9 +75,9 @@ Future<void> runStatus({
     final patterns =
         relevantSkillPatterns(fileIO.read(skillsFile), state.bug.text);
     if (patterns.isNotEmpty) {
-      print('\nRelevant past patterns:');
+      print(UserText.statusRelevantPastPatterns.template);
       for (final pattern in patterns) {
-        print('  ${_truncate(pattern, max: 100)}');
+        print(UserText.statusText.format({'max': _truncate(pattern, max: 100)}));
       }
     }
   }
@@ -88,21 +89,21 @@ Future<void> runStatus({
   }
 
   print('');
-  print('Handoff  : $handoffFile');
-  print('Skills   : ${skillsPathFor(workspace)}');
+  print(UserText.statusHandoff.format({'handoffFile': handoffFile}));
+  print(UserText.statusSkills.format({'workspace': skillsPathFor(workspace)}));
 
   final modelRecords =
       SessionLogger.plain(io: fileIO, workspacePath: workspace)
           .readStepModelRecords();
   if (modelRecords.isNotEmpty) {
-    print('\nModels (newest per step):');
+    print(UserText.statusModelsNewestPerStep.template);
     for (final record in modelRecords) {
-      print('  ${describeModelRecord(record)}');
+      print(UserText.statusText2.format({'record': describeModelRecord(record)}));
     }
   }
 
   print('\nNext step:');
-  print('  ${shown.nextStep}');
+  print(UserText.statusText3.format({'nextStep': shown.nextStep}));
   print('');
 }
 

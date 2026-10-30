@@ -14,6 +14,7 @@ import '../workspace/workspace_link_state.dart';
 import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 /// How a `kill` run ended. The name is the outcome written to the interaction
 /// log, so a warned kill, a cancelled one and a refused one can be told apart.
@@ -89,8 +90,8 @@ Future<void> runKill({
     if (headless) return headlessAnswer;
     final answer = ask(question);
     if (answer == null) {
-      print('\n✗ No input available to answer "$question", so nothing was changed.');
-      print('  Re-run in a terminal, or pass --headless to kill without asking.\n');
+      print(UserText.killNoInputAvailableToAnswerSo.format({'question': question}));
+      print(UserText.killReRunInATerminalOr.template);
       leave(KillOutcome.noInput, 1);
     }
     return answer;
@@ -104,7 +105,7 @@ Future<void> runKill({
   final registry = project.registry;
   final entry = project.entry;
   final gitCtx = project.gitContext;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
   final recorder = SessionLogger.forEntry(entry, io: fileIO);
   logger = recorder;
 
@@ -113,11 +114,11 @@ Future<void> runKill({
   // 3 — Guard check — interrupted state.
   if (isLocked(workspace, io: fileIO)) {
     final op = interruptedOperation(workspace, io: fileIO) ?? 'unknown';
-    print('\n⚠  Workspace is locked (interrupted during: $op).');
-    print('   Another operation may still be running, or a previous run crashed.');
+    print(UserText.killWorkspaceIsLockedInterruptedDuring.format({'op': op}));
+    print(UserText.killAnotherOperationMayStillBeRunning.template);
     if (!decide('Clear the lock and force kill?', headlessAnswer: false)) {
-      print('\nKill cancelled. Resolve the interrupted state before retrying.');
-      if (headless) print('  (--headless never clears a workspace lock; re-run in a terminal.)');
+      print(UserText.killCancelledInterrupted.template);
+      if (headless) print(UserText.killHeadlessNeverClearsAWorkspaceLock.template);
       print('');
       leave(KillOutcome.lockNotCleared, headless ? 1 : 0);
     }
@@ -127,9 +128,9 @@ Future<void> runKill({
   // 4 — Check for an active session: a linked project (symlink or the real
   // directory fallback). Only warn when it is unlinked.
   if (!linkStateOf(fileIO, projectRoot).isLinked) {
-    print('\n⚠  No active session found for ${entry.name}.');
+    print(UserText.killNoActiveSessionFoundFor.format({'name': entry.name}));
     if (!decide('Kill anyway and archive the handoff?', headlessAnswer: true)) {
-      print('\nKill cancelled.\n');
+      print(UserText.killCancelled.template);
       leave(KillOutcome.cancelled, 0);
     }
   }
@@ -138,9 +139,9 @@ Future<void> runKill({
   final handoffPath = handoffPathFor(workspace);
   final handoff = fileIO.fileExists(handoffPath) ? fileIO.read(handoffPath) : '';
   if (handoff.isEmpty) {
-    print('\n⚠  No handoff found in workspace: $workspace');
+    print(UserText.killNoHandoffFoundInWorkspace.format({'workspace': workspace}));
     if (!decide('Nothing to archive. Reset the session anyway?', headlessAnswer: true)) {
-      print('\nKill cancelled.\n');
+      print(UserText.killCancelled.template);
       leave(KillOutcome.cancelled, 0);
     }
   } else {
@@ -149,10 +150,10 @@ Future<void> runKill({
   }
 
   // 6 — Final confirmation.
-  if (headless) print('\n(headless — killing without confirmation)');
+  if (headless) print(UserText.killHeadlessKillingWithoutConfirmation.template);
   if (!decide('Kill this session? (archive will be saved, skills.md will NOT be updated)',
       headlessAnswer: true)) {
-    print('\nKill cancelled.\n');
+    print(UserText.killCancelled.template);
     leave(KillOutcome.cancelled, 0);
   }
 
@@ -162,14 +163,14 @@ Future<void> runKill({
       await closeSession(workspace, projectRoot, io: fileIO);
     }, io: fileIO);
   } on SessionCloseException catch (e) {
-    print('\n✗ Kill failed at step "${e.failedStep}": ${e.cause}');
-    print('  Workspace state has been rolled back. No partial changes remain.\n');
+    print(UserText.killKillFailedAtStep.format({'failedStep': e.failedStep, 'cause': e.cause}));
+    print(UserText.killWorkspaceStateHasBeenRolledBack.template);
     // closeSession's own rollback already restored the workspace, so the
     // lock withGuard left behind is not signaling a real interrupted state.
     clearLock(workspace, io: fileIO);
     leave(KillOutcome.closeFailed, 1);
   } on WorkspaceLockedException catch (e) {
-    print('\n✗ ${e.toString()}\n');
+    print(UserText.killText3.format({'toString': e.toString()}));
     leave(KillOutcome.workspaceLocked, 1);
   }
 
@@ -192,32 +193,32 @@ Future<void> runKill({
   registry.touchSession(entry.name).save(io: fileIO);
 
   sw.stop();
-  print('\n✓ Session killed: ${entry.name}  (${sw.elapsedMilliseconds}ms)');
+  print(UserText.killSessionKilledMs.format({'name': entry.name, 'elapsedMilliseconds': sw.elapsedMilliseconds}));
   print('  Handoff archived to ${p.join(workspace, 'archive')}');
-  print('  Handoff reset to blank.\n');
-  print('Run `claudart setup` to start a new session.\n');
+  print(UserText.killHandoffResetToBlank.template);
+  print(UserText.killRunClaudartSetupToStartA.template);
 }
 
 void _printSessionSummary(String name, SessionState state, String? liveBranch) {
-  print('\n───────────────────────────────────────');
-  print('  Session: $name');
-  print('  Branch : ${liveBranch ?? state.branch}');
-  print('  Status : ${state.effectiveStatus.value}');
-  print('  Bug    : ${_truncate(state.bug.text)}');
+  print(UserText.killText.template);
+  print(UserText.killSession.format({'name': name}));
+  print(UserText.killBranch.format({'branch': liveBranch ?? state.branch}));
+  print(UserText.killStatus.format({'value': state.effectiveStatus.value}));
+  print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
   final warning = state.effectiveStatus.killWarning;
-  if (warning != null) print('\n⚠  $warning');
+  if (warning != null) print(UserText.killText4.format({'warning': warning}));
   if (state.hasActiveContent) {
-    print('\n  Debug progress recorded — this work will be archived.');
+    print(UserText.killDebugProgressRecordedThisWorkWill.template);
     if (!state.attempted.isBlank) {
-      print('  Attempted : ${_truncate(state.attempted.text)}');
+      print(UserText.killAttempted.format({'text': _truncate(state.attempted.text)}));
     }
     if (!state.changed.isBlank) {
-      print('  Changed   : ${_truncate(state.changed.text)}');
+      print(UserText.killChanged.format({'text': _truncate(state.changed.text)}));
     }
   } else {
-    print('\n  No debug progress recorded (fresh session).');
+    print(UserText.killNoDebugProgressRecordedFreshSession.template);
   }
-  print('───────────────────────────────────────');
+  print(UserText.killText2.template);
 }
 
 String _truncate(String s, {int max = 72}) =>

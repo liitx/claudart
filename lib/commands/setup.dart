@@ -19,6 +19,8 @@ import '../session/session_ops.dart';
 import '../ui/render.dart' as render;
 import '../util/prompt_with_default.dart';
 import '../io/process_runner.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.
@@ -51,12 +53,12 @@ Future<void> runSetup({
   final projectRoot = projectRootOverride ?? gitCtx?.root;
 
   if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project root.');
+    print(UserText.notInGitRepositoryRoot.template.trimRight());
     exit_(1);
   }
 
   if (!fileIO.dirExists(projectRoot)) {
-    print('\n✗ Path not found: $projectRoot');
+    print(UserText.setupPathNotFound.format({'projectRoot': projectRoot}));
     exit_(1);
   }
 
@@ -64,11 +66,11 @@ Future<void> runSetup({
   final registry = Registry.load(io: fileIO);
   final entry = registry.findByProjectRoot(projectRoot);
   if (entry == null) {
-    print('\n✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it first.');
+    print(UserText.setupNoClaudartSessionFoundForThis.template);
+    print(UserText.setupRunClaudartLinkToRegisterIt.template);
     exit_(1);
   }
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
@@ -83,19 +85,19 @@ Future<void> runSetup({
     final state = SessionState.parse(existing);
     if (state.hasActiveContent) {
       final statusColour = render.statusColour(state.status);
-      print('\n─── ${entry.name} ───────────────────────────────');
-      print('  Branch : ${gitCtx?.branch ?? state.branch}');
+      print(UserText.setupText.format({'name': entry.name}));
+      print(UserText.killBranch.format({'branch': gitCtx?.branch ?? state.branch}));
       print('  Status : ${ansi.c(statusColour, state.status.value)}');
-      print('  Bug    : ${_truncate(state.bug.text)}');
+      print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
       print('');
 
       final choice = chooseFrom(SetupMenu.values, (m) => m.label, pick_);
       switch (choice) {
         case SetupMenu.back:
-          print('\nSetup cancelled.\n');
+          print(UserText.setupSetupCancelled.template);
           exit_(0);
         case SetupMenu.resume:
-          print('\nOpen your editor and run /suggest or /debug to continue.\n');
+          print(UserText.setupOpenYourEditorAndRunSuggest.template);
           exit_(0);
         case SetupMenu.startFresh:
           break;
@@ -114,25 +116,25 @@ Future<void> runSetup({
       prompt_('Could not detect git branch. Enter branch name manually') ??
       'unknown';
 
-  print('\n🌿 Branch: $branch');
+  print(UserText.setupBranch.format({'branch': branch}));
 
   // Surface skills context.
   final skillsFile = skillsPathFor(workspace);
   final skills =
       fileIO.fileExists(skillsFile) ? fileIO.read(skillsFile) : '';
   if (skills.isNotEmpty && !skills.contains('_No sessions recorded yet._')) {
-    print('\n📚 Skills loaded — relevant patterns will inform /suggest.');
+    print(UserText.setupSkillsLoadedRelevantPatternsWillInform.template);
   }
 
   // Prompt for session context.
-  print('\nAnswer the following. Be specific — this seeds the handoff for /suggest.\n');
+  print(UserText.setupAnswerTheFollowingBeSpecificThis.template);
 
   final bug = promptWithDefault(prompt_, '1. What is the bug? (actual behavior)', defaultBug);
   final expected = promptWithDefault(
       prompt_, '2. What should be happening? (expected behavior)', defaultExpected);
 
   if (bug == null || expected == null) {
-    print('\n✗ Setup requires an interactive terminal.');
+    print(UserText.setupSetupRequiresAnInteractiveTerminal.template);
     exit_(1);
   }
 
@@ -147,16 +149,16 @@ Future<void> runSetup({
 
   // Confirm before writing.
   print('\n${render.divider()}');
-  print('Project : ${entry.name}');
-  print('Branch  : $branch');
-  print('Bug     : $bug');
-  print('Expected: $expected');
-  if (files != null) print('Files   : $files');
-  if (entryPoints != null) print('Entry   : $entryPoints');
+  print(UserText.setupProject.format({'name': entry.name}));
+  print(UserText.setupBranch2.format({'branch': branch}));
+  print(UserText.setupBug.format({'bug': bug}));
+  print(UserText.setupExpected.format({'expected': expected}));
+  if (files != null) print(UserText.setupFiles.format({'files': files}));
+  if (entryPoints != null) print(UserText.setupEntry.format({'entryPoints': entryPoints}));
   print(render.divider());
 
   if (!confirm_('Write handoff with this context?')) {
-    print('\nSetup cancelled.');
+    print(UserText.setupSetupCancelled2.template);
     exit_(0);
   }
 
@@ -191,8 +193,8 @@ Future<void> runSetup({
       io: fileIO,
     ).single;
     if (!abstractor.isNotSensitive(content, defaultDetector)) {
-      print('\n⚠  Handoff still contains sensitive tokens after abstraction.');
-      print('   Review handoff.md manually before sharing.');
+      print(UserText.setupHandoffStillContainsSensitiveTokensAfter.template);
+      print(UserText.setupReviewHandoffMdManuallyBeforeSharing.template);
     }
   }
 
@@ -213,10 +215,10 @@ Future<void> runSetup({
     event: HandoffEvent.setup,
   );
 
-  print('\n✓ Handoff written to $handoffFile');
+  print(UserText.setupHandoffWrittenTo.format({'handoffFile': handoffFile}));
   print('\nNext step:');
-  print('  Open your editor and run /suggest to begin exploration.');
-  print('  Or run /debug if you already know the root cause.\n');
+  print(UserText.setupOpenYourEditorAndRunSuggest2.template);
+  print(UserText.setupOrRunDebugIfYouAlready.template);
 }
 
 String? _defaultPrompt(String question, {bool optional = false}) =>

@@ -4,6 +4,7 @@ import '../session/pending_confirmation.dart';
 import '../ui/render.dart' as render;
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
 
 /// Sets or clears the pending confirmation for the current project's
 /// workspace. A skill's confirmation-gate step (see
@@ -31,7 +32,7 @@ Future<void> runConfirmPending(
     ),
   );
   final entry = project.entry;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
 
@@ -45,7 +46,7 @@ Future<void> runConfirmPending(
   final onConfirm = _valueOf(args, '--on-confirm');
 
   if (question == null || onConfirm == null) {
-    print('✗ Both --question and --on-confirm are required (or pass --clear).');
+    print(UserText.confirmPendingBothQuestionAndOnConfirmAre.template);
     exit_(1);
   }
 

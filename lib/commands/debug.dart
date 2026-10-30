@@ -24,6 +24,7 @@ import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.
@@ -107,7 +108,7 @@ Future<void> runDebug({
   }
   final projectRoot = project.projectRoot;
   final entry = project.entry;
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
   final logger = SessionLogger.forEntry(entry, io: fileIO);
   exitLogger = logger;
 
@@ -127,7 +128,7 @@ Future<void> runDebug({
   final handoffFile = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
-    print('✗ No handoff found. Run `claudart suggest` first.');
+    print(UserText.debugNoHandoffFoundRunClaudartSuggest.template);
     leave(DebugExitKind.noHandoff);
   }
 
@@ -253,7 +254,7 @@ Future<void> runDebug({
 
   if (ctx.readerOut.isEmpty) {
     blockDebug();
-    print('     Is claude CLI installed and authenticated?');
+    print(UserText.debugIsClaudeCliInstalledAndAuthenticated.template);
     leave(DebugExitKind.readerProducedNothing);
   }
 
@@ -294,7 +295,7 @@ Future<void> runDebug({
     final abs    = p.join(projectRoot, f.path);
     final exists = File(abs).existsSync();
     final tag    = exists ? ansi.c(ansi.yellow, 'MOD') : ansi.c(ansi.green, 'NEW');
-    print('    [$tag]  ${f.path}');
+    print(UserText.debugText.format({'tag': tag, 'path': f.path}));
   }
   print('');
 
@@ -306,7 +307,7 @@ Future<void> runDebug({
   ]);
 
   if (choice == 1) {
-    print('\n  Exit — no files written.\n');
+    print(UserText.debugExitNoFilesWritten.template);
     leave(DebugExitKind.ownerDeclinedWrite);
   }
 

@@ -5,6 +5,7 @@ import '../config/paths.dart';
 import '../io/process_runner.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 /// Runs an experiment: executes [command] with [args], tees stdout/stderr to a
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the
@@ -28,7 +29,7 @@ Future<void> runExperiment(
   // ── Parse arguments: <name> -- <command> [args...] ────────────────────────
   final sepIdx = args.indexOf('--');
   if (sepIdx < 1 || sepIdx == args.length - 1) {
-    print('Usage: claudart experiment <name> -- <command> [args...]');
+    print(UserText.experimentUsageClaudartExperimentNameCommandArgs.template);
     exit_(1);
   }
   final name = args.first;

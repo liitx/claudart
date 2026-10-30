@@ -25,6 +25,7 @@ import 'flow.dart';
 import 'suggest.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
 
 /// What the user typed. Conversation is the default: only slash commands invoke
 /// structured work; everything else is a [message] to the agent.
@@ -119,7 +120,7 @@ Future<void> runChatShell({
 
   print(render.header('CLAUDART'));
   if (entry == null) {
-    print('\n  Not in a registered project — run `claudart link` here first.\n');
+    print(UserText.chatShellNotInARegisteredProjectRun.template);
     exit_(0);
   }
 
