@@ -26,6 +26,7 @@ import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
+import '../session/handoff_store.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.
@@ -163,19 +164,15 @@ Future<void> runDebug({
   // is never silent and the handoff never stays at ready-for-debug.
 
 
-  String applyDebugEvent(String text, HandoffEvent event) => applyHandoffEvent(
-        text,
-        event,
-        onTransition: (transition) => logger.logTransition(
-          command: ClaudartCommand.debug.name,
-          transition: transition,
-        ),
-      );
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.debug.name,
+  );
 
-  void blockDebug() => fileIO.write(
-        handoffFile,
-        applyDebugEvent(fileIO.read(handoffFile), HandoffEvent.debugBlocked),
-      );
+  void blockDebug() =>
+      store.apply(fileIO.read(handoffFile), HandoffEvent.debugBlocked);
 
   Future<T> blockOnFailure<T>(Future<T> Function() step) async {
     try {
@@ -188,10 +185,7 @@ Future<void> runDebug({
 
   // A run resuming from debugInProgress has no debugStarted move to make.
   if (status.after(HandoffEvent.debugStarted) != null) {
-    fileIO.write(
-      handoffFile,
-      applyDebugEvent(handoff, HandoffEvent.debugStarted),
-    );
+    store.apply(handoff, HandoffEvent.debugStarted);
   }
 
   // ── Header ──────────────────────────────────────────────────────────────────
@@ -317,10 +311,9 @@ Future<void> runDebug({
   });
   final written = editTags.length;
 
-  fileIO.write(
-    handoffFile,
+  store.rewrite(
     withDebugDisposition(
-      applyDebugEvent(fileIO.read(handoffFile), HandoffEvent.fixApplied),
+      store.apply(fileIO.read(handoffFile), HandoffEvent.fixApplied),
       DebugDisposition.done,
     ),
   );

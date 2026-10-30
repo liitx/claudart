@@ -20,6 +20,7 @@ import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../session/handoff_store.dart';
 
 const _shellExecutable = 'sh';
 const _shellCommandFlag = '-c';
@@ -158,16 +159,20 @@ Future<RotateResult>  runRotate({
   // to change. Not enforced: rotate is deliberately permissive, so a status
   // the table lacks is logged, not thrown.
   final logger = SessionLogger.forEntry(entry, io: fileIO);
-  void recordMove(HandoffEvent event) => logger.logHandoffMove(
-        command: ClaudartCommand.rotate.name,
-        from: state.status,
-        event: event,
-      );
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.rotate.name,
+  );
 
   // 7 — Seed next handoff or reset to blank.
   if (pending.isEmpty) {
-    recordMove(HandoffEvent.rotatedEmpty);
-    fileIO.write(handoffFile, blankHandoff);
+    store.replace(
+      blankHandoff,
+      from: state.status,
+      event: HandoffEvent.rotatedEmpty,
+    );
     print(UserText.rotateArchived.format({'archiveFile': p.basename(archiveFile)}));
     print(UserText.rotateAllPendingIssuesClearedHandoffReset.template);
     return RotateResult.noNextIssue;
@@ -185,8 +190,11 @@ Future<RotateResult>  runRotate({
     projectName: entry.name,
     pendingIssues: remaining,
   );
-  recordMove(HandoffEvent.rotated);
-  fileIO.write(handoffFile, newHandoff);
+  store.replace(
+    newHandoff,
+    from: state.status,
+    event: HandoffEvent.rotated,
+  );
 
   print(UserText.rotateArchived.format({'archiveFile': p.basename(archiveFile)}));
   print(UserText.rotateNextIssue.format({'nextBug': _truncate(nextBug)}));

@@ -27,6 +27,7 @@ import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
+import '../session/handoff_store.dart';
 
 Future<void> runSuggest({
   FileIO? io,
@@ -71,6 +72,12 @@ Future<void> runSuggest({
   final logger = SessionLogger.forEntry(entry, io: fileIO);
   logger.logPipelineEvents(exec.events, command: ClaudartCommand.suggest.name);
   final handoffFile  = handoffPathFor(workspace);
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.suggest.name,
+  );
 
   if (!fileIO.fileExists(handoffFile)) {
     print(UserText.suggestNoHandoffFoundRunClaudartSetup.template);
@@ -115,15 +122,7 @@ Future<void> runSuggest({
   // Picking up a blocked handoff (needs-suggest) moves it back to
   // investigating before any model call.
   if (status.after(HandoffEvent.suggestResumed) != null) {
-    handoff = applyHandoffEvent(
-      handoff,
-      HandoffEvent.suggestResumed,
-      onTransition: (transition) => logger.logTransition(
-        command: ClaudartCommand.suggest.name,
-        transition: transition,
-      ),
-    );
-    fileIO.write(handoffFile, handoff);
+    handoff = store.apply(handoff, HandoffEvent.suggestResumed);
   }
 
   // ── Header ─────────────────────────────────────────────────────────────────
@@ -280,20 +279,13 @@ $mustNotTouch''';
   updated = updateSection(updated, 'Root Cause',  rootCause.trim());
   updated = updateSection(updated, 'Scope',        newScope.trim());
   updated = updateSection(updated, 'Constraints',  constraints.trim());
-  updated = applyHandoffEvent(
-    updated,
-    HandoffEvent.saveConfirmedReady,
-    onTransition: (transition) => logger.logTransition(
-      command: ClaudartCommand.suggest.name,
-      transition: transition,
-    ),
-  );
+  updated = store.apply(updated, HandoffEvent.saveConfirmedReady);
   updated = updated.replaceFirst(
     RegExp(r'> Updated: [^\n]+'),
     '> Updated: ${DateTime.now().toIso8601String().split('.').first}',
   );
 
-  fileIO.write(handoffFile, updated);
+  store.rewrite(updated);
 
   stdout.write('\x1B[2K\r  ${ansi.green}✓${ansi.reset}  ${ansi.dim}[4/4]${ansi.reset}  Handoff written  ${ansi.dim}→${ansi.reset}  status: ready-for-debug\n\n');
   print(UserText.suggestNextClaudartSaveThenDebugIn.styled({}));

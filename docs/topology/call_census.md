@@ -7,51 +7,51 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | scenario | step | registry | handoff | workspaceConfig | config | skills | pendingConfirmation | log | other |
 |---|---|---|---|---|---|---|---|---|---|
 | setup, suggest, debug, teardown | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, suggest, debug, teardown | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
-| setup, suggest, debug, teardown | debug | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
+| setup, suggest, debug, teardown | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, debug, teardown | debug | r1 | r3 w3 | r1 | r1 | — | — | r11 a11 | — |
 | setup, suggest, debug, teardown | teardown | r1 | r1 w1 | — | — | r1 w2 | — | r5 w1 a4 | w3 d1 |
 | setup, suggest, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, suggest, kill | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, kill | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, unconfirmed save | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, unconfirmed save | save | r2 w1 | r1 w1 | — | — | — | — | r1 a1 | w1 |
+| setup, unconfirmed save | save | r2 w1 | r2 w2 | — | — | — | — | r1 a1 | w1 |
 | setup, confirmed save, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, confirmed save, kill | seed root cause | — | r1 w1 | — | — | — | — | — | — |
-| setup, confirmed save, kill | save | r2 w1 | r1 w1 | — | — | w1 | — | r1 a1 | w1 |
+| setup, confirmed save, kill | save | r2 w1 | r2 w2 | — | — | w1 | — | r1 a1 | w1 |
 | setup, confirmed save, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, suggest, debug blocked, suggest again | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, suggest, debug blocked, suggest again | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, debug blocked, suggest again | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug blocked, suggest again | debug blocked | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
-| setup, suggest, debug blocked, suggest again | suggest | r1 | r1 w2 | r1 | r1 | — | — | r11 a11 | — |
+| setup, suggest, debug blocked, suggest again | suggest | r1 | r2 w3 | r1 | r1 | — | — | r11 a11 | — |
 | setup, rotate with a pending issue | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, rotate with a pending issue | seed pending | — | r1 w1 | — | — | — | — | — | — |
 | setup, rotate with a pending issue | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |
 | setup, rotate with nothing pending | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, rotate with nothing pending | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |
 | setup, suggest, debug blocked, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, suggest, debug blocked, kill | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, debug blocked, kill | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug blocked, kill | debug blocked | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
 | setup, suggest, debug blocked, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | setup, suggest, suggest again | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, suggest, suggest again | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
-| setup, suggest, suggest again | suggest | r1 | r2 w1 | r1 | r1 | — | — | r10 a10 | w2 |
+| setup, suggest, suggest again | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, suggest again | suggest | r1 | r3 w2 | r1 | r1 | — | — | r10 a10 | w2 |
 | setup, suggest, teardown without debug | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, suggest, teardown without debug | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, teardown without debug | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r1 w2 | — | r5 w1 a4 | w3 d1 |
 | setup, confirmed save, teardown without debug | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, confirmed save, teardown without debug | seed root cause | — | r1 w1 | — | — | — | — | — | — |
-| setup, confirmed save, teardown without debug | save | r2 w1 | r1 w1 | — | — | w1 | — | r1 a1 | w1 |
+| setup, confirmed save, teardown without debug | save | r2 w1 | r2 w2 | — | — | w1 | — | r1 a1 | w1 |
 | setup, confirmed save, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r2 w2 | — | r5 w1 a4 | w3 d1 |
 | setup, suggest, debug, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, suggest, debug, kill | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
-| setup, suggest, debug, kill | debug | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
+| setup, suggest, debug, kill | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
+| setup, suggest, debug, kill | debug | r1 | r3 w3 | r1 | r1 | — | — | r11 a11 | — |
 | setup, suggest, debug, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
 | rotate with a pending issue seeds the next session | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| rotate with a pending issue seeds the next session | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
+| rotate with a pending issue seeds the next session | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | rotate with a pending issue seeds the next session | seed pending | — | r1 w1 | — | — | — | — | — | — |
 | rotate with a pending issue seeds the next session | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |
 | rotate with nothing pending leaves no session | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| rotate with nothing pending leaves no session | suggest | r1 | r1 w1 | r1 | r1 | — | — | r10 a10 | — |
+| rotate with nothing pending leaves no session | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | rotate with nothing pending leaves no session | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |

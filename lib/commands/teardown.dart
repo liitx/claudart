@@ -27,6 +27,7 @@ import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
+import '../session/handoff_store.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.
@@ -74,6 +75,12 @@ Future<void> runTeardown({
   final handoffFile = handoffPathFor(workspace);
   final handoff =
       fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: SessionLogger.forEntry(entry, io: fileIO),
+    command: ClaudartCommand.teardown.name,
+  );
 
   if (handoff.isEmpty) {
     print(UserText.teardownNoActiveHandoffFoundNothingTo.template);
@@ -356,24 +363,21 @@ Future<void> runTeardown({
       );
       archiveFile = p.join(archiveDirFor(workspace), entry.handoffFile);
 
-      // Reset handoff.
-      fileIO.write(handoffFile, blankHandoff);
+      // Reset handoff. Not enforced: teardown is deliberately permissive (a
+      // human may confirm "resolved" from any status), so a status the table
+      // lacks is logged, not thrown.
+      store.replace(
+        blankHandoff,
+        from: readHandoffStatus(handoff),
+        event: archiveKind == ArchiveKind.archive
+            ? HandoffEvent.tornDown
+            : HandoffEvent.reminderSaved,
+      );
     }, io: fileIO);
   } on WorkspaceLockedException catch (e) {
     print(UserText.errorMessageLine.format({'toString': e.toString()}));
     exit_(1);
   }
-
-  // Record the move once the guarded close succeeded. Not enforced: teardown
-  // is deliberately permissive (a human may confirm "resolved" from any
-  // status), so a status the table lacks is logged, not thrown.
-  SessionLogger.forEntry(entry, io: fileIO).logHandoffMove(
-    command: ClaudartCommand.teardown.name,
-    from: readHandoffStatus(handoff),
-    event: archiveKind == ArchiveKind.archive
-        ? HandoffEvent.tornDown
-        : HandoffEvent.reminderSaved,
-  );
 
   // Suggest commit message.
   final commitMsg = buildCommitMessage(area, bug, rootCause, fixSummary!);

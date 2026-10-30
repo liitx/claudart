@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../io/file_io.dart';
 import '../logging/logger.dart';
-import '../session/md_io.dart' show applyHandoffEvent;
 import '../config/paths.dart';
 import '../sensitivity/abstractor.dart';
 import '../templates/handoff_template.dart' show stampHandoffUpdated;
@@ -15,6 +14,7 @@ import 'support/claudart_command.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../session/handoff_store.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }
@@ -59,21 +59,20 @@ Future<SkillsUpdateResult> runSave({
   final saveEvent = state.rootCause.isBlank
       ? HandoffEvent.saveUnconfirmed
       : HandoffEvent.saveConfirmedExploring;
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.save.name,
+  );
   if (state.effectiveStatus.after(saveEvent) != null) {
-    final logger = SessionLogger.forEntry(entry, io: fileIO);
-    handoff = applyHandoffEvent(
-      handoff,
-      saveEvent,
-      onTransition: (transition) => logger.logTransition(
-        command: ClaudartCommand.save.name,
-        transition: transition,
-      ),
-    );
+    handoff = store.apply(handoff, saveEvent);
   }
 
   // 3 — Stamp updated timestamp and persist.
   handoff = stampHandoffUpdated(handoff);
-  fileIO.write(handoffFile, handoff);
+  store.rewrite(handoff);
 
   // 3b — Write checkpoint to archive/.
   final archiveDir = archiveDirFor(workspace);

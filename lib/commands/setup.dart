@@ -21,6 +21,7 @@ import '../util/prompt_with_default.dart';
 import '../io/process_runner.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../session/handoff_store.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.
@@ -198,23 +199,22 @@ Future<void> runSetup({
     }
   }
 
-  fileIO.write(handoffFile, content);
+  // Not enforced: "Start fresh" over a live handoff is allowed today, so a
+  // status the table lacks is logged as a move it lacks rather than thrown.
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.setup.name,
+  ).replace(content, from: startedFrom, event: HandoffEvent.setup);
 
   // Log the setup interaction.
-  final logger = SessionLogger.forEntry(entry, io: fileIO);
   logger.logInteraction(
     command: 'setup',
     outcome: 'ok',
     platform: Platform.operatingSystem,
   );
-  // Not enforced: "Start fresh" over a live handoff is allowed today, so it is
-  // logged as a move the table lacks rather than thrown.
-  logger.logHandoffMove(
-    command: ClaudartCommand.setup.name,
-    from: startedFrom,
-    event: HandoffEvent.setup,
-  );
-
   print(UserText.setupHandoffWrittenTo.format({'handoffFile': handoffFile}));
   print(UserText.nextStepHeading.template);
   print(UserText.setupOpenEditorRunSuggestToExplore.template);
