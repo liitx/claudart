@@ -49,19 +49,19 @@ Files in `lib/` that mention the event, other than the table itself. "— no cod
 
 | event | passed by |
 |---|---|
-| setup | lib/commands/setup.dart |
-| saveUnconfirmed | lib/commands/save.dart |
-| saveConfirmedExploring | lib/commands/save.dart |
-| saveConfirmedReady | lib/commands/suggest.dart |
-| debugStarted | lib/commands/debug.dart |
-| debugBlocked | lib/commands/debug.dart |
-| suggestResumed | lib/commands/suggest.dart |
-| fixApplied | lib/commands/debug.dart |
-| rotated | lib/commands/rotate.dart |
-| rotatedEmpty | lib/commands/rotate.dart |
+| setup | lib/commands/setup.dart, lib/session/handoff_listeners.dart |
+| saveUnconfirmed | lib/commands/save.dart, lib/session/handoff_listeners.dart |
+| saveConfirmedExploring | lib/commands/save.dart, lib/session/handoff_listeners.dart |
+| saveConfirmedReady | lib/commands/suggest.dart, lib/session/handoff_listeners.dart |
+| debugStarted | lib/commands/debug.dart, lib/session/handoff_listeners.dart |
+| debugBlocked | lib/commands/debug.dart, lib/session/handoff_listeners.dart |
+| suggestResumed | lib/commands/suggest.dart, lib/session/handoff_listeners.dart |
+| fixApplied | lib/commands/debug.dart, lib/session/handoff_listeners.dart |
+| rotated | lib/commands/rotate.dart, lib/session/handoff_listeners.dart |
+| rotatedEmpty | lib/commands/rotate.dart, lib/session/handoff_listeners.dart |
 | tornDown | lib/commands/teardown.dart, lib/session/handoff_listeners.dart |
-| reminderSaved | lib/commands/teardown.dart |
-| killed | lib/commands/kill.dart |
+| reminderSaved | lib/commands/teardown.dart, lib/session/handoff_listeners.dart |
+| killed | lib/commands/kill.dart, lib/session/handoff_listeners.dart |
 
 ## Statuses named in agent prompts
 

@@ -50,14 +50,31 @@ class HandoffStore {
   /// a subscriber that runs inline; reactions are added with [react].
   late final HandoffTransitionBus bus;
 
-  /// Adds a reaction to every move this store makes. It may return an event;
-  /// the store applies it, so the next hop is a move on the same bus and in
-  /// the same log.
+  /// Adds a reaction of [kind]. It runs only for the moves [listenersFor]
+  /// names [kind] for, and may return an event that [kind] is allowed to emit
+  /// (`mayEmit`, proven legal and acyclic in `handoff_listeners_test.dart`);
+  /// any other is refused and reported. The store applies what it returns, so
+  /// the next hop is a move on the same bus and in the same log.
   void react(
-    String name,
+    HandoffListenerKind kind,
     Future<HandoffEvent?> Function(HandoffTransition move) listener,
-  ) =>
-      bus.react(name, listener);
+  ) {
+    if (kind == HandoffListenerKind.recordTransition) {
+      throw ArgumentError.value(
+        kind,
+        'kind',
+        'the record runs inline; it is not a reaction',
+      );
+    }
+    bus.react(kind.name, (move) async {
+      if (!listenersFor(move).contains(kind)) return null;
+      final next = await listener(move);
+      if (next != null && !kind.mayEmit.contains(next)) {
+        throw StateError('${kind.name} may not emit ${next.name}');
+      }
+      return next;
+    });
+  }
 
   /// Completes when every reaction has finished. A command that added a
   /// reaction awaits this before it returns.

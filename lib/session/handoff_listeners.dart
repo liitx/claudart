@@ -27,19 +27,36 @@ enum HandoffListenerKind {
   final Set<HandoffEvent> mayEmit;
 }
 
-/// The reactions [transition] calls for.
+/// The reactions [transition] calls for. Exhaustive over the events, so a new
+/// event fails to compile until someone decides what follows it; the landing
+/// status matters only where a reaction depends on it.
 List<HandoffListenerKind> listenersFor(HandoffTransition transition) =>
-    switch (transition.to) {
-      HandoffStatus.debugComplete => const [
-          HandoffListenerKind.recordTransition,
-          HandoffListenerKind.teardownWhenConverged,
-        ],
-      HandoffStatus.suggestInvestigating ||
-      HandoffStatus.readyForSuggest ||
-      HandoffStatus.readyForDebug ||
-      HandoffStatus.debugInProgress ||
-      HandoffStatus.needsSuggest ||
-      HandoffStatus.noHandoff ||
-      HandoffStatus.unknown =>
+    switch (transition.event) {
+      HandoffEvent.fixApplied => switch (transition.to) {
+          HandoffStatus.debugComplete => const [
+              HandoffListenerKind.recordTransition,
+              HandoffListenerKind.teardownWhenConverged,
+            ],
+          HandoffStatus.suggestInvestigating ||
+          HandoffStatus.readyForSuggest ||
+          HandoffStatus.readyForDebug ||
+          HandoffStatus.debugInProgress ||
+          HandoffStatus.needsSuggest ||
+          HandoffStatus.noHandoff ||
+          HandoffStatus.unknown =>
+            const [HandoffListenerKind.recordTransition],
+        },
+      HandoffEvent.setup ||
+      HandoffEvent.saveUnconfirmed ||
+      HandoffEvent.saveConfirmedExploring ||
+      HandoffEvent.saveConfirmedReady ||
+      HandoffEvent.debugStarted ||
+      HandoffEvent.debugBlocked ||
+      HandoffEvent.suggestResumed ||
+      HandoffEvent.rotated ||
+      HandoffEvent.rotatedEmpty ||
+      HandoffEvent.tornDown ||
+      HandoffEvent.reminderSaved ||
+      HandoffEvent.killed =>
         const [HandoffListenerKind.recordTransition],
     };

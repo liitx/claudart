@@ -29,7 +29,7 @@ context; the register below holds the evidence.
 | Q15 | `enumFactsAsData` | done 2026-10-30: the 13 enums state their facts as constructor fields (facts a new variant must decide are required arguments); the relational `HandoffStatus.after` stays a switch; `CategorizeTag` computes its values from the other enums once; ratchet 13 to 0 |
 | Q16 | `folderLayout` | done 2026-10-30: `lib/` root holds only the barrel and the two files zedup imports by path (`registry.dart`, `version.dart`); `lib/config/`, `lib/io/`, `lib/project/` and `lib/commands/support/` created; `layout_test.dart` enforces it; `make consumer-check` fails only on the earlier X8 gaps, none from paths |
 | Q17 | `userTextFromConfig` | done for `lib/commands` 2026-10-30: every printed sentence reads from `text/user_text.json` through the generated `UserText` enum (`format`, and `styled` for colour placeholders); ratchet 294 to 0; text in the other layers (errors, render, logs, templates) remains |
-| Q3, Q4, Q5 | one writer, the asynchronous stream, logs for every command | Q3 half done 2026-10-30: `HandoffStore` (`apply`, `rewrite`, `replace`) is the one writer; debug, save, suggest, rotate, teardown and setup go through it; kill's reset goes through its `writeBlank`; `flow` is the one ledgered writer (agent-constructed status outside the table); `handoff_store_test.dart` fails on any other writer. Q3's "every early exit writes a record" folds into Q5; Q4 core built 2026-10-30, tests first: `handoff_listeners.dart` (totality, safety, termination over all legal cells), `transition_bus.dart` (order, drain, isolation, inline record vs queued reaction), `HandoffStore` publishes on its bus and the logger is its inline subscriber, a thrown reaction is logged as `FailureType.handoffListenerFailed`; not yet done: a command attaching a reaction (`teardownWhenConverged` is declared and proven, not attached), the pipeline publishing on the bus, `teardown` reaction on the headless path; Q5 not started |
+| Q3, Q4, Q5 | one writer, the asynchronous stream, logs for every command | Q3 half done 2026-10-30: `HandoffStore` (`apply`, `rewrite`, `replace`) is the one writer; debug, save, suggest, rotate, teardown and setup go through it; kill's reset goes through its `writeBlank`; `flow` is the one ledgered writer (agent-constructed status outside the table); `handoff_store_test.dart` fails on any other writer. Q3's "every early exit writes a record" folds into Q5; Q4 core built 2026-10-30, tests first: `handoff_listeners.dart` (totality, safety, termination over all legal cells), `transition_bus.dart` (order, drain, isolation, inline record vs queued reaction), `HandoffStore` publishes on its bus and the logger is its inline subscriber, a thrown reaction is logged as `FailureType.handoffListenerFailed`; reactions are bound to the proven table (a reaction runs only for the cells `listenersFor` names its kind for, may return only its kind's `mayEmit`, which is exhaustive over events); not yet done: a command attaching a reaction, a command awaiting `drain`, the matrix test reading the hop records (`teardownWhenConverged` is declared and proven, not attached), the pipeline publishing on the bus, `teardown` reaction on the headless path; Q5 not started |
 | Q7 | `measuredRedundancyRemoved` | last, by design |
 | Q8 to Q11 | families, cross-package, ticket classification, verified fix | not started; Q10 waits on the owner vetting the ticket flow |
 
@@ -180,6 +180,15 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | M4 | `olderMutationSurvivors` | Mutation runs over the files this work touched found survivors in older, untouched lines, to be filed as one issue (not fixed inline, per the repo rule): `handoff_template` 33, `report` 40, `pipeline_executor` 37, `save` 26, `debug` 24, `rotate` 23, `kill` 21, `status` 17, `token_map` 10, `logger` 9, `workspace_config` 8, `teardown_utils` 7, `resume` 5, `sync_check` 3, and one each in `hook`, `failure_type` and `xml_tags`. `teardown` cannot be measured: it hangs the mutation tool | mutation runs, this document's progress notes | open, issue not yet filed | Also `process_runner.dart` `killProcessTree` (2026-10-30): the `process.kill` after the tree kill and the `kill -9` argument survive mutation; both are older lines. `paths.dart` (2026-10-30): 20 survivors in lines 53 and 100-151, none in the lines changed that day. `save.dart` (2026-10-30): 21 survivors in lines 50, 79 and 151-234 (older code) plus one equivalent mutant at line 35.
 
 
+### Measured while building Q4 (the spec against the tests that were written for it)
+
+| Id | Name | Finding | Evidence | Status |
+|---|---|---|---|---|
+| T1 | `provenModelNotWiredToRuntime` | The Q4 proofs (totality, safety, termination) were written and passed over a declared table (`listenersFor`, `HandoffListenerKind.mayEmit`) that no runtime code read: `store.react` took any free-form callback, so a reaction could break every property the proofs state and every test still passed. The tests proved a model, not the system | `handoff_listeners.dart` at `38e13fa`: `listenersFor` and `mayEmit` referenced only from `test/` | closed for the store (a reaction is registered under a kind, runs only for the cells `listenersFor` names it for, may return only its kind's `mayEmit`; tests and mutation bind it); the pattern stays open as T2 to T4 |
+| T2 | `specObligationsNotTracedToTests` | The stage 3 table states seven obligations in prose. Nothing links an obligation to the test that checks it, or fails when an obligation has no test or a weaker one: "checked over all 104 cells" was tested over the 36 legal cells; "a command awaits the stream's drain" has no test at all | the stage 3 obligations table; `handoff_listeners_test.dart`, `transition_bus_test.dart` | open |
+| T3 | `testOnlySymbolCensusIsAdvisory` | `tool/check_test_only_symbols.dart` lists the `lib/` symbols only tests reference, which is exactly T1. It always exits 0 and is in no gate. Run on the tree at `38e13fa` it flagged `listenersFor` (13 symbols; 12 today, all older); nothing consumed the signal | `make` target at `Makefile:164`; the run recorded 2026-10-30 | open |
+| T4 | `specWordingAdmitsAConformingTestOfTheWrongThing` | Three spec sentences each admitted an implementation that passed its tests and missed the sentence: "a switch over the transition's (status, event) cell, so a new event or status fails to compile" (built over the landing status only: a new event compiled silently); "the logger is a subscriber and the `onTransition` callbacks are gone" (the parameter still exists in `applyHandoffEvent`, used by the store); "a command awaits the stream's drain before it returns" (no command does). Each sentence has no check written against its words | stage 3 shape list, items 1 to 3 | open: the first is fixed (exhaustive over events); the other two wait on a command attaching a reaction |
+
 ### Measured in real logs
 
 Source: the real workspace logs of this machine (`transitions.jsonl` 44 moves
@@ -253,6 +262,10 @@ variant is not in the proposals below.
 | Y5 | — | new: CodeTree |
 | Y6 | drivesState x processBound; untouched x processBound; observesState x processBound | existing |
 | Y7 | drivesState x processBound | existing |
+| T1 | drivesState x pure | existing |
+| T2 | untouched x pure | existing |
+| T3 | untouched x fileSeam | existing |
+| T4 | drivesState x pure | existing |
 | D13 | drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x pure; drivesState x processBound | existing |
 | D14 | — | new: CodeTree |
 | B1 | untouched x processBound | existing |
@@ -1108,3 +1121,38 @@ sequences start automatically after which state (for example, after
 real logs show `suggest` tried from `debugComplete` twice (R2) and `kill` used
 instead of `teardown` eight times (R3), so those two moves are the first
 candidates to decide on evidence.
+
+
+### Stage 3 - what the spec did not carry (audit of the build, 2026-10-30)
+
+The Q4 build was test first: each obligation was written as a failing test,
+run red, then implemented. Every test passed, and an audit against the stage 3
+table still found the build short of it. The spec states *what must hold*; it
+does not state *where the runtime consults it*, *which test checks it*, or *what
+a weakened version looks like*. Those three omissions are the gap:
+
+| What the spec said | What was built and tested | What was missing from the spec |
+|---|---|---|
+| Totality: "`listenersFor` is an exhaustive switch over every cell, no wildcard" | a switch over the landing status; the test checked the 36 legal cells | the dimension to be exhaustive over (events), and that illegal cells need no check, so "104" was never what to test |
+| Safety, termination: "checked over all 104 cells", "acyclic" | proven over the declared `mayEmit` of each kind | a runtime hook that makes `mayEmit` binding: a reaction could return an event outside it |
+| "the logger is a subscriber and the `onTransition` callbacks are gone" | the logger is an inline subscriber; the callback parameter remains | a check that fails while the callback parameter exists |
+| Drain: "a command awaits the stream's drain before it returns" | the bus drains; the store exposes `drain()` | the caller: no test names a command that awaits it |
+| Order, isolation, record | tested at the bus, and at the store for isolation and record | nothing; these matched |
+
+**What a spec obligation must carry**, so a builder cannot satisfy its test and
+miss its point:
+
+1. *Statement*: the property, in one sentence (as today).
+2. *Consulting symbol*: the runtime function or type that reads the table the
+   proof is about; the proof is of that symbol's behaviour, not of the table.
+3. *Check*: the test id, and the weakened variant it must fail on (a fixture or
+   a mutation), as the liveness seeds do for the tools.
+4. *Caller*: for an obligation about what a command does, the command and the
+   assertion on its observable output.
+
+**Mechanisms proposed (not built):** an enum of the spec's obligations with the
+four fields, and a test that fails for an obligation with no consulting symbol
+referenced from `lib/`, no named check, or no failing fixture (closes T2, T4);
+`check_test_only_symbols` run as a ratchet in the gate, so a proven symbol that
+only tests read fails the build (closes T3). T1's instance is closed; the
+pattern is not until these exist.

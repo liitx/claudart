@@ -77,6 +77,37 @@ void main() {
     });
   });
 
+  group('totality over events', () {
+    test('every event is decided, including those no status makes yet', () {
+      for (final event in HandoffEvent.values) {
+        for (final to in HandoffStatus.values) {
+          final kinds = listenersFor(
+            HandoffTransition(from: HandoffStatus.unknown, event: event, to: to),
+          );
+          expect(kinds, contains(HandoffListenerKind.recordTransition),
+              reason: '${event.name} -> ${to.name}');
+        }
+      }
+    });
+
+    test('only a fix landing on a finished fix calls for a teardown', () {
+      final calling = [
+        for (final cell in legalCells())
+          if (listenersFor(cell)
+              .contains(HandoffListenerKind.teardownWhenConverged))
+            cell,
+      ];
+      expect(
+        calling.map((cell) => cell.event).toSet(),
+        {HandoffEvent.fixApplied},
+      );
+      expect(
+        calling.map((cell) => cell.to).toSet(),
+        {HandoffStatus.debugComplete},
+      );
+    });
+  });
+
   group('safety', () {
     test('no listener may emit an event the landing status forbids', () {
       expect(

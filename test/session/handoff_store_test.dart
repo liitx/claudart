@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/handoff_listeners.dart';
 import 'package:claudart/session/handoff_store.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/md_io.dart';
@@ -127,9 +128,8 @@ void main() {
         () async {
       final fixture = _store(HandoffStatus.debugInProgress);
       fixture.store.react(
-        'close',
-        (move) async =>
-            move.event == HandoffEvent.fixApplied ? HandoffEvent.tornDown : null,
+        HandoffListenerKind.teardownWhenConverged,
+        (move) async => HandoffEvent.tornDown,
       );
       fixture.store
           .apply(fixture.io.read(_handoffFile), HandoffEvent.fixApplied);
@@ -151,17 +151,69 @@ void main() {
     });
 
     test('a reaction that throws is logged under its failure type', () async {
-      final fixture = _store(HandoffStatus.readyForDebug);
-      fixture.store.react('breaks', (move) async => throw StateError('boom'));
+      final fixture = _store(HandoffStatus.debugInProgress);
+      fixture.store.react(
+        HandoffListenerKind.teardownWhenConverged,
+        (move) async => throw StateError('boom'),
+      );
       fixture.store
-          .apply(fixture.io.read(_handoffFile), HandoffEvent.debugStarted);
+          .apply(fixture.io.read(_handoffFile), HandoffEvent.fixApplied);
       await fixture.store.drain();
       expect(
         fixture.io.read('$_workspace/logs/errors.jsonl'),
         contains(FailureType.handoffListenerFailed.name),
       );
       expect(readHandoffStatus(fixture.io.read(_handoffFile)),
-          HandoffStatus.debugInProgress);
+          HandoffStatus.debugComplete);
+    });
+
+    test('a reaction runs only for the moves listenersFor names its kind for',
+        () async {
+      final fixture = _store(HandoffStatus.readyForDebug);
+      var ran = 0;
+      fixture.store.react(HandoffListenerKind.teardownWhenConverged, (move) async {
+        ran++;
+        return null;
+      });
+      fixture.store
+          .apply(fixture.io.read(_handoffFile), HandoffEvent.debugStarted);
+      await fixture.store.drain();
+      expect(ran, 0);
+      fixture.store
+          .apply(fixture.io.read(_handoffFile), HandoffEvent.fixApplied);
+      await fixture.store.drain();
+      expect(ran, 1);
+    });
+
+    test('an event outside what its kind may emit is refused and reported',
+        () async {
+      final fixture = _store(HandoffStatus.debugInProgress);
+      fixture.store.react(
+        HandoffListenerKind.teardownWhenConverged,
+        (move) async => HandoffEvent.killed,
+      );
+      fixture.store
+          .apply(fixture.io.read(_handoffFile), HandoffEvent.fixApplied);
+      await fixture.store.drain();
+      expect(
+        fixture.io.read('$_workspace/logs/errors.jsonl'),
+        contains(FailureType.handoffListenerFailed.name),
+      );
+      expect(readHandoffStatus(fixture.io.read(_handoffFile)),
+          HandoffStatus.debugComplete);
+      expect(fixture.io.read('$_workspace/logs/transitions.jsonl'),
+          isNot(contains(HandoffEvent.killed.name)));
+    });
+
+    test('the record kind cannot be reacted to, it is the inline record', () {
+      final fixture = _store(HandoffStatus.readyForDebug);
+      expect(
+        () => fixture.store.react(
+          HandoffListenerKind.recordTransition,
+          (move) async => null,
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('replace of a legal move records it once', () {
