@@ -392,7 +392,7 @@ content (see `docs/session_log.md`'s 2026-09-26 entry for the full story).
 
 ### Phase 3 — `claudart add` wizard (complete)
 Scaffolds a brand-new project workspace end to end. `lib/commands/add.dart`:
-- Pre-fills git author (`readGitAuthor`, new in `lib/git_utils.dart`),
+- Pre-fills git author (`readGitAuthor`, new in `lib/io/git_utils.dart`),
   project name, Dart SDK constraint and dartrix usage (plain regex reads
   of `pubspec.yaml`, no yaml package dependency)
 - Injectable questionnaire (SDK constraint, uses dartrix?, GitHub
@@ -676,7 +676,7 @@ mechanical fix — user confirmed all 3 the "wire it in for real" way):
   (the default), smoke-tested for real from zedup's own repo (correctly
   resolved to the real linked workspace path).
 - **`WorkspaceConfig` naming collision** (claudart `8c01c9a`) — two
-  unrelated classes shared the name (`lib/config.dart`'s scan/sensitivity
+  unrelated classes shared the name (`lib/config/config.dart`'s scan/sensitivity
   settings vs. `lib/workspace/workspace_config.dart`'s real v2 per-project
   metadata). Renamed the former to `ProjectConfig`, matching its own doc
   comment.

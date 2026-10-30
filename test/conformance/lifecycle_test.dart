@@ -6,7 +6,7 @@
 // command logged to transitions.jsonl: file, log and consumer view agree. The
 // same scenarios run against zedup's real reader by `make consumer-check`.
 
-import 'package:claudart/dependency_config.dart';
+import 'package:claudart/config/dependency_config.dart';
 import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';

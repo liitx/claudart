@@ -1,11 +1,11 @@
 // call_census.dart — which kind of file a call touched, and how often.
 //
 // Every path is classified into exactly one [CensusFile]. The kinds are
-// named by the file-name constants in lib/paths.dart, never respelled here;
+// named by the file-name constants in lib/config/paths.dart, never respelled here;
 // a path that is none of the named kinds is `other`, the complement, so a
 // file nobody has named yet still shows up in the count.
 
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:path/path.dart' as p;
 
 import 'counting_file_io.dart';

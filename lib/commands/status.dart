@@ -1,15 +1,15 @@
 import 'dart:io';
-import '../file_io.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
 import '../pipeline/model_observation.dart' show describeModelRecord;
-import '../paths.dart';
+import '../config/paths.dart';
 import '../session/session_state.dart';
 import '../session/skills_lookup.dart';
 import '../session/teardown_utils.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
-import 'command_seams.dart';
-import 'project_resolution.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
 
 Future<void> runStatus({
   CommandSeams seams = const CommandSeams(),

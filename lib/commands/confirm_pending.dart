@@ -1,9 +1,9 @@
 import 'dart:io';
-import '../file_io.dart';
+import '../io/file_io.dart';
 import '../session/pending_confirmation.dart';
 import '../ui/render.dart' as render;
-import 'project_resolution.dart';
-import 'command_seams.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
 
 /// Sets or clears the pending confirmation for the current project's
 /// workspace. A skill's confirmation-gate step (see

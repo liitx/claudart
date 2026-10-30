@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'file_io.dart';
+import '../io/file_io.dart';
 import 'paths.dart';
 
 /// The two named scan-scope values with special meaning. `scanScope` itself

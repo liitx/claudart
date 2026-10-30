@@ -4,7 +4,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:claudart/config.dart';
+import 'package:claudart/config/config.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';

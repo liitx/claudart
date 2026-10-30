@@ -3,16 +3,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/debug.dart';
 import 'package:claudart/errors/failure_type.dart';
-import 'package:claudart/md_io.dart' show readHandoffStatus, withHandoffStatus;
+import 'package:claudart/session/md_io.dart' show readHandoffStatus, withHandoffStatus;
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart'
     show HandoffStatus, SessionState;
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/pipeline/agent_model.dart';
@@ -28,7 +28,7 @@ import '../helpers/unscripted.dart';
 import '../helpers/variant_topology.dart';
 import 'package:claudart/logging/log_file.dart';
 import '../helpers/project_fixture.dart';
-import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 // debug_test.dart — coverage for runDebug.
 //

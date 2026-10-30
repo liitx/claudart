@@ -52,7 +52,7 @@ final _topLevelFunctionDecl = RegExp(
 // Top-level only (column-anchored, so a class/enum member getter — already
 // out of scope, see this file's own header — never matches: it's always
 // indented). Missed in the first version: `String get workspacesRoot { ... }`
-// in lib/paths.dart was invisible to the census entirely.
+// in lib/config/paths.dart was invisible to the census entirely.
 final _topLevelGetterDecl = RegExp(r'^(?:[\w<>,.? ]+\s+)?get\s+(\w+)\s*(?:=>|\{)');
 
 List<RegExp> get _declPatterns => [

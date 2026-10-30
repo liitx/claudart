@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/readme_template.dart';

@@ -1,5 +1,5 @@
 import 'dart:io';
-import '../environment.dart';
+import '../config/environment.dart';
 
 /// ANSI escape sequences for terminal styling and cursor control.
 ///

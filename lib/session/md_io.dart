@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'pipeline/pipeline_context.dart' show ScopeFile;
-import 'session/debug_disposition.dart';
-import 'session/handoff_event.dart';
-import 'session/handoff_transition.dart';
-import 'session/invalid_handoff_transition_exception.dart';
-import 'session/session_state.dart' show HandoffStatus;
-import 'ui/line_editor.dart' as editor;
+import '../pipeline/pipeline_context.dart' show ScopeFile;
+import 'debug_disposition.dart';
+import 'handoff_event.dart';
+import 'handoff_transition.dart';
+import 'invalid_handoff_transition_exception.dart';
+import 'session_state.dart' show HandoffStatus;
+import '../ui/line_editor.dart' as editor;
 
 /// Reads a section from a markdown file between `## Header` and the next `## `.
 /// Returns the trimmed content, or `_Not yet determined._` if not found.

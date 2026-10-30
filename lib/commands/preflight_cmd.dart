@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../session/sync_check.dart';
-import 'project_resolution.dart';
-import 'command_seams.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
 
 /// Runs a preflight sync check for [operation] and prints results.
 ///

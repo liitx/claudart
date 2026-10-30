@@ -11,17 +11,17 @@ import 'package:path/path.dart' as p;
 
 import '../codegen/artifact_state.dart';
 import '../codegen/claudart_artifact.dart';
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
 import '../harness/harness_check.dart';
 import '../logging/logger.dart';
-import '../paths.dart';
-import '../process_runner.dart';
+import '../config/paths.dart';
+import '../io/process_runner.dart';
 import '../providers/agent_provider.dart';
 import '../providers/claude_settings_env.dart';
 import '../registry.dart';
-import 'command_seams.dart';
-import '../environment.dart';
+import 'support/command_seams.dart';
+import '../config/environment.dart';
 
 const _ghExecutable = 'gh';
 const _claudeExecutable = 'claude';

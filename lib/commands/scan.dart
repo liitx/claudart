@@ -1,7 +1,7 @@
-import '../config.dart' show ScanScope;
-import '../file_io.dart';
-import '../ignore_rules.dart';
-import '../paths.dart';
+import '../config/config.dart' show ScanScope;
+import '../io/file_io.dart';
+import '../project/ignore_rules.dart';
+import '../config/paths.dart';
 import '../scanner/scanner.dart';
 import '../scanner/scan_threshold_exception.dart';
 import '../sensitivity/token_map.dart';

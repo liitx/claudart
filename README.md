@@ -68,7 +68,7 @@ Everything below is typed. A fact lives on one enum or one function, and the doc
 
 | Layer | Source of truth | What it owns |
 |---|---|---|
-| Entry point | [`ClaudartCommand`](lib/commands/claudart_command.dart) | every command and how it is reached: `reachedFrom`, `supportsHeadless`, `supportsProjectSelector`, `handoffEvents` |
+| Entry point | [`ClaudartCommand`](lib/commands/support/claudart_command.dart) | every command and how it is reached: `reachedFrom`, `supportsHeadless`, `supportsProjectSelector`, `handoffEvents` |
 | Session state | [`HandoffStatus`](lib/session/session_state.dart) + [`HandoffEvent`](lib/session/handoff_event.dart) | which move is legal from which status (`after`), and what a reader should show (`effectiveStatus`) |
 | Workspace | [`Registry`](lib/registry.dart) + [`WorkspaceSummary`](lib/commands/workspaces.dart) | project root to workspace, link state, lock, last session |
 | Targeting | `--project <name>` + `selectProject` | which linked workspace a command acts on |
@@ -81,12 +81,16 @@ What each `lib/` directory is for:
 | Directory | Role |
 |---|---|
 | `lib/commands/` | one file per subcommand; the only layer that touches the terminal flow |
+| `lib/commands/support/` | what the commands share: the seams bundle, the project lookup, the failure boundary, the command enum |
 | `lib/session/` | the state machine, handoff operations, workspace lock |
 | `lib/pipeline/` | the agent engine: steps, executor, model routing, flows |
 | `lib/templates/` | pure functions that render a string; no I/O |
 | `lib/workspace/` | workspace config, index and link state |
 | `lib/logging/` | per-workspace logs and the global planner log |
 | `lib/ui/` | terminal rendering |
+| `lib/config/` | the environment, the home directory, paths, and config files, each read from one place |
+| `lib/io/` | the file system, spawned processes and git, behind one seam each |
+| `lib/project/` | facts read from a project's own files: ignore rules, pubspec, knowledge templates, portability gaps |
 | `lib/errors/` | the layered error taxonomy: exception, error type, failure type |
 | `lib/providers/` | which auth backend the `claude` subprocess uses |
 | `lib/sensitivity/`, `lib/scanner/`, `lib/similarity/`, `lib/assets/` | token abstraction, scanning, retrieval, the bundled corpus |
@@ -214,7 +218,7 @@ Preconditions are hard gates. `claudart debug` checks that `fixApplied` is legal
 
 ## The handoff
 
-`handoff.md` is the single artifact both sides read and write. [`lib/templates/handoff_template.dart`](lib/templates/handoff_template.dart) renders nine top-level sections in a fixed order, and both writers address them by name through `readSection`/`updateSection` in [`lib/md_io.dart`](lib/md_io.dart) — never by offset.
+`handoff.md` is the single artifact both sides read and write. [`lib/templates/handoff_template.dart`](lib/templates/handoff_template.dart) renders nine top-level sections in a fixed order, and both writers address them by name through `readSection`/`updateSection` in [`lib/session/md_io.dart`](lib/session/md_io.dart) — never by offset.
 
 | Section | Written by | Read by |
 |---|---|---|
@@ -472,7 +476,7 @@ claudart workspaces     # every linked workspace and where its session stands (-
 claudart --project <name> status   # aim a session command at another linked workspace
 ```
 
-[`ClaudartCommand`](lib/commands/claudart_command.dart) is the single source of truth for dispatch, and carries each command's facts as getters: how it is reached, whether it runs headless, whether `--project` can target it, and which handoff events it passes. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable.
+[`ClaudartCommand`](lib/commands/support/claudart_command.dart) is the single source of truth for dispatch, and carries each command's facts as getters: how it is reached, whether it runs headless, whether `--project` can target it, and which handoff events it passes. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable.
 
 <details>
 <summary><strong>Full command table, one row per dispatch arm</strong></summary>
@@ -711,7 +715,7 @@ Each workspace keeps its own logs under `logs/`, all written by [`SessionLogger`
 
 Routing decisions are a separate, global log. [`PlannerLog`](lib/logging/planner_log.dart#L132) appends one JSON line per categorize step — the three-axis classification (`category`, `intent`, `complexity`), the routed model, and design-surface counts — to `planner.jsonl` (`LogFile.planner`) in `~/.claudart/`, sibling to `registry.json` rather than per-workspace. It's wired into `claudart flow` only ([`lib/commands/flow.dart`](lib/commands/flow.dart#L42)); `suggest` and `debug`'s own Phase 0 categorize steps don't call it yet.
 
-Path construction is centralized in [`lib/paths.dart`](lib/paths.dart) — one function per artifact, no string concatenation at call sites. [`lib/registry.dart`](lib/registry.dart) resolves a git project root to its workspace; [`lib/workspace/workspace_config.dart`](lib/workspace/workspace_config.dart) parses `workspace.json` once at session entry, and agents read the parsed value rather than the file.
+Path construction is centralized in [`lib/config/paths.dart`](lib/config/paths.dart) — one function per artifact, no string concatenation at call sites. [`lib/registry.dart`](lib/registry.dart) resolves a git project root to its workspace; [`lib/workspace/workspace_config.dart`](lib/workspace/workspace_config.dart) parses `workspace.json` once at session entry, and agents read the parsed value rather than the file.
 
 ```json
 {

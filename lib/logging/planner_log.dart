@@ -8,7 +8,7 @@
 import 'dart:convert';
 import 'dart:io' as io;
 
-import '../paths.dart';
+import '../config/paths.dart';
 import 'log_file.dart';
 import '../pipeline/agent_flow.dart';
 import '../pipeline/agent_model.dart';

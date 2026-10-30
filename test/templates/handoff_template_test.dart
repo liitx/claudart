@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:claudart/md_io.dart' show readHandoffStatus;
+import 'package:claudart/session/md_io.dart' show readHandoffStatus;
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart';
 

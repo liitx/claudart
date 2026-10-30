@@ -10,15 +10,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
 import '../logging/logger.dart';
-import '../paths.dart';
+import '../config/paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart';
 import '../session/workspace_guard.dart';
 import '../workspace/workspace_link_state.dart';
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 
 /// One linked workspace and where its session stands. The registry entry holds
 /// what is registered about it (name, roots, last session); the summary adds

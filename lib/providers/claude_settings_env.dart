@@ -14,8 +14,8 @@
 
 import 'dart:convert';
 
-import '../file_io.dart';
-import '../environment.dart';
+import '../io/file_io.dart';
+import '../config/environment.dart';
 
 /// `~/.claude/settings.json` — resolved fresh each call so a test override
 /// of `HOME` is honored without a cached stale path.

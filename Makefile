@@ -116,7 +116,7 @@ rebuild: clean build
 ## scoped to one file + its own test file per invocation, never the whole
 ## lib/ tree -- a full-repo run reruns the full suite per mutation point,
 ## which the package's own docs warn can take hours.
-## Usage: make mutation-test FILE=lib/git_utils.dart TEST_FILE=test/git_utils_test.dart
+## Usage: make mutation-test FILE=lib/io/git_utils.dart TEST_FILE=test/git_utils_test.dart
 ##
 ## DANGER, confirmed real: this tool mutates FILE on disk, runs the test
 ## command, then reverts it. If the process is killed mid-run (Ctrl-C, a

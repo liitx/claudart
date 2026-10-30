@@ -2,7 +2,7 @@
 // WorkspaceConfig (lib/workspace/workspace_config.dart)
 //
 // Distinct from test/config_test.dart, which covers the unrelated
-// WorkspaceConfig in lib/config.dart (workspace.json's local scan/sensitivity
+// WorkspaceConfig in lib/config/config.dart (workspace.json's local scan/sensitivity
 // settings, not the session-scoped owner/project/session config this file
 // parses at Step 0). No file imports both, so there's no active name
 // collision — just a latent one, noted and left alone here.

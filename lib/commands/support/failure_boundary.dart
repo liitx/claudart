@@ -7,12 +7,12 @@
 // type. Both are logged to the error log of the project's workspace, or the
 // global one when the project is not known.
 
-import '../errors/claudart_exception.dart';
-import '../errors/failure_type.dart';
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../logging/logger.dart';
-import '../registry.dart';
+import '../../errors/claudart_exception.dart';
+import '../../errors/failure_type.dart';
+import '../../io/file_io.dart';
+import '../../io/git_utils.dart';
+import '../../logging/logger.dart';
+import '../../registry.dart';
 
 /// The keys of the context [reportFailure] puts on a failure it had to wrap.
 /// The enum name is the key.

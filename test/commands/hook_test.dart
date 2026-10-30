@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/hook.dart';
 import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/logging/log_file.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;

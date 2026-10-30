@@ -12,7 +12,7 @@
 
 import 'dart:convert';
 import 'dart:io';
-import '../environment.dart';
+import '../config/environment.dart';
 
 // ── Env-var + path constants ──────────────────────────────────────────────
 

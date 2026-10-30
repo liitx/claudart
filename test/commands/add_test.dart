@@ -3,7 +3,7 @@ import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/add.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import '../helpers/mocks.dart';
 import '../helpers/project_fixture.dart';
 

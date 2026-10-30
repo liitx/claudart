@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:claudart/commands/preflight_cmd.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import '../helpers/mocks.dart';
 import '../helpers/project_fixture.dart';
 

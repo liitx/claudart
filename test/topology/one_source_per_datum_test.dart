@@ -11,19 +11,19 @@ import 'package:test/test.dart';
 enum DatumSource {
   environment(
     pattern: r'\bPlatform\.environment\b',
-    ownerFile: 'lib/environment.dart',
+    ownerFile: 'lib/config/environment.dart',
   ),
   process(
     pattern: r'\bProcess\.(run|runSync|start)\(',
-    ownerFile: 'lib/process_runner.dart',
+    ownerFile: 'lib/io/process_runner.dart',
   ),
   homeDirectory(
     pattern: r"\[homeEnvVar\]|\['HOME'\]",
-    ownerFile: 'lib/environment.dart',
+    ownerFile: 'lib/config/environment.dart',
   ),
   gitExecutable(
     pattern: r"'git'",
-    ownerFile: 'lib/git_utils.dart',
+    ownerFile: 'lib/io/git_utils.dart',
   );
 
   const DatumSource({required this.pattern, required this.ownerFile});
@@ -56,7 +56,7 @@ List<String> directReaders(DatumSource source, Map<String, String> sources) {
 /// lists every project.
 const _ownLookupLedger = {
   'lib/commands/doctor.dart',
-  'lib/commands/failure_boundary.dart',
+  'lib/commands/support/failure_boundary.dart',
   'lib/commands/launch.dart',
   'lib/commands/link.dart',
   'lib/commands/setup.dart',

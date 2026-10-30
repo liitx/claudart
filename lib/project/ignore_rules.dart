@@ -1,4 +1,4 @@
-import 'file_io.dart';
+import '../io/file_io.dart';
 
 /// Default glob-style patterns applied when .claudartignore is missing.
 const _defaultPatterns = [

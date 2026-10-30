@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
 import '../templates/handoff_template.dart';
-import '../md_io.dart';
-import '../paths.dart';
+import '../session/md_io.dart';
+import '../config/paths.dart';
 import '../registry.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
@@ -13,12 +13,12 @@ import '../session/handoff_event.dart';
 import '../session/session_state.dart' show SessionState, HandoffStatus;
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 import 'scan.dart';
 import '../session/session_ops.dart';
 import '../ui/render.dart' as render;
 import '../util/prompt_with_default.dart';
-import '../process_runner.dart';
+import '../io/process_runner.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.

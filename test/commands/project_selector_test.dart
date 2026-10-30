@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:claudart/commands/project_selector.dart';
+import 'package:claudart/commands/support/project_selector.dart';
 import 'package:claudart/commands/workspaces.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:test/test.dart';
 

@@ -1,16 +1,16 @@
 import 'dart:io';
 import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
-import '../md_io.dart';
-import '../paths.dart';
-import '../knowledge_templates.dart';
+import '../session/md_io.dart';
+import '../config/paths.dart';
+import '../project/knowledge_templates.dart';
 import '../templates/handoff_template.dart';
 import '../templates/suggest_template.dart';
 import '../templates/debug_template.dart';
 import '../templates/save_template.dart';
 import '../templates/teardown_template.dart';
 import '../ui/render.dart' as render;
-import '../process_runner.dart';
+import '../io/process_runner.dart';
 
 Future<void> runInit(List<String> args) async {
   final parser = ArgParser()

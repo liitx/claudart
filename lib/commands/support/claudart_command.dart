@@ -8,7 +8,7 @@
 // Adding a new subcommand forces a new arm in every exhaustive switch over
 // this enum at compile time (missing_enum_constant_in_switch: error).
 
-import '../session/handoff_event.dart';
+import '../../session/handoff_event.dart';
 
 /// Where a command can be started from on claudart's own command-line side.
 /// (zedup's TUI is a separate surface: it runs the pipelines itself and shells

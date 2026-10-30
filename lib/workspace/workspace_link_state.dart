@@ -8,8 +8,8 @@
 
 import 'package:path/path.dart' as p;
 
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 
 enum WorkspaceLinkState {
   /// No `.claude` at the project root: `claudart link` has not run (or

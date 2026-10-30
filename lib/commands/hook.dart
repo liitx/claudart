@@ -17,13 +17,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart';
 import '../workspace/workspace_config.dart';
-import 'claudart_command.dart';
-import 'failure_boundary.dart';
+import 'support/claudart_command.dart';
+import 'support/failure_boundary.dart';
 
 /// What the pre-edit hook decides.
 enum HookOutcome {

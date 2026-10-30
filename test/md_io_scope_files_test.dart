@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:claudart/md_io.dart';
+import 'package:claudart/session/md_io.dart';
 import 'package:test/test.dart';
 
 String _scope(List<String> bullets) => '## Scope\n\n### Files in play\n${bullets.join('\n')}\n\n### Key entry points in play\n- `foo()`\n';

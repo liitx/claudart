@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:claudart/commands/command_seams.dart';
-import 'package:claudart/commands/project_resolution.dart';
+import 'package:claudart/commands/support/command_seams.dart';
+import 'package:claudart/commands/support/project_resolution.dart';
 import 'package:claudart/registry.dart';
 import 'package:test/test.dart';
 

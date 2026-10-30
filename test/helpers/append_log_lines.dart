@@ -4,7 +4,7 @@
 // A separate process, not an isolate: Dart's file lock is per process, so
 // isolates in one process would not exercise what two claudart commands do.
 
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:claudart/logging/logger.dart';
 
 void main(List<String> args) {

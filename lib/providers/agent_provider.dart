@@ -36,9 +36,9 @@ import 'dart:convert' show jsonDecode;
 import 'dart:io' show ProcessException;
 
 import 'claude_settings_env.dart';
-import '../file_io.dart';
-import '../environment.dart';
-import '../process_runner.dart';
+import '../io/file_io.dart';
+import '../config/environment.dart';
+import '../io/process_runner.dart';
 
 enum AgentProvider {
   /// Direct Anthropic API — `ANTHROPIC_API_KEY` only.

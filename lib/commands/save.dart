@@ -1,19 +1,19 @@
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import '../md_io.dart' show applyHandoffEvent;
-import '../paths.dart';
+import '../session/md_io.dart' show applyHandoffEvent;
+import '../config/paths.dart';
 import '../sensitivity/abstractor.dart';
 import '../templates/handoff_template.dart' show stampHandoffUpdated;
 import '../session/handoff_event.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
 import '../ui/render.dart' as render;
-import 'claudart_command.dart';
-import 'command_seams.dart';
-import 'project_resolution.dart';
+import 'support/claudart_command.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }

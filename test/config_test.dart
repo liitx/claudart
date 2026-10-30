@@ -1,7 +1,7 @@
 import 'package:test/test.dart';
 import 'dart:convert';
-import 'package:claudart/config.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/config.dart';
+import 'package:claudart/config/paths.dart';
 import 'helpers/mocks.dart';
 
 void main() {

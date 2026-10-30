@@ -7,17 +7,17 @@
 // Differs from suggest: the agent builds the handoff, not the user.
 // Experimental variant — treat as a preview feature.
 
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 import '../logging/logger.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../config.dart' show loadWorkspaceConfig;
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../config/config.dart' show loadWorkspaceConfig;
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
 import '../logging/planner_log.dart';
-import '../md_io.dart' show prompt;
-import '../paths.dart';
+import '../session/md_io.dart' show prompt;
+import '../config/paths.dart';
 import '../pipeline/agents/categorization.dart';
 import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/pipeline_context.dart';
@@ -29,8 +29,8 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
-import 'project_resolution.dart';
-import 'command_seams.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
 
 Future<void> runFlow({
   FileIO? io,

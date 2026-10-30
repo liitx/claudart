@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:claudart/commands/command_seams.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/command_seams.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:test/test.dart';
 

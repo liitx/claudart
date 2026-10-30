@@ -10,10 +10,10 @@
 
 import 'dart:io';
 
-import '../file_io.dart';
-import '../logging/logger.dart';
-import '../registry.dart';
-import 'workspaces.dart' show WorkspaceInteraction;
+import '../../io/file_io.dart';
+import '../../logging/logger.dart';
+import '../../registry.dart';
+import '../workspaces.dart' show WorkspaceInteraction;
 
 /// The `--project` option's own strings.
 abstract final class ProjectOption {

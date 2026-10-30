@@ -1,4 +1,4 @@
-import '../file_io.dart';
+import '../io/file_io.dart';
 import 'token_map.dart';
 import 'detector.dart';
 

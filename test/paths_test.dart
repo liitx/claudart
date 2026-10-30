@@ -4,7 +4,7 @@
 
 import 'package:claudart/errors/claudart_exception.dart';
 import 'package:claudart/errors/failure_type.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 

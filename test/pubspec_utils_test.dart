@@ -1,6 +1,6 @@
 import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
-import 'package:claudart/pubspec_utils.dart';
+import 'package:claudart/project/pubspec_utils.dart';
 import 'helpers/mocks.dart';
 
 void main() {

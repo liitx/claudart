@@ -1,4 +1,4 @@
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';

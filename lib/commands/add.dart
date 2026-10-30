@@ -13,18 +13,18 @@
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../dependency_config.dart';
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../md_io.dart' show confirm;
-import '../paths.dart';
+import '../config/dependency_config.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
+import '../session/md_io.dart' show confirm;
+import '../config/paths.dart';
 import '../registry.dart';
 import '../templates/claude_template.dart';
 import '../templates/plan_template.dart';
 import '../ui/line_editor.dart' as editor;
 import '../ui/render.dart' as render;
 import 'link.dart' show createProjectLinks;
-import '../environment.dart';
+import '../config/environment.dart';
 
 /// Project shape — drives `claudeTemplate`'s optional Flutter constraint
 /// line. Not named `WorkspaceConfig` — that name belongs to

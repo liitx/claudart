@@ -1,7 +1,7 @@
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
+import '../config/paths.dart';
 import '../ui/render.dart' as render;
 
 /// Removes the symlinks `link` creates — `.claude` and `.cursor/commands` —

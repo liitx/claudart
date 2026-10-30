@@ -5,7 +5,7 @@
 
 import 'dart:io';
 
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 
 void main(List<String> args) {
   final path = args[0];

@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../config.dart';
-import '../file_io.dart';
-import '../ignore_rules.dart';
+import '../config/config.dart';
+import '../io/file_io.dart';
+import '../project/ignore_rules.dart';
 import 'scan_threshold_exception.dart';
 
 const int _defaultThreshold = 300;

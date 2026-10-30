@@ -1,14 +1,14 @@
 
 import 'dart:io';
-import '../config.dart' show loadWorkspaceConfig;
+import '../config/config.dart' show loadWorkspaceConfig;
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
-import '../file_io.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import 'claudart_command.dart';
-import '../md_io.dart';
-import 'scope_files.dart';
-import '../paths.dart';
+import 'support/claudart_command.dart';
+import '../session/md_io.dart';
+import 'support/scope_files.dart';
+import '../config/paths.dart';
 import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/flows/suggest_steps.dart';
 import '../pipeline/pipeline_context.dart';
@@ -23,8 +23,8 @@ import '../session/invalid_handoff_transition_exception.dart';
 import '../session/session_state.dart' show HandoffStatus;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
-import 'project_resolution.dart';
-import 'command_seams.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
 
 Future<void> runSuggest({
   FileIO? io,

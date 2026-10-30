@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../paths.dart';
-import '../process_runner.dart';
-import 'command_seams.dart';
-import 'project_resolution.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
+import '../io/process_runner.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
 
 /// Runs an experiment: executes [command] with [args], tees stdout/stderr to a
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the

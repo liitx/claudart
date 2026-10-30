@@ -1,6 +1,6 @@
 import 'package:path/path.dart' as p;
-import 'errors/claudart_exception.dart';
-import 'errors/failure_type.dart';
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
 import 'environment.dart';
 
 export 'environment.dart' show homeEnvVar;

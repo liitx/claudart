@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 
 import 'mocks.dart';
 import 'package:claudart/logging/log_file.dart';

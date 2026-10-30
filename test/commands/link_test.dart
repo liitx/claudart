@@ -5,7 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/link.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/codegen/dependency_config_codegen.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import '../helpers/mocks.dart';

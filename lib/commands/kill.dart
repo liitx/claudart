@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import '../md_io.dart' show confirmOrEof, readHandoffStatus;
-import '../paths.dart';
-import 'claudart_command.dart';
+import '../session/md_io.dart' show confirmOrEof, readHandoffStatus;
+import '../config/paths.dart';
+import 'support/claudart_command.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
@@ -12,8 +12,8 @@ import '../session/session_state.dart';
 import '../session/workspace_guard.dart';
 import '../workspace/workspace_link_state.dart';
 import '../ui/render.dart' as render;
-import 'command_seams.dart';
-import 'project_resolution.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
 
 /// How a `kill` run ended. The name is the outcome written to the interaction
 /// log, so a warned kill, a cancelled one and a refused one can be told apart.

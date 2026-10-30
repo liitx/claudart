@@ -10,7 +10,7 @@ import 'dart:async';
 
 import 'package:claudart/commands/debug.dart';
 import 'package:claudart/commands/suggest.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import 'package:claudart/registry.dart';
@@ -19,7 +19,7 @@ import 'package:test/test.dart';
 import '../helpers/mocks.dart';
 import '../helpers/project_fixture.dart';
 import '../helpers/unscripted.dart';
-import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 const _secret = 'VolumeBloc';
 const _failure = '$_secret exploded in VolumeRepository.load';

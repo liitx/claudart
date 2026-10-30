@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:test/test.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/suggest.dart';
-import 'package:claudart/md_io.dart'
+import 'package:claudart/session/md_io.dart'
     show readHandoffStatus, readSection, withHandoffStatus;
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/handoff_event.dart';
@@ -10,7 +10,7 @@ import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/errors/claudart_exception.dart';
 import 'package:claudart/errors/failure_type.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_result.dart';

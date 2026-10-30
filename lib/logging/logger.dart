@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import '../errors/failure_type.dart';
-import '../file_io.dart';
+import '../io/file_io.dart';
 import '../session/handoff_event.dart';
 import '../session/handoff_transition.dart';
 import '../session/session_state.dart' show HandoffStatus;
-import '../paths.dart';
+import '../config/paths.dart';
 import '../pipeline/model_observation.dart';
 import '../pipeline/pipeline_event.dart'
     show AgentCompleted, AgentFailed, PipelineEvent;

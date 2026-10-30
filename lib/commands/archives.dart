@@ -8,15 +8,15 @@
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../session/archive_entry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../workspace/workspace_index.dart';
 import '../ui/render.dart' as render;
-import 'command_seams.dart';
-import 'project_resolution.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
 
 Future<void> runArchives({
   CommandSeams seams = const CommandSeams(),

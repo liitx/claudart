@@ -2,18 +2,18 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/teardown.dart'
     show kTeardownSkipDebugQuestion, runTeardown, TeardownCategory;
 import 'package:claudart/session/debug_disposition.dart';
-import 'package:claudart/md_io.dart' show readHandoffStatus, readSection;
-import 'package:claudart/paths.dart';
+import 'package:claudart/session/md_io.dart' show readHandoffStatus, readSection;
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:claudart/session/workspace_guard.dart';
 import '../helpers/logged_moves.dart';
 import '../helpers/fake_executors.dart';

@@ -4,7 +4,7 @@
 // menu pick, and the project root through these. Passing them as one bundle
 // stops every command from redeclaring the same five parameters.
 
-import '../file_io.dart';
+import '../../io/file_io.dart';
 
 /// The seams a command can have replaced. Every field is optional: a command
 /// that is given none uses the real file system, the real exit and the real

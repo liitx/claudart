@@ -1,8 +1,8 @@
 import 'dart:convert';
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../util/enum_util.dart';
 

@@ -12,8 +12,8 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 
 ## drivesState x pure
 
-- `lib/commands/claudart_command.dart`
-- `lib/md_io.dart`
+- `lib/commands/support/claudart_command.dart`
+- `lib/session/md_io.dart`
 
 ## drivesState x fileSeam
 
@@ -61,15 +61,15 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 
 - `lib/commands/launch.dart`
 - `lib/commands/workspaces.dart`
-- `lib/knowledge_templates.dart`
+- `lib/project/knowledge_templates.dart`
 
 ## untouched x pure
 
 - `lib/assets/corpus.dart`
 - `lib/codegen/claudart_artifact.dart`
 - `lib/codegen/dependency_config_codegen.dart`
-- `lib/dependency_config.dart`
-- `lib/environment.dart`
+- `lib/config/dependency_config.dart`
+- `lib/config/environment.dart`
 - `lib/errors/claudart_exception.dart`
 - `lib/errors/error_type.dart`
 - `lib/errors/failure_type.dart`
@@ -109,7 +109,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/pipeline/step_telemetry.dart`
 - `lib/pipeline/usage.dart`
 - `lib/pipeline/xml_tags.dart`
-- `lib/portability_gap.dart`
+- `lib/project/portability_gap.dart`
 - `lib/scanner/scan_threshold_exception.dart`
 - `lib/sensitivity/detector.dart`
 - `lib/session/archive_entry.dart`
@@ -146,12 +146,12 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/codegen/artifact_state.dart`
 - `lib/commands/confirm_pending.dart`
 - `lib/commands/map_cmd.dart`
-- `lib/commands/project_selector.dart`
 - `lib/commands/scan.dart`
-- `lib/file_io.dart`
-- `lib/ignore_rules.dart`
+- `lib/commands/support/project_selector.dart`
+- `lib/io/file_io.dart`
+- `lib/project/ignore_rules.dart`
+- `lib/project/pubspec_utils.dart`
 - `lib/providers/claude_settings_env.dart`
-- `lib/pubspec_utils.dart`
 - `lib/scanner/scanner.dart`
 - `lib/sensitivity/abstractor.dart`
 - `lib/sensitivity/token_map.dart`
@@ -163,9 +163,9 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 ## untouched x workspaceBound
 
 - `lib/commands/preflight_cmd.dart`
-- `lib/commands/scope_files.dart`
-- `lib/config.dart`
-- `lib/paths.dart`
+- `lib/commands/support/scope_files.dart`
+- `lib/config/config.dart`
+- `lib/config/paths.dart`
 - `lib/registry.dart`
 - `lib/workspace/workspace_config.dart`
 
@@ -175,22 +175,22 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/commands/add.dart`
 - `lib/commands/archives.dart`
 - `lib/commands/chat_shell.dart`
-- `lib/commands/command_seams.dart`
 - `lib/commands/doctor.dart`
 - `lib/commands/experiment.dart`
-- `lib/commands/failure_boundary.dart`
 - `lib/commands/flow.dart`
 - `lib/commands/init.dart`
 - `lib/commands/link.dart`
-- `lib/commands/project_resolution.dart`
 - `lib/commands/report.dart`
 - `lib/commands/resume.dart`
+- `lib/commands/support/command_seams.dart`
+- `lib/commands/support/failure_boundary.dart`
+- `lib/commands/support/project_resolution.dart`
 - `lib/commands/unlink.dart`
-- `lib/git_utils.dart`
+- `lib/io/git_utils.dart`
+- `lib/io/process_runner.dart`
 - `lib/pipeline/claudart_surface.dart`
 - `lib/pipeline/edit_files.dart`
 - `lib/pipeline/pipeline_executor.dart`
-- `lib/process_runner.dart`
 - `lib/providers/agent_provider.dart`
 - `lib/ui/line_editor.dart`
 - `lib/ui/menu.dart`

@@ -8,14 +8,14 @@
 import 'dart:io';
 import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../md_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../session/md_io.dart';
+import '../config/paths.dart';
 import '../session/teardown_utils.dart' show readSubSection;
 import '../workspace/workspace_index.dart';
 import 'setup.dart';
-import 'project_resolution.dart';
-import 'command_seams.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
 
 Future<void> runResume({
   FileIO? io,

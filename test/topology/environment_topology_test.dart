@@ -9,8 +9,8 @@
 
 import 'dart:io';
 
-import 'package:claudart/commands/claudart_command.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/pipeline/claudart_surface.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';

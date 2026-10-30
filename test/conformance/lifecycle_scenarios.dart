@@ -16,8 +16,8 @@ import 'package:claudart/commands/save.dart';
 import 'package:claudart/commands/setup.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/teardown.dart';
-import 'package:claudart/md_io.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/session/md_io.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
@@ -34,7 +34,7 @@ import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import 'package:claudart/logging/log_file.dart';
 import '../helpers/project_fixture.dart';
-import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 /// A linked project: its registry name, repo root and claudart workspace.
 typedef LifecycleProject = ({String name, String root, String workspace});

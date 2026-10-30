@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 
 import '../helpers/cli_session.dart';
 import 'package:claudart/logging/log_file.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 
 // The real binary, two linked projects in one registry. `proj` has a live
 // session; `other` is linked with none. Everything is run from proj's

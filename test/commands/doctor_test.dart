@@ -9,15 +9,15 @@ import 'dart:io';
 
 import 'package:claudart/commands/doctor.dart';
 import 'package:claudart/commands/link.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/harness/harness_check.dart';
-import 'package:claudart/paths.dart';
-import 'package:claudart/process_runner.dart';
+import 'package:claudart/config/paths.dart';
+import 'package:claudart/io/process_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
-import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 /// Thrown by the injected exitFn so tests can assert exit-code behaviour
 /// without terminating the process.
@@ -459,7 +459,7 @@ void main() {
 
     test('ok when every registered projectRoot still exists on disk', () async {
       // Registry.load() always resolves via the real registryPath getter
-      // (lib/paths.dart) — unaffected by the `env` map passed to
+      // (lib/config/paths.dart) — unaffected by the `env` map passed to
       // runDoctorChecks — so the fixture has to live at that real,
       // machine-dependent path, not an arbitrary fake one.
       final io = MemoryFileIO(

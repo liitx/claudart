@@ -4,7 +4,7 @@ import 'package:claudart/commands/link.dart';
 import 'package:claudart/codegen/artifact_state.dart';
 import 'package:claudart/codegen/claudart_artifact.dart';
 import 'package:claudart/codegen/dependency_config_codegen.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/templates/claude_settings_template.dart';
 import 'package:claudart/templates/claude_template.dart' show generatedMarker;

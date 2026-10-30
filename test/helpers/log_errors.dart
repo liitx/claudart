@@ -5,7 +5,7 @@
 //
 // args: <workspace> <writer> <count> <shared|distinct>
 
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:claudart/logging/logger.dart';
 
 void main(List<String> args) {

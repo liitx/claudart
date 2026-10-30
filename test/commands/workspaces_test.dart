@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:claudart/claudart.dart' as api;
 import 'package:claudart/commands/workspaces.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;

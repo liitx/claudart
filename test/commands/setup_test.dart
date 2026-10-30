@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/setup.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart'
     show HandoffStatus, SessionState;

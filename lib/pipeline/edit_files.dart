@@ -15,7 +15,7 @@ import 'package:path/path.dart' as p;
 
 import '../errors/failure_type.dart';
 import 'xml_tags.dart';
-import '../process_runner.dart';
+import '../io/process_runner.dart';
 
 typedef EditFile = ({String path, String content});
 

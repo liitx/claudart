@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/commands/status.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/ui/ansi.dart' as ansi;
 import '../helpers/mocks.dart';
@@ -11,7 +11,7 @@ import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
 import '../helpers/project_fixture.dart';
-import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 const _projectRoot = ProjectFixture.root;
 const _projectName = 'my-app';

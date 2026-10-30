@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/save.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/md_io.dart' show readHandoffStatus;
-import 'package:claudart/paths.dart';
+import 'package:claudart/session/md_io.dart' show readHandoffStatus;
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
@@ -16,7 +16,7 @@ import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
 import '../helpers/project_fixture.dart';
-import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 const _projectRoot = ProjectFixture.root;
 const _workspace = ProjectFixture.workspace;

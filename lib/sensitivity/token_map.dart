@@ -1,7 +1,7 @@
 import 'dart:convert';
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
-import '../file_io.dart';
+import '../io/file_io.dart';
 
 /// token_map.json exists but cannot be read: malformed JSON, or an entry of
 /// the wrong shape. Loading it as an empty map would let the next save erase

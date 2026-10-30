@@ -17,10 +17,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import '../config.dart' show defaultStepTimeout;
+import '../config/config.dart' show defaultStepTimeout;
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
-import '../process_runner.dart' show RealProcessRunner, killProcessTree;
+import '../io/process_runner.dart' show RealProcessRunner, killProcessTree;
 import '../providers/agent_provider.dart' show AgentProvider;
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;

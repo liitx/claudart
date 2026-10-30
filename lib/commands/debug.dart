@@ -2,13 +2,13 @@
 import 'dart:io';
 import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
-import '../config.dart' show loadWorkspaceConfig;
-import '../file_io.dart';
+import '../config/config.dart' show loadWorkspaceConfig;
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import 'claudart_command.dart';
-import '../md_io.dart';
-import 'scope_files.dart';
-import '../paths.dart';
+import 'support/claudart_command.dart';
+import '../session/md_io.dart';
+import 'support/scope_files.dart';
+import '../config/paths.dart';
 import '../pipeline/edit_files.dart';
 import '../pipeline/flows/debug_steps.dart';
 import '../pipeline/flows/flow_steps.dart';
@@ -22,8 +22,8 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
-import 'command_seams.dart';
-import 'project_resolution.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.

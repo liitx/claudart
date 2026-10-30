@@ -18,7 +18,7 @@ import 'dart:io';
 
 import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/logging/logger.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/handoff_transition.dart';
 import 'package:claudart/session/session_state.dart';

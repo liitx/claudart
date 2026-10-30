@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/commands/flow.dart';
 import 'package:claudart/logging/planner_log.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';

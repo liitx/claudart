@@ -1,5 +1,5 @@
 import 'package:path/path.dart' as p;
-import 'file_io.dart';
+import '../io/file_io.dart';
 
 /// Reads Dart SDK and Flutter version constraints from a project's pubspec.yaml.
 ({String? sdk, String? flutter}) readProjectEnv(

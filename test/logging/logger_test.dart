@@ -15,7 +15,7 @@ import 'package:claudart/session/session_state.dart';
 import 'package:claudart/sensitivity/token_map.dart';
 import 'package:path/path.dart' as p;
 import '../helpers/mocks.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/logging/log_protection.dart';

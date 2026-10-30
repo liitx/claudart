@@ -3,7 +3,7 @@
 // list. PLAN.md's "Skills + cosine retrieval" backfill entry claimed
 // lib/similarity/cosine.dart already powered this — it didn't, until now.
 
-import '../md_io.dart';
+import 'md_io.dart';
 import '../similarity/cosine.dart';
 
 /// Splits the `## Root Cause Patterns` section into one chunk per bullet.

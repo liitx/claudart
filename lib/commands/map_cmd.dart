@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 
 /// Generates a human-readable token_map.md from token_map.json on demand.
 /// [workspacePath] routes token_map.json to the per-project workspace.

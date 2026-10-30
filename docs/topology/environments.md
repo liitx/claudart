@@ -70,6 +70,6 @@ How the pipeline renders. zedup's TUI is the `tui` surface: it runs the pipeline
 
 A project "uses dartrix" when its pubspec declares it. Files that read that today:
 
-`lib/commands/add.dart`, `lib/commands/link.dart`, `lib/dependency_config.dart`, `lib/templates/plan_template.dart`
+`lib/commands/add.dart`, `lib/commands/link.dart`, `lib/config/dependency_config.dart`, `lib/templates/plan_template.dart`
 
 Files that read the generated `dependency_config.g.dart` constant: — no reader yet. (`claudart link` regenerates it; nothing branches on it yet.)

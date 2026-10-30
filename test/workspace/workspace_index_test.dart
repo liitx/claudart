@@ -4,7 +4,7 @@
 
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/archive_entry.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';

@@ -1,7 +1,7 @@
 // log_performance_rows.dart — a child process for the concurrent
 // logPerformance test: logs [count] timing rows to the workspace at args[0].
 
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:claudart/logging/logger.dart';
 
 void main(List<String> args) {

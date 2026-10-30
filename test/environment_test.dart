@@ -1,4 +1,4 @@
-import 'package:claudart/environment.dart';
+import 'package:claudart/config/environment.dart';
 import 'package:test/test.dart';
 
 void main() {

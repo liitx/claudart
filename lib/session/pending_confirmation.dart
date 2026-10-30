@@ -12,8 +12,8 @@
 // `## Status` to also guess which axis a value belongs to.
 
 import 'dart:convert';
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 
 /// A confirmation gate awaiting the user's reply, persisted to
 /// `pending_confirmation.json` in the workspace directory.

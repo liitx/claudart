@@ -1,7 +1,7 @@
 import 'dart:convert';
-import '../file_io.dart';
-import '../paths.dart';
-import '../process_runner.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
+import '../io/process_runner.dart';
 import '../ui/render.dart' as render;
 import '../logging/log_file.dart';
 

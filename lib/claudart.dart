@@ -3,12 +3,12 @@
 // Exports the pipeline engine and session types for consumers (e.g. zedup).
 // Import with: import 'package:claudart/claudart.dart';
 
-export 'paths.dart' show handoffFileName, skillsFileName, archivesDirName, archiveIndexFileName, flowCheckpointFileName, parseWorkspaceDirFromStatusOutput, handoffPathFor;
-export 'portability_gap.dart';
+export 'config/paths.dart' show handoffFileName, skillsFileName, archivesDirName, archiveIndexFileName, flowCheckpointFileName, parseWorkspaceDirFromStatusOutput, handoffPathFor;
+export 'project/portability_gap.dart';
 export 'providers/agent_provider.dart';
 export 'registry.dart' show Registry, RegistryEntry;
 // updateStatus stays exported for existing consumers (it is deprecated).
-export 'md_io.dart'
+export 'session/md_io.dart'
     show
         applyHandoffEvent,
         parseScopeFiles,
@@ -19,7 +19,7 @@ export 'md_io.dart'
         // ignore: deprecated_member_use_from_same_package
         updateStatus,
         withHandoffStatus;
-export 'commands/claudart_command.dart' show ClaudartCommand, CommandEntry;
+export 'commands/support/claudart_command.dart' show ClaudartCommand, CommandEntry;
 // The shared top layer of the error taxonomy. ErrorType and FailureType stay
 // out: a consumer's own (zedup's) are different enums with the same names.
 export 'errors/fault_class.dart' show FaultClass, FaultSeverity;
@@ -51,7 +51,7 @@ export 'pipeline/usage.dart';
 export 'pipeline/xml_tags.dart';
 // Linked-workspace awareness: a consumer (zedup) lists the workspaces and
 // resolves a `--project` name through these, not by parsing registry.json.
-export 'commands/project_selector.dart'
+export 'commands/support/project_selector.dart'
     show
         ProjectNotFound,
         ProjectSelected,

@@ -1,4 +1,4 @@
-import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';

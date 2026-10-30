@@ -1,8 +1,8 @@
-import '../config.dart';
-import '../file_io.dart';
-import '../md_io.dart';
-import '../paths.dart';
-import '../pipeline/pipeline_context.dart' show ScopeFile;
+import '../../config/config.dart';
+import '../../io/file_io.dart';
+import '../../session/md_io.dart';
+import '../../config/paths.dart';
+import '../../pipeline/pipeline_context.dart' show ScopeFile;
 
 /// Reads the handoff's `### Files in play`, applying the workspace's
 /// `allowedScopeRoots` containment, and tells the user about any path that was

@@ -59,7 +59,7 @@ void _checkFile(String path) {
   // Real bug, found during a later full-repo audit: `path.contains('/lib/')`
   // alone only matches an ABSOLUTE path — the PostToolUse hook passes one
   // of those, but the pre-push hook's own `find lib -name '*.dart'` produces
-  // relative paths like `lib/paths.dart`, which never contain `/lib/` (no
+  // relative paths like `lib/config/paths.dart`, which never contain `/lib/` (no
   // leading slash). That silently skipped every file on every push since
   // this script was written — `startsWith('lib/')` closes the relative case.
   final isUnderLib = path.contains('/lib/') || path.startsWith('lib/');

@@ -7,9 +7,9 @@
 
 import 'dart:io' show exit;
 
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../registry.dart';
+import '../../io/file_io.dart';
+import '../../io/git_utils.dart';
+import '../../registry.dart';
 import 'command_seams.dart';
 
 /// Why a project could not be found.

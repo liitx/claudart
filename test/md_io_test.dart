@@ -4,7 +4,7 @@ import 'package:claudart/session/handoff_transition.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
-import 'package:claudart/md_io.dart';
+import 'package:claudart/session/md_io.dart';
 import 'package:claudart/session/debug_disposition.dart';
 import 'helpers/mocks.dart';
 

@@ -1,7 +1,7 @@
 import 'package:test/test.dart';
 import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'helpers/mocks.dart';
 import 'helpers/project_fixture.dart';
 

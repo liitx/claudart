@@ -27,7 +27,7 @@ context; the register below holds the evidence.
 | Q13 | `seamBundle` | done 2026-10-30: `CommandSeams` (io, projectRootOverride, exitFn, confirmFn, askFn, pickFn) replaces the loose parameters of the nine seam-heavy commands; ratchet 0; the other commands and the runner, executor and mode parameters stay per command |
 | Q14 | `oneSourcePerDatum` | done for the environment, home directory, processes, git executable and the project lookup (`lookupProject`, `requireProject`; six files with their own lookup are in a ledger with the reason); credentials, settings and `workspace.json` access remain |
 | Q15 | `enumFactsAsData` | done 2026-10-30: the 13 enums state their facts as constructor fields (facts a new variant must decide are required arguments); the relational `HandoffStatus.after` stays a switch; `CategorizeTag` computes its values from the other enums once; ratchet 13 to 0 |
-| Q16 | `folderLayout` | not started |
+| Q16 | `folderLayout` | done 2026-10-30: `lib/` root holds only the barrel and the two files zedup imports by path (`registry.dart`, `version.dart`); `lib/config/`, `lib/io/`, `lib/project/` and `lib/commands/support/` created; `layout_test.dart` enforces it; `make consumer-check` fails only on the earlier X8 gaps, none from paths |
 | Q17 | `userTextFromConfig` | not started |
 | Q3, Q4, Q5 | one writer, the asynchronous stream, logs for every command | not started; recommended to wait for Q12 to Q15: writing the writer and the stream on today's duplicated seams and per-variant switches would mean writing them twice |
 | Q7 | `measuredRedundancyRemoved` | last, by design |

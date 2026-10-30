@@ -1,14 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:claudart/commands/failure_boundary.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/commands/support/failure_boundary.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
 import 'package:claudart/version.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/commands/add.dart';
 import 'package:claudart/commands/archives.dart';
 import 'package:claudart/commands/chat_shell.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/confirm_pending.dart';
 import 'package:claudart/commands/doctor.dart';
 import 'package:claudart/commands/hook.dart';
@@ -27,16 +27,16 @@ import 'package:claudart/commands/debug.dart';
 import 'package:claudart/commands/flow.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/status.dart';
-import 'package:claudart/commands/project_selector.dart';
+import 'package:claudart/commands/support/project_selector.dart';
 import 'package:claudart/commands/workspaces.dart';
 import 'package:claudart/commands/resume.dart';
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/commands/teardown.dart';
 import 'package:claudart/commands/unlink.dart';
-import 'package:claudart/commands/command_seams.dart';
-import 'package:claudart/environment.dart';
-import 'package:claudart/process_runner.dart';
+import 'package:claudart/commands/support/command_seams.dart';
+import 'package:claudart/config/environment.dart';
+import 'package:claudart/io/process_runner.dart';
 
 const _usage = '''
 claudart — Dart CLI for structured project debug and suggestion sessions

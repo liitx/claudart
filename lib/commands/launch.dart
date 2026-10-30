@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
+import '../config/paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart' show SessionState, HandoffStatus;
 import '../session/workspace_guard.dart';
@@ -13,7 +13,7 @@ import 'link.dart';
 import 'setup.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_link_state.dart';
-import 'command_seams.dart';
+import 'support/command_seams.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///

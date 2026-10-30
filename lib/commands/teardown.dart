@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 import '../templates/handoff_template.dart';
-import '../md_io.dart';
-import '../paths.dart';
+import '../session/md_io.dart';
+import '../config/paths.dart';
 import '../pipeline/flows/teardown_steps.dart';
 import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
@@ -24,8 +24,8 @@ import '../ui/menu.dart';
 import '../util/prompt_with_default.dart';
 import '../ui/render.dart' as render;
 import '../ui/ansi.dart' as ansi;
-import 'project_resolution.dart';
-import 'command_seams.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.

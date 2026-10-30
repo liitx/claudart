@@ -12,9 +12,9 @@
 
 import 'dart:io';
 
-import '../file_io.dart';
-import '../md_io.dart' show readSection;
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../session/md_io.dart' show readSection;
+import '../config/paths.dart';
 import '../pipeline/agent_model.dart';
 import '../pipeline/step_result.dart' show StepResult;
 import '../pipeline/step_role.dart';
@@ -23,8 +23,8 @@ import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'flow.dart';
 import 'suggest.dart';
-import 'command_seams.dart';
-import 'project_resolution.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
 
 /// What the user typed. Conversation is the default: only slash commands invoke
 /// structured work; everything else is a [message] to the agent.
