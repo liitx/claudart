@@ -512,11 +512,33 @@ void main() {
 
     test('multiple saves write multiple distinct checkpoints', () async {
       final io = _io();
-      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
-      // Small pause ensures distinct timestamp in filename.
-      await Future<void>.delayed(const Duration(seconds: 1));
-      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
+      var now = DateTime.utc(2026, 1, 1, 12);
+      CommandSeams seams() => CommandSeams(
+            io: io,
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            clock: () => now,
+          );
+      await runSave(seams: seams());
+      now = now.add(const Duration(seconds: 1));
+      await runSave(seams: seams());
       expect(_checkpoints(io), hasLength(2));
+    });
+
+    test('the Updated line and the checkpoint name carry the clock\'s time',
+        () async {
+      final io = _io();
+      await runSave(
+        seams: CommandSeams(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          clock: () => DateTime.utc(2026, 1, 1, 12, 30, 45),
+        ),
+      );
+      expect(io.read(_checkpoints(io).single), contains('> Updated: 2026-01-01T12:30:45'));
+      expect(io.read(handoffPathFor(_workspace)), contains('> Updated: 2026-01-01T12:30:45'));
+      expect(_checkpoints(io).single, contains('2026-01-01'));
     });
 
     test('writes checkpoint even when root cause not confirmed (audit trail)',

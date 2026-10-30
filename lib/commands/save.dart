@@ -32,6 +32,7 @@ Future<SkillsUpdateResult> runSave({
   final fileIO = io ?? const RealFileIO();
   final exit_ = exitFn ?? exit;
   final sw = Stopwatch()..start();
+  final now = (seams.clock ?? DateTime.now)();
 
   print(render.header('CLAUDART SAVE'));
 
@@ -71,13 +72,13 @@ Future<SkillsUpdateResult> runSave({
   }
 
   // 3 — Stamp updated timestamp and persist.
-  handoff = stampHandoffUpdated(handoff);
+  handoff = stampHandoffUpdated(handoff, now: now);
   store.rewrite(handoff);
 
   // 3b — Write checkpoint to archive/.
   final archiveDir = archiveDirFor(workspace);
   fileIO.createDir(archiveDir);
-  final checkpointFile = p.join(archiveDir, _checkpointName(state.branch));
+  final checkpointFile = p.join(archiveDir, _checkpointName(state.branch, now));
   fileIO.write(checkpointFile, handoff);
 
   // 4 — Append confirmed facts to skills.md pending section.
@@ -144,8 +145,8 @@ SkillsUpdateResult _updatePendingSkills({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-String _checkpointName(String branch) {
-  final ts = DateTime.now()
+String _checkpointName(String branch, DateTime now) {
+  final ts = now
       .toIso8601String()
       .replaceAll(':', '-')
       .split('.')

@@ -13,6 +13,7 @@ void main() {
       expect(seams.confirmFn, isNull);
       expect(seams.askFn, isNull);
       expect(seams.pickFn, isNull);
+      expect(seams.clock, isNull);
     });
 
     test('forProjectRoot changes the root and keeps the rest', () {
@@ -21,6 +22,7 @@ void main() {
       bool confirmFn(String question) => true;
       bool? askFn(String question) => null;
       int pickFn(List<String> items) => 0;
+      DateTime clock() => DateTime.utc(2026);
       final seams = CommandSeams(
         io: io,
         projectRootOverride: '/one',
@@ -28,6 +30,7 @@ void main() {
         confirmFn: confirmFn,
         askFn: askFn,
         pickFn: pickFn,
+        clock: clock,
       ).forProjectRoot('/two');
       expect(seams.projectRootOverride, '/two');
       expect(seams.io, same(io));
@@ -35,6 +38,7 @@ void main() {
       expect(seams.confirmFn, same(confirmFn));
       expect(seams.askFn, same(askFn));
       expect(seams.pickFn, same(pickFn));
+      expect(seams.clock, same(clock));
     });
   });
 }

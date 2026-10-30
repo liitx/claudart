@@ -17,6 +17,7 @@ class CommandSeams {
     this.confirmFn,
     this.askFn,
     this.pickFn,
+    this.clock,
   });
 
   /// The file system the command reads and writes.
@@ -38,6 +39,9 @@ class CommandSeams {
   /// Which item of a menu the user picked.
   final int Function(List<String> items)? pickFn;
 
+  /// The time the command reads, instead of the wall clock.
+  final DateTime Function()? clock;
+
   /// The same seams, acting on another project.
   CommandSeams forProjectRoot(String projectRoot) => CommandSeams(
         io: io,
@@ -46,5 +50,6 @@ class CommandSeams {
         confirmFn: confirmFn,
         askFn: askFn,
         pickFn: pickFn,
+        clock: clock,
       );
 }

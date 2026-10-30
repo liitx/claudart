@@ -114,8 +114,8 @@ $pendingSection
 ///
 /// Operates on the raw string — no full parse required. Safe to call on any
 /// handoff regardless of age or format.
-String stampHandoffUpdated(String handoff) {
-  final ts = DateTime.now().toIso8601String().split('.').first;
+String stampHandoffUpdated(String handoff, {DateTime? now}) {
+  final ts = (now ?? DateTime.now()).toIso8601String().split('.').first;
   final updatedLine = '> Updated: $ts';
   final pattern = RegExp(r'^> Updated: .+$', multiLine: true);
   if (pattern.hasMatch(handoff)) {

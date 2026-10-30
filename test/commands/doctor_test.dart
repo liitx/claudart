@@ -14,6 +14,7 @@ import 'package:claudart/harness/harness_check.dart';
 import 'package:claudart/config/paths.dart';
 import 'package:claudart/io/process_runner.dart';
 import 'package:path/path.dart' as p;
+import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
@@ -676,17 +677,23 @@ void main() {
       expect(preflight.result, equals(HarnessCheckResult.fail));
     });
 
-    test('fails — does not hang the suite — when the call exceeds the bounded timeout', () async {
-      final outcomes = await runDoctorChecks(
-        runner: _HangingProcessRunner(_FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus))),
-        env: _cleanEnv,
-        projectRoot: '/fake/repo',
-        io: MemoryFileIO(),
-        bedrockPreflightTimeout: const Duration(milliseconds: 20),
-      );
-      final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
-      expect(preflight.result, equals(HarnessCheckResult.fail));
-      expect(preflight.detail, contains('did not respond within'));
+    test('fails — does not hang the suite — when the call exceeds the bounded timeout', () {
+      fakeAsync((async) {
+        List<HarnessCheckOutcome>? outcomes;
+        runDoctorChecks(
+          runner: _HangingProcessRunner(_FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus))),
+          env: _cleanEnv,
+          projectRoot: '/fake/repo',
+          io: MemoryFileIO(),
+          bedrockPreflightTimeout: const Duration(milliseconds: 20),
+        ).then((found) => outcomes = found);
+        async.elapse(const Duration(milliseconds: 19));
+        expect(outcomes, isNull);
+        async.elapse(const Duration(milliseconds: 1));
+        final preflight = outcomes!.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
+        expect(preflight.result, equals(HarnessCheckResult.fail));
+        expect(preflight.detail, contains('did not respond within'));
+      });
     });
   });
 
