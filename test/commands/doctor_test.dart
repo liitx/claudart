@@ -64,6 +64,16 @@ class _FakeProcessRunner implements ProcessRunner {
   }
 
   @override
+  Future<Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) =>
+      throw UnsupportedError('doctor never starts a streaming process');
+
+  @override
   Future<ProcessResult> run(
     String executable,
     List<String> arguments, {
@@ -139,6 +149,16 @@ Map<String, ProcessResult> _responses({
 class _HangingProcessRunner implements ProcessRunner {
   const _HangingProcessRunner(this._fallback);
   final ProcessRunner _fallback;
+
+  @override
+  Future<Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) =>
+      throw UnsupportedError('doctor never starts a streaming process');
 
   @override
   Future<ProcessResult> run(

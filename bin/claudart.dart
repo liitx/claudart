@@ -35,6 +35,8 @@ import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/commands/teardown.dart';
 import 'package:claudart/commands/unlink.dart';
 import 'package:claudart/commands/command_seams.dart';
+import 'package:claudart/environment.dart';
+import 'package:claudart/process_runner.dart';
 
 const _usage = '''
 claudart — Dart CLI for structured project debug and suggestion sessions
@@ -171,7 +173,7 @@ Future<void> main(List<String> rawArgs) async {
   // only an explicit --debug does. The project is only looked up when it
   // matters, so no `git` process runs on an ordinary invocation.
   if (!explicitDebug &&
-      Platform.environment[kClaudartDebugEnvVar] ==
+      processEnvironment[kClaudartDebugEnvVar] ==
           kClaudartDebugEnabledValue) {
     final debugRoot = selectedRoot ?? detectGitContext()?.root;
     final debugEntry =
@@ -324,7 +326,7 @@ Future<void> _dispatch(
 }
 
 int _compile() {
-  final home = Platform.environment['HOME'] ?? '';
+  final home = processEnvironment['HOME'] ?? '';
   final out  = '$home/bin/claudart';
   final src  = _resolveClaudartSource();
 
@@ -337,7 +339,7 @@ int _compile() {
   }
 
   stdout.writeln('Compiling claudart → $out');
-  final result = Process.runSync('dart', ['compile', 'exe', src, '-o', out]);
+  final result = const RealProcessRunner().runSync('dart', ['compile', 'exe', src, '-o', out]);
 
   stdout.write(result.stdout);
   if (result.stderr.toString().trim().isNotEmpty) {
@@ -358,7 +360,7 @@ int _compile() {
 /// Where the path of the claudart source is remembered after a compile. The
 /// one place its location is spelled out; saving and reading both use it.
 File get _savedSourceFile =>
-    File('${Platform.environment['HOME']}/.config/claudart/source');
+    File('${processEnvironment['HOME']}/.config/claudart/source');
 
 void _saveSourcePath(String repoRoot) {
   try {

@@ -4,6 +4,7 @@ import '../file_io.dart';
 import '../git_utils.dart';
 import '../paths.dart';
 import '../registry.dart';
+import '../process_runner.dart';
 
 /// Runs an experiment: executes [command] with [args], tees stdout/stderr to a
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the
@@ -67,7 +68,7 @@ Future<void> runExperiment(
   // inheritStdio: child shares the terminal directly — no piping through the
   // parent IOSink. Required for interactive commands (raw stdin, arrow keys)
   // and ensures header/footer print in correct order.
-  final process = await Process.start(
+  final process = await const RealProcessRunner().start(
     cmdArgs.first,
     cmdArgs.sublist(1),
     mode: ProcessStartMode.inheritStdio,

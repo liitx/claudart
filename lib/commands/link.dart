@@ -18,6 +18,7 @@ import '../templates/command_template_marker.dart';
 import '../templates/readme_template.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
+import '../environment.dart';
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
@@ -649,7 +650,7 @@ Future<void> _recompileIfCli(
   final entryPoint = p.join(_binDirName, '$projectName.dart');
   if (!fileIO.fileExists(p.join(projectRoot, entryPoint))) return;
 
-  final home = Platform.environment[homeEnvVar];
+  final home = processEnvironment[homeEnvVar];
   if (home == null || home.isEmpty) return;
   final output = p.join(home, _binDirName, projectName);
 
@@ -680,19 +681,13 @@ void _writeCommandFile(FileIO fileIO, String path, String content) {
 }
 
 String _detectProjectName(String projectRoot) {
-  try {
-    final result = Process.runSync(
-      'git',
-      ['remote', 'get-url', 'origin'],
-      workingDirectory: projectRoot,
-    );
-    if (result.exitCode == 0) {
-      final url = (result.stdout as String).trim();
-      if (url.isNotEmpty) {
-        final name = url.split('/').last.replaceAll('.git', '').trim();
-        if (name.isNotEmpty) return name;
-      }
-    }
-  } on Exception catch (_) {}
+  final url = readGitConfig(
+    GitConfigKey.remoteOriginUrl,
+    workingDirectory: projectRoot,
+  );
+  if (url != null) {
+    final name = url.split('/').last.replaceAll('.git', '').trim();
+    if (name.isNotEmpty) return name;
+  }
   return p.basename(projectRoot);
 }

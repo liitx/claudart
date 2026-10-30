@@ -19,6 +19,16 @@ abstract class ProcessRunner {
     Map<String, String>? environment,
   });
 
+  /// Starts the process and hands back the running [Process], for callers
+  /// that stream its output or share the terminal with it.
+  Future<Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  });
+
   /// Like [run], but actually kills the child process on [timeout] instead
   /// of merely abandoning the `Future` — `Future.timeout()` on top of [run]
   /// stops *waiting*, it does not stop the process, so a hung subprocess
@@ -67,6 +77,22 @@ class RealProcessRunner implements ProcessRunner {
       );
 
   @override
+  Future<Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) =>
+      Process.start(
+        executable,
+        arguments,
+        workingDirectory: workingDirectory,
+        environment: environment,
+        mode: mode,
+      );
+
+  @override
   Future<ProcessResult> runKillable(
     String executable,
     List<String> arguments, {
@@ -74,7 +100,7 @@ class RealProcessRunner implements ProcessRunner {
     Map<String, String>? environment,
     required Duration timeout,
   }) async {
-    final process = await Process.start(
+    final process = await start(
       executable,
       arguments,
       workingDirectory: workingDirectory,

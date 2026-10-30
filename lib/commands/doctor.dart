@@ -21,12 +21,12 @@ import '../providers/agent_provider.dart';
 import '../providers/claude_settings_env.dart';
 import '../registry.dart';
 import 'command_seams.dart';
+import '../environment.dart';
 
-const _gitExecutable = 'git';
 const _ghExecutable = 'gh';
 const _claudeExecutable = 'claude';
 const _awsExecutable = 'aws';
-const _requiredTools = [_gitExecutable, _ghExecutable, _claudeExecutable];
+const _requiredTools = [gitExecutable, _ghExecutable, _claudeExecutable];
 const _doctorCommandName = 'doctor';
 const _ec2MetadataDisabledVar = 'AWS_EC2_METADATA_DISABLED';
 const _notUsingBedrockDetail = 'not using Bedrock';
@@ -68,7 +68,7 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
 }) async {
   final proc = runner ?? const RealProcessRunner();
   final fileIO = io ?? const RealFileIO();
-  final environment = env ?? Platform.environment;
+  final environment = env ?? processEnvironment;
   final root = projectRoot ?? Directory.current.path;
 
   final activeProvider = await _detectActiveProvider(proc, environment, io: io, settingsPath: claudeSettingsPath);

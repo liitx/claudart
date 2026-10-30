@@ -24,6 +24,7 @@ import '../templates/plan_template.dart';
 import '../ui/line_editor.dart' as editor;
 import '../ui/render.dart' as render;
 import 'link.dart' show createProjectLinks;
+import '../environment.dart';
 
 /// Project shape — drives `claudeTemplate`'s optional Flutter constraint
 /// line. Not named `WorkspaceConfig` — that name belongs to
@@ -179,7 +180,7 @@ Future<void> runAdd({
   // 9 — Register in Claude Code's own auto-memory so a session started
   // here already knows the project exists.
   final memoryRoot = claudeMemoryRootOverride ??
-      p.join(Platform.environment[homeEnvVar] ?? '', IdeIntegration.claudeCode.dirName, 'projects');
+      p.join(processEnvironment[homeEnvVar] ?? '', IdeIntegration.claudeCode.dirName, 'projects');
   final projectHash = projectRoot.replaceAll('/', '-');
   final memoryDir = p.join(memoryRoot, projectHash, 'memory');
   fileIO.createDir(memoryDir);

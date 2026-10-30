@@ -10,6 +10,7 @@ import '../templates/debug_template.dart';
 import '../templates/save_template.dart';
 import '../templates/teardown_template.dart';
 import '../ui/render.dart' as render;
+import '../process_runner.dart';
 
 Future<void> runInit(List<String> args) async {
   final parser = ArgParser()
@@ -107,7 +108,7 @@ void _writeIfAbsent(String path, String content) {
 
 Future<String?> _detectVersion(String cmd, List<String> args) async {
   try {
-    final result = await Process.run(cmd, args);
+    final result = await const RealProcessRunner().run(cmd, args);
     final out = (result.stdout as String) + (result.stderr as String);
     final match = RegExp(r'(\d+\.\d+\.\d+)').firstMatch(out);
     return match?.group(1);

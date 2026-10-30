@@ -20,7 +20,7 @@ import 'dart:io';
 import '../config.dart' show defaultStepTimeout;
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
-import '../process_runner.dart' show killProcessTree;
+import '../process_runner.dart' show RealProcessRunner, killProcessTree;
 import '../providers/agent_provider.dart' show AgentProvider;
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
@@ -701,7 +701,7 @@ Future<StepResult?> defaultClaudeRunner({
     // conversation, distinct from the user's interactive Claude Code session, while
     // keeping the live shared ~/.claude auth (config-dir isolation 401s — the OAuth
     // token rotates and a copied credential goes stale).
-    final process = await Process.start(
+    final process = await const RealProcessRunner().start(
       executable,
       [
         '--print',

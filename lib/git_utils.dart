@@ -21,7 +21,8 @@ typedef GitAuthor = ({String? name, String? email});
 enum GitConfigKey {
   userName(gitKey: 'user.name'),
   userEmail(gitKey: 'user.email'),
-  hooksPath(gitKey: 'core.hooksPath');
+  hooksPath(gitKey: 'core.hooksPath'),
+  remoteOriginUrl(gitKey: 'remote.origin.url');
 
   const GitConfigKey({required this.gitKey});
 
@@ -29,7 +30,8 @@ enum GitConfigKey {
   final String gitKey;
 }
 
-const _gitExecutable = 'git';
+/// The git executable's name — the one spelling, read by every caller.
+const gitExecutable = 'git';
 const _detachedHeadMarker = 'HEAD';
 
 /// The executable + leading args every git call goes through to clear
@@ -59,7 +61,7 @@ ProcessResult _runGit(
 }) =>
     proc.runSync(
       gitEnvClearExecutable,
-      [...gitEnvClearArgs, _gitExecutable, ...gitArgs],
+      [...gitEnvClearArgs, gitExecutable, ...gitArgs],
       workingDirectory: workingDirectory,
     );
 

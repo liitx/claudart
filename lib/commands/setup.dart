@@ -18,6 +18,7 @@ import 'scan.dart';
 import '../session/session_ops.dart';
 import '../ui/render.dart' as render;
 import '../util/prompt_with_default.dart';
+import '../process_runner.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.
@@ -260,7 +261,7 @@ final class _NotFound extends _FileResolution {
 /// Default [FileFinderFn] — delegates to the OS `find` command, skipping
 /// hidden dirs and common build artefacts.
 List<String> _defaultFileFinder(String projectRoot, String basename) {
-  final result = Process.runSync(
+  final result = const RealProcessRunner().runSync(
     'find',
     [projectRoot, '-type', 'f', '-name', basename,
      '!', '-path', '*/.dart_tool/*',

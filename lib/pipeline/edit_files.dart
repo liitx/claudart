@@ -15,6 +15,7 @@ import 'package:path/path.dart' as p;
 
 import '../errors/failure_type.dart';
 import 'xml_tags.dart';
+import '../process_runner.dart';
 
 typedef EditFile = ({String path, String content});
 
@@ -100,7 +101,7 @@ String _body(String raw) {
 }
 
 bool dartAnalyzeClean(String absolutePath, String projectRoot) =>
-    Process.runSync(
+    const RealProcessRunner().runSync(
       'dart',
       ['analyze', '--no-fatal-warnings', absolutePath],
       workingDirectory: projectRoot,

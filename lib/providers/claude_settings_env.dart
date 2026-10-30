@@ -13,15 +13,15 @@
 // never crash detection, only fall back to process-env-only behavior.
 
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import '../file_io.dart';
 import '../paths.dart' show homeEnvVar;
+import '../environment.dart';
 
 /// `~/.claude/settings.json` — resolved fresh each call so a test override
 /// of `HOME` is honored without a cached stale path.
 String get defaultClaudeSettingsPath {
-  final home = Platform.environment[homeEnvVar] ?? '';
+  final home = processEnvironment[homeEnvVar] ?? '';
   return '$home/.claude/settings.json';
 }
 
