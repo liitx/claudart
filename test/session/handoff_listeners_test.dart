@@ -78,17 +78,16 @@ void main() {
   });
 
   group('totality over events', () {
-    test('every event is decided, including those no status makes yet', () {
-      for (final event in HandoffEvent.values) {
-        for (final to in HandoffStatus.values) {
+    for (final event in HandoffEvent.values) {
+      for (final to in HandoffStatus.values) {
+        test('${event.name} landing on ${to.name} is decided and recorded', () {
           final kinds = listenersFor(
             HandoffTransition(from: HandoffStatus.unknown, event: event, to: to),
           );
-          expect(kinds, contains(HandoffListenerKind.recordTransition),
-              reason: '${event.name} -> ${to.name}');
-        }
+          expect(kinds, contains(HandoffListenerKind.recordTransition));
+        });
       }
-    });
+    }
 
     test('only a fix landing on a finished fix calls for a teardown', () {
       final calling = [
