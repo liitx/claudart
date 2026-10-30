@@ -8,6 +8,7 @@ import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/md_io.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
@@ -109,14 +110,17 @@ void main() {
       );
     });
 
-    test('apply publishes the move to observers', () async {
-      final fixture = _store(HandoffStatus.readyForDebug);
-      final seen = <HandoffEvent>[];
-      fixture.store.bus.transitions.listen((move) => seen.add(move.event));
-      fixture.store
-          .apply(fixture.io.read(_handoffFile), HandoffEvent.debugStarted);
-      await Future<void>.delayed(Duration.zero);
-      expect(seen, [HandoffEvent.debugStarted]);
+    test('apply publishes the move to observers', () {
+      fakeAsync((async) {
+        final fixture = _store(HandoffStatus.readyForDebug);
+        final seen = <HandoffEvent>[];
+        fixture.store.bus.transitions.listen((move) => seen.add(move.event));
+        fixture.store
+            .apply(fixture.io.read(_handoffFile), HandoffEvent.debugStarted);
+        expect(seen, isEmpty);
+        async.flushMicrotasks();
+        expect(seen, [HandoffEvent.debugStarted]);
+      });
     });
 
     test('an event a reaction returns is applied by the store, after the move',
