@@ -62,7 +62,7 @@ class HandoffTransitionBus {
     for (final (name, listener) in _records) {
       try {
         listener(move);
-      } catch (error) {
+      } on Object catch (error) {
         onFailure(
           HandoffListenerFailure(listener: name, transition: move, error: error),
         );
@@ -80,7 +80,7 @@ class HandoffTransitionBus {
         try {
           final next = await listener(move);
           if (next != null) publish(await applyNext(next));
-        } catch (error) {
+        } on Object catch (error) {
           onFailure(
             HandoffListenerFailure(
               listener: name,

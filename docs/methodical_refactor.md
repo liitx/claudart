@@ -9,10 +9,10 @@ The approved plan is the source of the stage order (Phases 0 to 6). The
 reasoning behind a stage is in `docs/session_log.md`; the roadmap entry is in
 `PLAN.md`.
 
-## Where we are (rendered 2026-10-28)
+## Where we are (rendered 2026-11-06)
 
 Branch `claudart/enum-matrix-architecture`, all local, nothing pushed; the suite,
-`custom_lint` and the analyzer baseline (18) hold at every commit. This section is
+`custom_lint` and the analyzer (13 issues, all older infos; the baseline was 18) hold at every commit from `239f46e`, where the gate also began to fail on any analyzer error or lint finding. This section is
 the one place that says what is done and what is next, so it survives a lost
 context; the register below holds the evidence.
 
@@ -30,6 +30,7 @@ context; the register below holds the evidence.
 | Q16 | `folderLayout` | done 2026-10-30: `lib/` root holds only the barrel and the two files zedup imports by path (`registry.dart`, `version.dart`); `lib/config/`, `lib/io/`, `lib/project/` and `lib/commands/support/` created; `layout_test.dart` enforces it; `make consumer-check` fails only on the earlier X8 gaps, none from paths |
 | Q17 | `userTextFromConfig` | done for `lib/commands` 2026-10-30: every printed sentence reads from `text/user_text.json` through the generated `UserText` enum (`format`, and `styled` for colour placeholders); ratchet 294 to 0; text in the other layers (errors, render, logs, templates) remains |
 | Q3, Q4, Q5 | one writer, the asynchronous stream, logs for every command | Q3 half done 2026-10-30: `HandoffStore` (`apply`, `rewrite`, `replace`) is the one writer; debug, save, suggest, rotate, teardown and setup go through it; kill's reset goes through its `writeBlank`; `flow` is the one ledgered writer (agent-constructed status outside the table); `handoff_store_test.dart` fails on any other writer. Q3's "every early exit writes a record" folds into Q5; Q4 core built 2026-10-30, tests first: `handoff_listeners.dart` (totality, safety, termination over all legal cells), `transition_bus.dart` (order, drain, isolation, inline record vs queued reaction), `HandoffStore` publishes on its bus and the logger is its inline subscriber, a thrown reaction is logged as `FailureType.handoffListenerFailed`; reactions are bound to the proven table (a reaction runs only for the cells `listenersFor` names its kind for, may return only its kind's `mayEmit`, which is exhaustive over events); not yet done: a command attaching a reaction, a command awaiting `drain`, the matrix test reading the hop records (`teardownWhenConverged` is declared and proven, not attached), the pipeline publishing on the bus, `teardown` reaction on the headless path; Q5 not started |
+| Q4 spec mechanisms | `SpecObligation`, the test-only-symbol ratchet, the no-real-waits and no-global-cwd guards | done 2026-10-30 to 11-06 (T1 to T3 closed; T4 open until a command attaches a reaction and awaits `drain`) |
 | Q7 | `measuredRedundancyRemoved` | last, by design |
 | Q8 to Q11 | families, cross-package, ticket classification, verified fix | not started; Q10 waits on the owner vetting the ticket flow |
 

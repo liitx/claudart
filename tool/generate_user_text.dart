@@ -19,7 +19,7 @@ String generateUserText(String json) {
   final entries = (jsonDecode(json) as Map<String, dynamic>).entries.toList();
   final variants = [
     for (final entry in entries)
-      "  ${entry.key}(${_literal(entry.value as String)})",
+      '  ${entry.key}(${_literal(entry.value as String)})',
   ].join(',\n');
   return '''// GENERATED — DO NOT EDIT.
 // Source: $_sourcePath. Regenerate with `dart run tool/generate_user_text.dart`.

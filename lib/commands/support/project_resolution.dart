@@ -10,6 +10,7 @@ import 'dart:io' show exit;
 import '../../generated/user_text.g.dart';
 import '../../io/file_io.dart';
 import '../../io/git_utils.dart';
+import '../../io/process_runner.dart';
 import '../../registry.dart';
 import 'command_seams.dart';
 
@@ -60,15 +61,16 @@ class ResolvedProject {
 ResolvedProject? lookupProject(
   CommandSeams seams, {
   bool withGitContext = false,
+  ProcessRunner? runner,
   void Function(ProjectLookupFailure failure)? onFailure,
 }) {
   final io = seams.io ?? const RealFileIO();
   final projectRootOverride = seams.projectRootOverride;
   final gitContext = withGitContext
-      ? detectGitContext(workingDirectory: projectRootOverride)
+      ? detectGitContext(runner: runner, workingDirectory: projectRootOverride)
       : null;
   final projectRoot = projectRootOverride ??
-      (withGitContext ? gitContext?.root : detectGitContext()?.root);
+      (withGitContext ? gitContext?.root : detectGitContext(runner: runner)?.root);
   if (projectRoot == null) {
     onFailure?.call(ProjectLookupFailure.notInGitRepository);
     return null;

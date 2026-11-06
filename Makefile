@@ -2,7 +2,12 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+.PHONY: gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+
+## Every check a change must pass: suite, analyzer errors, custom_lint. With
+## MSG="..." it commits after they pass. See tool/gate.sh.
+gate:
+	tool/gate.sh $(MSG)
 
 ## Compile native binary to ~/bin/claudart
 build:

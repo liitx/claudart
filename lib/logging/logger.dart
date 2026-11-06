@@ -181,7 +181,7 @@ class SessionLogger {
     required String command,
     required HandoffListenerFailure failure,
   }) {
-    final type = FailureType.handoffListenerFailed;
+    const type = FailureType.handoffListenerFailed;
     logError(
       command: command,
       errorType: type.errorType.name,

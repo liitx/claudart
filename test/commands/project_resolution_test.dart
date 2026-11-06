@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:claudart/commands/support/command_seams.dart';
 import 'package:claudart/commands/support/project_resolution.dart';
 import 'package:claudart/registry.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
@@ -19,7 +20,7 @@ MemoryFileIO _ioWithRegistry({required bool registered}) {
   if (registered) {
     Registry.load(io: io)
         .add(
-          RegistryEntry(
+          const RegistryEntry(
             name: 'app',
             projectRoot: _root,
             workspacePath: '/workspaces/app',
@@ -59,21 +60,23 @@ void main() {
     });
 
     test('outside any git repository is reported as such', () {
-      final original = Directory.current;
-      final outside = Directory.systemTemp.createTempSync('no_git_');
-      Directory.current = outside;
-      try {
-        ProjectLookupFailure? reported;
-        final project = lookupProject(
-          CommandSeams(io: _ioWithRegistry(registered: true)),
-          onFailure: (found) => reported = found,
-        );
-        expect(project, isNull);
-        expect(reported, ProjectLookupFailure.notInGitRepository);
-      } finally {
-        Directory.current = original;
-        outside.deleteSync(recursive: true);
-      }
+      final runner = MockProcessRunner();
+      when(
+        () => runner.runSync(
+          any(),
+          any(),
+          workingDirectory: any(named: 'workingDirectory'),
+          environment: any(named: 'environment'),
+        ),
+      ).thenReturn(ProcessResult(0, 128, '', 'fatal: not a git repository'));
+      ProjectLookupFailure? reported;
+      final project = lookupProject(
+        CommandSeams(io: _ioWithRegistry(registered: true)),
+        runner: runner,
+        onFailure: (found) => reported = found,
+      );
+      expect(project, isNull);
+      expect(reported, ProjectLookupFailure.notInGitRepository);
     });
 
     for (final failure in ProjectLookupFailure.values) {
