@@ -77,7 +77,8 @@ List<String> testOnlySymbols(Map<String, String> contents) {
   List<String> under(String prefix) =>
       [for (final path in contents.keys) if (path.startsWith(prefix)) path];
   final libFiles = under('lib/');
-  final binFiles = under('bin/');
+  // bin/ and tool/ are real consumers: the binary, and scripts `make` runs.
+  final binFiles = [...under('bin/'), ...under('tool/')];
   final testFiles = under('test/');
 
   const barrelPath = 'lib/claudart.dart';
@@ -113,6 +114,7 @@ void main(List<String> args) {
     for (final f in [
       ..._dartFilesUnder('lib'),
       ..._dartFilesUnder('bin'),
+      ..._dartFilesUnder('tool'),
       ..._dartFilesUnder('test'),
     ])
       f: File(f).readAsStringSync(),

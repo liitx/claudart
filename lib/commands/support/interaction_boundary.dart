@@ -8,10 +8,8 @@
 
 import '../../io/process_exit.dart';
 import '../../logging/logger.dart';
+import '../../logging/recorded_outcome.dart';
 import 'claudart_command.dart';
-
-/// How a recorded run ended. A run that leaves with exit code 0 is `ok`.
-enum RecordedOutcome { ok, failed }
 
 /// Runs [body] as [command] and records how it ended in [logger]. A thrown
 /// error is recorded and goes on; an exit is recorded before the process

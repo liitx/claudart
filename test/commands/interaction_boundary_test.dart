@@ -10,6 +10,7 @@ import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/support/interaction_boundary.dart';
 import 'package:claudart/io/process_exit.dart';
 import 'package:claudart/logging/logger.dart';
+import 'package:claudart/logging/recorded_outcome.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';

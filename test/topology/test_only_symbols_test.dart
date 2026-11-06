@@ -14,7 +14,7 @@ import '../../tool/check_test_only_symbols.dart';
 const _knownTestOnlySymbols = 12;
 
 Map<String, String> _readSources() => {
-      for (final root in ['lib', 'bin', 'test'])
+      for (final root in ['lib', 'bin', 'tool', 'test'])
         if (Directory(root).existsSync())
           for (final file in Directory(root)
               .listSync(recursive: true)
@@ -37,6 +37,15 @@ void main() {
       final found = testOnlySymbols({
         'lib/a.dart': 'bool decide(int x) {\n  return x > 0;\n}\n',
         'lib/b.dart': 'final ok = decide(1);',
+        'test/a_test.dart': 'void main() { decide(1); }',
+      });
+      expect(found, isEmpty);
+    });
+
+    test('a function a tool script calls is not found, a tool is real use', () {
+      final found = testOnlySymbols({
+        'lib/a.dart': 'bool decide(int x) {\n  return x > 0;\n}\n',
+        'tool/draw.dart': 'void main() { decide(1); }',
         'test/a_test.dart': 'void main() { decide(1); }',
       });
       expect(found, isEmpty);

@@ -2,7 +2,12 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+.PHONY: diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+
+## Draw the runs a logs directory holds as Mermaid sequence diagrams.
+##   make diagram DIR=<workspace>/logs [CMD=debug]
+diagram:
+	$(DART) run tool/run_diagram.dart $(DIR) $(CMD)
 
 ## Every check a change must pass: suite, analyzer errors, custom_lint. With
 ## MSG="..." it commits after they pass. See tool/gate.sh.
