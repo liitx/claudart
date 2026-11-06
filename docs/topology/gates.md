@@ -9,9 +9,9 @@
 | debug | no command configured | `verificationCommand` | not run | — | returned | debugStarted, fixApplied | — | debugComplete; archive files 0; fix kept |
 | debug | command configured, passes | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | returned | debugStarted, fixApplied | exit 0 | debugComplete; archive files 0; fix kept |
 | debug | command configured, fails | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | threw fixVerificationFailed | debugStarted, debugBlocked | exit 1 | needsSuggest; archive files 0; fix — |
-| rotate | passes, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned rotated | rotated | exit 0 | suggestInvestigating; archive files 2; fix — |
-| rotate | fails, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned buildFailed | — | exit 1 | readyForDebug; archive files 2; fix — |
-| rotate | passes, nothing pending | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned noNextIssue | rotatedEmpty | exit 0 | noHandoff; archive files 2; fix — |
+| rotate | passes, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 0; fix — | returned rotated | rotated | exit 0 | suggestInvestigating; archive files 2; fix — |
+| rotate | fails, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 0; fix — | returned buildFailed | — | exit 1 | readyForDebug; archive files 0; fix — |
+| rotate | passes, nothing pending | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 0; fix — | returned noNextIssue | rotatedEmpty | exit 0 | noHandoff; archive files 2; fix — |
 
 ## Call chain to the gate (claudart frames, innermost first)
 

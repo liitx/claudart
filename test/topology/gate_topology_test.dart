@@ -384,19 +384,19 @@ void main() {
       expect(r.moves, ['debugStarted', 'debugBlocked']);
     });
 
-    test('rotate runs its gate after the archive is written, before the '
-        'handoff changes', () {
+    test('rotate runs its gate before it writes anything: no archive yet, the '
+        'handoff unchanged', () {
       final r = run('rotate', 'passes, a pending issue to seed');
-      expect(r.atGate!.archiveFiles, greaterThan(0));
+      expect(r.atGate!.archiveFiles, 0);
       expect(r.atGate!.status, HandoffStatus.readyForDebug.name);
       expect(r.moves, ['rotated']);
     });
 
-    test('a failing rotate gate keeps the archive and leaves the handoff '
+    test('a failing rotate gate writes no archive and leaves the handoff '
         'alone, and logs no move', () {
       final r = run('rotate', 'fails, a pending issue to seed');
       expect(r.result, 'returned buildFailed');
-      expect(r.archiveFilesAfter, greaterThan(0));
+      expect(r.archiveFilesAfter, 0);
       expect(r.statusAfter, HandoffStatus.readyForDebug.name);
       expect(r.moves, isEmpty);
     });
@@ -417,8 +417,8 @@ void main() {
           'make rebuild');
     });
 
-    test('a rotate whose gate fails archives again each time it is retried',
-        () async {
+    test('a rotate whose gate fails writes no archive, however often it is '
+        'retried', () async {
       final io = _io(ProjectFixture.root, pending: ['second issue']);
       Future<void> failingRotate() => _quiet(() => runRotate(
             seams: CommandSeams(
@@ -430,14 +430,9 @@ void main() {
             mode: RunMode.headless,
             buildFn: (_) async => const GateResult.failed(),
           ));
-      int entries() => (jsonDecode(io.read(p.join(archiveDirFor(_workspace), archiveIndexFileName)))
-              as List<dynamic>)
-          .length;
       await failingRotate();
-      final afterFirst = entries();
       await failingRotate();
-      expect(afterFirst, 1);
-      expect(entries(), 2, reason: 'the handoff did not change, the archive grew');
+      expect(_archiveFiles(io), 0);
       expect(_statusOf(io), HandoffStatus.readyForDebug.name);
     });
 

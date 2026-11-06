@@ -128,21 +128,11 @@ Future<RotateResult>  runRotate({
   // 4 — Extract pending issues before overwriting anything.
   final pending = extractPendingIssues(handoff);
 
-  // 5 — Archive current handoff + index entry, so a rotated session is
-  // visible to `claudart archives` like a killed or torn-down one is.
-  final archiveEntry = writeArchiveEntry(
-    workspace:   workspace,
-    branch:      state.branch,
-    handoff:     handoff,
-    kind:        ArchiveKind.reminder,
-    description: state.bug.text,
-    io:          fileIO,
-  );
-  final archiveFile = p.join(archiveDirFor(workspace), archiveEntry.handoffFile);
-
   final logger = SessionLogger.forEntry(entry, io: fileIO);
 
-  // 6 — Build gate: must pass before the next session can start.
+  // 5 — Build gate: must pass before the next session can start, and runs
+  // before anything is written, so a failed gate leaves no archive behind and
+  // a retry does not archive the same handoff again.
   // afterFixCommand has no registry-entry field yet, so it stays sourced
   // from the workspace config.json, defaulting to 'make rebuild'.
   final config = _loadConfig(fileIO, workspace);
@@ -162,6 +152,19 @@ Future<RotateResult>  runRotate({
     return RotateResult.buildFailed;
   }
   print(UserText.rotateBuildPassed.template);
+
+  // 6 — Archive current handoff + index entry, so a rotated session is
+  // visible to `claudart archives` like a killed or torn-down one is. Only now
+  // that the gate has passed.
+  final archiveEntry = writeArchiveEntry(
+    workspace:   workspace,
+    branch:      state.branch,
+    handoff:     handoff,
+    kind:        ArchiveKind.reminder,
+    description: state.bug.text,
+    io:          fileIO,
+  );
+  final archiveFile = p.join(archiveDirFor(workspace), archiveEntry.handoffFile);
 
   // Records the move once the build gate has passed and the handoff is about
   // to change. Not enforced: rotate is deliberately permissive, so a status

@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/rotate.dart';
+import 'package:claudart/generated/user_text.g.dart';
 import 'package:claudart/io/gate_runner.dart';
 import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/templates/handoff_template.dart';
@@ -302,6 +303,55 @@ void main() {
     });
   });
 
+  group('runRotate — the default gate and what it says', () {
+    test('the default gate is timed by the clock the command is given',
+        () async {
+      final io = _io();
+      final runner = MockProcessRunner();
+      when(() => runner.run(any(), any(),
+              workingDirectory: any(named: 'workingDirectory')))
+          .thenAnswer((_) async => fakeResult(''));
+      final times = [
+        DateTime.utc(2026, 1, 1, 12),
+        DateTime.utc(2026, 1, 1, 12, 0, 0, 250),
+      ];
+      await runRotate(
+        seams: CommandSeams(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _noExit,
+          confirmFn: _confirmYes,
+          clock: () => times.removeAt(0),
+        ),
+        runner: runner,
+      );
+      final row = jsonDecode(io
+          .read(logFilePath(logsDirFor(_workspace), LogFile.gates))
+          .trim()) as Map<String, dynamic>;
+      expect(row['durationMs'], 250);
+    });
+
+    test('a passing gate says it passed and never says it failed', () async {
+      final printed = <String>[];
+      await Zone.current
+          .fork(specification: ZoneSpecification(print: (self, parent, zone, line) => printed.add(line)))
+          .run(() => runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk));
+      final text = printed.join('\n');
+      expect(text, contains(UserText.rotateBuildPassed.template));
+      expect(text, isNot(contains(UserText.rotateBuildFailedFixTheBuildBefore.template)));
+    });
+
+    test('a failing gate says it failed and never says it passed', () async {
+      final printed = <String>[];
+      await Zone.current
+          .fork(specification: ZoneSpecification(print: (self, parent, zone, line) => printed.add(line)))
+          .run(() => runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildFail));
+      final text = printed.join('\n');
+      expect(text, contains(UserText.rotateBuildFailedFixTheBuildBefore.template));
+      expect(text, isNot(contains(UserText.rotateBuildPassed.template)));
+    });
+  });
+
   group('runRotate — no handoff', () {
     test('returns noHandoff when file missing', () async {
       final io = MemoryFileIO(files: {
@@ -416,7 +466,7 @@ void main() {
   });
 
   group('runRotate — build gate fails', () {
-    test('returns buildFailed, archives handoff, does not seed new one', () async {
+    test('returns buildFailed, writes no archive, does not seed new one', () async {
       final io = _io();
       final handoffFile = handoffPathFor(_workspace);
       final originalContent = io.files[handoffFile];
@@ -424,10 +474,36 @@ void main() {
       final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildFail);
 
       expect(result, RotateResult.buildFailed);
-      // Archive was written before the build gate.
-      expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
+      // The gate runs before anything is written: a failed gate leaves no
+      // archive behind (gap R14).
+      expect(io.files.keys.any((k) => k.contains('/archive/')), isFalse);
       // Live handoff NOT overwritten — still original content.
       expect(io.files[handoffFile], originalContent);
+    });
+
+    test('a retry after a failed gate does not archive a second time', () async {
+      final io = _io();
+      Future<RotateResult> failing() => runRotate(
+            seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes),
+            buildFn: _buildFail,
+          );
+      await failing();
+      await failing();
+      expect(io.files.keys.any((k) => k.contains('/archive/')), isFalse);
+    });
+
+    test('the archive is written once the gate has passed', () async {
+      final io = _io();
+      var archivedAtGate = true;
+      await runRotate(
+        seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes),
+        buildFn: (_) async {
+          archivedAtGate = io.files.keys.any((k) => k.contains('/archive/'));
+          return const GateResult.passed();
+        },
+      );
+      expect(archivedAtGate, isFalse, reason: 'nothing is archived when the gate runs');
+      expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
     });
   });
 
