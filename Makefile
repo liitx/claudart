@@ -5,9 +5,9 @@ DART    := dart
 .PHONY: diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
 
 ## Draw the runs a logs directory holds as Mermaid sequence diagrams.
-##   make diagram DIR=<workspace>/logs [CMD=debug]
+##   make diagram DIR="<global-logs> <workspace-logs>" [CMD=debug] [HTML=<file>]
 diagram:
-	$(DART) run tool/run_diagram.dart $(DIR) $(CMD)
+	$(DART) run tool/run_diagram.dart $(DIR) $(if $(CMD),--command=$(CMD)) $(if $(HTML),--html=$(HTML))
 
 ## Every check a change must pass: suite, analyzer errors, custom_lint. With
 ## MSG="..." it commits after they pass. See tool/gate.sh.

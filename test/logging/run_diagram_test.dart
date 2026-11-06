@@ -211,6 +211,39 @@ void main() {
     });
   });
 
+  group('the html page', () {
+    final runs = runsFrom(
+      interactions: [_boundary(_t0, 'status', 'ok', 15)],
+      transitions: const [],
+      steps: const [],
+      errors: const [],
+    );
+
+    test('holds each diagram for Mermaid to draw, and loads Mermaid', () {
+      final html = renderRunHtml(runs);
+      expect(html, contains('<pre class="mermaid">\nsequenceDiagram'));
+      expect(html, contains('mermaid'));
+      expect(html, contains('<script type="module">'));
+      expect(html, contains('status'));
+    });
+
+    test('escapes what the logs wrote so it cannot become markup', () {
+      final hostile = runsFrom(
+        interactions: [_boundary(_t0, 'a<b>&c', 'ok', 15)],
+        transitions: const [],
+        steps: const [],
+        errors: const [],
+      );
+      final html = renderRunHtml(hostile);
+      expect(html, isNot(contains('a<b>')));
+      expect(html, contains('a&lt;b&gt;&amp;c'));
+    });
+
+    test('says so when there are no runs', () {
+      expect(renderRunHtml(const []), contains('No runs'));
+    });
+  });
+
   group('the page', () {
     test('has a heading and a fenced diagram for each run', () {
       final page = renderRunPage(
