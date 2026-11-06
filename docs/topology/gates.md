@@ -6,12 +6,12 @@
 
 | command | use case | config key | shell command | at the gate | result | moves logged | after |
 |---|---|---|---|---|---|---|---|
-| debug | no command configured | `verificationCommand` | not run | — | returned | debugStarted, fixApplied | debugComplete; archive 0; fix kept |
-| debug | command configured, passes | `verificationCommand` | `dart test` | debugInProgress; archive 0; fix written | returned | debugStarted, fixApplied | debugComplete; archive 0; fix kept |
-| debug | command configured, fails | `verificationCommand` | `dart test` | debugInProgress; archive 0; fix written | threw fixVerificationFailed | debugStarted, debugBlocked | needsSuggest; archive 0; fix — |
-| rotate | passes, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive 2; fix — | returned rotated | rotated | suggestInvestigating; archive 2; fix — |
-| rotate | fails, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive 2; fix — | returned buildFailed | — | readyForDebug; archive 2; fix — |
-| rotate | passes, nothing pending | `afterFixCommand` | `make rebuild` | readyForDebug; archive 2; fix — | returned noNextIssue | rotatedEmpty | noHandoff; archive 2; fix — |
+| debug | no command configured | `verificationCommand` | not run | — | returned | debugStarted, fixApplied | debugComplete; archive files 0; fix kept |
+| debug | command configured, passes | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | returned | debugStarted, fixApplied | debugComplete; archive files 0; fix kept |
+| debug | command configured, fails | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | threw fixVerificationFailed | debugStarted, debugBlocked | needsSuggest; archive files 0; fix — |
+| rotate | passes, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned rotated | rotated | suggestInvestigating; archive files 2; fix — |
+| rotate | fails, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned buildFailed | — | readyForDebug; archive files 2; fix — |
+| rotate | passes, nothing pending | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned noNextIssue | rotatedEmpty | noHandoff; archive files 2; fix — |
 
 ## Call chain to the gate (claudart frames, innermost first)
 

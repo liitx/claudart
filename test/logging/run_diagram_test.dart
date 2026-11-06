@@ -18,8 +18,10 @@ Map<String, dynamic> _move(String ts, String command, String from, String event,
       if (to != null) 'to': to else 'rejected': true,
     };
 
+/// A step row. The real log writes the duration of a completed step as an
+/// integer of milliseconds, so [detail] is any JSON value.
 Map<String, dynamic> _step(String ts, String command, String kind,
-        {String? stepId, String? detail, String? failureType}) =>
+        {String? stepId, Object? detail, String? failureType}) =>
     {
       'ts': ts,
       'command': command,
@@ -45,7 +47,7 @@ void main() {
         steps: [
           _step('2026-11-06T10:00:02.000Z', 'debug', 'agentStarted', stepId: 'reader'),
           _step('2026-11-06T10:00:03.000Z', 'debug', 'agentCompleted',
-              stepId: 'reader', detail: '1200ms'),
+              stepId: 'reader', detail: 1200),
         ],
         errors: const [],
       );

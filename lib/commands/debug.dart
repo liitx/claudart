@@ -309,8 +309,8 @@ Future<void> runDebug({
   final verificationCommand =
       loadWorkspaceConfig(workspace, io: fileIO).verificationCommand;
   final runVerification_ = runVerification ?? _runVerificationCommand;
-  await blockOnFailure(() async {
-    applyEditFiles(
+  final verified = await blockOnFailure(() async {
+    return applyEditFiles(
       projectRoot:      projectRoot,
       planned:          editTags,
       write:            writeFile,
@@ -325,9 +325,7 @@ Future<void> runDebug({
   store.rewrite(
     withDebugDisposition(
       store.apply(fileIO.read(handoffFile), HandoffEvent.fixApplied),
-      verificationCommand == null
-          ? DebugDisposition.done
-          : DebugDisposition.verified,
+      verified ? DebugDisposition.verified : DebugDisposition.done,
     ),
   );
 

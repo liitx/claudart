@@ -116,6 +116,11 @@ String _safe(Object? text) {
   return cleaned.length > 120 ? '${cleaned.substring(0, 119)}…' : cleaned;
 }
 
+/// A step's detail as the diagram says it: the log writes a completed step's
+/// duration as an integer of milliseconds, anything else is text.
+String _durationOrText(Object detail) =>
+    detail is int ? '${detail}ms' : _safe(detail);
+
 /// The Mermaid sequence diagram of [run].
 String renderRunDiagram(RunLog run) {
   final owner = _Participant.owner.id;
@@ -142,7 +147,7 @@ String renderRunDiagram(RunLog run) {
   for (final row in run.steps) {
     final kind = row[LogEntryField.kind.name];
     final step = _safe(row[LogEntryField.stepId.name] ?? '');
-    final detail = row[LogEntryField.detail.name];
+    final Object? detail = row[LogEntryField.detail.name];
     final failureType = row[LogEntryField.failureType.name];
     add(
       row,
@@ -151,7 +156,7 @@ String renderRunDiagram(RunLog run) {
           '$command->>$model: $step started',
         _ when kind == PipelineEventKind.agentCompleted.name =>
           '$model-->>$command: $step completed'
-              '${detail == null ? '' : ' (${_safe(detail)})'}',
+              '${detail == null ? '' : ' (${_durationOrText(detail)})'}',
         _ when kind == PipelineEventKind.agentFailed.name =>
           '$model--x$command: $step failed: ${_safe(failureType ?? detail ?? '')}',
         _ => 'Note over $command,$model: ${_safe(kind)} $step',

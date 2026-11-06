@@ -177,6 +177,18 @@ void main() {
       expect(asked, isFalse);
     });
 
+    test('says the fix was verified only when a verifier ran and passed', () {
+      bool apply({FixVerifier? verifier}) => applyEditFiles(
+            projectRoot: root.path,
+            planned: [(path: 'lib/a.dart', content: 'a\n')],
+            write: _write,
+            dartFileAnalyzer: (_, __) => true,
+            verifyFix: verifier,
+          );
+      expect(apply(verifier: (_) => true), isTrue);
+      expect(apply(), isFalse);
+    });
+
     test('with no verifier nothing is run', () {
       applyEditFiles(
         projectRoot: root.path,

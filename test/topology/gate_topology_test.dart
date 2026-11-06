@@ -265,10 +265,10 @@ String renderGates(List<GateRun> runs, {required Set<String> sharingShell}) {
     final at = run.atGate;
     return '| ${run.command} | ${run.useCase} | `${run.configKey}` | '
         '${run.invoked ? '`${_cell(run.shellCommand)}`' : 'not run'} | '
-        '${at == null ? '—' : '${at.status}; archive ${at.archiveFiles}; fix '
+        '${at == null ? '—' : '${at.status}; archive files ${at.archiveFiles}; fix '
             '${at.fixWritten ? 'written' : '—'}'} | '
         '${_cell(run.result)} | ${run.moves.isEmpty ? '—' : run.moves.join(', ')}'
-        ' | ${run.statusAfter}; archive ${run.archiveFilesAfter}; fix '
+        ' | ${run.statusAfter}; archive files ${run.archiveFilesAfter}; fix '
         '${run.fixLeftWritten ? 'kept' : '—'} |';
   }
 

@@ -196,6 +196,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | R13 | `failedRunHasNoReasonInTheLogs` | A run that ends with a handled exit (`status` or `archives` outside a project) leaves a boundary row with outcome `failed` and no error row: the reason was printed, never logged, so a diagram of the run shows that it failed and not why. Found by drawing real runs with `make diagram` | `interactions.jsonl` after `claudart status` outside a git repository | open: a handled exit should name its reason in the log (a typed exit kind, as `debug` already has) |
 | R14 | `failedRotateGateLeavesAnOrphanArchive` | `rotate` writes the archive before it runs `afterFixCommand`. A failing gate leaves that archive, logs no move and leaves the handoff unchanged, so each retry archives the same unchanged handoff again (archive index 1 entry after the first failed run, 2 after the second) | `gate_topology_test.dart`, `docs/topology/gates.md` | open: owner decision, archive after the gate passes or accept the duplicate |
 | R15 | `gateOutputNotLogged` | Neither gate records the command's exit code or output: a failing `debug` gate leaves only `fixVerificationFailed`, a failing `rotate` gate leaves no log row at all (nothing names the command or says why it failed), so the data to judge a gate is lost | `gate_topology_test.dart`, `docs/topology/gates.md` | open: both gates should return the exit code and the tail of the output and log them |
+| T5 | `fixtureShapeDiffersFromTheRealLog` | The run diagram's first tests wrote a completed step's `detail` as the string `'1200ms'`; the real log writes it as the integer `10824`. The tests passed and the diagram showed no unit for real data, found only by drawing a real run. A fixture that does not have the shape of the real data proves nothing about it | `run_diagram_test.dart` before the fix; `steps.jsonl` from the sandboxed run | closed for the diagram (the fixture is now an integer and the renderer says `ms`); the test trace should record rows from real runs, not only fixtures |
 
 ### Measured in real logs
 
@@ -209,7 +210,7 @@ from 2026-10-19 03:54 to 2026-10-20 12:56, `errors.jsonl` 8 fingerprints,
 | R2 | `suggestFromDebugCompleteRejectedInRealUse` | Real use tried `suggest` from `debug-complete` twice and it was rejected with `invalidHandoffTransition`; no lifecycle scenario tries it | `errors.jsonl`, fingerprint `suggest.invalidHandoffTransition` | open |
 | R3 | `realUseNeverTearsDown` | 8 sessions ended with `kill` from `debugComplete`, none with `teardown`, so the skills-update path did not run in real use over these two days | `transitions.jsonl` | open |
 | R4 | `realUseHitsNineOfThirtyThreeLegalCells` | Real moves touched 9 of the table's 33 legal cells; every one was legal and none was rejected | `transitions.jsonl` | open |
-| R5 | `stepLogAbsentInRealUse` | No workspace has a `steps.jsonl`: the installed binary predates step logging, which is in unpushed local commits | workspace log directories | open, collect after a rebuild |
+| R5 | `stepLogAbsentInRealUse` | No workspace has a `steps.jsonl`: the installed binary predates step logging, which is in unpushed local commits | workspace log directories | closed 2026-11-06: a sandboxed `claudart suggest` from a freshly compiled binary wrote `steps.jsonl` (9 rows) and `models.jsonl` (3 rows) with the schema version; the installed binary at `~/bin/claudart` is still the older build |
 | R6 | `errorLogIsMostlyEnvironmentChecks` | 7 of the 8 error fingerprints come from `doctor` environment checks; one comes from a state move | `errors.jsonl` | open |
 | R7 | `logSchemaUnversioned` | Of 107 model rows only 40 carry a role and 16 an accounting field: older rows lack fields and nothing marks which schema a row follows | `models.jsonl` | closed 2026-11-06: every row names `schema` (`logSchemaVersion`, now 1) and a row without it predates it; one test per writer |
 | R8 | `fixAppliedFromReadyForDebugIsDebugPrecondition` | `readyForDebug --fixApplied` is never produced as a move by current `debug` (it writes `debugStarted` first; real logs show it produced up to 2026-10-20 08:07), but `debug` uses the cell as its start check before any model call (`debug.dart:139`) and `canStartDebug` is tested to agree with it. Measured in a scratch copy: making the cell illegal makes all 24 lifecycle runs that call `debug` fail (4 scenarios x 6 environments). The earlier "dead cell" claim was wrong: it is unused as a move and load-bearing as a check | scratch experiment, `debug.dart:139`, `transitions.jsonl` | open (decide: keep as the precondition, or check `debugStarted` instead and then remove) |
@@ -278,6 +279,7 @@ variant is not in the proposals below.
 | R13 | observesState x fileSeam | existing |
 | R14 | drivesState x processBound | existing |
 | R15 | drivesState x processBound | existing |
+| T5 | untouched x pure | existing |
 | D13 | drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x pure; drivesState x processBound | existing |
 | D14 | — | new: CodeTree |
 | B1 | untouched x processBound | existing |
@@ -970,6 +972,38 @@ the state machine and a failure does different things to the state. The data
 supports consolidating the runner (one injectable function that returns the exit
 code and the tail of the output, and logs them, which closes R15 for both) and
 keeping the two keys and the two positions.
+
+
+### Consultation with claudart on the refactor state (2026-11-06)
+
+A real `claudart suggest` run in a throwaway workspace on a clone of `5baf2c6`
+(`CLAUDART_WORKSPACE` and the project under `/tmp`, project named so link cannot
+recompile into `~/bin`), given `docs/briefs/claudart_consult_2026-11-06.md`. The
+real binary and `settings.json` were unchanged (`~/.claude.json` is Claude
+Code's own state, updated by every `claude` run); cost $0.23. Its analysis is
+saved unedited in `docs/briefs/claudart_consult_2026-11-06_review.md`. It stopped
+at the approve/refine/exit menu (stdin closed), so nothing was saved. The
+assistant checked each claim:
+
+| Claudart's point | The assistant's check | Outcome |
+|---|---|---|
+| Q3, Q4, Q5, R14, R15 and the shared mechanism hold against the code | each located at the lines it names | confirmed |
+| "Five-row matrix" but `ClosureEvidence` has four values | five scenarios map to four values (two end as `none`); the wording was imprecise | brief reworded |
+| "Every command leaves one row" conflicts with R12 | true: one boundary row each, plus a second for self-logging commands | already R12 |
+| R14's "1 then 2" disagrees with `gates.md`'s `archive 2` | wrong reading: `gates.md` counts files (the handoff and the index), the 1 to 2 counts index entries, and a test already pins it | column renamed "archive files" |
+| `debug` writes `verified` whenever a command is configured, not when it passed | true, and implicit: correct only because a failure throws first | fixed: `applyEditFiles` returns whether it verified and `debug` records that |
+| `replace` can log without publishing when no transition exists | true and intended: no transition, no reaction; the permissive logging is S6 | not a gap |
+| Headless `teardown` never reads the disposition, so it disagrees with `automaticClosureFor` | mostly true: the interactive path reads it for the skip question, the headless decision does not; this is open decision 3 | confirms the decision's cause |
+
+Its recommendations agree with the assistant's: keep two keys and two positions
+and consolidate only the runner; archive after the rotate gate passes; a
+headless `teardown` from `done` saves a reminder. Its one caution is worth
+measuring: if most projects set no `verificationCommand`, every headless
+teardown would end as a reminder, so `done` is the normal end state and an
+opt-in would be needed rather than a silent archive. For the test trace it
+recommends anchoring on `SpecObligation`, recording the expected value before
+the code runs, the actual value from the code under test, and which log rows the
+test caused, with an explicit bucket for tests that name no obligation.
 
 
 ## Stage records

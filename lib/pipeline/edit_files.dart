@@ -115,8 +115,9 @@ typedef FixVerifier = bool Function(String projectRoot);
 /// Writes every file in [planned] with [write], then verifies each one exists,
 /// equals the parsed content, and (for Dart files) analyzes; then, when
 /// [verifyFix] is given, runs it once. On any failure the touched files are
-/// restored and an [EditPlanException] is thrown.
-void applyEditFiles({
+/// restored and an [EditPlanException] is thrown. Returns whether the fix was
+/// verified: true only when [verifyFix] ran and passed.
+bool applyEditFiles({
   required String projectRoot,
   required List<EditFile> planned,
   required void Function(String path, String content) write,
@@ -151,6 +152,7 @@ void applyEditFiles({
         'the verification command failed',
       );
     }
+    return verifyFix != null;
   } catch (_) {
     _restore(originals);
     rethrow;
