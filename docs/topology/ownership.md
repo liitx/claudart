@@ -6,7 +6,7 @@
 
 | repo | lib files | public components | test files |
 |---|---|---|---|
-| claudart | 158 | 202 | 207 |
+| claudart | 158 | 202 | 208 |
 | dartrix | 14 | 22 | 7 |
 | zedup | 192 | 230 | 119 |
 

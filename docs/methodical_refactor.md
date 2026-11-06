@@ -194,6 +194,8 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | T4 | `specWordingAdmitsAConformingTestOfTheWrongThing` | Three spec sentences each admitted an implementation that passed its tests and missed the sentence: "a switch over the transition's (status, event) cell, so a new event or status fails to compile" (built over the landing status only: a new event compiled silently); "the logger is a subscriber and the `onTransition` callbacks are gone" (the parameter still exists in `applyHandoffEvent`, used by the store); "a command awaits the stream's drain before it returns" (no command does). Each sentence has no check written against its words | stage 3 shape list, items 1 to 3 | open: sentence 1 fixed (exhaustive over events); sentences 2 and 3 are the pending obligations `commandAwaitsDrain` and `commandAttachesReaction`, which fail the build once built unless marked; the `onTransition` parameter is still in `applyHandoffEvent` |
 | R12 | `selfLoggingCommandsAlsoGetTheBoundaryRow` | `doctor`, `scan`, `setup`, `debug`, `kill` and `workspaces` write their own interaction row, and the boundary now writes one per run as well; in an unregistered project both land in the same global log, so a run is counted twice there (seen in a compiled-binary run of `doctor`). The two rows mean different things (domain outcome and platform; ok or failed with a duration) and are not marked apart | `interactions.jsonl` after `claudart doctor` outside a project | open: either mark the boundary row, or let a command hand its outcome to the boundary |
 | R13 | `failedRunHasNoReasonInTheLogs` | A run that ends with a handled exit (`status` or `archives` outside a project) leaves a boundary row with outcome `failed` and no error row: the reason was printed, never logged, so a diagram of the run shows that it failed and not why. Found by drawing real runs with `make diagram` | `interactions.jsonl` after `claudart status` outside a git repository | open: a handled exit should name its reason in the log (a typed exit kind, as `debug` already has) |
+| R14 | `failedRotateGateLeavesAnOrphanArchive` | `rotate` writes the archive before it runs `afterFixCommand`. A failing gate leaves that archive, logs no move and leaves the handoff unchanged, so each retry archives the same unchanged handoff again (archive index 1 entry after the first failed run, 2 after the second) | `gate_topology_test.dart`, `docs/topology/gates.md` | open: owner decision, archive after the gate passes or accept the duplicate |
+| R15 | `gateOutputNotLogged` | Neither gate records the command's exit code or output: a failing `debug` gate leaves only `fixVerificationFailed`, a failing `rotate` gate leaves no log row at all (nothing names the command or says why it failed), so the data to judge a gate is lost | `gate_topology_test.dart`, `docs/topology/gates.md` | open: both gates should return the exit code and the tail of the output and log them |
 
 ### Measured in real logs
 
@@ -274,6 +276,8 @@ variant is not in the proposals below.
 | T4 | drivesState x pure | existing |
 | R12 | observesState x fileSeam | existing |
 | R13 | observesState x fileSeam | existing |
+| R14 | drivesState x processBound | existing |
+| R15 | drivesState x processBound | existing |
 | D13 | drivesState x workspaceBound; observesState x workspaceBound; untouched x workspaceBound; untouched x pure; drivesState x processBound | existing |
 | D14 | — | new: CodeTree |
 | B1 | untouched x processBound | existing |
@@ -945,6 +949,28 @@ KT; what `teardown` writes when no fix was applied (today it reads changed
 files, and an analysis-only session has none); the name and place of the
 analysis-resolved status; and the table changes themselves, which are written
 test-first under Q2 and Q3 once the owner has confirmed this reading.
+
+### The two gates, compared (run 2026-11-06, `docs/topology/gates.md`)
+
+`debug` runs `verificationCommand`; `rotate` runs `afterFixCommand`. Run through
+real use cases (`gate_topology_test.dart`), they are not the same thing:
+
+| | `debug` gate | `rotate` gate |
+|---|---|---|
+| question | does this fix work? | can the next session start? |
+| config key and default | `verificationCommand`, none | `afterFixCommand`, `make rebuild` |
+| where it runs | after the fix is written and analyzed, inside the fix transition | after the archive is written, before the next handoff is seeded |
+| on pass | `fixApplied`, disposition `verified` | `rotated` or `rotatedEmpty` |
+| on fail | files restored, `debugBlocked`, `needsSuggest`, typed failure | no move, handoff unchanged, archive left behind (R14), no log row (R15) |
+| how it is called | synchronously, from inside `applyEditFiles`, with a hard-coded runner | asynchronously, with an injectable `ProcessRunner` |
+| shared | one shell command, exit 0 passes, the same `sh -c` constants | the same |
+
+What is shared is the mechanism, not the purpose: they sit at different points of
+the state machine and a failure does different things to the state. The data
+supports consolidating the runner (one injectable function that returns the exit
+code and the tail of the output, and logs them, which closes R15 for both) and
+keeping the two keys and the two positions.
+
 
 ## Stage records
 
