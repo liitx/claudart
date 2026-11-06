@@ -359,13 +359,13 @@ class SessionState {
           HandoffFinding.debugDispositionDisagrees,
       ];
 
-  /// A recorded disposition contradicts the status: `done` only with a finished
-  /// fix, and a finished fix only with `done`.
+  /// A recorded disposition contradicts the status: one that records an
+  /// applied fix only with a finished fix, and a finished fix only with one.
   bool get _debugDispositionDisagrees {
     final recorded = recordedDebugDisposition;
     if (recorded == null) return false;
     return (effectiveStatus == HandoffStatus.debugComplete) !=
-        (recorded == DebugDisposition.done);
+        recorded.recordsAppliedFix;
   }
 
   List<HandoffFinding> get _knowledgeTransferFindings => switch ((

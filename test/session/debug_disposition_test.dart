@@ -8,6 +8,7 @@ import 'package:test/test.dart';
 const _wire = <DebugDisposition, String>{
   DebugDisposition.pending: 'pending',
   DebugDisposition.done: 'done',
+  DebugDisposition.verified: 'verified',
   DebugDisposition.notApplicable: 'not-applicable',
   DebugDisposition.skipped: 'skipped',
 };
@@ -16,6 +17,7 @@ const _wire = <DebugDisposition, String>{
 const _resolved = <DebugDisposition, bool>{
   DebugDisposition.pending: false,
   DebugDisposition.done: true,
+  DebugDisposition.verified: true,
   DebugDisposition.notApplicable: true,
   DebugDisposition.skipped: true,
 };

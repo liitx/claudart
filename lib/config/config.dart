@@ -21,6 +21,7 @@ const Duration defaultStepTimeout = Duration(minutes: 15);
 
 const _defaultAfterFixCommand = 'make rebuild';
 const _afterFixCommandKey = 'afterFixCommand';
+const _verificationCommandKey = 'verificationCommand';
 const _allowedScopeRootsKey = 'allowedScopeRoots';
 const _stepTimeoutMinutesKey = 'stepTimeoutMinutes';
 
@@ -40,6 +41,12 @@ class ProjectConfig {
   /// session, before seeding the next handoff. Must exit 0 to continue.
   /// Defaults to `make rebuild` for self-hosted projects.
   final String afterFixCommand;
+
+  /// Shell command `claudart debug` runs after it has written and analyzed a
+  /// fix, before it records the work as verified. Null (unset, blank, or not
+  /// text) means nothing verifies the fix: it is recorded as applied, never as
+  /// verified, and no automatic close may rely on it.
+  final String? verificationCommand;
 
   /// Extra directories a `### Files in play` entry may point into besides the
   /// project root itself (for example a sibling package in a monorepo).
@@ -62,6 +69,7 @@ class ProjectConfig {
 
   const ProjectConfig({
     this.afterFixCommand = _defaultAfterFixCommand,
+    this.verificationCommand,
     this.allowedScopeRoots = const [],
     this.stepTimeoutMinutes,
   });
@@ -69,6 +77,10 @@ class ProjectConfig {
   factory ProjectConfig.fromJson(Map<String, dynamic> json) {
     return ProjectConfig(
       afterFixCommand: json[_afterFixCommandKey] as String? ?? _defaultAfterFixCommand,
+      verificationCommand: switch (json[_verificationCommandKey]) {
+        final String command when command.trim().isNotEmpty => command.trim(),
+        _ => null,
+      },
       allowedScopeRoots: [
         for (final r in (json[_allowedScopeRootsKey] as List<dynamic>? ?? const []))
           if (r is String && r.trim().isNotEmpty) r.trim(),
@@ -84,17 +96,21 @@ class ProjectConfig {
 
   Map<String, dynamic> toJson() => {
         _afterFixCommandKey: afterFixCommand,
+        if (verificationCommand != null)
+          _verificationCommandKey: verificationCommand,
         if (allowedScopeRoots.isNotEmpty) _allowedScopeRootsKey: allowedScopeRoots,
         if (stepTimeoutMinutes != null) _stepTimeoutMinutesKey: stepTimeoutMinutes,
       };
 
   ProjectConfig copyWith({
     String? afterFixCommand,
+    String? verificationCommand,
     List<String>? allowedScopeRoots,
     int? stepTimeoutMinutes,
   }) {
     return ProjectConfig(
       afterFixCommand: afterFixCommand ?? this.afterFixCommand,
+      verificationCommand: verificationCommand ?? this.verificationCommand,
       allowedScopeRoots: allowedScopeRoots ?? this.allowedScopeRoots,
       stepTimeoutMinutes: stepTimeoutMinutes ?? this.stepTimeoutMinutes,
     );

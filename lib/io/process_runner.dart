@@ -2,6 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+/// How a free-form shell command is run: the whole command string is passed to
+/// the shell as one argument, so operators, quoting and globs work as they do
+/// when typed in a terminal (`runInShell` on a split argument list does not).
+const String shellExecutable = 'sh';
+const String shellCommandFlag = '-c';
+
 /// Abstraction over Process.run.
 /// Swap in [MockProcessRunner] in tests to avoid spawning real processes.
 abstract class ProcessRunner {

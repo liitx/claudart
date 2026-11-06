@@ -11,27 +11,35 @@ import 'handoff_placeholder.dart';
 /// Where debug stands for a handoff.
 enum DebugDisposition {
   /// Debug applies and has not finished: it may still run.
-  pending('pending'),
+  pending('pending', recordsAppliedFix: false),
 
-  /// Debug ran and the fix was applied.
-  done('done'),
+  /// Debug ran and the fix was applied; nothing but `dart analyze` checked it.
+  done('done', recordsAppliedFix: true),
+
+  /// Debug ran, the fix was applied, and the workspace's verification command
+  /// passed. The only disposition that counts as verified evidence.
+  verified('verified', recordsAppliedFix: true),
 
   /// The kind of work has no debug step, such as an analysis that resolves it.
-  notApplicable('not-applicable'),
+  notApplicable('not-applicable', recordsAppliedFix: false),
 
   /// Debug applies but will not be used; this was decided, not forgotten.
-  skipped('skipped');
+  skipped('skipped', recordsAppliedFix: false);
 
-  const DebugDisposition(this.wire);
+  const DebugDisposition(this.wire, {required this.recordsAppliedFix});
 
   /// How the disposition is written in the handoff.
   final String wire;
+
+  /// Whether the disposition says a fix was applied, so only a finished fix
+  /// (`debugComplete`) goes with it.
+  final bool recordsAppliedFix;
 
   /// Whether the handoff is resolved as far as debug goes: nothing is left for
   /// debug to do.
   bool get isResolved => switch (this) {
         pending => false,
-        done || notApplicable || skipped => true,
+        done || verified || notApplicable || skipped => true,
       };
 
   /// The disposition written as [text], or null when [text] is empty, a

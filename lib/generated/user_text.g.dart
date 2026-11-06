@@ -284,7 +284,8 @@ enum UserText {
   suggestStageBar('  {dim}[1] Classify{reset}  {dim}›{reset}  {dim}[2] Read files{reset}  {dim}›{reset}  {dim}[3] Reason{reset}  {dim}›{reset}  {dim}[4] Write handoff{reset}\n'),
   confirmPendingTitle('CONFIRM PENDING'),
   indentedLine('  {line}'),
-  leadingBlankLine('\n{line}');
+  leadingBlankLine('\n{line}'),
+  statusClosureLine('Closure  : {evidence} — {closure}');
 
   const UserText(this.template);
 

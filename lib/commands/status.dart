@@ -11,6 +11,7 @@ import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../session/closure_evidence.dart';
 
 Future<void> runStatus({
   CommandSeams seams = const CommandSeams(),
@@ -62,6 +63,13 @@ Future<void> runStatus({
   print(UserText.statusBranch.format({'branch': currentBranch ?? state.branch}));
   final statusColour = render.statusColour(shown);
   print(UserText.statusLine.format({'status': ansi.c(statusColour, shown.value)}));
+  if (state.hasActiveContent) {
+    final closureEvidence = closureEvidenceOf(state);
+    print(UserText.statusClosureLine.format({
+      'evidence': closureEvidence.label,
+      'closure': automaticClosureFor(closureEvidence).label,
+    }));
+  }
   print(UserText.statusBug.format({'text': _truncate(state.bug.text)}));
   print(UserText.statusRootCause.format({'text': _truncate(state.rootCause.text)}));
   if (shown == HandoffStatus.debugInProgress ||

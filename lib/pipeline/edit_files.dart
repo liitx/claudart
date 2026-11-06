@@ -108,14 +108,20 @@ bool dartAnalyzeClean(String absolutePath, String projectRoot) =>
     ).exitCode ==
     0;
 
+/// Whether the fix works, decided by running the workspace's verification
+/// command in [projectRoot] with the fix written.
+typedef FixVerifier = bool Function(String projectRoot);
+
 /// Writes every file in [planned] with [write], then verifies each one exists,
-/// equals the parsed content, and (for Dart files) analyzes. On any failure
-/// the touched files are restored and an [EditPlanException] is thrown.
+/// equals the parsed content, and (for Dart files) analyzes; then, when
+/// [verifyFix] is given, runs it once. On any failure the touched files are
+/// restored and an [EditPlanException] is thrown.
 void applyEditFiles({
   required String projectRoot,
   required List<EditFile> planned,
   required void Function(String path, String content) write,
   DartFileAnalyzer dartFileAnalyzer = dartAnalyzeClean,
+  FixVerifier? verifyFix,
 }) {
   final originals = <String, String?>{};
   for (final f in planned) {
@@ -138,6 +144,12 @@ void applyEditFiles({
       if (isDartFile && !dartFileAnalyzer(abs, projectRoot)) {
         throw _verifyFailure(f.path, 'dart analyze reported errors');
       }
+    }
+    if (verifyFix != null && !verifyFix(projectRoot)) {
+      throw EditPlanException(
+        FailureType.fixVerificationFailed,
+        'the verification command failed',
+      );
     }
   } catch (_) {
     _restore(originals);

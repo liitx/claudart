@@ -28,6 +28,7 @@ import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
+import '../io/process_runner.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.
@@ -72,6 +73,7 @@ Future<void> runDebug({
   CommandSeams seams = const CommandSeams(),
   PipelineExecutor? executor,
   DartFileAnalyzer? dartFileAnalyzer,
+  bool Function(String command, String projectRoot)? runVerification,
 }) async {
   final io = seams.io;
   final exitFn = seams.exitFn;
@@ -302,12 +304,20 @@ Future<void> runDebug({
 
   // Write, then verify every file; a failure restores the files, blocks the
   // session and throws before fixApplied is applied.
+  // The workspace's verification command, when it names one, decides whether
+  // the fix is verified; none configured means nothing verifies it.
+  final verificationCommand =
+      loadWorkspaceConfig(workspace, io: fileIO).verificationCommand;
+  final runVerification_ = runVerification ?? _runVerificationCommand;
   await blockOnFailure(() async {
     applyEditFiles(
       projectRoot:      projectRoot,
       planned:          editTags,
       write:            writeFile,
       dartFileAnalyzer: dartFileAnalyzer ?? dartAnalyzeClean,
+      verifyFix: verificationCommand == null
+          ? null
+          : (root) => runVerification_(verificationCommand, root),
     );
   });
   final written = editTags.length;
@@ -315,7 +325,9 @@ Future<void> runDebug({
   store.rewrite(
     withDebugDisposition(
       store.apply(fileIO.read(handoffFile), HandoffEvent.fixApplied),
-      DebugDisposition.done,
+      verificationCommand == null
+          ? DebugDisposition.done
+          : DebugDisposition.verified,
     ),
   );
 
@@ -326,6 +338,17 @@ Future<void> runDebug({
   );
   print(UserText.debugNextClaudartSaveThenRunTests.styled({}));
 }
+
+/// Runs [command] through the shell in [projectRoot]; passing means exit 0.
+bool _runVerificationCommand(String command, String projectRoot) =>
+    const RealProcessRunner()
+        .runSync(
+          shellExecutable,
+          [shellCommandFlag, command],
+          workingDirectory: projectRoot,
+        )
+        .exitCode ==
+    0;
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 

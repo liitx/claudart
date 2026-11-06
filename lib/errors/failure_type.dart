@@ -149,6 +149,14 @@ enum FailureType {
     suggestedAction: 'Set HOME, or set CLAUDART_WORKSPACE to an absolute '
                      'directory, then re-run.',
   ),
+  fixVerificationFailed(
+    errorType: ErrorType.pipeline,
+    faultClassOverride: null,
+    label: 'Fix verification failed',
+    suggestedAction: 'The workspace verification command failed after the fix '
+        'was written, so the files were restored and the session was blocked, '
+        'not marked done. Read the command output, then run `claudart suggest`.',
+  ),
   handoffListenerFailed(
     errorType: ErrorType.session,
     faultClassOverride: null,

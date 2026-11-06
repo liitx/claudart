@@ -4,7 +4,11 @@ import 'package:test/test.dart';
 import 'package:claudart/commands/status.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/config/paths.dart';
+import 'package:claudart/session/closure_evidence.dart';
+import 'package:claudart/session/debug_disposition.dart';
+import 'package:claudart/session/md_io.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
+import 'package:claudart/templates/handoff_template.dart';
 import 'package:claudart/ui/ansi.dart' as ansi;
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
@@ -317,6 +321,74 @@ _Nothing yet.
       final out = await statusText(ioWithModels(const []));
       expect(out, isNot(contains('Models')));
     });
+  });
+
+  group('status — what closed the handoff', () {
+    /// A handoff at [status] with a real root cause and scope, and [disposition]
+    /// recorded when given.
+    MemoryFileIO ioClosedBy(HandoffStatus status, DebugDisposition? disposition) {
+      final io = MemoryFileIO();
+      final workspace = workspaceFor(_projectName);
+      Registry.empty()
+          .add(RegistryEntry(
+            name: _projectName,
+            projectRoot: _projectRoot,
+            workspacePath: workspace,
+            createdAt: '2026-03-17',
+            lastSession: '2026-03-17',
+          ))
+          .save(io: io);
+      var content = blankHandoff;
+      content = updateSection(content, 'Bug', 'The parser drops a line.');
+      content = updateSection(content, 'Root Cause', 'The splitter stops early.');
+      content = updateSection(
+        content,
+        'Scope',
+        '### Files in play\n- lib/parser.dart\n\n### Must not touch\nnothing',
+      );
+      content = withHandoffStatus(content, status);
+      if (disposition != null) content = withDebugDisposition(content, disposition);
+      io.write(handoffPathFor(workspace), content);
+      return io;
+    }
+
+    Future<String> statusText(MemoryFileIO io) async {
+      final output = <String>[];
+      await runZoned(
+        () => runStatus(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      return output.join('\n');
+    }
+
+    const cases = <ClosureEvidence, (HandoffStatus, DebugDisposition?)>{
+      ClosureEvidence.verified:
+          (HandoffStatus.debugComplete, DebugDisposition.verified),
+      ClosureEvidence.confirmedBySuggest:
+          (HandoffStatus.readyForDebug, DebugDisposition.skipped),
+      ClosureEvidence.debugUnrecorded: (HandoffStatus.readyForDebug, null),
+      ClosureEvidence.none: (HandoffStatus.suggestInvestigating, null),
+    };
+
+    test('every kind of evidence has a case', () {
+      expect(cases.keys.toSet(), ClosureEvidence.values.toSet());
+    });
+
+    for (final entry in cases.entries) {
+      test('${entry.key.name}: says what closed it and what an automatic '
+          'close would do', () async {
+        final (status, disposition) = entry.value;
+        final text = await statusText(ioClosedBy(status, disposition));
+        final evidence = entry.key;
+        final closure = automaticClosureFor(evidence);
+        expect(
+          text,
+          contains('Closure  : ${evidence.label} — ${closure.label}'),
+        );
+      });
+    }
   });
 
   group('status — relevant past patterns', () {

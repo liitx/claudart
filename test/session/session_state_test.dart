@@ -236,11 +236,12 @@ void main() {
           recordedDebugDisposition: recorded,
         );
 
-    // Independent literals: only a finished fix is `done`, and a finished fix
-    // is nothing else.
+    // Independent literals: only a finished fix is `done` or `verified`, and a
+    // finished fix is nothing else.
     bool disagrees(HandoffStatus status, DebugDisposition recorded) =>
         (status == HandoffStatus.debugComplete) !=
-        (recorded == DebugDisposition.done);
+        (recorded == DebugDisposition.done ||
+            recorded == DebugDisposition.verified);
 
     for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
       for (final recorded in DebugDisposition.values) {

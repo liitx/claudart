@@ -583,6 +583,112 @@ void main() {
     });
   });
 
+  // The workspace's verification command decides whether a fix is recorded as
+  // verified (Q11, gap S11). None configured means nothing verifies it: the fix
+  // is recorded as applied, never as verified.
+  group('runDebug — the verification command', () {
+    late Directory root;
+    setUp(() => root = Directory.systemTemp.createTempSync('claudart_verifycmd_'));
+    tearDown(() => root.deleteSync(recursive: true));
+
+    final plan = '${WireTag.editFile.openPrefix} path="lib/foo.dart">\n'
+        'void a() {}\n${WireTag.editFile.close}';
+
+    MemoryFileIO ioWithCommand(String? command) {
+      final io = _io(projectRoot: root.path);
+      if (command != null) {
+        io.write(
+          configPathFor(_workspace),
+          jsonEncode({'verificationCommand': command}),
+        );
+      }
+      return io;
+    }
+
+    DebugDisposition recorded(MemoryFileIO io) =>
+        SessionState.parse(io.read(handoffPathFor(_workspace))).debugDisposition;
+
+    test('none configured: nothing is run and the fix is recorded as done',
+        () async {
+      final io = ioWithCommand(null);
+      var asked = false;
+      await runDebug(
+        seams: CommandSeams(io: io, projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0),
+        executor: _executorWithPlanText(plan),
+        dartFileAnalyzer: (_, __) => true,
+        runVerification: (command, projectRoot) {
+          asked = true;
+          return true;
+        },
+      );
+      expect(asked, isFalse);
+      expect(_statusOf(io), HandoffStatus.debugComplete);
+      expect(recorded(io), DebugDisposition.done);
+    });
+
+    test('configured and passing: the fix is recorded as verified', () async {
+      final io = ioWithCommand('dart test');
+      final seen = <String>[];
+      await runDebug(
+        seams: CommandSeams(io: io, projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0),
+        executor: _executorWithPlanText(plan),
+        dartFileAnalyzer: (_, __) => true,
+        runVerification: (command, projectRoot) {
+          seen.add('$command in ${p.basename(projectRoot)}');
+          seen.add('written: ${File('$projectRoot/lib/foo.dart').existsSync()}');
+          return true;
+        },
+      );
+      expect(seen, ['dart test in ${p.basename(root.path)}', 'written: true']);
+      expect(_statusOf(io), HandoffStatus.debugComplete);
+      expect(recorded(io), DebugDisposition.verified);
+    });
+
+    test('configured and failing: the files are restored and the session is '
+        'blocked', () async {
+      final io = ioWithCommand('dart test');
+      await expectLater(
+        runDebug(
+          seams: CommandSeams(io: io, projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0),
+          executor: _executorWithPlanText(plan),
+          dartFileAnalyzer: (_, __) => true,
+          runVerification: (command, projectRoot) => false,
+        ),
+        throwsA(
+          isA<EditPlanException>().having(
+            (e) => e.failure,
+            'failure',
+            FailureType.fixVerificationFailed,
+          ),
+        ),
+      );
+      expect(File('${root.path}/lib/foo.dart').existsSync(), isFalse);
+      expect(_statusOf(io), HandoffStatus.needsSuggest);
+      expect(
+        loggedMoves(io, _workspace).map((move) => move['event']),
+        [HandoffEvent.debugStarted.name, HandoffEvent.debugBlocked.name],
+      );
+    });
+
+    test('a failing analysis is never verified: the command is not run', () async {
+      final io = ioWithCommand('dart test');
+      var asked = false;
+      await expectLater(
+        runDebug(
+          seams: CommandSeams(io: io, projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0),
+          executor: _executorWithPlanText(plan),
+          dartFileAnalyzer: (_, __) => false,
+          runVerification: (command, projectRoot) {
+            asked = true;
+            return true;
+          },
+        ),
+        throwsA(isA<EditPlanException>()),
+      );
+      expect(asked, isFalse);
+    });
+  });
+
   // Every way a debug run can end is one DebugExitKind, and each one is logged
   // as the outcome of the run, so a run that stopped leaves a record of why.
   group('$DebugExitKind', () {

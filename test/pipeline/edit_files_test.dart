@@ -119,6 +119,74 @@ void main() {
       expect(File(p.join(root.path, 'lib/new.dart')).existsSync(), isFalse);
     });
 
+    test('a verifier that fails restores originals and says the fix was not '
+        'verified', () {
+      _write(p.join(root.path, 'lib/old.dart'), 'original\n');
+      expect(
+        () => applyEditFiles(
+          projectRoot: root.path,
+          planned: [(path: 'lib/old.dart', content: 'changed\n')],
+          write: _write,
+          dartFileAnalyzer: (_, __) => true,
+          verifyFix: (_) => false,
+        ),
+        _throwsFailure(FailureType.fixVerificationFailed),
+      );
+      expect(File(p.join(root.path, 'lib/old.dart')).readAsStringSync(),
+          equals('original\n'));
+    });
+
+    test('a verifier runs once, after the files are written and analyzed', () {
+      final seen = <String>[];
+      applyEditFiles(
+        projectRoot: root.path,
+        planned: [(path: 'lib/a.dart', content: 'a\n')],
+        write: _write,
+        dartFileAnalyzer: (_, __) {
+          seen.add('analyzed');
+          return true;
+        },
+        verifyFix: (projectRoot) {
+          seen.add('verified in ${p.basename(projectRoot)}');
+          seen.add('file present: ${File(p.join(projectRoot, 'lib/a.dart')).existsSync()}');
+          return true;
+        },
+      );
+      expect(seen, [
+        'analyzed',
+        'verified in ${p.basename(root.path)}',
+        'file present: true',
+      ]);
+    });
+
+    test('a verifier is not asked when the analysis already failed', () {
+      var asked = false;
+      expect(
+        () => applyEditFiles(
+          projectRoot: root.path,
+          planned: [(path: 'lib/a.dart', content: 'a\n')],
+          write: _write,
+          dartFileAnalyzer: (_, __) => false,
+          verifyFix: (_) {
+            asked = true;
+            return true;
+          },
+        ),
+        _throwsFailure(FailureType.editVerificationFailed),
+      );
+      expect(asked, isFalse);
+    });
+
+    test('with no verifier nothing is run', () {
+      applyEditFiles(
+        projectRoot: root.path,
+        planned: [(path: 'lib/a.dart', content: 'a\n')],
+        write: _write,
+        dartFileAnalyzer: (_, __) => true,
+      );
+      expect(File(p.join(root.path, 'lib/a.dart')).existsSync(), isTrue);
+    });
+
     test('a writer that truncates is caught by the content check', () {
       expect(
         () => applyEditFiles(

@@ -22,8 +22,6 @@ import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
 
-const _shellExecutable = 'sh';
-const _shellCommandFlag = '-c';
 
 enum RotateResult {
   /// Current session archived, next issue seeded into fresh handoff.
@@ -235,8 +233,8 @@ Future<bool> _defaultBuild(
   ProcessRunner proc,
 ) async {
   final result = await proc.run(
-    _shellExecutable,
-    [_shellCommandFlag, command],
+    shellExecutable,
+    [shellCommandFlag, command],
     workingDirectory: workingDirectory,
   );
   return result.exitCode == 0;
