@@ -6,6 +6,7 @@ import '../io/process_runner.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 /// Runs an experiment: executes [command] with [args], tees stdout/stderr to a
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the
@@ -24,7 +25,7 @@ Future<void> runExperiment(
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   // ── Parse arguments: <name> -- <command> [args...] ────────────────────────
   final sepIdx = args.indexOf('--');

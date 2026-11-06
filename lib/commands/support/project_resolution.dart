@@ -13,6 +13,7 @@ import '../../io/git_utils.dart';
 import '../../io/process_runner.dart';
 import '../../registry.dart';
 import 'command_seams.dart';
+import '../../io/process_exit.dart';
 
 /// Why a project could not be found, and what the user is told.
 enum ProjectLookupFailure {
@@ -105,5 +106,5 @@ ResolvedProject requireProject(
   for (final line in failure!.lines) {
     print(line);
   }
-  (seams.exitFn ?? exit)(1);
+  (seams.exitFn ?? exitProcess)(1);
 }

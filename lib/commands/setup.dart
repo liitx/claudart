@@ -22,6 +22,7 @@ import '../io/process_runner.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.
@@ -41,7 +42,7 @@ Future<void> runSetup({
   String? defaultEntryPoints,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final confirm_ = confirmFn ?? confirm;
   final prompt_ = promptFn ?? _defaultPrompt;
   final pick_ = pickFn ?? arrowMenu;

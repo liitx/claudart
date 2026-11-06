@@ -17,6 +17,7 @@ import 'setup.dart';
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 Future<void> runResume({
   FileIO? io,
@@ -28,7 +29,7 @@ Future<void> runResume({
   FileFinderFn? fileFinderFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   final project = requireProject(
     CommandSeams(

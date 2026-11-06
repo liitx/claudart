@@ -19,6 +19,7 @@ import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
+import '../io/process_exit.dart';
 
 Future<void> runArchives({
   CommandSeams seams = const CommandSeams(),
@@ -27,7 +28,7 @@ Future<void> runArchives({
   final exitFn = seams.exitFn;
   final pickFn = seams.pickFn;
   final fileIO = io    ?? const RealFileIO();
-  final exit_  = exitFn ?? exit;
+  final exit_  = exitFn ?? exitProcess;
   final pick_  = pickFn ?? arrowMenu;
 
   final project = requireProject(seams);

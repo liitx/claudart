@@ -27,6 +27,7 @@ import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
 /// logged as the run's outcome, so a run that stopped leaves a record of why.
@@ -76,7 +77,7 @@ Future<void> runDebug({
   final exitFn = seams.exitFn;
   final pickFn = seams.pickFn;
   final fileIO   = io       ?? const RealFileIO();
-  final exit_    = exitFn   ?? exit;
+  final exit_    = exitFn   ?? exitProcess;
   final pick_    = pickFn   ?? arrowMenu;
 
   // Logs the kind as the run's outcome, then exits with the kind's code. Until

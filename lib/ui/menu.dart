@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'ansi.dart' as ansi;
 import 'terminal_support.dart';
+import '../io/process_exit.dart';
 
 /// Shows an arrow-key navigable menu and returns the **0-based** index of the
 /// selected item.
@@ -57,7 +58,7 @@ int _arrowSelect(List<String> items, {int startIndex = 0}) {
         case _Key.ctrlC:
           _clearMenu(items.length);
           stdout.write(ansi.showCursor);
-          exit(0);
+          exitProcess(0);
         case _Key.other:
           break;
       }
@@ -151,7 +152,7 @@ int selectNumbered(
   final String? Function() read = readLine ?? () => stdin.readLineSync();
   final void Function(String) out = write ?? (String s) => stdout.write(s);
   final void Function(String) err = writeError ?? (String s) => stderr.writeln(s);
-  final Never Function(int) quit = exitFn ?? (int code) => exit(code);
+  final Never Function(int) quit = exitFn ?? (int code) => exitProcess(code);
   for (var i = 0; i < items.length; i++) {
     out('  ${i + 1}. ${items[i]}\n');
   }

@@ -12,6 +12,7 @@ import '../templates/teardown_template.dart';
 import '../ui/render.dart' as render;
 import '../io/process_runner.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 Future<void> runInit(List<String> args) async {
   final parser = ArgParser()
@@ -36,7 +37,7 @@ Future<void> _initWorkspace() async {
     print(UserText.initWorkspaceAlreadyInitialized.template);
     if (!confirm('Re-initialize and overwrite starter files?')) {
       print(UserText.initAbortedRunClaudartInitProjectName.template);
-      exit(0);
+      exitProcess(0);
     }
   }
 
@@ -81,7 +82,7 @@ Future<void> _initProject(String name) async {
 
   if (!Directory(genericKnowledgeDir).existsSync()) {
     print(UserText.initWorkspaceNotInitializedRunClaudartInit.template);
-    exit(1);
+    exitProcess(1);
   }
 
   final projectFile = p.join(projectsKnowledgeDir, '$name.md');
@@ -90,7 +91,7 @@ Future<void> _initProject(String name) async {
     print(UserText.initProjectKnowledgeFileAlreadyExists.format({'projectFile': projectFile}));
     if (!confirm('Overwrite with a fresh template?')) {
       print(UserText.initKeptExistingFile.template);
-      exit(0);
+      exitProcess(0);
     }
   }
 

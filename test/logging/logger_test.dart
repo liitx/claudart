@@ -25,7 +25,6 @@ String get _logsDir => p.join(claudeDir, 'logs');
 String get _interactionsPath => logFilePath(_logsDir, LogFile.interactions);
 String get _errorsPath => logFilePath(_logsDir, LogFile.errors);
 String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
-String get _performancePath => logFilePath(_logsDir, LogFile.performance);
 String get _modelsPath => logFilePath(_logsDir, LogFile.models);
 String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
 
@@ -87,7 +86,7 @@ void main() {
       final entries = readJsonl(_transitionsPath);
       expect(entries, hasLength(1));
       expect(entries.first['ts'], isA<String>());
-      expect({...entries.first}..remove('ts'), {
+      expect({...entries.first}..remove('ts')..remove('schema'), {
         'command': 'suggest',
         'from': 'suggestInvestigating',
         'event': 'saveConfirmedReady',
@@ -101,7 +100,7 @@ void main() {
         from: HandoffStatus.readyForDebug,
         event: HandoffEvent.killed,
       );
-      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')), [
+      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')..remove('schema')), [
         {
           'command': 'kill',
           'from': 'readyForDebug',
@@ -117,7 +116,7 @@ void main() {
         from: HandoffStatus.debugComplete,
         event: HandoffEvent.rotated,
       );
-      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')), [
+      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')..remove('schema')), [
         {
           'command': 'rotate',
           'from': 'debugComplete',
@@ -229,49 +228,6 @@ void main() {
       final reason = entries.first['reason'] as String;
       expect(reason, isNot(contains('VolumeBloc')));
     });
-
-    const performanceHeader = '| timestamp | command | filesScanned | duration '
-        '| tokensNew | outcome |';
-    const performanceDivider =
-        '|-----------|---------|-------------|----------|-----------|--------|';
-
-    List<String> performanceTable() => io
-        .read(_performancePath)
-        .split('\n')
-        .where((l) => l.isNotEmpty)
-        .toList();
-
-    test('logPerformance starts the table with a header and a divider row',
-        () {
-      logger.logPerformance(command: 'scan', outcome: 'ok', filesScanned: 10);
-      final table = performanceTable();
-      expect(table[0], performanceHeader);
-      expect(table[1], performanceDivider);
-      expect(table.length, 3);
-      expect(table[2], contains('| scan | 10 |'));
-    });
-
-    test('logPerformance keeps every row, in order, under the header', () {
-      for (final command in ['one', 'two', 'three']) {
-        logger.logPerformance(command: command, outcome: 'ok');
-      }
-      final table = performanceTable();
-      expect(table.length, 5);
-      expect(table.sublist(2).map((row) => row.split('|')[2].trim()),
-          ['one', 'two', 'three']);
-    });
-
-    test('logPerformance rotation keeps the header and the newest 50 rows', () {
-      for (var i = 0; i < 52; i++) {
-        logger.logPerformance(command: 'cmd_$i', outcome: 'ok');
-      }
-      final table = performanceTable();
-      expect(table.length, 52);
-      expect(table[0], performanceHeader);
-      expect(table[1], performanceDivider);
-      expect(table[2], contains('| cmd_2 |'));
-      expect(table.last, contains('| cmd_51 |'));
-    });
   });
 
   group('SessionLogger.logStepModels', () {
@@ -325,7 +281,7 @@ void main() {
       expect(written.last[ModelRecordField.drift.name], ['unknownModel']);
     });
 
-    test('the record holds exactly the ModelRecordField keys plus ts, command',
+    test('the record holds exactly the ModelRecordField keys plus schema, ts, command',
         () {
       logger.logStepModels(
         command: 'debug',
@@ -333,7 +289,7 @@ void main() {
       );
       expect(
         records().single.keys.toSet(),
-        {'ts', 'command', for (final f in ModelRecordField.values) f.name},
+        {'schema', 'ts', 'command', for (final f in ModelRecordField.values) f.name},
       );
     });
 
@@ -562,27 +518,6 @@ void main() {
       expect(entries.single['count'], 4 * 25);
     }, timeout: const Timeout(Duration(seconds: 90)));
 
-    test('timing rows from several processes all survive', () async {
-      final dir = Directory.systemTemp.createTempSync('claudart_perf_race_');
-      addTearDown(() => dir.deleteSync(recursive: true));
-      final results = await Future.wait([
-        for (var writer = 0; writer < 4; writer++)
-          Process.run(Platform.resolvedExecutable, [
-            'test/helpers/log_performance_rows.dart',
-            dir.path,
-            '$writer',
-            '10',
-          ]),
-      ]);
-      for (final result in results) {
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-      }
-      final rows = File(logFilePath(logsDirFor(dir.path), LogFile.performance))
-          .readAsLinesSync()
-          .where((l) => l.startsWith('| ') && !l.contains('timestamp'));
-      expect(rows.length, 4 * 10);
-    }, timeout: const Timeout(Duration(seconds: 90)));
-
     test('distinct fingerprints from several processes all survive',
         () async {
       final entries = await runErrorWriters('distinct');
@@ -594,6 +529,7 @@ void main() {
   // what is written: each key is pinned here as a literal.
   group('LogEntryField keys', () {
     const keys = <LogEntryField, String>{
+      LogEntryField.schema: 'schema',
       LogEntryField.ts: 'ts',
       LogEntryField.command: 'command',
       LogEntryField.outcome: 'outcome',

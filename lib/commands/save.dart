@@ -15,6 +15,7 @@ import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }
@@ -30,7 +31,7 @@ Future<SkillsUpdateResult> runSave({
   final io = seams.io;
   final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final sw = Stopwatch()..start();
   final now = (seams.clock ?? DateTime.now)();
 

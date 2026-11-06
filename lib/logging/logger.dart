@@ -16,10 +16,13 @@ import 'log_file.dart';
 import 'log_protection.dart';
 import '../session/transition_bus.dart';
 
+/// The version of the shape every log row follows. Raise it when a row's
+/// fields change meaning, so a reader can tell old rows from current ones.
+const int logSchemaVersion = 1;
+
 const int _maxInteractions = 500;
 const int _maxErrors = 200;
 const int _maxTransitions = 500;
-const int _maxPerformance = 50;
 
 /// A jsonl log may run this many lines past its cap before it is trimmed back
 /// to the cap, so the rewrite (the only step concurrent writers can race on)
@@ -32,6 +35,8 @@ const int _maxStepRecords = 2000;
 /// transition are [HandoffTransitionField]'s, of a model record
 /// [ModelRecordField]'s.)
 enum LogEntryField {
+  /// The schema version the row follows; a row without it predates it.
+  schema,
   ts,
   command,
   outcome,
@@ -125,7 +130,6 @@ class SessionLogger {
   String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
   String get _modelsPath => logFilePath(_logsDir, LogFile.models);
   String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
-  String get _performancePath => logFilePath(_logsDir, LogFile.performance);
 
   void logInteraction({
     required String command,
@@ -355,6 +359,7 @@ class SessionLogger {
         existing[matchIdx] = old;
       } else {
         final entry = <String, dynamic>{
+          LogEntryField.schema.name: logSchemaVersion,
           LogEntryField.ts.name: now,
           LogEntryField.command.name: command,
           LogEntryField.outcome.name: errorType,
@@ -373,47 +378,6 @@ class SessionLogger {
       }
 
       _writeJsonl(_errorsPath, existing, _maxErrors);
-    });
-  }
-
-  void logPerformance({
-    required String command,
-    required String outcome,
-    int? filesScanned,
-    Duration? duration,
-    int? tokensNew,
-  }) {
-    final entry = StringBuffer();
-    entry.write('| ${DateTime.now().toUtc().toIso8601String()} '
-        '| $command '
-        '| ${filesScanned ?? '-'} '
-        '| ${duration?.inMilliseconds ?? '-'}ms '
-        '| ${tokensNew ?? '-'} '
-        '| $outcome |');
-
-    // Read, change, rewrite the table: under a lock, so no row is lost.
-    _io.withExclusiveLock(_performancePath, () {
-      final current = _io.read(_performancePath);
-      final lines = current.isEmpty
-          ? <String>[]
-          : current.split('\n').where((l) => l.isNotEmpty).toList();
-
-      if (lines.isEmpty) {
-        lines.add(
-            '| timestamp | command | filesScanned | duration | tokensNew | outcome |');
-        lines.add('|-----------|---------|-------------|----------|-----------|--------|');
-      }
-
-      // Data lines start after the 2-line header
-      final header = lines.take(2).toList();
-      var data = lines.skip(2).toList();
-      data.add(entry.toString());
-
-      if (data.length > _maxPerformance) {
-        data = data.sublist(data.length - _maxPerformance);
-      }
-
-      _io.write(_performancePath, '${[...header, ...data].join('\n')}\n');
     });
   }
 
@@ -445,7 +409,10 @@ class SessionLogger {
     // run under one lock: a trim's rename would otherwise orphan an append
     // another process was making to the file it replaced.
     _io.withExclusiveLock(path, () {
-      _io.append(path, '${jsonEncode(entry)}\n');
+      _io.append(
+        path,
+        '${jsonEncode({LogEntryField.schema.name: logSchemaVersion, ...entry})}\n',
+      );
       _trimIfOver(path, maxLines);
     });
   }

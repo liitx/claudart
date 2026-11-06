@@ -21,6 +21,10 @@ enum DatumSource {
     pattern: r"\[homeEnvVar\]|\['HOME'\]",
     ownerFile: 'lib/config/environment.dart',
   ),
+  processExit(
+    pattern: r'(^|[^\w.])exit\(|\?\? exit\b',
+    ownerFile: 'lib/io/process_exit.dart',
+  ),
   gitExecutable(
     pattern: r"'git'",
     ownerFile: 'lib/io/git_utils.dart',

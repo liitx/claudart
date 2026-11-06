@@ -26,6 +26,7 @@ import '../ui/render.dart' as render;
 import 'link.dart' show createProjectLinks;
 import '../config/environment.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 /// Project shape — drives `claudeTemplate`'s optional Flutter constraint
 /// line. Not named `WorkspaceConfig` — that name belongs to
@@ -72,7 +73,7 @@ Future<void> runAdd({
   final fileIO = io ?? const RealFileIO();
   final prompt_ = promptFn ?? _defaultPrompt;
   final confirm_ = confirmFn ?? confirm;
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   print(render.header('CLAUDART ADD'));
 

@@ -7,7 +7,7 @@ DART    := dart
 ## Every check a change must pass: suite, analyzer errors, custom_lint. With
 ## MSG="..." it commits after they pass. See tool/gate.sh.
 gate:
-	tool/gate.sh $(MSG)
+	tool/gate.sh "$(MSG)"
 
 ## Compile native binary to ~/bin/claudart
 build:

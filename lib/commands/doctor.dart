@@ -22,6 +22,7 @@ import '../providers/claude_settings_env.dart';
 import '../registry.dart';
 import 'support/command_seams.dart';
 import '../config/environment.dart';
+import '../io/process_exit.dart';
 
 const _ghExecutable = 'gh';
 const _claudeExecutable = 'claude';
@@ -539,7 +540,7 @@ Future<void> runDoctor({
   final projectRootOverride = seams.projectRootOverride;
   final io = seams.io;
   final exitFn = seams.exitFn;
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final outcomes = await runDoctorChecks(
     runner: runner,
     env: env,

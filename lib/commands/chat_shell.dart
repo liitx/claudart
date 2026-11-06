@@ -26,6 +26,7 @@ import 'suggest.dart';
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 /// What the user typed. Conversation is the default: only slash commands invoke
 /// structured work; everything else is a [message] to the agent.
@@ -113,7 +114,7 @@ Future<void> runChatShell({
   final io = seams.io;
   final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final run = runner ?? defaultClaudeRunner;
 
   final entry = lookupProject(seams)?.entry;

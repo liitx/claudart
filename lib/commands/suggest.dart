@@ -28,6 +28,7 @@ import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
 
 Future<void> runSuggest({
   FileIO? io,
@@ -39,7 +40,7 @@ Future<void> runSuggest({
   int Function(List<String> items)? pickFn,
 }) async {
   final fileIO   = io       ?? const RealFileIO();
-  final exit_    = exitFn   ?? exit;
+  final exit_    = exitFn   ?? exitProcess;
   final confirm_ = confirmFn ?? confirm;
   final prompt_  = promptFn ?? prompt;
   final pick_    = pickFn   ?? arrowMenu;

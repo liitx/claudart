@@ -15,6 +15,7 @@ import '../ui/render.dart' as render;
 import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 /// How a `kill` run ended. The name is the outcome written to the interaction
 /// log, so a warned kill, a cancelled one and a refused one can be told apart.
@@ -70,7 +71,7 @@ Future<void> runKill({
   // of input. [askFn] lets a test simulate "nobody to answer".
   final bool? Function(String question) ask =
       askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final sw = Stopwatch()..start();
   // Null until the project is known: a run that cannot find a project has no
   // workspace to record in, and a command outside any project writes nothing.

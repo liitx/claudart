@@ -28,6 +28,7 @@ import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.
@@ -45,7 +46,7 @@ Future<void> runTeardown({
   PipelineExecutor? executor,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final headless = mode == RunMode.headless;
   // In headless mode nothing calls these — every decision below resolves
   // itself instead — but they're still constructed so the interactive

@@ -6,6 +6,7 @@ import '../session/sync_check.dart';
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 /// Runs a preflight sync check for [operation] and prints results.
 ///
@@ -20,7 +21,7 @@ Future<void> runPreflightCmd(
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   // 1 — Git context: project root + current branch in one call.
   final project = requireProject(

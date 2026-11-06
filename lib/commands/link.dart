@@ -20,6 +20,7 @@ import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
 import '../config/environment.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
@@ -55,7 +56,7 @@ Future<void> runLink(
   // test simulate "nobody to answer".
   final bool? Function(String question) ask =
       askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   final unknownFlags = args.where((a) =>
       a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag && a != _recompileFlag);

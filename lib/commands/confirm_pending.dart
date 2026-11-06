@@ -5,6 +5,7 @@ import '../ui/render.dart' as render;
 import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 /// Sets or clears the pending confirmation for the current project's
 /// workspace. A skill's confirmation-gate step (see
@@ -22,7 +23,7 @@ Future<void> runConfirmPending(
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   final project = requireProject(
     CommandSeams(

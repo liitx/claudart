@@ -32,7 +32,7 @@ fi
 
 echo "ALL GATES PASS: $(tail -1 /tmp/claudart_gate_suite.txt | cut -c1-40)"
 
-if [ $# -ge 1 ]; then
+if [ -n "${1:-}" ]; then
   git add lib test docs tool Makefile README.md text bin pubspec.yaml
   git commit -q -m "$1" && git log --oneline | head -1
 fi

@@ -21,6 +21,7 @@ import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
 
 const _shellExecutable = 'sh';
 const _shellCommandFlag = '-c';
@@ -66,7 +67,7 @@ Future<RotateResult>  runRotate({
   final askFn = seams.askFn;
   final fileIO = io ?? const RealFileIO();
   final proc = runner ?? const RealProcessRunner();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   // A caller-supplied confirm always answers; the default reports null at end
   // of input. [askFn] lets a test simulate "nobody to answer".
   final bool? Function(String question) ask =

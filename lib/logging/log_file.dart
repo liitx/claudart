@@ -25,9 +25,6 @@ enum LogFile {
   /// Every pipeline event: each step's start, end and failure.
   steps,
 
-  /// Timing of command runs, as a table.
-  performance,
-
   /// Each categorize step's routing decision. Unlike the others it is global:
   /// it sits beside the registry in the workspaces root, not in a workspace's
   /// logs directory.
@@ -40,7 +37,6 @@ enum LogFile {
         LogFile.transitions => 'transitions.jsonl',
         LogFile.models => 'models.jsonl',
         LogFile.steps => 'steps.jsonl',
-        LogFile.performance => 'performance.md',
         LogFile.planner => 'planner.jsonl',
       };
 }

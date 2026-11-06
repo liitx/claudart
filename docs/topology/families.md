@@ -8,7 +8,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 |---|---|---|---|---|
 | drivesState | 3 | 1 | 2 | 6 |
 | observesState | 10 | 1 | 4 | 3 |
-| untouched | 78 | 16 | 6 | 24 |
+| untouched | 80 | 16 | 6 | 24 |
 
 ## drivesState x pure
 
@@ -69,6 +69,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/assets/corpus.dart`
 - `lib/codegen/claudart_artifact.dart`
 - `lib/codegen/dependency_config_codegen.dart`
+- `lib/commands/support/interaction_boundary.dart`
 - `lib/config/dependency_config.dart`
 - `lib/config/environment.dart`
 - `lib/errors/claudart_exception.dart`
@@ -78,6 +79,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 - `lib/generated/dependency_config.g.dart`
 - `lib/generated/user_text.g.dart`
 - `lib/harness/harness_check.dart`
+- `lib/io/process_exit.dart`
 - `lib/logging/log_file.dart`
 - `lib/logging/log_protection.dart`
 - `lib/logging/planner_log.dart`

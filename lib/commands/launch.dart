@@ -15,6 +15,7 @@ import '../ui/render.dart' as render;
 import '../workspace/workspace_link_state.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
@@ -29,7 +30,7 @@ Future<void> runLauncher({
   final confirmFn = seams.confirmFn;
   final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final pick_ = pickFn ?? arrowMenu;
 
   print(render.header('CLAUDART'));

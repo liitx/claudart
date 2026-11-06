@@ -33,6 +33,7 @@ import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
+import '../io/process_exit.dart';
 
 Future<void> runFlow({
   FileIO? io,
@@ -44,7 +45,7 @@ Future<void> runFlow({
   int Function(List<String> items)? pickFn,
 }) async {
   final fileIO  = io       ?? const RealFileIO();
-  final exit_   = exitFn   ?? exit;
+  final exit_   = exitFn   ?? exitProcess;
   final planner = plannerLog ?? PlannerLog();
   final prompt_ = promptFn ?? prompt;
   final pick_   = pickFn   ?? arrowMenu;
