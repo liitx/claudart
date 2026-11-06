@@ -27,9 +27,9 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | setup, suggest, debug blocked, suggest again | suggest | r1 | r2 w3 | r1 | r1 | — | — | r11 a11 | — |
 | setup, rotate with a pending issue | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, rotate with a pending issue | seed pending | — | r1 w1 | — | — | — | — | — | — |
-| setup, rotate with a pending issue | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |
+| setup, rotate with a pending issue | rotate | r1 | r1 w1 | — | — | — | — | r2 a2 | w2 |
 | setup, rotate with nothing pending | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
-| setup, rotate with nothing pending | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |
+| setup, rotate with nothing pending | rotate | r1 | r1 w1 | — | — | — | — | r2 a2 | w2 |
 | setup, suggest, debug blocked, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug blocked, kill | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug blocked, kill | debug blocked | r1 | r2 w2 | r1 | r1 | — | — | r11 a11 | — |
@@ -51,7 +51,7 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | rotate with a pending issue seeds the next session | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | rotate with a pending issue seeds the next session | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | rotate with a pending issue seeds the next session | seed pending | — | r1 w1 | — | — | — | — | — | — |
-| rotate with a pending issue seeds the next session | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |
+| rotate with a pending issue seeds the next session | rotate | r1 | r1 w1 | — | — | — | — | r2 a2 | w2 |
 | rotate with nothing pending leaves no session | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | rotate with nothing pending leaves no session | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
-| rotate with nothing pending leaves no session | rotate | r1 | r1 w1 | — | — | — | — | r1 a1 | w2 |
+| rotate with nothing pending leaves no session | rotate | r1 | r1 w1 | — | — | — | — | r2 a2 | w2 |

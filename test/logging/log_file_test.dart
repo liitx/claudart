@@ -13,6 +13,7 @@ const Map<LogFile, String> _fileNameByLogFile = {
   LogFile.transitions: 'transitions.jsonl',
   LogFile.models: 'models.jsonl',
   LogFile.steps: 'steps.jsonl',
+  LogFile.gates: 'gates.jsonl',
   LogFile.planner: 'planner.jsonl',
 };
 

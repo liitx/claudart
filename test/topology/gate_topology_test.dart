@@ -19,6 +19,8 @@ import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/commands/support/command_seams.dart';
 import 'package:claudart/config/paths.dart';
 import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/io/gate_runner.dart';
+import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
@@ -61,6 +63,7 @@ typedef GateRun = ({
   List<String> callChain,
   String result,
   List<String> moves,
+  String loggedGate,
   String statusAfter,
   int archiveFilesAfter,
   bool fixLeftWritten,
@@ -78,6 +81,17 @@ List<String> claudartFrames(StackTrace trace) {
 int _archiveFiles(MemoryFileIO io) {
   final prefix = archiveDirFor(_workspace);
   return io.files.keys.where((path) => path.startsWith(prefix)).length;
+}
+
+/// The gate row the run logged, as `exit N`, or `—` when it logged none.
+String _loggedGate(MemoryFileIO io) {
+  final path = logFilePath(logsDirFor(_workspace), LogFile.gates);
+  if (!io.fileExists(path)) return '—';
+  final rows = [
+    for (final line in io.read(path).split('\n'))
+      if (line.trim().isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+  ];
+  return rows.map((row) => 'exit ${row['exitCode']}').join(', ');
 }
 
 String _statusOf(MemoryFileIO io) {
@@ -186,7 +200,9 @@ Future<GateRun> debugRun({
                 archiveFiles: _archiveFiles(io),
                 fixWritten: File(p.join(root.path, 'lib/foo.dart')).existsSync(),
               );
-              return passes;
+              return passes
+                  ? const GateResult.passed()
+                  : const GateResult.failed();
             },
           ));
     } on EditPlanException catch (e) {
@@ -202,6 +218,7 @@ Future<GateRun> debugRun({
       callChain: chain,
       result: result,
       moves: [for (final move in loggedMoves(io, _workspace)) '${move['event']}'],
+      loggedGate: _loggedGate(io),
       statusAfter: _statusOf(io),
       archiveFilesAfter: _archiveFiles(io),
       fixLeftWritten: File(p.join(root.path, 'lib/foo.dart')).existsSync(),
@@ -239,7 +256,7 @@ Future<GateRun> rotateRun({
             archiveFiles: _archiveFiles(io),
             fixWritten: false,
           );
-          return passes;
+          return passes ? const GateResult.passed() : const GateResult.failed();
         },
       ));
   return (
@@ -252,6 +269,7 @@ Future<GateRun> rotateRun({
     callChain: chain,
     result: 'returned ${outcome.name}',
     moves: [for (final move in loggedMoves(io, _workspace)) '${move['event']}'],
+    loggedGate: _loggedGate(io),
     statusAfter: _statusOf(io),
     archiveFilesAfter: _archiveFiles(io),
     fixLeftWritten: false,
@@ -268,7 +286,7 @@ String renderGates(List<GateRun> runs, {required Set<String> sharingShell}) {
         '${at == null ? '—' : '${at.status}; archive files ${at.archiveFiles}; fix '
             '${at.fixWritten ? 'written' : '—'}'} | '
         '${_cell(run.result)} | ${run.moves.isEmpty ? '—' : run.moves.join(', ')}'
-        ' | ${run.statusAfter}; archive files ${run.archiveFilesAfter}; fix '
+        ' | ${_cell(run.loggedGate)} | ${run.statusAfter}; archive files ${run.archiveFilesAfter}; fix '
         '${run.fixLeftWritten ? 'kept' : '—'} |';
   }
 
@@ -287,8 +305,8 @@ String renderGates(List<GateRun> runs, {required Set<String> sharingShell}) {
         'existed when the gate ran and what was left after.',
     '',
     '| command | use case | config key | shell command | at the gate | result | '
-        'moves logged | after |',
-    '|---|---|---|---|---|---|---|---|',
+        'moves logged | gate row logged | after |',
+    '|---|---|---|---|---|---|---|---|---|',
     for (final run in runs) row(run),
     '',
     '## Call chain to the gate (claudart frames, innermost first)',
@@ -299,7 +317,7 @@ String renderGates(List<GateRun> runs, {required Set<String> sharingShell}) {
     '',
     '## Code that spells the shell invocation',
     '',
-    'Files naming `shellExecutable`: ${sharingShell.toList().join(', ')}.',
+    'Files naming `shellExecutable` (outside the process runner): ${sharingShell.toList().join(', ')}.',
     '',
   ].join('\n');
 }
@@ -410,7 +428,7 @@ void main() {
               confirmFn: (_) => true,
             ),
             mode: RunMode.headless,
-            buildFn: (_) async => false,
+            buildFn: (_) async => const GateResult.failed(),
           ));
       int entries() => (jsonDecode(io.read(p.join(archiveDirFor(_workspace), archiveIndexFileName)))
               as List<dynamic>)
@@ -423,7 +441,7 @@ void main() {
       expect(_statusOf(io), HandoffStatus.readyForDebug.name);
     });
 
-    test('a failing gate leaves no log row naming its command or its output',
+    test('a failing gate is logged with its command, exit code and output',
         () async {
       final io = _io(ProjectFixture.root, pending: ['second issue']);
       await _quiet(() => runRotate(
@@ -434,21 +452,24 @@ void main() {
               confirmFn: (_) => true,
             ),
             mode: RunMode.headless,
-            buildFn: (_) async => false,
+            buildFn: (_) async => const GateResult.failed(
+              exitCode: 2,
+              outputTail: 'make: *** [build] Error 2',
+            ),
           ));
-      final logged = [
-        for (final entry in io.files.entries)
-          if (entry.key.startsWith(logsDirFor(_workspace))) entry.value,
-      ].join('\n');
-      expect(logged, isNot(contains('make rebuild')));
-      expect(logged, isNot(contains('exit')));
+      final logged = io.read(logFilePath(logsDirFor(_workspace), LogFile.gates));
+      expect(logged, contains('make rebuild'));
+      expect(logged, contains('"exitCode":2'));
+      expect(logged, contains('Error 2'));
     });
 
-    test('both spell the shell invocation through the same constants', () {
-      expect(
-        _filesNamingShell(),
-        containsAll(['lib/commands/debug.dart', 'lib/commands/rotate.dart']),
-      );
+    test('the shell invocation is spelled once, and both gates run through it',
+        () {
+      expect(_filesNamingShell(), {'lib/io/gate_runner.dart'});
+      expect(File('lib/commands/debug.dart').readAsStringSync(),
+          contains('runGateSync('));
+      expect(File('lib/commands/rotate.dart').readAsStringSync(),
+          contains('runGate('));
     });
 
     test('the call chain of each gate is captured from the claudart frames',

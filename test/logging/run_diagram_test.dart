@@ -148,6 +148,60 @@ void main() {
     });
   });
 
+  group('a gate', () {
+    Map<String, dynamic> gate(String ts, int exitCode, {String tail = ''}) => {
+          'ts': ts,
+          'command': 'debug',
+          'gate': 'debugVerification',
+          'shellCommand': 'dart test',
+          'exitCode': exitCode,
+          'durationMs': 5400,
+          'outputTail': tail,
+        };
+
+    List<RunLog> runWith(Map<String, dynamic> row) => runsFrom(
+          interactions: [_boundary('2026-11-06T10:00:09.000Z', 'debug', 'ok', 9000)],
+          transitions: const [],
+          steps: const [],
+          errors: const [],
+          gates: [row],
+        );
+
+    test('is drawn with its command and how it ended', () {
+      final text = renderRunDiagram(
+          runWith(gate('2026-11-06T10:00:05.000Z', 0)).single);
+      expect(text, contains('    participant Shell\n'));
+      expect(text,
+          contains('Command->>Shell: debugVerification gate: dart test'));
+      expect(text, contains('Shell-->>Command: exit 0 after 5400ms'));
+    });
+
+    test('that failed shows the exit code and what it wrote', () {
+      final text = renderRunDiagram(runWith(
+              gate('2026-11-06T10:00:05.000Z', 1, tail: 'Some tests failed'))
+          .single);
+      expect(text,
+          contains('Shell--xCommand: exit 1 after 5400ms: Some tests failed'));
+    });
+
+    test('is not in a run that ran none, and then there is no Shell', () {
+      final run = runsFrom(
+        interactions: [_boundary(_t0, 'status', 'ok', 15)],
+        transitions: const [],
+        steps: const [],
+        errors: const [],
+      ).single;
+      expect(renderRunDiagram(run), isNot(contains('Shell')));
+    });
+
+    test('outside the run window or another command is not drawn', () {
+      final runs = runWith({
+        ...gate('2026-11-06T09:00:00.000Z', 0),
+      });
+      expect(renderRunDiagram(runs.single), isNot(contains('Shell')));
+    });
+  });
+
   group('runs', () {
     test('one run for each boundary row, oldest first', () {
       final runs = runsFrom(
@@ -210,6 +264,90 @@ void main() {
 
     test('an empty log has no rows', () {
       expect(rowsOfJsonl(''), isEmpty);
+    });
+  });
+
+  group('long text from a log', () {
+    List<RunLog> withDetail(String detail) => runsFrom(
+          interactions: [_boundary('2026-11-06T10:00:05.000Z', 'debug', 'ok', 5000)],
+          transitions: const [],
+          steps: [
+            _step('2026-11-06T10:00:02.000Z', 'debug', 'agentCompleted',
+                stepId: 'a', detail: detail),
+          ],
+          errors: const [],
+        );
+
+    String line(String detail) => renderRunDiagram(withDetail(detail).single)
+        .split('\n')
+        .firstWhere((line) => line.contains('a completed'));
+
+    test('is cut to 120 characters with an ellipsis', () {
+      final cut = line('x' * 130);
+      expect(cut, endsWith('${'x' * 119}…)'));
+    });
+
+    test('of exactly 120 characters is kept whole', () {
+      expect(line('x' * 120), endsWith('${'x' * 120})'));
+    });
+  });
+
+  group('a gate that failed with no output', () {
+    test('has no trailing colon', () {
+      final run = runsFrom(
+        interactions: [_boundary('2026-11-06T10:00:09.000Z', 'debug', 'ok', 9000)],
+        transitions: const [],
+        steps: const [],
+        errors: const [],
+        gates: [
+          {
+            'ts': '2026-11-06T10:00:05.000Z',
+            'command': 'debug',
+            'gate': 'debugVerification',
+            'shellCommand': 'dart test',
+            'exitCode': 1,
+            'durationMs': 7,
+            'outputTail': '',
+          },
+        ],
+      ).single;
+      expect(renderRunDiagram(run), contains('Shell--xCommand: exit 1 after 7ms\n'));
+    });
+  });
+
+  group('the html page, whole', () {
+    final one = runsFrom(
+      interactions: [_boundary(_t0, 'status', 'ok', 15)],
+      transitions: const [],
+      steps: const [],
+      errors: const [],
+    );
+
+    String shell(String body) => '<!doctype html>\n'
+        '<meta charset="utf-8">\n'
+        '<title>claudart runs</title>\n'
+        '<style>body{font-family:system-ui,sans-serif;margin:2rem}'
+        'h2{margin-top:2.5rem}</style>\n'
+        '<h1>Runs</h1>\n'
+        '$body<script type="module">\n'
+        "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/"
+        "mermaid.esm.min.mjs';\n"
+        'mermaid.initialize({startOnLoad: true});\n'
+        '</script>\n';
+
+    test('with no runs', () {
+      expect(renderRunHtml(const []),
+          shell('<p>No runs were recorded.</p>\n'));
+    });
+
+    test('with one run', () {
+      expect(
+        renderRunHtml(one),
+        shell('<h2>status — 2026-11-06T10:00:00.000Z</h2>\n'
+            '<pre class="mermaid">\n'
+            '${renderRunDiagram(one.single).replaceAll('>', '&gt;')}'
+            '</pre>\n'),
+      );
     });
   });
 

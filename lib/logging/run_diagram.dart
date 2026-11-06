@@ -42,6 +42,7 @@ class RunLog {
     required this.transitions,
     required this.steps,
     required this.errors,
+    this.gates = const [],
   });
 
   final String command;
@@ -52,6 +53,7 @@ class RunLog {
   final List<Map<String, dynamic>> transitions;
   final List<Map<String, dynamic>> steps;
   final List<Map<String, dynamic>> errors;
+  final List<Map<String, dynamic>> gates;
 }
 
 /// The runs in the given log rows, oldest first. A row of [interactions] with
@@ -62,6 +64,7 @@ List<RunLog> runsFrom({
   required List<Map<String, dynamic>> transitions,
   required List<Map<String, dynamic>> steps,
   required List<Map<String, dynamic>> errors,
+  List<Map<String, dynamic>> gates = const [],
 }) {
   final runs = <RunLog>[];
   for (final row in interactions) {
@@ -86,6 +89,7 @@ List<RunLog> runsFrom({
       transitions: inside(transitions),
       steps: inside(steps),
       errors: inside(errors),
+      gates: inside(gates),
     ));
   }
   return runs..sort((a, b) => a.endedAt.compareTo(b.endedAt));
@@ -99,7 +103,8 @@ enum _Participant {
   owner('Owner', 'Owner'),
   command('Command', null),
   handoff('Handoff', 'Handoff'),
-  model('Model', 'Model');
+  model('Model', 'Model'),
+  shell('Shell', 'Shell');
 
   const _Participant(this.id, this.label);
   final String id;
@@ -127,6 +132,7 @@ String renderRunDiagram(RunLog run) {
   final command = _Participant.command.id;
   final handoff = _Participant.handoff.id;
   final model = _Participant.model.id;
+  final shell = _Participant.shell.id;
 
   final timed = <(DateTime, int, String)>[];
   var order = 0;
@@ -163,6 +169,23 @@ String renderRunDiagram(RunLog run) {
       },
     );
   }
+  for (final row in run.gates) {
+    final exitCode = row[LogEntryField.exitCode.name];
+    final tail = row[LogEntryField.outputTail.name];
+    final ended = 'exit $exitCode after ${row[LogEntryField.durationMs.name]}ms';
+    add(
+      row,
+      '$command->>$shell: ${_safe(row[LogEntryField.gate.name])} gate: '
+      '${_safe(row[LogEntryField.shellCommand.name])}',
+    );
+    add(
+      row,
+      exitCode == 0
+          ? '$shell-->>$command: $ended'
+          : '$shell--x$command: $ended'
+              '${tail is String && tail.isNotEmpty ? ': ${_safe(tail)}' : ''}',
+    );
+  }
   for (final row in run.errors) {
     add(row, 'Note over $command: error ${_safe(row[LogEntryField.fingerprint.name])}');
   }
@@ -181,6 +204,7 @@ String renderRunDiagram(RunLog run) {
     '    participant $command as claudart ${_safe(run.command)}',
     '    participant $handoff',
     '    participant $model',
+    if (run.gates.isNotEmpty) '    participant $shell',
     '    $owner->>$command: claudart ${_safe(run.command)}',
     for (final (_, _, line) in timed) '    $line',
     '    $ended',

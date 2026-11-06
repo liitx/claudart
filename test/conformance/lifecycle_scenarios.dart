@@ -35,6 +35,7 @@ import '../helpers/unscripted.dart';
 import 'package:claudart/logging/log_file.dart';
 import '../helpers/project_fixture.dart';
 import 'package:claudart/commands/support/command_seams.dart';
+import 'package:claudart/io/gate_runner.dart';
 
 /// A linked project: its registry name, repo root and claudart workspace.
 typedef LifecycleProject = ({String name, String root, String workspace});
@@ -247,7 +248,7 @@ Future<void> rotate(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) async {
-  await runRotate(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, confirmFn: (_) => true), buildFn: (_) async => true);
+  await runRotate(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, confirmFn: (_) => true), buildFn: (_) async => const GateResult.passed());
 }
 
 Future<void> teardown(

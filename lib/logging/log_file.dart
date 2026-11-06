@@ -25,6 +25,10 @@ enum LogFile {
   /// Every pipeline event: each step's start, end and failure.
   steps,
 
+  /// Every gate command a command ran: which gate, the command, its exit code,
+  /// how long it took and the tail of its output.
+  gates,
+
   /// Each categorize step's routing decision. Unlike the others it is global:
   /// it sits beside the registry in the workspaces root, not in a workspace's
   /// logs directory.
@@ -37,6 +41,7 @@ enum LogFile {
         LogFile.transitions => 'transitions.jsonl',
         LogFile.models => 'models.jsonl',
         LogFile.steps => 'steps.jsonl',
+        LogFile.gates => 'gates.jsonl',
         LogFile.planner => 'planner.jsonl',
       };
 }

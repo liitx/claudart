@@ -530,6 +530,10 @@ void main() {
   group('LogEntryField keys', () {
     const keys = <LogEntryField, String>{
       LogEntryField.schema: 'schema',
+      LogEntryField.gate: 'gate',
+      LogEntryField.shellCommand: 'shellCommand',
+      LogEntryField.exitCode: 'exitCode',
+      LogEntryField.outputTail: 'outputTail',
       LogEntryField.ts: 'ts',
       LogEntryField.command: 'command',
       LogEntryField.outcome: 'outcome',

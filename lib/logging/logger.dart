@@ -15,6 +15,7 @@ import '../sensitivity/token_map.dart';
 import 'log_file.dart';
 import 'log_protection.dart';
 import '../session/transition_bus.dart';
+import '../io/gate_runner.dart';
 
 /// The version of the shape every log row follows. Raise it when a row's
 /// fields change meaning, so a reader can tell old rows from current ones.
@@ -29,6 +30,7 @@ const int _maxTransitions = 500;
 /// happens once per this many appends, not on every one.
 const int _trimSlackLines = 50;
 const int _maxModelRecords = 500;
+const int _maxGateRecords = 500;
 const int _maxStepRecords = 2000;
 
 /// The keys of a session log entry; the names are the keys. (The keys of a
@@ -37,6 +39,10 @@ const int _maxStepRecords = 2000;
 enum LogEntryField {
   /// The schema version the row follows; a row without it predates it.
   schema,
+  gate,
+  shellCommand,
+  exitCode,
+  outputTail,
   ts,
   command,
   outcome,
@@ -130,6 +136,7 @@ class SessionLogger {
   String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
   String get _modelsPath => logFilePath(_logsDir, LogFile.models);
   String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
+  String get _gatesPath => logFilePath(_logsDir, LogFile.gates);
 
   void logInteraction({
     required String command,
@@ -176,6 +183,30 @@ class SessionLogger {
         ...transition.toJson(),
       },
       _maxTransitions,
+    );
+  }
+
+  /// A gate command a command ran: which gate, the command, its exit code, how
+  /// long it took and the tail of its output. Free text (the command and its
+  /// output) is protected in a sensitive project.
+  void logGate({
+    required String command,
+    required GateKind gate,
+    required String shellCommand,
+    required GateResult result,
+  }) {
+    _appendJsonl(
+      _gatesPath,
+      {
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.command.name: command,
+        LogEntryField.gate.name: gate.name,
+        LogEntryField.shellCommand.name: _safe(shellCommand),
+        LogEntryField.exitCode.name: result.exitCode,
+        LogEntryField.durationMs.name: result.durationMs,
+        LogEntryField.outputTail.name: _safe(result.outputTail),
+      },
+      _maxGateRecords,
     );
   }
 

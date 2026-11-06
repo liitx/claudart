@@ -15,6 +15,7 @@ import 'package:claudart/session/session_state.dart'
 import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/workspace/workspace_config.dart';
+import 'package:claudart/io/gate_runner.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -605,6 +606,14 @@ void main() {
       return io;
     }
 
+    List<Map<String, dynamic>> gateRows(MemoryFileIO io) => [
+          for (final line in io
+              .read(logFilePath(logsDirFor(_workspace), LogFile.gates))
+              .split('\n')
+              .where((line) => line.trim().isNotEmpty))
+            jsonDecode(line) as Map<String, dynamic>,
+        ];
+
     DebugDisposition recorded(MemoryFileIO io) =>
         SessionState.parse(io.read(handoffPathFor(_workspace))).debugDisposition;
 
@@ -618,12 +627,13 @@ void main() {
         dartFileAnalyzer: (_, __) => true,
         runVerification: (command, projectRoot) {
           asked = true;
-          return true;
+          return const GateResult.passed();
         },
       );
       expect(asked, isFalse);
       expect(_statusOf(io), HandoffStatus.debugComplete);
       expect(recorded(io), DebugDisposition.done);
+      expect(gateRows(io), isEmpty);
     });
 
     test('configured and passing: the fix is recorded as verified', () async {
@@ -636,12 +646,19 @@ void main() {
         runVerification: (command, projectRoot) {
           seen.add('$command in ${p.basename(projectRoot)}');
           seen.add('written: ${File('$projectRoot/lib/foo.dart').existsSync()}');
-          return true;
+          return const GateResult(exitCode: 0, outputTail: 'All passed', durationMs: 42);
         },
       );
       expect(seen, ['dart test in ${p.basename(root.path)}', 'written: true']);
       expect(_statusOf(io), HandoffStatus.debugComplete);
       expect(recorded(io), DebugDisposition.verified);
+      final row = gateRows(io).single;
+      expect(row['gate'], GateKind.debugVerification.name);
+      expect(row['command'], ClaudartCommand.debug.name);
+      expect(row['shellCommand'], 'dart test');
+      expect(row['exitCode'], 0);
+      expect(row['outputTail'], 'All passed');
+      expect(row['durationMs'], 42);
     });
 
     test('configured and failing: the files are restored and the session is '
@@ -652,7 +669,10 @@ void main() {
           seams: CommandSeams(io: io, projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0),
           executor: _executorWithPlanText(plan),
           dartFileAnalyzer: (_, __) => true,
-          runVerification: (command, projectRoot) => false,
+          runVerification: (command, projectRoot) => const GateResult.failed(
+            exitCode: 1,
+            outputTail: 'Some tests failed',
+          ),
         ),
         throwsA(
           isA<EditPlanException>().having(
@@ -668,6 +688,9 @@ void main() {
         loggedMoves(io, _workspace).map((move) => move['event']),
         [HandoffEvent.debugStarted.name, HandoffEvent.debugBlocked.name],
       );
+      final row = gateRows(io).single;
+      expect(row['exitCode'], 1);
+      expect(row['outputTail'], 'Some tests failed');
     });
 
     test('a failing analysis is never verified: the command is not run', () async {
@@ -680,7 +703,7 @@ void main() {
           dartFileAnalyzer: (_, __) => false,
           runVerification: (command, projectRoot) {
             asked = true;
-            return true;
+            return const GateResult.passed();
           },
         ),
         throwsA(isA<EditPlanException>()),

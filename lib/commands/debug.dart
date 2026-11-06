@@ -28,6 +28,7 @@ import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
+import '../io/gate_runner.dart';
 import '../io/process_runner.dart';
 
 /// Every way a `claudart debug` run can end before it applies a fix. Each is
@@ -73,7 +74,7 @@ Future<void> runDebug({
   CommandSeams seams = const CommandSeams(),
   PipelineExecutor? executor,
   DartFileAnalyzer? dartFileAnalyzer,
-  bool Function(String command, String projectRoot)? runVerification,
+  GateResult Function(String command, String projectRoot)? runVerification,
 }) async {
   final io = seams.io;
   final exitFn = seams.exitFn;
@@ -308,7 +309,8 @@ Future<void> runDebug({
   // the fix is verified; none configured means nothing verifies it.
   final verificationCommand =
       loadWorkspaceConfig(workspace, io: fileIO).verificationCommand;
-  final runVerification_ = runVerification ?? _runVerificationCommand;
+  final runVerification_ = runVerification ??
+      (command, root) => _runVerificationCommand(command, root, seams.clock);
   final verified = await blockOnFailure(() async {
     return applyEditFiles(
       projectRoot:      projectRoot,
@@ -317,7 +319,16 @@ Future<void> runDebug({
       dartFileAnalyzer: dartFileAnalyzer ?? dartAnalyzeClean,
       verifyFix: verificationCommand == null
           ? null
-          : (root) => runVerification_(verificationCommand, root),
+          : (root) {
+              final gate = runVerification_(verificationCommand, root);
+              logger.logGate(
+                command: ClaudartCommand.debug.name,
+                gate: GateKind.debugVerification,
+                shellCommand: verificationCommand,
+                result: gate,
+              );
+              return gate.passed;
+            },
     );
   });
   final written = editTags.length;
@@ -337,16 +348,13 @@ Future<void> runDebug({
   print(UserText.debugNextClaudartSaveThenRunTests.styled({}));
 }
 
-/// Runs [command] through the shell in [projectRoot]; passing means exit 0.
-bool _runVerificationCommand(String command, String projectRoot) =>
-    const RealProcessRunner()
-        .runSync(
-          shellExecutable,
-          [shellCommandFlag, command],
-          workingDirectory: projectRoot,
-        )
-        .exitCode ==
-    0;
+/// Runs [command] through the shell in [projectRoot].
+GateResult _runVerificationCommand(
+  String command,
+  String projectRoot,
+  DateTime Function()? clock,
+) =>
+    runGateSync(const RealProcessRunner(), command, projectRoot, clock: clock);
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 

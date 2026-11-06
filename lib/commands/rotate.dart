@@ -21,6 +21,7 @@ import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
+import '../io/gate_runner.dart';
 
 
 enum RotateResult {
@@ -55,7 +56,7 @@ enum RotateResult {
 Future<RotateResult>  runRotate({
   CommandSeams seams = const CommandSeams(),
   ProcessRunner? runner,
-  Future<bool> Function(String command)? buildFn,
+  Future<GateResult> Function(String command)? buildFn,
   RunMode mode = RunMode.interactive,
 }) async {
   final io = seams.io;
@@ -139,14 +140,23 @@ Future<RotateResult>  runRotate({
   );
   final archiveFile = p.join(archiveDirFor(workspace), archiveEntry.handoffFile);
 
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+
   // 6 — Build gate: must pass before the next session can start.
   // afterFixCommand has no registry-entry field yet, so it stays sourced
   // from the workspace config.json, defaulting to 'make rebuild'.
   final config = _loadConfig(fileIO, workspace);
-  final build_ = buildFn ?? (command) => _defaultBuild(command, projectRoot, proc);
+  final build_ = buildFn ??
+      (command) => runGate(proc, command, projectRoot, clock: seams.clock);
   print(UserText.rotateRunningBuildGate.format({'afterFixCommand': config.afterFixCommand}));
-  final buildOk = await build_(config.afterFixCommand);
-  if (!buildOk) {
+  final gate = await build_(config.afterFixCommand);
+  logger.logGate(
+    command: ClaudartCommand.rotate.name,
+    gate: GateKind.rotateBuild,
+    shellCommand: config.afterFixCommand,
+    result: gate,
+  );
+  if (!gate.passed) {
     print(UserText.rotateBuildFailedFixTheBuildBefore.template);
     print(UserText.rotateGateChangeItWithAfterfixcommandIn.format({'afterFixCommand': config.afterFixCommand, 'workspace': configPathFor(workspace)}));
     return RotateResult.buildFailed;
@@ -156,7 +166,6 @@ Future<RotateResult>  runRotate({
   // Records the move once the build gate has passed and the handoff is about
   // to change. Not enforced: rotate is deliberately permissive, so a status
   // the table lacks is logged, not thrown.
-  final logger = SessionLogger.forEntry(entry, io: fileIO);
   final store = HandoffStore(
     io: fileIO,
     handoffFile: handoffFile,
@@ -213,31 +222,6 @@ ProjectConfig _loadConfig(FileIO fileIO, String workspace) {
   } on FormatException {
     return const ProjectConfig();
   }
-}
-
-/// afterFixCommand is free-form user config, not untrusted input — shell
-/// operators (&&, ||, |, >, globs) are expected to work, same as typing the
-/// command directly in a terminal.
-///
-/// `runInShell: true` on a pre-split argument list does NOT do this —
-/// confirmed by direct testing: Dart quotes each split argument
-/// individually before handing them to the shell, so `&&`/`||` inside the
-/// (already-split) argument list arrive as inert literal text, not
-/// operators. Passing the whole, unsplit [command] string as `sh`'s `-c`
-/// argument is what actually works — the shell parses operators, quoting,
-/// and globs itself, the same as this project's own `.githooks/pre-push`
-/// already relies on.
-Future<bool> _defaultBuild(
-  String command,
-  String workingDirectory,
-  ProcessRunner proc,
-) async {
-  final result = await proc.run(
-    shellExecutable,
-    [shellCommandFlag, command],
-    workingDirectory: workingDirectory,
-  );
-  return result.exitCode == 0;
 }
 
 String _truncate(String s, {int max = 72}) =>

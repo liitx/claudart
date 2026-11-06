@@ -4,14 +4,14 @@
 
 `debug` runs `verificationCommand` and `rotate` runs `afterFixCommand`. Each use case below is run through the command; the columns say what existed when the gate ran and what was left after.
 
-| command | use case | config key | shell command | at the gate | result | moves logged | after |
-|---|---|---|---|---|---|---|---|
-| debug | no command configured | `verificationCommand` | not run | — | returned | debugStarted, fixApplied | debugComplete; archive files 0; fix kept |
-| debug | command configured, passes | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | returned | debugStarted, fixApplied | debugComplete; archive files 0; fix kept |
-| debug | command configured, fails | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | threw fixVerificationFailed | debugStarted, debugBlocked | needsSuggest; archive files 0; fix — |
-| rotate | passes, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned rotated | rotated | suggestInvestigating; archive files 2; fix — |
-| rotate | fails, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned buildFailed | — | readyForDebug; archive files 2; fix — |
-| rotate | passes, nothing pending | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned noNextIssue | rotatedEmpty | noHandoff; archive files 2; fix — |
+| command | use case | config key | shell command | at the gate | result | moves logged | gate row logged | after |
+|---|---|---|---|---|---|---|---|---|
+| debug | no command configured | `verificationCommand` | not run | — | returned | debugStarted, fixApplied | — | debugComplete; archive files 0; fix kept |
+| debug | command configured, passes | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | returned | debugStarted, fixApplied | exit 0 | debugComplete; archive files 0; fix kept |
+| debug | command configured, fails | `verificationCommand` | `dart test` | debugInProgress; archive files 0; fix written | threw fixVerificationFailed | debugStarted, debugBlocked | exit 1 | needsSuggest; archive files 0; fix — |
+| rotate | passes, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned rotated | rotated | exit 0 | suggestInvestigating; archive files 2; fix — |
+| rotate | fails, a pending issue to seed | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned buildFailed | — | exit 1 | readyForDebug; archive files 2; fix — |
+| rotate | passes, nothing pending | `afterFixCommand` | `make rebuild` | readyForDebug; archive files 2; fix — | returned noNextIssue | rotatedEmpty | exit 0 | noHandoff; archive files 2; fix — |
 
 ## Call chain to the gate (claudart frames, innermost first)
 
@@ -23,4 +23,4 @@
 
 ## Code that spells the shell invocation
 
-Files naming `shellExecutable`: lib/commands/debug.dart, lib/commands/rotate.dart.
+Files naming `shellExecutable` (outside the process runner): lib/io/gate_runner.dart.

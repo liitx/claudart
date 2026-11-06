@@ -41,6 +41,7 @@ void main(List<String> args) {
     transitions: _rows(directories, LogFile.transitions),
     steps: _rows(directories, LogFile.steps),
     errors: _rows(directories, LogFile.errors),
+    gates: _rows(directories, LogFile.gates),
   ).where((run) => command == null || run.command == command).toList();
 
   if (htmlPath == null) {

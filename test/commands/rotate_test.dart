@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/rotate.dart';
+import 'package:claudart/io/gate_runner.dart';
 import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/templates/handoff_template.dart';
 import 'package:claudart/config/paths.dart';
+import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
@@ -209,8 +212,9 @@ MemoryFileIO _io({String handoff = _handoffWithPending}) {
   });
 }
 
-Future<bool> _buildOk(String _) async => true;
-Future<bool> _buildFail(String _) async => false;
+Future<GateResult> _buildOk(String _) async => const GateResult.passed();
+Future<GateResult> _buildFail(String _) async =>
+    const GateResult.failed(exitCode: 2, outputTail: 'make: *** [build] Error 2');
 bool _confirmYes(String _) => true;
 bool _confirmNo(String _) => false;
 
@@ -348,7 +352,10 @@ void main() {
       var built = false;
 
       await expectLater(
-        runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, askFn: (_) => null), buildFn: (_) async => built = true),
+        runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, askFn: (_) => null), buildFn: (_) async {
+          built = true;
+          return const GateResult.passed();
+        }),
         throwsA(isA<StateError>().having((e) => e.message, 'message', 'exit(1) called')),
       );
 
@@ -428,7 +435,7 @@ void main() {
     Future<RotateResult> rotate(
       MemoryFileIO io, {
       bool Function(String)? confirm,
-      Future<bool> Function(String)? build,
+      Future<GateResult> Function(String)? build,
     }) =>
         runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: confirm ?? _confirmYes), buildFn: build ?? _buildOk);
 
@@ -463,6 +470,34 @@ void main() {
       final io = _io();
       await rotate(io, confirm: (_) => false);
       expect(loggedMoves(io, _workspace), isEmpty);
+    });
+
+    List<Map<String, dynamic>> gateRows(MemoryFileIO io) => [
+          for (final line in io
+              .read(logFilePath(logsDirFor(_workspace), LogFile.gates))
+              .split('\n')
+              .where((line) => line.trim().isNotEmpty))
+            jsonDecode(line) as Map<String, dynamic>,
+        ];
+
+    test('a passing build gate is logged with its command and exit code',
+        () async {
+      final io = _io();
+      await rotate(io);
+      final row = gateRows(io).single;
+      expect(row['gate'], GateKind.rotateBuild.name);
+      expect(row['command'], 'rotate');
+      expect(row['shellCommand'], 'make rebuild');
+      expect(row['exitCode'], 0);
+    });
+
+    test('a failing build gate is logged with its exit code and output',
+        () async {
+      final io = _io();
+      await rotate(io, build: _buildFail);
+      final row = gateRows(io).single;
+      expect(row['exitCode'], 2);
+      expect(row['outputTail'], 'make: *** [build] Error 2');
     });
 
     test('a failed build gate logs nothing', () async {
