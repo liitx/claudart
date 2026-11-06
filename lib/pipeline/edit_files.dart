@@ -146,7 +146,7 @@ void applyEditFiles({
       }
     }
     if (verifyFix != null && !verifyFix(projectRoot)) {
-      throw EditPlanException(
+      throw const EditPlanException(
         FailureType.fixVerificationFailed,
         'the verification command failed',
       );
