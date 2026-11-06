@@ -6,13 +6,13 @@ Each cell is what the real lifecycle scenarios did (`test/conformance/lifecycle_
 
 | status \ event | setup | saveUnconfirmed | saveConfirmedExploring | saveConfirmedReady | debugStarted | debugBlocked | suggestResumed | fixApplied | rotated | rotatedEmpty | tornDown | reminderSaved | killed |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| suggestInvestigating | · | ok x1 | ok x2 | ok x10 | · | · | · | · | ok x1 | ok x1 | · | GAP | ok x1 |
+| suggestInvestigating | · | ok x1 | ok x2 | ok x11 | · | · | · | · | ok x1 | ok x1 | · | GAP | ok x1 |
 | readyForSuggest | · | · | · | GAP | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
-| readyForDebug | · | · | · | ok x1 | ok x4 | · | · | GAP | ok x1 | ok x1 | ok x1 | GAP | ok x1 |
-| debugInProgress | · | GAP | · | GAP | · | ok x2 | · | ok x2 | GAP | GAP | GAP | GAP | GAP |
+| readyForDebug | · | · | · | ok x1 | ok x5 | · | · | GAP | ok x1 | ok x1 | ok x1 | GAP | ok x1 |
+| debugInProgress | · | GAP | · | GAP | · | ok x2 | · | ok x3 | GAP | GAP | GAP | GAP | GAP |
 | debugComplete | · | · | · | · | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
 | needsSuggest | · | · | · | GAP | · | · | ok x1 | · | · | · | · | GAP | ok x1 |
-| noHandoff | ok x15 | · | · | · | · | · | · | · | · | · | · | · | · |
+| noHandoff | ok x16 | · | · | · | · | · | · | · | · | · | · | · | · |
 | unknown | · | · | · | · | · | · | · | · | · | · | · | · | · |
 
 ## Legal moves no scenario drives (15)

@@ -28,6 +28,7 @@ import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
+import '../session/closure_evidence.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.
@@ -104,13 +105,15 @@ Future<void> runTeardown({
   print(UserText.teardownBranch.format({'branch': branch}));
   print('${render.divider()}\n');
 
-  // Headless resolves "confirmed resolved?" from the handoff's own typed
-  // status rather than asking — debugComplete is the one HandoffStatus
-  // variant that means "fix verified" per the FSA (docs/design.md). Any
-  // other status headless treats the same way a human declining the
-  // interactive confirm would: save as a reminder, don't archive as fixed.
+  // Headless resolves "confirmed resolved?" from the handoff's own recorded
+  // evidence rather than asking: only a fix a verification command passed
+  // (ClosureEvidence.verified) archives and updates what was learned. Anything
+  // less (a fix that was only analyzed, a handoff only suggest confirmed, an
+  // unconverged one) is treated as a human declining the interactive confirm
+  // would be: saved as a reminder, not archived as fixed.
   var resolved = headless
-      ? SessionState.parse(handoff).status == HandoffStatus.debugComplete
+      ? closureEvidenceOf(SessionState.parse(handoff)) ==
+          ClosureEvidence.verified
       : confirm_('Is the bug confirmed resolved?');
 
   // A complete transfer that debug never finished is resolved only if debug is

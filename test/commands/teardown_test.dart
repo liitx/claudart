@@ -6,7 +6,8 @@ import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/teardown.dart'
     show kTeardownSkipDebugQuestion, runTeardown, TeardownCategory;
 import 'package:claudart/session/debug_disposition.dart';
-import 'package:claudart/session/md_io.dart' show readHandoffStatus, readSection;
+import 'package:claudart/session/md_io.dart'
+    show readHandoffStatus, readSection, updateSection, withDebugDisposition;
 import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
@@ -417,8 +418,10 @@ void main() {
     test('a headless debugComplete teardown logs tornDown into noHandoff',
         () async {
       final io = _io(
-        handoff:
-            _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+        handoff: withDebugDisposition(
+          _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+          DebugDisposition.verified,
+        ),
       );
       await runTeardown(
         executor: noModelExecutor(),
@@ -892,15 +895,92 @@ _None recorded yet._
 
   // ── Headless mode ────────────────────────────────────────────────────────────
 
+  // A headless teardown archives, and updates what was learned, only when the
+  // handoff's evidence is verified (Q11, owner agreed): a fix that was applied
+  // and analyzed but never verified, and a handoff only suggest confirmed, are
+  // saved as reminders.
+  group('teardown — headless closes only on verified evidence', () {
+    const cases = <({
+      String name,
+      String status,
+      DebugDisposition? disposition,
+      bool archives,
+    })>[
+      (
+        name: 'a verified fix',
+        status: 'debug-complete',
+        disposition: DebugDisposition.verified,
+        archives: true,
+      ),
+      (
+        name: 'a fix applied and analyzed, never verified',
+        status: 'debug-complete',
+        disposition: DebugDisposition.done,
+        archives: false,
+      ),
+      (
+        name: 'a finished fix with no disposition recorded',
+        status: 'debug-complete',
+        disposition: null,
+        archives: false,
+      ),
+      (
+        name: 'a handoff suggest confirmed, debug skipped',
+        status: 'ready-for-debug',
+        disposition: DebugDisposition.skipped,
+        archives: false,
+      ),
+    ];
+
+    for (final scenario in cases) {
+      test('${scenario.name}: '
+          '${scenario.archives ? 'archives and resets' : 'saves a reminder'}',
+          () async {
+        var handoff =
+            _richHandoff.replaceFirst('debug-in-progress', scenario.status);
+        if (scenario.disposition != null) {
+          handoff = withDebugDisposition(handoff, scenario.disposition!);
+        }
+        final io = _io(handoff: handoff);
+        try {
+          await runTeardown(
+            executor: noModelExecutor(),
+            io: io,
+            projectRootOverride: _projectRoot,
+            mode: RunMode.headless,
+            exitFn: _throwExit,
+          );
+        } on _ExitException {
+          // The reminder path leaves through exit 0.
+        }
+        final events = [
+          for (final move in loggedMoves(io, _workspace)) move['event'],
+        ];
+        // A reminder leaves the handoff where it is and logs no move (gap
+        // R16): only the resolved path records one.
+        expect(events, scenario.archives ? [HandoffEvent.tornDown.name] : isEmpty);
+        expect(io.read(handoffPathFor(_workspace)) == blankHandoff,
+            scenario.archives);
+        if (!scenario.archives) {
+          expect(io.read(handoffPathFor(_workspace)), handoff,
+              reason: 'a reminder leaves the handoff untouched');
+        }
+        expect(_archives(io), hasLength(1));
+        expect(io.read(skillsPathFor(_workspace)).contains('resolved'),
+            scenario.archives);
+      });
+    }
+  });
+
   group('teardown — headless', () {
     Never Function(String) throwOnCall(String label) =>
         (_) => throw StateError('headless must never call $label');
 
-    test('debugComplete status archives without asking anything — every '
+    test('a verified debugComplete archives without asking anything — every '
         'human touchpoint would throw if called', () async {
-      final completeHandoff = _richHandoff.replaceFirst(
-        'debug-in-progress',
-        'debug-complete',
+      final completeHandoff = withDebugDisposition(
+        _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+        DebugDisposition.verified,
       );
       final io = _io(handoff: completeHandoff);
 
@@ -987,9 +1067,19 @@ _None recorded yet._
 
     test('never records the unspecified sentinel as a real hot-path file '
         'when no hot files are known', () async {
-      final completeHandoff = _bareHandoff.replaceFirst(
-        'suggest-investigating',
-        'debug-complete',
+      // Converged (a real root cause and scope) and verified, but with no
+      // changed files recorded, so no hot files are known.
+      final completeHandoff = withDebugDisposition(
+        updateSection(
+          updateSection(
+            _bareHandoff.replaceFirst('suggest-investigating', 'debug-complete'),
+            'Root Cause',
+            'The splitter stops early.',
+          ),
+          'Scope',
+          '### Files in play\n- lib/parser.dart',
+        ),
+        DebugDisposition.verified,
       );
       final io = _io(handoff: completeHandoff);
 

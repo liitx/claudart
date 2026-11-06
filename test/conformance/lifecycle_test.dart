@@ -61,7 +61,8 @@ void main() {
   }
 
   group('the debug disposition follows the session', () {
-    test('setup and suggest record pending; debug records done', () async {
+    test('setup and suggest record pending; debug records verified when a '
+        'verification command passes, done when none is set', () async {
       final io = freshLifecycleIo();
       DebugDisposition recorded() =>
           SessionState.parse(handoffContentOf(io)).debugDisposition;
@@ -72,7 +73,16 @@ void main() {
       await quietly(() => suggest(io));
       expect(recorded(), DebugDisposition.pending);
       await quietly(() => debug(io));
-      expect(state().recordedDebugDisposition, DebugDisposition.done);
+      expect(state().recordedDebugDisposition, DebugDisposition.verified);
+    });
+
+    test('a debug with no verification command records done', () async {
+      final io = freshLifecycleIo();
+      await quietly(() => setupDefault(io));
+      await quietly(() => suggest(io));
+      await quietly(() => debugUnverified(io));
+      expect(SessionState.parse(handoffContentOf(io)).recordedDebugDisposition,
+          DebugDisposition.done);
     });
   });
 

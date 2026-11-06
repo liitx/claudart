@@ -192,7 +192,26 @@ Future<void> suggest(
       pickFn: (_) => 0,
     );
 
+/// A debug in a workspace that names a verification command, which passes: the
+/// fix is recorded as verified, so a headless teardown may archive it.
 Future<void> debug(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) {
+  io.write(
+    configPathFor(project.workspace),
+    jsonEncode({'verificationCommand': 'dart test'}),
+  );
+  return runDebug(
+    seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, pickFn: (_) => 0),
+    executor: _exec('<CHANGES>none</CHANGES>'),
+    runVerification: (_, __) => const GateResult.passed(),
+  );
+}
+
+/// A debug in a workspace that names no verification command: the fix is
+/// recorded as applied and analyzed, never as verified.
+Future<void> debugUnverified(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) =>
@@ -262,6 +281,19 @@ Future<void> teardown(
       mode: RunMode.headless,
       exitFn: _noExit,
     );
+
+/// A headless teardown that saves a reminder: it leaves through exit 0 and the
+/// handoff stays where it was.
+Future<void> teardownReminder(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) async {
+  try {
+    await teardown(io, project: project);
+  } on StateError catch (error) {
+    if (error.message != 'exit(0)') rethrow;
+  }
+}
 
 void seedPending(
   MemoryFileIO io, [
@@ -360,6 +392,21 @@ Map<String, List<LifecycleStep>> lifecycleScenarios({
       lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
       lifecycleStep('debug', bind(debug), HandoffStatus.debugComplete),
       lifecycleStep('teardown', bind(teardown), HandoffStatus.noHandoff),
+    ],
+    'setup, suggest, debug without verification, teardown saves a reminder': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'debug without verification',
+        bind(debugUnverified),
+        HandoffStatus.debugComplete,
+      ),
+      lifecycleStep(
+        'teardown saves a reminder',
+        bind(teardownReminder),
+        HandoffStatus.debugComplete,
+        logged: false,
+      ),
     ],
     'setup, suggest, kill': [
       setupStep,
