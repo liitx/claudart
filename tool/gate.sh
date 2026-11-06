@@ -21,7 +21,8 @@ if ! tail -1 /tmp/claudart_gate_suite.txt | grep -q "All tests passed"; then
   exit 1
 fi
 
-errors=$(dart analyze 2>&1 | grep -E "^\s+error" | grep -v analysis_options)
+# Errors and warnings fail the gate; the older infos (13 today) are tolerated.
+errors=$(dart analyze 2>&1 | grep -E "^\s*(error|warning) -" | grep -v analysis_options)
 if [ -n "$errors" ]; then echo "ANALYZER FAIL"; echo "$errors" | head -5; exit 1; fi
 echo "analyzer: $(dart analyze 2>&1 | tail -1)"
 

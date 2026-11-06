@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../config/config.dart';

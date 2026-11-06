@@ -24,7 +24,7 @@ class _Left implements Exception {
 Never _leave(int code) => throw _Left(code);
 
 List<Map<String, dynamic>> _rows(MemoryFileIO io) {
-  final path = '$_workspace/logs/interactions.jsonl';
+  const path = '$_workspace/logs/interactions.jsonl';
   if (!io.fileExists(path)) return [];
   return [
     for (final line in io.read(path).split('\n'))

@@ -5,7 +5,6 @@
 // That is written here once; a command that cannot proceed gets the same
 // words and the same exit.
 
-import 'dart:io' show exit;
 
 import '../../generated/user_text.g.dart';
 import '../../io/file_io.dart';

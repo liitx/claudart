@@ -5,7 +5,6 @@
 // pre-filled as defaults — the operator can accept them (press enter) or
 // override, same as any other promptWithDefault-backed question.
 
-import 'dart:io';
 import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
 import '../io/file_io.dart';

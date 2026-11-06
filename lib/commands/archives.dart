@@ -6,7 +6,6 @@
 // Resume: copies the archived handoff.md back to the active handoff path,
 // allowing the user to re-enter /suggest or /debug where they left off.
 
-import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../io/file_io.dart';
 import '../config/paths.dart';
