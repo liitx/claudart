@@ -43,6 +43,7 @@ class RunLog {
     required this.steps,
     required this.errors,
     this.gates = const [],
+    this.outcomes = const [],
   });
 
   final String command;
@@ -54,6 +55,9 @@ class RunLog {
   final List<Map<String, dynamic>> steps;
   final List<Map<String, dynamic>> errors;
   final List<Map<String, dynamic>> gates;
+
+  /// The rows the command wrote itself (an outcome, and what it rested on).
+  final List<Map<String, dynamic>> outcomes;
 }
 
 /// The runs in the given log rows, oldest first. A row of [interactions] with
@@ -90,6 +94,10 @@ List<RunLog> runsFrom({
       steps: inside(steps),
       errors: inside(errors),
       gates: inside(gates),
+      outcomes: inside([
+        for (final own in interactions)
+          if (own[LogEntryField.durationMs.name] is! int) own,
+      ]),
     ));
   }
   return runs..sort((a, b) => a.endedAt.compareTo(b.endedAt));
@@ -184,6 +192,14 @@ String renderRunDiagram(RunLog run) {
           ? '$shell-->>$command: $ended'
           : '$shell--x$command: $ended'
               '${tail is String && tail.isNotEmpty ? ': ${_safe(tail)}' : ''}',
+    );
+  }
+  for (final row in run.outcomes) {
+    final evidence = row[LogEntryField.evidence.name];
+    add(
+      row,
+      'Note over $command: ${_safe(row[LogEntryField.outcome.name])}'
+      '${evidence == null ? '' : ', evidence ${_safe(evidence)}'}',
     );
   }
   for (final row in run.errors) {

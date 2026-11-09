@@ -16,3 +16,16 @@ List<Map<String, dynamic>> loggedMoves(MemoryFileIO io, String workspace) {
         ..remove('schema'),
   ];
 }
+
+/// The interaction rows a command logged to `<workspace>/logs/interactions.jsonl`,
+/// minus the timestamp and schema version.
+List<Map<String, dynamic>> loggedInteractions(MemoryFileIO io, String workspace) {
+  final path = logFilePath(logsDirFor(workspace), LogFile.interactions);
+  if (!io.fileExists(path)) return [];
+  return [
+    for (final line in io.read(path).split('\n').where((l) => l.isNotEmpty))
+      {...jsonDecode(line) as Map<String, dynamic>}
+        ..remove('ts')
+        ..remove('schema'),
+  ];
+}

@@ -148,6 +148,50 @@ void main() {
     });
   });
 
+  group('a row a command wrote itself', () {
+    List<RunLog> runWith(Map<String, dynamic> own, {String command = 'teardown'}) =>
+        runsFrom(
+          interactions: [
+            _boundary('2026-11-06T10:00:09.000Z', 'teardown', 'ok', 9000),
+            {...own, 'command': command},
+          ],
+          transitions: const [],
+          steps: const [],
+          errors: const [],
+        );
+
+    test('is a note in the run, with its outcome and the evidence', () {
+      final text = renderRunDiagram(runWith({
+        'ts': '2026-11-06T10:00:05.000Z',
+        'outcome': 'reminderSaved',
+        'evidence': 'debugUnrecorded',
+      }).single);
+      expect(text,
+          contains('Note over Command: reminderSaved, evidence debugUnrecorded'));
+    });
+
+    test('without evidence is a note with the outcome alone', () {
+      final text = renderRunDiagram(runWith({
+        'ts': '2026-11-06T10:00:05.000Z',
+        'outcome': 'killed',
+      }).single);
+      expect(text, contains('Note over Command: killed\n'));
+    });
+
+    test('of another command or outside the window is not drawn', () {
+      final other = renderRunDiagram(runWith({
+        'ts': '2026-11-06T10:00:05.000Z',
+        'outcome': 'killed',
+      }, command: 'kill').single);
+      final early = renderRunDiagram(runWith({
+        'ts': '2026-11-06T09:00:00.000Z',
+        'outcome': 'killed',
+      }).single);
+      expect(other, isNot(contains('killed')));
+      expect(early, isNot(contains('killed')));
+    });
+  });
+
   group('a gate', () {
     Map<String, dynamic> gate(String ts, int exitCode, {String tail = ''}) => {
           'ts': ts,

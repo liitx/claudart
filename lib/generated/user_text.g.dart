@@ -285,7 +285,8 @@ enum UserText {
   confirmPendingTitle('CONFIRM PENDING'),
   indentedLine('  {line}'),
   leadingBlankLine('\n{line}'),
-  statusClosureLine('Closure  : {evidence} — {closure}');
+  statusClosureLine('Closure  : {evidence} — {closure}'),
+  statusVerificationHint('  Verify    : no verification command is set, so a headless teardown will only save a reminder. Set "verificationCommand" in {configPath}');
 
   const UserText(this.template);
 

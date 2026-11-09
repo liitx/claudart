@@ -40,6 +40,7 @@ enum LogEntryField {
   /// The schema version the row follows; a row without it predates it.
   schema,
   gate,
+  evidence,
   shellCommand,
   exitCode,
   outputTail,
@@ -150,6 +151,7 @@ class SessionLogger {
     int? durationMs,
     String? platform,
     String? claudartVersion,
+    String? evidence,
   }) {
     final entry = <String, dynamic>{
       LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
@@ -163,6 +165,7 @@ class SessionLogger {
       if (scanDuration != null) LogEntryField.scanDuration.name: scanDuration,
       if (durationMs != null) LogEntryField.durationMs.name: durationMs,
       if (platform != null) LogEntryField.platform.name: platform,
+      if (evidence != null) LogEntryField.evidence.name: evidence,
       if (claudartVersion != null) LogEntryField.claudartVersion.name: claudartVersion,
       LogEntryField.outcome.name: outcome,
     };

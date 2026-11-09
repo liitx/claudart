@@ -12,6 +12,8 @@ import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../session/closure_evidence.dart';
+import '../session/debug_disposition.dart';
+import '../config/config.dart' show loadWorkspaceConfig;
 
 Future<void> runStatus({
   CommandSeams seams = const CommandSeams(),
@@ -69,6 +71,13 @@ Future<void> runStatus({
       'evidence': closureEvidence.label,
       'closure': automaticClosureFor(closureEvidence).label,
     }));
+    // A fix that was applied and analyzed but never verified, in a workspace
+    // that names no verification command: say how to set one (gap R17).
+    if (state.debugDisposition == DebugDisposition.done &&
+        loadWorkspaceConfig(workspace, io: fileIO).verificationCommand == null) {
+      print(UserText.statusVerificationHint
+          .format({'configPath': configPathFor(workspace)}));
+    }
   }
   print(UserText.statusBug.format({'text': _truncate(state.bug.text)}));
   print(UserText.statusRootCause.format({'text': _truncate(state.rootCause.text)}));

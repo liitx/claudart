@@ -4,7 +4,8 @@ import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/teardown.dart'
-    show kTeardownSkipDebugQuestion, runTeardown, TeardownCategory;
+    show kTeardownSkipDebugQuestion, runTeardown, TeardownCategory, TeardownOutcome;
+import 'package:claudart/session/closure_evidence.dart';
 import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/session/md_io.dart'
     show readHandoffStatus, readSection, updateSection, withDebugDisposition;
@@ -905,30 +906,35 @@ _None recorded yet._
       String status,
       DebugDisposition? disposition,
       bool archives,
+      ClosureEvidence evidence,
     })>[
       (
         name: 'a verified fix',
         status: 'debug-complete',
         disposition: DebugDisposition.verified,
         archives: true,
+        evidence: ClosureEvidence.verified,
       ),
       (
         name: 'a fix applied and analyzed, never verified',
         status: 'debug-complete',
         disposition: DebugDisposition.done,
         archives: false,
+        evidence: ClosureEvidence.debugUnrecorded,
       ),
       (
         name: 'a finished fix with no disposition recorded',
         status: 'debug-complete',
         disposition: null,
         archives: false,
+        evidence: ClosureEvidence.debugUnrecorded,
       ),
       (
         name: 'a handoff suggest confirmed, debug skipped',
         status: 'ready-for-debug',
         disposition: DebugDisposition.skipped,
         archives: false,
+        evidence: ClosureEvidence.confirmedBySuggest,
       ),
     ];
 
@@ -965,11 +971,60 @@ _None recorded yet._
           expect(io.read(handoffPathFor(_workspace)), handoff,
               reason: 'a reminder leaves the handoff untouched');
         }
+        // The run records how it ended and what it rested on (gap R16), so a
+        // reminder says why it was one.
+        expect(loggedInteractions(io, _workspace), [
+          {
+            'command': ClaudartCommand.teardown.name,
+            'sensitivityMode': false,
+            'outcome': (scenario.archives
+                    ? TeardownOutcome.archived
+                    : TeardownOutcome.reminderSaved)
+                .name,
+            'evidence': scenario.evidence.name,
+          },
+        ]);
         expect(_archives(io), hasLength(1));
         expect(io.read(skillsPathFor(_workspace)).contains('resolved'),
             scenario.archives);
       });
     }
+  });
+
+  // An interactive teardown that does not resolve the handoff records which way
+  // the owner went and what the handoff rested on (gap R16).
+  group('teardown — the outcome of an unresolved interactive run', () {
+    Future<List<Map<String, dynamic>>> runWith({required bool saveReminder}) async {
+      final io = _io(handoff: _richHandoff);
+      try {
+        await runTeardown(
+          executor: noModelExecutor(),
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (question) =>
+              question == 'Save as a reminder to resume later?' && saveReminder,
+          promptFn: (q, {optional = false}) => '',
+          pickFn: (items, {startIndex = 0}) => 0,
+          exitFn: _throwExit,
+        );
+      } on _ExitException {
+        // Both unresolved paths leave through exit 0.
+      }
+      return loggedInteractions(io, _workspace);
+    }
+
+    test('a reminder the owner accepts is recorded as saved, with its evidence',
+        () async {
+      final rows = await runWith(saveReminder: true);
+      expect(rows.single['outcome'], TeardownOutcome.reminderSaved.name);
+      expect(rows.single['evidence'], ClosureEvidence.debugUnrecorded.name);
+    });
+
+    test('a reminder the owner declines is its own outcome', () async {
+      final rows = await runWith(saveReminder: false);
+      expect(rows.single['outcome'], TeardownOutcome.reminderDeclined.name);
+      expect(rows.single['evidence'], ClosureEvidence.debugUnrecorded.name);
+    });
   });
 
   group('teardown — headless', () {

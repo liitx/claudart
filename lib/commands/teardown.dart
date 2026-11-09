@@ -35,6 +35,20 @@ import '../session/closure_evidence.dart';
 const String kTeardownSkipDebugQuestion =
     'Debug did not run for this handoff. Record it as skipped?';
 
+/// How a `teardown` that went as far as archiving or a reminder ended. The name
+/// is the outcome written to the interaction log, with the evidence the handoff
+/// rested on, so a reminder says why it was one.
+enum TeardownOutcome {
+  /// Archived, what was learned was kept, and the handoff was reset.
+  archived,
+
+  /// Saved as a reminder: the handoff was not archived as fixed.
+  reminderSaved,
+
+  /// The owner declined to save a reminder, so nothing was written.
+  reminderDeclined,
+}
+
 Future<void> runTeardown({
   FileIO? io,
   String? projectRootOverride,
@@ -111,9 +125,14 @@ Future<void> runTeardown({
   // less (a fix that was only analyzed, a handoff only suggest confirmed, an
   // unconverged one) is treated as a human declining the interactive confirm
   // would be: saved as a reminder, not archived as fixed.
+  final evidence = closureEvidenceOf(SessionState.parse(handoff));
+  void recordOutcome(TeardownOutcome outcome) => store.logger.logInteraction(
+        command: ClaudartCommand.teardown.name,
+        outcome: outcome.name,
+        evidence: evidence.name,
+      );
   var resolved = headless
-      ? closureEvidenceOf(SessionState.parse(handoff)) ==
-          ClosureEvidence.verified
+      ? evidence == ClosureEvidence.verified
       : confirm_('Is the bug confirmed resolved?');
 
   // A complete transfer that debug never finished is resolved only if debug is
@@ -165,6 +184,9 @@ Future<void> runTeardown({
         io:          fileIO,
       );
       print(UserText.teardownReminderSavedRunClaudartArchivesTo.template);
+      recordOutcome(TeardownOutcome.reminderSaved);
+    } else {
+      recordOutcome(TeardownOutcome.reminderDeclined);
     }
     print(UserText.teardownComeBackWhenTheFixIs.template);
     exit_(0);
@@ -381,6 +403,12 @@ Future<void> runTeardown({
     print(UserText.errorMessageLine.format({'toString': e.toString()}));
     exit_(1);
   }
+
+  recordOutcome(
+    archiveKind == ArchiveKind.archive
+        ? TeardownOutcome.archived
+        : TeardownOutcome.reminderSaved,
+  );
 
   // Suggest commit message.
   final commitMsg = buildCommitMessage(area, bug, rootCause, fixSummary!);

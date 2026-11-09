@@ -9,11 +9,11 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | setup, suggest, debug, teardown | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug, teardown | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug, teardown | debug | r1 | r3 w3 | r1 | r2 w1 | — | — | r12 a12 | — |
-| setup, suggest, debug, teardown | teardown | r1 | r1 w1 | — | — | r1 w2 | — | r5 w1 a4 | w3 d1 |
+| setup, suggest, debug, teardown | teardown | r1 | r1 w1 | — | — | r1 w2 | — | r6 w1 a5 | w3 d1 |
 | setup, suggest, debug without verification, teardown saves a reminder | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug without verification, teardown saves a reminder | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug without verification, teardown saves a reminder | debug without verification | r1 | r3 w3 | r1 | r2 | — | — | r11 a11 | — |
-| setup, suggest, debug without verification, teardown saves a reminder | teardown saves a reminder | r1 | r1 | — | — | — | — | — | w2 |
+| setup, suggest, debug without verification, teardown saves a reminder | teardown saves a reminder | r1 | r1 | — | — | — | — | r1 a1 | w2 |
 | setup, suggest, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, kill | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, kill | kill | r2 w1 | r2 w1 | — | — | — | — | r2 a2 | w3 d1 |
@@ -43,11 +43,11 @@ Each cell is the calls a lifecycle step made through the FileIO seam, by file ki
 | setup, suggest, suggest again | suggest | r1 | r3 w2 | r1 | r1 | — | — | r10 a10 | w2 |
 | setup, suggest, teardown without debug | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, teardown without debug | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
-| setup, suggest, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r1 w2 | — | r5 w1 a4 | w3 d1 |
+| setup, suggest, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r1 w2 | — | r6 w1 a5 | w3 d1 |
 | setup, confirmed save, teardown without debug | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, confirmed save, teardown without debug | seed root cause | — | r1 w1 | — | — | — | — | — | — |
 | setup, confirmed save, teardown without debug | save | r2 w1 | r2 w2 | — | — | w1 | — | r1 a1 | w1 |
-| setup, confirmed save, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r2 w2 | — | r5 w1 a4 | w3 d1 |
+| setup, confirmed save, teardown without debug | teardown skipping debug | r1 | r1 w1 | — | — | r2 w2 | — | r6 w1 a5 | w3 d1 |
 | setup, suggest, debug, kill | setup | r1 | w1 | — | — | — | — | r2 a2 | — |
 | setup, suggest, debug, kill | suggest | r1 | r2 w2 | r1 | r1 | — | — | r10 a10 | — |
 | setup, suggest, debug, kill | debug | r1 | r3 w3 | r1 | r2 w1 | — | — | r12 a12 | — |

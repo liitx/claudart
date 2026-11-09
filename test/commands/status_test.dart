@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/commands/status.dart';
+import 'package:claudart/generated/user_text.g.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/closure_evidence.dart';
@@ -371,6 +372,42 @@ _Nothing yet.
       ClosureEvidence.debugUnrecorded: (HandoffStatus.readyForDebug, null),
       ClosureEvidence.none: (HandoffStatus.suggestInvestigating, null),
     };
+
+    group('the verification hint', () {
+      String hint() => UserText.statusVerificationHint
+          .format({'configPath': configPathFor(workspaceFor(_projectName))});
+
+      test('is shown for a fix applied but never verified, with no command set',
+          () async {
+        final text = await statusText(
+            ioClosedBy(HandoffStatus.debugComplete, DebugDisposition.done));
+        expect(text, contains(hint()));
+      });
+
+      test('names the key to set and the file to set it in', () {
+        expect(hint(), contains('verificationCommand'));
+        expect(hint(), contains('config.json'));
+      });
+
+      test('is not shown once a verification command is set', () async {
+        final io =
+            ioClosedBy(HandoffStatus.debugComplete, DebugDisposition.done);
+        io.write(configPathFor(workspaceFor(_projectName)),
+            '{"verificationCommand": "dart test"}');
+        expect(await statusText(io), isNot(contains(hint())));
+      });
+
+      test('is not shown for a verified fix', () async {
+        final text = await statusText(
+            ioClosedBy(HandoffStatus.debugComplete, DebugDisposition.verified));
+        expect(text, isNot(contains(hint())));
+      });
+
+      test('is not shown while the fix has not been applied', () async {
+        final text = await statusText(ioClosedBy(HandoffStatus.readyForDebug, null));
+        expect(text, isNot(contains(hint())));
+      });
+    });
 
     test('every kind of evidence has a case', () {
       expect(cases.keys.toSet(), ClosureEvidence.values.toSet());

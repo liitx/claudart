@@ -531,6 +531,7 @@ void main() {
     const keys = <LogEntryField, String>{
       LogEntryField.schema: 'schema',
       LogEntryField.gate: 'gate',
+      LogEntryField.evidence: 'evidence',
       LogEntryField.shellCommand: 'shellCommand',
       LogEntryField.exitCode: 'exitCode',
       LogEntryField.outputTail: 'outputTail',
