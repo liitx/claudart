@@ -148,6 +148,32 @@ void main() {
     });
   });
 
+  group('a run that failed', () {
+    test('says why when the row names a reason', () {
+      final runs = runsFrom(
+        interactions: [
+          {..._boundary(_t0, 'status', 'failed', 15), 'reason': 'notRegistered'},
+        ],
+        transitions: const [],
+        steps: const [],
+        errors: const [],
+      );
+      expect(renderRunDiagram(runs.single),
+          contains('Command--xOwner: failed after 15ms: notRegistered\n'));
+    });
+
+    test('says only that it failed when the row names none', () {
+      final runs = runsFrom(
+        interactions: [_boundary(_t0, 'status', 'failed', 15)],
+        transitions: const [],
+        steps: const [],
+        errors: const [],
+      );
+      expect(renderRunDiagram(runs.single),
+          contains('Command--xOwner: failed after 15ms\n'));
+    });
+  });
+
   group('a row a command wrote itself', () {
     List<RunLog> runWith(Map<String, dynamic> own, {String command = 'teardown'}) =>
         runsFrom(

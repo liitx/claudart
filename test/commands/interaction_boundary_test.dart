@@ -8,6 +8,8 @@ import 'dart:io';
 
 import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/support/interaction_boundary.dart';
+import 'package:claudart/errors/claudart_exception.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/io/process_exit.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/logging/recorded_outcome.dart';
@@ -161,6 +163,92 @@ void main() {
       );
       expect(() => exitProcessWith(1, leave: _leave), throwsA(isA<_Left>()));
       expect(_rows(fixture.io), hasLength(1));
+    });
+  });
+
+  group('why a run ended', () {
+    test('an exit that named its reason records it on the row', () async {
+      final fixture = _fixture();
+      await expectLater(
+        runRecorded(
+          command: ClaudartCommand.status,
+          logger: fixture.logger,
+          leave: _leave,
+          body: () async {
+            noteExitReason(FailureType.registryCorrupt);
+            exitProcess(1);
+          },
+        ),
+        throwsA(isA<_Left>()),
+      );
+      expect(_rows(fixture.io).single['reason'], 'registryCorrupt');
+    });
+
+    test('an exit that named none leaves no reason on the row', () async {
+      final fixture = _fixture();
+      await expectLater(
+        runRecorded(
+          command: ClaudartCommand.status,
+          logger: fixture.logger,
+          leave: _leave,
+          body: () async => exitProcess(1),
+        ),
+        throwsA(isA<_Left>()),
+      );
+      expect(_rows(fixture.io).single.containsKey('reason'), isFalse);
+    });
+
+    test('a reason named in one run is not carried into the next', () async {
+      final fixture = _fixture();
+      await expectLater(
+        runRecorded(
+          command: ClaudartCommand.status,
+          logger: fixture.logger,
+          leave: _leave,
+          body: () async {
+            noteExitReason(FailureType.registryCorrupt);
+            exitProcess(1);
+          },
+        ),
+        throwsA(isA<_Left>()),
+      );
+      await runRecorded(
+        command: ClaudartCommand.save,
+        logger: fixture.logger,
+        leave: _leave,
+        body: () async {},
+      );
+      expect(_rows(fixture.io).last.containsKey('reason'), isFalse);
+    });
+
+    test('a typed failure that was thrown is recorded by its failure type',
+        () async {
+      final fixture = _fixture();
+      await expectLater(
+        runRecorded(
+          command: ClaudartCommand.save,
+          logger: fixture.logger,
+          leave: _leave,
+          body: () async =>
+              throw ClaudartException(FailureType.homeDirectoryUnset),
+        ),
+        throwsA(isA<ClaudartException>()),
+      );
+      expect(_rows(fixture.io).single['reason'], 'homeDirectoryUnset');
+    });
+
+    test('an untyped error that was thrown is recorded by its type', () async {
+      final fixture = _fixture();
+      await expectLater(
+        runRecorded(
+          command: ClaudartCommand.save,
+          logger: fixture.logger,
+          leave: _leave,
+          body: () async => throw StateError('boom'),
+        ),
+        throwsStateError,
+      );
+      expect(_rows(fixture.io).single['reason'], 'StateError');
     });
   });
 

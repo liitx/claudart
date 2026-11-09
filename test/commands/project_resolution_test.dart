@@ -1,6 +1,13 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:claudart/commands/support/command_seams.dart';
+import 'package:claudart/logging/recorded_outcome.dart';
+import 'package:claudart/logging/logger.dart';
+import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/io/process_exit.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
+import 'package:claudart/commands/support/interaction_boundary.dart';
 import 'package:claudart/commands/support/project_resolution.dart';
 import 'package:claudart/registry.dart';
 import 'package:mocktail/mocktail.dart';
@@ -84,6 +91,39 @@ void main() {
         expect(failure.lines.first, startsWith('✗'));
       });
     }
+  });
+
+  group('requireProject names why it exits', () {
+    Future<Map<String, dynamic>> exitRow({required bool registered}) async {
+      final io = _ioWithRegistry(registered: registered);
+      final logger = SessionLogger.plain(io: io, workspacePath: '/ws');
+      try {
+        await runRecorded(
+          command: ClaudartCommand.status,
+          logger: logger,
+          leave: (code) => throw _ExitCode(code),
+          body: () async => requireProject(
+            CommandSeams(
+              io: io,
+              projectRootOverride: _root,
+              exitFn: (code) =>
+                  exitProcessWith(code, leave: (c) => throw _ExitCode(c)),
+            ),
+          ),
+        );
+      } on _ExitCode {
+        // The exit is the point.
+      }
+      return jsonDecode(io
+          .read(logFilePath('/ws/logs', LogFile.interactions))
+          .trim()) as Map<String, dynamic>;
+    }
+
+    test('a project that is not registered is recorded as such', () async {
+      final row = await exitRow(registered: false);
+      expect(row['outcome'], RecordedOutcome.failed.name);
+      expect(row['reason'], ProjectLookupFailure.notRegistered.name);
+    });
   });
 
   group('requireProject', () {

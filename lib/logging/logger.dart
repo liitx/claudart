@@ -152,6 +152,7 @@ class SessionLogger {
     String? platform,
     String? claudartVersion,
     String? evidence,
+    String? reason,
   }) {
     final entry = <String, dynamic>{
       LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
@@ -166,6 +167,7 @@ class SessionLogger {
       if (durationMs != null) LogEntryField.durationMs.name: durationMs,
       if (platform != null) LogEntryField.platform.name: platform,
       if (evidence != null) LogEntryField.evidence.name: evidence,
+      if (reason != null) LogEntryField.reason.name: reason,
       if (claudartVersion != null) LogEntryField.claudartVersion.name: claudartVersion,
       LogEntryField.outcome.name: outcome,
     };

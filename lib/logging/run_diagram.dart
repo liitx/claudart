@@ -44,6 +44,7 @@ class RunLog {
     required this.errors,
     this.gates = const [],
     this.outcomes = const [],
+    this.reason,
   });
 
   final String command;
@@ -58,6 +59,9 @@ class RunLog {
 
   /// The rows the command wrote itself (an outcome, and what it rested on).
   final List<Map<String, dynamic>> outcomes;
+
+  /// Why the run ended as it did, when the exit or the failure named one.
+  final String? reason;
 }
 
 /// The runs in the given log rows, oldest first. A row of [interactions] with
@@ -90,6 +94,7 @@ List<RunLog> runsFrom({
       endedAt: endedAt,
       outcome: row[LogEntryField.outcome.name] as String,
       durationMs: durationMs,
+      reason: row[LogEntryField.reason.name] as String?,
       transitions: inside(transitions),
       steps: inside(steps),
       errors: inside(errors),
@@ -212,7 +217,8 @@ String renderRunDiagram(RunLog run) {
 
   final ended = run.outcome == RecordedOutcome.ok.name
       ? '$command-->>$owner: ${_safe(run.outcome)} after ${run.durationMs}ms'
-      : '$command--x$owner: ${_safe(run.outcome)} after ${run.durationMs}ms';
+      : '$command--x$owner: ${_safe(run.outcome)} after ${run.durationMs}ms'
+          '${run.reason == null ? '' : ': ${_safe(run.reason)}'}';
 
   return [
     'sequenceDiagram',

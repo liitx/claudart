@@ -105,5 +105,6 @@ ResolvedProject requireProject(
   for (final line in failure!.lines) {
     print(line);
   }
+  noteExitReason(failure!);
   (seams.exitFn ?? exitProcess)(1);
 }

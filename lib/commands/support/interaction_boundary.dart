@@ -6,6 +6,7 @@
 // command does inside; the richer, per-project rows a command writes itself
 // (a kill's warning, a scan's counts) stay where they are.
 
+import '../../errors/claudart_exception.dart';
 import '../../io/process_exit.dart';
 import '../../logging/logger.dart';
 import '../../logging/recorded_outcome.dart';
@@ -23,27 +24,37 @@ Future<T> runRecorded<T>({
 }) async {
   final clock = Stopwatch()..start();
   var recorded = false;
-  void record(RecordedOutcome outcome) {
+  void record(RecordedOutcome outcome, {String? reason}) {
     if (recorded) return;
     recorded = true;
     logger.logInteraction(
       command: command.wireName,
       outcome: outcome.name,
       durationMs: clock.elapsedMilliseconds,
+      reason: reason,
     );
   }
 
   return withExitHook(
-    beforeExit: (code) =>
-        record(code == 0 ? RecordedOutcome.ok : RecordedOutcome.failed),
+    beforeExit: (code, reason) => record(
+      code == 0 ? RecordedOutcome.ok : RecordedOutcome.failed,
+      reason: reason,
+    ),
     leave: leave,
     body: () async {
       try {
         final result = await body();
         record(RecordedOutcome.ok);
         return result;
-      } on Object {
-        record(RecordedOutcome.failed);
+      } on Object catch (error) {
+        // A typed failure is named by its failure type, anything else by its
+        // runtime type: never by its message, which may hold project text.
+        record(
+          RecordedOutcome.failed,
+          reason: error is ClaudartException
+              ? error.failureType.name
+              : error.runtimeType.toString(),
+        );
         rethrow;
       }
     },
