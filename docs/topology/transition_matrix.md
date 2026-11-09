@@ -4,16 +4,16 @@
 
 Each cell is what the real lifecycle scenarios did (`test/conformance/lifecycle_scenarios.dart`): `ok xN` the move is in the table and a command made it N times; `GAP` the table allows it and no scenario drives it; `REJ xN` a command tried a move the table lacks; `·` forbidden and not tried.
 
-| status \ event | setup | saveUnconfirmed | saveConfirmedExploring | saveConfirmedReady | debugStarted | debugBlocked | suggestResumed | fixApplied | rotated | rotatedEmpty | tornDown | reminderSaved | killed |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| suggestInvestigating | · | ok x1 | ok x2 | ok x11 | · | · | · | · | ok x1 | ok x1 | · | GAP | ok x1 |
-| readyForSuggest | · | · | · | GAP | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
-| readyForDebug | · | · | · | ok x1 | ok x5 | · | · | GAP | ok x1 | ok x1 | ok x1 | GAP | ok x1 |
-| debugInProgress | · | GAP | · | GAP | · | ok x2 | · | ok x3 | GAP | GAP | GAP | GAP | GAP |
-| debugComplete | · | · | · | · | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
-| needsSuggest | · | · | · | GAP | · | · | ok x1 | · | · | · | · | GAP | ok x1 |
-| noHandoff | ok x16 | · | · | · | · | · | · | · | · | · | · | · | · |
-| unknown | · | · | · | · | · | · | · | · | · | · | · | · | · |
+| status \ event | setup | flowConstructed | saveUnconfirmed | saveConfirmedExploring | saveConfirmedReady | debugStarted | debugBlocked | suggestResumed | fixApplied | rotated | rotatedEmpty | tornDown | reminderSaved | killed |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| suggestInvestigating | · | · | ok x1 | ok x2 | ok x11 | · | · | · | · | ok x1 | ok x1 | · | GAP | ok x1 |
+| readyForSuggest | · | · | · | · | GAP | · | · | · | · | · | · | ok x1 | GAP | ok x2 |
+| readyForDebug | · | · | · | · | ok x1 | ok x5 | · | · | GAP | ok x1 | ok x1 | ok x1 | GAP | ok x1 |
+| debugInProgress | · | · | GAP | · | GAP | · | ok x2 | · | ok x3 | GAP | GAP | GAP | GAP | GAP |
+| debugComplete | · | · | · | · | · | · | · | · | · | · | · | ok x1 | GAP | ok x1 |
+| needsSuggest | · | · | · | · | GAP | · | · | ok x1 | · | · | · | · | GAP | ok x1 |
+| noHandoff | ok x16 | ok x1 | · | · | · | · | · | · | · | · | · | · | · | · |
+| unknown | · | · | · | · | · | · | · | · | · | · | · | · | · | · |
 
 ## Legal moves no scenario drives (15)
 

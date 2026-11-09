@@ -36,6 +36,9 @@ import 'package:claudart/logging/log_file.dart';
 import '../helpers/project_fixture.dart';
 import 'package:claudart/commands/support/command_seams.dart';
 import 'package:claudart/io/gate_runner.dart';
+import 'package:claudart/commands/flow.dart';
+import 'package:claudart/logging/planner_log.dart';
+import 'package:claudart/pipeline/route_tag.dart';
 
 /// A linked project: its registry name, repo root and claudart workspace.
 typedef LifecycleProject = ({String name, String root, String workspace});
@@ -177,6 +180,54 @@ Future<void> setup(
     fileFinderFn: (_, __) => [],
   );
 }
+
+const _flowHandoff = '''## Status
+ready-for-suggest
+
+---
+
+## Bug
+The parser drops a line.
+
+---
+
+## Root Cause
+The splitter stops early.
+
+---
+
+## Scope
+### Files in play
+- lib/parser.dart''';
+
+/// A `flow` that resumes a saved plan and constructs the handoff: another way
+/// into a session, in place of `setup`.
+Future<void> flowStart(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) async {
+  io.write(
+    '${project.workspace}/$flowCheckpointFileName',
+    jsonEncode({
+      'createdAt': '2026-01-01T00:00:00',
+      'slots': {'plan': 'Do the thing'},
+      'bug': 'The parser drops a line.',
+      'expected': '',
+      'projectRoot': project.root,
+    }),
+  );
+  await runFlow(
+    io: io,
+    projectRootOverride: project.root,
+    exitFn: _noExit,
+    plannerLog: PlannerLog(path: '/tmp/ignored', appender: (_, __) {}),
+    executor: _exec(
+      '<${RouteTag.handoff.wireTag}>$_flowHandoff</${RouteTag.handoff.wireTag}>',
+    ),
+    pickFn: (_) => 0, // approve the saved plan
+  );
+}
+
 
 Future<void> suggest(
   MemoryFileIO io, {
@@ -407,6 +458,14 @@ Map<String, List<LifecycleStep>> lifecycleScenarios({
         HandoffStatus.debugComplete,
         logged: false,
       ),
+    ],
+    'flow, kill': [
+      lifecycleStep(
+        'flow',
+        bind(flowStart),
+        HandoffStatus.readyForSuggest,
+      ),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
     ],
     'setup, suggest, kill': [
       setupStep,

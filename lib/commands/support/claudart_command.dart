@@ -149,7 +149,7 @@ enum ClaudartCommand {
     wireName: 'flow',
     reachedFrom: _cliAndChat,
     supportsHeadless: false,
-    handoffEvents: _noEvents,
+    handoffEvents: {HandoffEvent.flowConstructed},
     recordsStepModels: true,
     ownsProjectOption: false,
     supportsProjectSelector: true,

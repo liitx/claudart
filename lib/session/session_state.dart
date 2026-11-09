@@ -155,6 +155,17 @@ enum HandoffStatus {
             unknown =>
               null,
           },
+        HandoffEvent.flowConstructed => switch (this) {
+            noHandoff => readyForSuggest,
+            suggestInvestigating ||
+            readyForSuggest ||
+            readyForDebug ||
+            debugInProgress ||
+            debugComplete ||
+            needsSuggest ||
+            unknown =>
+              null,
+          },
         HandoffEvent.saveUnconfirmed => switch (this) {
             suggestInvestigating => suggestInvestigating,
             debugInProgress => debugInProgress,

@@ -2,10 +2,10 @@
 // by exhaustive computation over its finite sets.
 //
 // The machine is the triple (S, E, delta): S = HandoffStatus (8 statuses),
-// E = HandoffEvent (13 events), and delta : S x E -> S u {rejected}, the
+// E = HandoffEvent (14 events), and delta : S x E -> S u {rejected}, the
 // partial function HandoffStatus.after (null is "rejected"). Every property
 // below is a statement about that finite object, so it is decided by checking
-// all |S| * |E| = 104 cells or by a graph search over the legal ones; none is a
+// all |S| * |E| = 112 cells or by a graph search over the legal ones; none is a
 // sample. The expected values are independent literals, so a change to the table
 // that alters a property fails here until the change is made on purpose.
 //
@@ -23,9 +23,9 @@ import 'package:test/test.dart';
 const _fixturePath = 'test/fixtures/real_transitions.jsonl';
 
 /// Independent literals.
-const _legalCellCount = 36;
+const _legalCellCount = 37;
 const _statusCount = 8;
-const _eventCount = 13;
+const _eventCount = 14;
 const _selfLoops = {
   HandoffStatus.suggestInvestigating,
   HandoffStatus.readyForDebug,

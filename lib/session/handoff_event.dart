@@ -5,6 +5,11 @@ enum HandoffEvent {
   /// `claudart setup` wrote a fresh handoff.
   setup,
 
+  /// `claudart flow` constructed a handoff from the owner's prompt: another way
+  /// into a session, for work with no bug yet. The construct step declares the
+  /// handoff `ready-for-suggest`, with a root cause and scope.
+  flowConstructed,
+
   /// `/save` with the root cause still unconfirmed (state unchanged).
   saveUnconfirmed,
 

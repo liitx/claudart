@@ -238,10 +238,9 @@ void main() {
   });
 
   group('who writes the handoff', () {
-    /// Files that write the handoff themselves, each with its reason.
-    /// `flow` writes the agent-constructed handoff, whose status is outside the
-    /// transition table (docs/design.md): it has no event to record.
-    const ledger = {'lib/commands/flow.dart'};
+    /// Files that write the handoff themselves, each with its reason. None:
+    /// every command, `flow` included, writes through the store.
+    const ledger = <String>{};
     final write = RegExp(
       r'\.write\(\s*(handoffFile|handoffPath|handoffPathFor\()',
     );

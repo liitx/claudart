@@ -47,6 +47,7 @@ List<HandoffListenerKind> listenersFor(HandoffTransition transition) =>
             const [HandoffListenerKind.recordTransition],
         },
       HandoffEvent.setup ||
+      HandoffEvent.flowConstructed ||
       HandoffEvent.saveUnconfirmed ||
       HandoffEvent.saveConfirmedExploring ||
       HandoffEvent.saveConfirmedReady ||

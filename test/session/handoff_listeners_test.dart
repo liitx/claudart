@@ -151,7 +151,7 @@ void main() {
 
     test('a chain is at most as long as there are events', () {
       // Acyclic over N events means no path has more than N hops.
-      expect(HandoffEvent.values.length, 13);
+      expect(HandoffEvent.values.length, 14);
     });
   });
 }

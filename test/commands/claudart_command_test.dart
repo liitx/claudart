@@ -155,6 +155,7 @@ void main() {
         HandoffEvent.reminderSaved,
       },
       ClaudartCommand.kill: {HandoffEvent.killed},
+      ClaudartCommand.flow: {HandoffEvent.flowConstructed},
     };
     final usage = usageByEvent(readLibSources());
 

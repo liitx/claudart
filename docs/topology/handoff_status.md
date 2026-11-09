@@ -28,6 +28,7 @@ stateDiagram-v2
   needsSuggest --> suggestInvestigating: suggestResumed
   needsSuggest --> noHandoff: reminderSaved, killed
   noHandoff --> suggestInvestigating: setup
+  noHandoff --> readyForSuggest: flowConstructed
 ```
 
 ## What each status answers
@@ -50,6 +51,7 @@ Files in `lib/` that mention the event, other than the table itself. "— no cod
 | event | passed by |
 |---|---|
 | setup | lib/commands/setup.dart, lib/session/handoff_listeners.dart |
+| flowConstructed | lib/commands/flow.dart, lib/session/handoff_listeners.dart |
 | saveUnconfirmed | lib/commands/save.dart, lib/session/handoff_listeners.dart |
 | saveConfirmedExploring | lib/commands/save.dart, lib/session/handoff_listeners.dart |
 | saveConfirmedReady | lib/commands/suggest.dart, lib/session/handoff_listeners.dart |

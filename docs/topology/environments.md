@@ -19,7 +19,7 @@ Where each command can be started, whether it takes `--headless`, whether `--pro
 | teardown | cliSubcommand | true | true | tornDown, reminderSaved |
 | suggest | cliSubcommand, chatShell | false | true | saveConfirmedReady, suggestResumed |
 | debug | cliSubcommand | false | true | debugStarted, debugBlocked, fixApplied |
-| flow | cliSubcommand, chatShell | false | true | — |
+| flow | cliSubcommand, chatShell | false | true | flowConstructed |
 | save | cliSubcommand | false | true | saveUnconfirmed, saveConfirmedExploring |
 | rotate | cliSubcommand | true | true | rotated, rotatedEmpty |
 | kill | cliSubcommand, launcherMenu | true | true | killed |

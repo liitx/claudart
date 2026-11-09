@@ -190,10 +190,11 @@ stateDiagram-v2
   needsSuggest --> suggestInvestigating: suggestResumed
   needsSuggest --> noHandoff: reminderSaved, killed
   noHandoff --> suggestInvestigating: setup
+  noHandoff --> readyForSuggest: flowConstructed
 ```
 <!-- /claudart:topology:handoff-diagram -->
 
-The diagram above is generated from `HandoffStatus.after` (`make topology`), so it cannot drift from the code; a test compares it with this page. Each arrow is labelled with a [`HandoffEvent`](lib/session/handoff_event.dart): `setup`, `saveUnconfirmed`, `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`, `rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. The generated [topology doc](docs/topology/handoff_status.md) also lists which file passes each event. `claudart flow` writes `readyForSuggest` straight into the handoff and is outside the table.
+The diagram above is generated from `HandoffStatus.after` (`make topology`), so it cannot drift from the code; a test compares it with this page. Each arrow is labelled with a [`HandoffEvent`](lib/session/handoff_event.dart): `setup`, `flowConstructed`, `saveUnconfirmed`, `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`, `rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. The generated [topology doc](docs/topology/handoff_status.md) also lists which file passes each event. `claudart flow` is another way into a session: it enters through `flowConstructed` and writes through the same writer as `setup`.
 
 `HandoffStatus` has eight variants. Six are persisted to disk; two never are:
 

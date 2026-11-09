@@ -16,6 +16,12 @@ const _legal = <_Move>{
     HandoffEvent.setup,
     HandoffStatus.suggestInvestigating,
   ),
+  // `flow` is another way into a session: from no handoff, a converged one.
+  (
+    HandoffStatus.noHandoff,
+    HandoffEvent.flowConstructed,
+    HandoffStatus.readyForSuggest,
+  ),
   (
     HandoffStatus.suggestInvestigating,
     HandoffEvent.saveUnconfirmed,
