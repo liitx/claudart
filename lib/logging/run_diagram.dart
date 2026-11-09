@@ -12,6 +12,7 @@ import 'dart:convert';
 import '../pipeline/pipeline_event.dart';
 import '../session/handoff_transition.dart';
 import 'logger.dart';
+import 'mermaid_page.dart';
 import 'recorded_outcome.dart';
 
 /// The rows of a JSONL log: each line that is a JSON object. A blank line, a
@@ -250,38 +251,16 @@ String renderRunPage(List<RunLog> runs) {
   return buffer.toString();
 }
 
-const String _mermaidModule =
-    'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-
-String _escapeHtml(String text) => text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-
-/// A web page that draws each run: the diagrams are text in `pre.mermaid`
-/// blocks and the page loads Mermaid to draw them when it is opened. What the
-/// logs wrote is escaped, so it cannot become markup.
-String renderRunHtml(List<RunLog> runs) {
-  final body = StringBuffer();
-  if (runs.isEmpty) {
-    body.writeln('<p>No runs were recorded.</p>');
-  }
-  for (final run in runs) {
-    body
-      ..writeln('<h2>${_escapeHtml(run.command)} — '
-          '${run.endedAt.toUtc().toIso8601String()}</h2>')
-      ..writeln('<pre class="mermaid">')
-      ..write(_escapeHtml(renderRunDiagram(run)))
-      ..writeln('</pre>');
-  }
-  return '''<!doctype html>
-<meta charset="utf-8">
-<title>claudart runs</title>
-<style>body{font-family:system-ui,sans-serif;margin:2rem}h2{margin-top:2.5rem}</style>
-<h1>Runs</h1>
-$body<script type="module">
-import mermaid from '$_mermaidModule';
-mermaid.initialize({startOnLoad: true});
-</script>
-''';
-}
+/// A web page that draws each run. What the logs wrote is escaped.
+String renderRunHtml(List<RunLog> runs) => renderMermaidHtml(
+      pageTitle: 'claudart runs',
+      heading: 'Runs',
+      emptyText: 'No runs were recorded.',
+      sections: [
+        for (final run in runs)
+          (
+            heading: '${run.command} — ${run.endedAt.toUtc().toIso8601String()}',
+            diagram: renderRunDiagram(run),
+          ),
+      ],
+    );

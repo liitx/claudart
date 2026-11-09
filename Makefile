@@ -6,8 +6,10 @@ DART    := dart
 
 ## Draw the runs a logs directory holds as Mermaid sequence diagrams.
 ##   make diagram DIR="<global-logs> <workspace-logs>" [CMD=debug] [HTML=<file>]
+## or what the tests did:
+##   CLAUDART_TEST_TRACE=<file> dart test <files>; make diagram TRACE=<file> [HTML=<file>]
 diagram:
-	$(DART) run tool/run_diagram.dart $(DIR) $(if $(CMD),--command=$(CMD)) $(if $(HTML),--html=$(HTML))
+	$(DART) run tool/run_diagram.dart $(DIR) $(if $(TRACE),--trace=$(TRACE)) $(if $(CMD),--command=$(CMD)) $(if $(HTML),--html=$(HTML))
 
 ## Every check a change must pass: suite, analyzer errors, custom_lint. With
 ## MSG="..." it commits after they pass. See tool/gate.sh.

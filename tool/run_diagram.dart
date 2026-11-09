@@ -1,7 +1,13 @@
 // run_diagram — draws the runs the logs hold, as Mermaid sequence diagrams.
 //
 //   dart run tool/run_diagram.dart <logs-dir>... [--command=<name>] [--html=<file>]
+//   dart run tool/run_diagram.dart --trace=<trace-file> [--html=<file>]
 //   make diagram DIR="<global-logs> <workspace-logs>" [CMD=debug] [HTML=<file>]
+//   make diagram TRACE=<trace-file> [HTML=<file>]
+//
+// With --trace the page draws what the tests did (CLAUDART_TEST_TRACE, see
+// test/helpers/test_trace.dart): the input, the expectation, the answer and the
+// log rows each check caused, counted by spec obligation.
 //
 // A run's boundary row is in the global log and its handoff moves, steps and
 // errors are in its project's, so pass both directories to see a whole run.
@@ -12,9 +18,11 @@ import 'dart:io';
 
 import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/logging/run_diagram.dart';
+import 'package:claudart/logging/trace_diagram.dart';
 
 const _commandPrefix = '--command=';
 const _htmlPrefix = '--html=';
+const _tracePrefix = '--trace=';
 
 List<Map<String, dynamic>> _rows(List<String> directories, LogFile file) => [
       for (final directory in directories)
@@ -23,6 +31,26 @@ List<Map<String, dynamic>> _rows(List<String> directories, LogFile file) => [
     ];
 
 void main(List<String> args) {
+  final tracePath = args
+      .where((arg) => arg.startsWith(_tracePrefix))
+      .map((arg) => arg.substring(_tracePrefix.length))
+      .firstOrNull;
+  if (tracePath != null) {
+    final htmlFile = args
+        .where((arg) => arg.startsWith(_htmlPrefix))
+        .map((arg) => arg.substring(_htmlPrefix.length))
+        .firstOrNull;
+    final rows = traceRowsOfJsonl(
+      File(tracePath).existsSync() ? File(tracePath).readAsStringSync() : '',
+    );
+    if (htmlFile == null) {
+      stdout.write(renderTracePage(rows));
+    } else {
+      File(htmlFile).writeAsStringSync(renderTraceHtml(rows));
+      stdout.writeln('wrote $htmlFile (${rows.length} checks)');
+    }
+    return;
+  }
   final directories = [for (final arg in args) if (!arg.startsWith('--')) arg];
   if (directories.isEmpty) {
     stderr.writeln('usage: dart run tool/run_diagram.dart <logs-dir>... '

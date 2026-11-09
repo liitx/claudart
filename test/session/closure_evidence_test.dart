@@ -11,6 +11,9 @@ import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart';
 import 'package:test/test.dart';
 
+import '../helpers/spec_obligations.dart';
+import '../helpers/test_trace.dart';
+
 /// A handoff with a real root cause and scope, at [status], with [disposition]
 /// recorded (or none recorded when null).
 SessionState _handoff(HandoffStatus status, {DebugDisposition? disposition}) {
@@ -31,46 +34,59 @@ void main() {
   verifiedConsistencyTests();
 
   group('the evidence matrix', () {
-    test('debug ran and its verification passed: teardown archives', () {
-      final state = _handoff(HandoffStatus.debugComplete,
-          disposition: DebugDisposition.verified);
-      expect(closureEvidenceOf(state), ClosureEvidence.verified);
-      expect(automaticClosureFor(ClosureEvidence.verified),
-          AutomaticClosure.teardownAndArchive);
-    });
+    /// One row of the matrix as a traced check: the handoff it is given, the
+    /// evidence and the exit expected for it, taken before the code runs.
+    void row(
+      String name,
+      SessionState state, {
+      required ClosureEvidence evidence,
+      required AutomaticClosure closure,
+    }) =>
+        test(name, () {
+          final check = tracer.check(
+            label: name,
+            input: '${state.effectiveStatus.name}, '
+                'debug ${state.debugDisposition.name}',
+            expected: '${evidence.name} -> ${closure.name}',
+            obligation: SpecObligation.headlessClosesOnlyOnVerified,
+          );
+          final found = closureEvidenceOf(state);
+          check.verify('${found.name} -> ${automaticClosureFor(found).name}');
+        });
 
-    test('debug ran and its verification failed: no teardown, needsSuggest',
-        () {
-      // A failed verification is written as debugBlocked, never as a fix.
-      final state = _handoff(HandoffStatus.needsSuggest);
-      expect(closureEvidenceOf(state), ClosureEvidence.none);
-      expect(automaticClosureFor(closureEvidenceOf(state)),
-          AutomaticClosure.stayOpen);
-    });
-
-    test('suggest confirmed, debug skipped and recorded: teardown as a reminder',
-        () {
-      final state = _handoff(HandoffStatus.readyForDebug,
-          disposition: DebugDisposition.skipped);
-      expect(closureEvidenceOf(state), ClosureEvidence.confirmedBySuggest);
-      expect(automaticClosureFor(ClosureEvidence.confirmedBySuggest),
-          AutomaticClosure.teardownAsReminder);
-    });
-
-    test('suggest confirmed, nothing recorded about debug: no teardown, the '
-        'owner is reminded', () {
-      final state = _handoff(HandoffStatus.readyForDebug);
-      expect(closureEvidenceOf(state), ClosureEvidence.debugUnrecorded);
-      expect(automaticClosureFor(ClosureEvidence.debugUnrecorded),
-          AutomaticClosure.remindOwner);
-    });
-
-    test('converged with no evidence at all: no teardown, it stays open', () {
-      final state = SessionState.parse(blankHandoff);
-      expect(closureEvidenceOf(state), ClosureEvidence.none);
-      expect(automaticClosureFor(ClosureEvidence.none),
-          AutomaticClosure.stayOpen);
-    });
+    row(
+      'debug ran and its verification passed: teardown archives',
+      _handoff(HandoffStatus.debugComplete,
+          disposition: DebugDisposition.verified),
+      evidence: ClosureEvidence.verified,
+      closure: AutomaticClosure.teardownAndArchive,
+    );
+    // A failed verification is written as debugBlocked, never as a fix.
+    row(
+      'debug ran and its verification failed: no teardown, needsSuggest',
+      _handoff(HandoffStatus.needsSuggest),
+      evidence: ClosureEvidence.none,
+      closure: AutomaticClosure.stayOpen,
+    );
+    row(
+      'suggest confirmed, debug skipped and recorded: teardown as a reminder',
+      _handoff(HandoffStatus.readyForDebug,
+          disposition: DebugDisposition.skipped),
+      evidence: ClosureEvidence.confirmedBySuggest,
+      closure: AutomaticClosure.teardownAsReminder,
+    );
+    row(
+      'suggest confirmed, nothing recorded about debug: the owner is reminded',
+      _handoff(HandoffStatus.readyForDebug),
+      evidence: ClosureEvidence.debugUnrecorded,
+      closure: AutomaticClosure.remindOwner,
+    );
+    row(
+      'converged with no evidence at all: no teardown, it stays open',
+      SessionState.parse(blankHandoff),
+      evidence: ClosureEvidence.none,
+      closure: AutomaticClosure.stayOpen,
+    );
   });
 
   group('the evidence is read from the handoff, never guessed', () {

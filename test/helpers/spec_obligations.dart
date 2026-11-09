@@ -110,6 +110,36 @@ enum SpecObligation {
       title: 'a reaction that throws is logged under its failure type',
     ),
   ),
+  everyRunRecorded(
+    statement: 'Every command run leaves one row: it returned, it threw, or it '
+        'left the process, with how long it took and why when it says.',
+    consultingSymbol: 'runRecorded',
+    definedIn: 'lib/commands/support/interaction_boundary.dart',
+    consultedUnder: 'bin/',
+    check: (
+      file: 'test/commands/interaction_boundary_test.dart',
+      title: 'a command that returns',
+    ),
+    weakened: (
+      file: 'test/commands/interaction_boundary_test.dart',
+      title: 'a command that throws',
+    ),
+  ),
+  headlessClosesOnlyOnVerified(
+    statement: 'A headless teardown archives and updates what was learned only '
+        'when the evidence is verified; anything less is a reminder.',
+    consultingSymbol: 'closureEvidenceOf',
+    definedIn: 'lib/session/closure_evidence.dart',
+    consultedUnder: 'lib/commands/',
+    check: (
+      file: 'test/commands/teardown_test.dart',
+      title: 'teardown — headless closes only on verified evidence',
+    ),
+    weakened: (
+      file: 'test/session/closure_evidence_test.dart',
+      title: 'a fix that was applied but not verified is not verified evidence',
+    ),
+  ),
   commandAwaitsDrain(
     statement: 'A command that attached a reaction awaits drain before it '
         'returns, so no record or reaction is lost at exit.',

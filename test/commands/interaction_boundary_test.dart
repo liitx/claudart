@@ -16,6 +16,8 @@ import 'package:claudart/logging/recorded_outcome.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
+import '../helpers/spec_obligations.dart';
+import '../helpers/test_trace.dart';
 
 const _workspace = '/workspaces/app';
 
@@ -48,6 +50,17 @@ void main() {
     for (final command in ClaudartCommand.values) {
       test('${command.name} leaves one ok record under its wire name', () async {
         final fixture = _fixture();
+        // The expectation is taken before the code runs.
+        final check = tracer.check(
+          label: '${command.name} leaves one ok record',
+          input: 'run ${command.name}, body returns',
+          expected: {
+            'rows': 1,
+            'command': command.wireName,
+            'outcome': RecordedOutcome.ok.name,
+          },
+          obligation: SpecObligation.everyRunRecorded,
+        );
         await runRecorded(
           command: command,
           logger: fixture.logger,
@@ -55,9 +68,16 @@ void main() {
           body: () async {},
         );
         final rows = _rows(fixture.io);
-        expect(rows, hasLength(1));
-        expect(rows.single['command'], command.wireName);
-        expect(rows.single['outcome'], RecordedOutcome.ok.name);
+        check.verify(
+          {
+            'rows': rows.length,
+            'command': rows.firstOrNull?['command'],
+            'outcome': rows.firstOrNull?['outcome'],
+          },
+          caused: [
+            for (final row in rows) 'interactions: ${row['command']} ${row['outcome']}',
+          ],
+        );
       });
     }
 
