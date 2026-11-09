@@ -225,7 +225,7 @@ void main() {
       const workspace = _workspace;
       final io = MemoryFileIO();
       Registry.empty()
-          .add(RegistryEntry(
+          .add(const RegistryEntry(
             name: 'my-app',
             projectRoot: _projectRoot,
             workspacePath: workspace,
