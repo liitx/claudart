@@ -27,6 +27,7 @@ void main() {
   group('logInteraction evidence', () {
     test('is written when it is passed', () {
       logger.logInteraction(
+        rowKind: InteractionRowKind.outcome,
         command: 'teardown',
         outcome: 'reminderSaved',
         evidence: 'debugUnrecorded',
@@ -35,7 +36,7 @@ void main() {
     });
 
     test('is absent when it is not', () {
-      logger.logInteraction(command: 'status', outcome: 'ok');
+      logger.logInteraction(rowKind: InteractionRowKind.outcome, command: 'status', outcome: 'ok');
       expect(_row(io).containsKey(LogEntryField.evidence.name), isFalse);
     });
   });

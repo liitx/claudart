@@ -224,6 +224,7 @@ Future<void> runWorkspaces({
       workspacePath: currentSummary.workspacePath,
     )
         .logInteraction(
+      rowKind: InteractionRowKind.outcome,
       command: ClaudartCommand.workspaces.wireName,
       outcome: WorkspaceInteraction.workspacesListed
           .outcomeFor(workspaceCount: summaries.length),

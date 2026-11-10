@@ -27,7 +27,7 @@ final _writers = <_Writer>[
   (
     name: 'an interaction',
     file: LogFile.interactions,
-    write: (logger) => logger.logInteraction(command: _command, outcome: 'ok'),
+    write: (logger) => logger.logInteraction(rowKind: InteractionRowKind.outcome, command: _command, outcome: 'ok'),
   ),
   (
     name: 'a transition',

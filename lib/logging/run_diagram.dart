@@ -65,9 +65,21 @@ class RunLog {
   final String? reason;
 }
 
-/// The runs in the given log rows, oldest first. A row of [interactions] with
-/// no `durationMs` was written by a command itself, not by the boundary, and is
-/// not a run.
+/// Which kind an interaction row is: the `rowKind` it was written with. A row
+/// from before the marking has none, and is read as the boundary's if it has a
+/// `durationMs` and as a command's own if it has not.
+InteractionRowKind _kindOf(Map<String, dynamic> row) {
+  final marked = row[LogEntryField.rowKind.name];
+  for (final kind in InteractionRowKind.values) {
+    if (kind.name == marked) return kind;
+  }
+  return row[LogEntryField.durationMs.name] is int
+      ? InteractionRowKind.run
+      : InteractionRowKind.outcome;
+}
+
+/// The runs in the given log rows, oldest first. Only a row the boundary wrote
+/// ([InteractionRowKind.run]) is a run; a command's own row is a note in it.
 List<RunLog> runsFrom({
   required List<Map<String, dynamic>> interactions,
   required List<Map<String, dynamic>> transitions,
@@ -77,6 +89,7 @@ List<RunLog> runsFrom({
 }) {
   final runs = <RunLog>[];
   for (final row in interactions) {
+    if (_kindOf(row) != InteractionRowKind.run) continue;
     final durationMs = row[LogEntryField.durationMs.name];
     if (durationMs is! int) continue;
     final endedAt = _timeOf(row);
@@ -102,7 +115,7 @@ List<RunLog> runsFrom({
       gates: inside(gates),
       outcomes: inside([
         for (final own in interactions)
-          if (own[LogEntryField.durationMs.name] is! int) own,
+          if (_kindOf(own) == InteractionRowKind.outcome) own,
       ]),
     ));
   }

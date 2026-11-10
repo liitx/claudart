@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/support/claudart_command.dart';
+import 'package:claudart/logging/logger.dart' show InteractionRowKind;
 import 'package:claudart/commands/teardown.dart'
     show kTeardownSkipDebugQuestion, runTeardown, TeardownCategory, TeardownOutcome;
 import 'package:claudart/session/closure_evidence.dart';
@@ -975,6 +976,7 @@ _None recorded yet._
         // reminder says why it was one.
         expect(loggedInteractions(io, _workspace), [
           {
+            'rowKind': InteractionRowKind.outcome.name,
             'command': ClaudartCommand.teardown.name,
             'sensitivityMode': false,
             'outcome': (scenario.archives

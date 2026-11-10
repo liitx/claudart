@@ -28,6 +28,7 @@ Future<T> runRecorded<T>({
     if (recorded) return;
     recorded = true;
     logger.logInteraction(
+      rowKind: InteractionRowKind.run,
       command: command.wireName,
       outcome: outcome.name,
       durationMs: clock.elapsedMilliseconds,

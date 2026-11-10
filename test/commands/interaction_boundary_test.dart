@@ -46,6 +46,18 @@ List<Map<String, dynamic>> _rows(MemoryFileIO io) {
 }
 
 void main() {
+  group('the boundary row', () {
+    test('is marked as a run, not as a command\'s own outcome', () async {
+      final fixture = _fixture();
+      await runRecorded(
+        command: ClaudartCommand.status,
+        logger: fixture.logger,
+        body: () async {},
+      );
+      expect(_rows(fixture.io).single['rowKind'], InteractionRowKind.run.name);
+    });
+  });
+
   group('a command that returns', () {
     for (final command in ClaudartCommand.values) {
       test('${command.name} leaves one ok record under its wire name', () async {

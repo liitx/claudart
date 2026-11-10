@@ -272,6 +272,47 @@ void main() {
     });
   });
 
+  group('a marked row', () {
+    final unmarked = {'ts': _t0, 'command': 'doctor', 'outcome': 'ok'};
+
+    List<RunLog> runsOf(List<Map<String, dynamic>> rows) => runsFrom(
+          interactions: rows,
+          transitions: const [],
+          steps: const [],
+          errors: const [],
+        );
+
+    test('written as a run is a run', () {
+      final runs = runsOf([
+        {...unmarked, 'rowKind': 'run', 'durationMs': 5},
+      ]);
+      expect(runs, hasLength(1));
+    });
+
+    test('written as an outcome is not a run, even with a duration', () {
+      final runs = runsOf([
+        {...unmarked, 'rowKind': 'outcome', 'durationMs': 5},
+      ]);
+      expect(runs, isEmpty);
+    });
+
+    test('written as an outcome is a note in the run it falls in', () {
+      final runs = runsOf([
+        {...unmarked, 'rowKind': 'run', 'durationMs': 9000, 'ts': '2026-11-06T10:00:09.000Z'},
+        {...unmarked, 'rowKind': 'outcome', 'ts': '2026-11-06T10:00:05.000Z', 'outcome': 'reminderSaved'},
+      ]);
+      expect(runs.single.outcomes, hasLength(1));
+    });
+
+    test('of a kind nobody knows is read like a row from before the marking',
+        () {
+      final runs = runsOf([
+        {...unmarked, 'rowKind': 'surprise', 'durationMs': 5},
+      ]);
+      expect(runs, hasLength(1));
+    });
+  });
+
   group('runs', () {
     test('one run for each boundary row, oldest first', () {
       final runs = runsFrom(

@@ -31,6 +31,7 @@ void logProjectTargeted(
   FileIO? io,
 }) {
   SessionLogger.forEntry(entry, io: io).logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: command,
     outcome: WorkspaceInteraction.projectTargeted.outcomeFor(),
     platform: Platform.operatingSystem,

@@ -118,6 +118,7 @@ Future<void> runScan({
   print(UserText.scanTokenMapUpdated.format({'tokenMapPath': tokenMapPath}));
 
   logger.logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: 'scan',
     outcome: 'ok',
     scanScope: effectiveScope,

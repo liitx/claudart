@@ -559,6 +559,7 @@ Future<void> runDoctor({
   ];
   final logger = SessionLogger.plain(io: io, workspacePath: workspacePath);
   logger.logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: _doctorCommandName,
     outcome: failed.isEmpty ? 'ok' : 'failed',
     platform: Platform.operatingSystem,

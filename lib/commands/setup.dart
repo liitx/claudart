@@ -188,6 +188,7 @@ Future<void> runSetup({
 
   // Log the setup interaction.
   logger.logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: 'setup',
     outcome: 'ok',
     platform: Platform.operatingSystem,

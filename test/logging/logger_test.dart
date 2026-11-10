@@ -49,15 +49,23 @@ void main() {
     }
 
     test('logInteraction appends one jsonl line', () {
-      logger.logInteraction(command: 'setup', outcome: 'ok');
+      logger.logInteraction(rowKind: InteractionRowKind.outcome, command: 'setup', outcome: 'ok');
       final entries = readJsonl(_interactionsPath);
       expect(entries, hasLength(1));
       expect(entries.first['command'], equals('setup'));
       expect(entries.first['outcome'], equals('ok'));
     });
 
+    for (final kind in InteractionRowKind.values) {
+      test('logInteraction marks a ${kind.name} row as ${kind.name}', () {
+        logger.logInteraction(rowKind: kind, command: 'setup', outcome: 'ok');
+        expect(readJsonl(_interactionsPath).single['rowKind'], kind.name);
+      });
+    }
+
     test('logInteraction stores all optional fields', () {
       logger.logInteraction(
+        rowKind: InteractionRowKind.outcome,
         command: 'scan',
         outcome: 'ok',
         scanScope: 'lib',
@@ -173,7 +181,7 @@ void main() {
 
       // Simulate new log — recreate logger and log one more
       final l2 = SessionLogger.plain(io: io);
-      l2.logInteraction(command: 'new_cmd', outcome: 'ok');
+      l2.logInteraction(rowKind: InteractionRowKind.outcome, command: 'new_cmd', outcome: 'ok');
 
       final entries = readJsonl(_interactionsPath);
       expect(entries.length, 500);
@@ -190,7 +198,7 @@ void main() {
       ).join('\n')}\n';
       io.write(_interactionsPath, within);
       SessionLogger.plain(io: io)
-          .logInteraction(command: 'new_cmd', outcome: 'ok');
+          .logInteraction(rowKind: InteractionRowKind.outcome, command: 'new_cmd', outcome: 'ok');
       final entries = readJsonl(_interactionsPath);
       expect(entries.length, 550);
       expect(entries.first['n'], 0);
@@ -558,6 +566,7 @@ void main() {
       LogEntryField.issueId: 'issueId',
       LogEntryField.rejected: 'rejected',
       LogEntryField.kind: 'kind',
+      LogEntryField.rowKind: 'rowKind',
       LogEntryField.stepId: 'stepId',
       LogEntryField.detail: 'detail',
       LogEntryField.failureType: 'failureType',
@@ -600,6 +609,7 @@ void main() {
       String? claudartVersion,
     }) =>
         l.logInteraction(
+          rowKind: InteractionRowKind.outcome,
           command: 'c',
           outcome: 'o',
           scanScope: scanScope,
@@ -657,7 +667,7 @@ void main() {
       });
 
       test('${field.name} is absent when not passed', () {
-        logger.logInteraction(command: 'c', outcome: 'o');
+        logger.logInteraction(rowKind: InteractionRowKind.outcome, command: 'c', outcome: 'o');
         expect(lastLine(_interactionsPath).containsKey(field.name), isFalse);
       });
     });

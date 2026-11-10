@@ -98,6 +98,7 @@ Future<void> runDebug({
   var exitLogger = SessionLogger.plain(io: fileIO);
   Never leave(DebugExitKind kind) {
     exitLogger.logInteraction(
+      rowKind: InteractionRowKind.outcome,
       command: ClaudartCommand.debug.name,
       outcome: kind.name,
     );

@@ -36,9 +36,24 @@ const int _maxStepRecords = 2000;
 /// The keys of a session log entry; the names are the keys. (The keys of a
 /// transition are [HandoffTransitionField]'s, of a model record
 /// [ModelRecordField]'s.)
+/// Which of the two kinds of row an interaction row is. A run is written once
+/// by the boundary around every command (`runRecorded`), with how long it took;
+/// an outcome is a command's own account of what it did. Marked on the row so a
+/// reader never infers the kind from which fields happen to be present.
+enum InteractionRowKind {
+  /// The boundary's row: the run ended, ok or failed, after `durationMs`.
+  run,
+
+  /// A row a command wrote itself: its domain outcome, scan figures, evidence.
+  outcome,
+}
+
 enum LogEntryField {
   /// The schema version the row follows; a row without it predates it.
   schema,
+  /// Which [InteractionRowKind] an interaction row is; a row without it
+  /// predates the marking.
+  rowKind,
   gate,
   evidence,
   shellCommand,
@@ -140,6 +155,7 @@ class SessionLogger {
   String get _gatesPath => logFilePath(_logsDir, LogFile.gates);
 
   void logInteraction({
+    required InteractionRowKind rowKind,
     required String command,
     required String outcome,
     bool? sensitivityModeOverride,
@@ -156,6 +172,7 @@ class SessionLogger {
   }) {
     final entry = <String, dynamic>{
       LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+      LogEntryField.rowKind.name: rowKind.name,
       LogEntryField.command.name: command,
       LogEntryField.sensitivityMode.name:
           sensitivityModeOverride ?? _protection.isSensitive,

@@ -706,7 +706,7 @@ Each workspace keeps its own logs under `logs/`, all written by [`SessionLogger`
 
 | Log | One line per | Cap |
 |---|---|---|
-| `interactions.jsonl` | command run: `command`, `outcome`, timing, scan metadata | 500 |
+| `interactions.jsonl` | command run: `command`, `outcome`, timing, scan metadata; `rowKind` says whether the row is the run itself (`run`, written once around every command, with `durationMs`) or a command's own account of what it did (`outcome`) | 500 |
 | `transitions.jsonl` | handoff move: `command`, `from`, `event`, `to` (enum names); `rejected: true` for a move the table lacks | 500 |
 | `errors.jsonl` | distinct error, deduplicated by fingerprint with a count | 200 |
 | `models.jsonl` | model a step ran on: intended alias, the id the `claude` stream reported, context used, drift from the declared `AgentModel` (shown by `claudart status`) | 500 |

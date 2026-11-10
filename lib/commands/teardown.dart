@@ -128,6 +128,7 @@ Future<void> runTeardown({
   // would be: saved as a reminder, not archived as fixed.
   final evidence = closureEvidenceOf(SessionState.parse(handoff));
   void recordOutcome(TeardownOutcome outcome) => store.logger.logInteraction(
+        rowKind: InteractionRowKind.outcome,
         command: ClaudartCommand.teardown.name,
         outcome: outcome.name,
         evidence: evidence.name,

@@ -79,6 +79,7 @@ Future<void> runKill({
   /// Records how the run ended, then exits with [code].
   Never leave(KillOutcome outcome, int code) {
     logger?.logInteraction(
+      rowKind: InteractionRowKind.outcome,
       command: ClaudartCommand.kill.name,
       outcome: outcome.name,
     );
@@ -182,6 +183,7 @@ Future<void> runKill({
     event: HandoffEvent.killed,
   );
   recorder.logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: ClaudartCommand.kill.name,
     outcome: (SessionState.parse(handoff).effectiveStatus.killWarning == null
             ? KillOutcome.killed

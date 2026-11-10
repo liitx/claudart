@@ -14,6 +14,6 @@ void main(List<String> args) {
   final logger =
       SessionLogger.plain(io: const RealFileIO(), workspacePath: workspace);
   for (var i = 0; i < count; i++) {
-    logger.logInteraction(command: 'w$writer-$i', outcome: 'ok');
+    logger.logInteraction(rowKind: InteractionRowKind.outcome, command: 'w$writer-$i', outcome: 'ok');
   }
 }
