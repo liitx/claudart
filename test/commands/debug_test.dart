@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/generated/user_text.g.dart';
+import 'package:claudart/ui/styled_text.dart';
 import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/debug.dart';
 import 'package:claudart/errors/failure_type.dart';
@@ -695,7 +696,11 @@ void main() {
       expect(row['outputTail'], 'Some tests failed');
     });
 
-    Future<String> printedBy(MemoryFileIO io, GateResult Function() gate) async {
+    Future<String> printedBy(
+      MemoryFileIO io,
+      GateResult Function() gate, {
+      RunMode mode = RunMode.interactive,
+    }) async {
       final lines = <String>[];
       await runZoned(
         () => runDebug(
@@ -703,6 +708,8 @@ void main() {
           executor: _executorWithPlanText(plan),
           dartFileAnalyzer: (_, __) => true,
           runVerification: (command, projectRoot) => gate(),
+          mode: mode,
+          closeSession: () async {},
         ),
         zoneSpecification: ZoneSpecification(
           print: (self, parent, zone, line) => lines.add(line),
@@ -721,6 +728,64 @@ void main() {
         () => const GateResult.passed(),
       );
       expect(printed, contains(hint));
+    });
+
+    final nextStep = UserText.debugNextClaudartSaveThenRunTests.styled({});
+
+    test('interactive: the end names the next step', () async {
+      final printed = await printedBy(
+        ioWithCommand('dart test'),
+        () => const GateResult.passed(),
+      );
+      expect(printed, contains(nextStep));
+    });
+
+    test('headless: the end names no next step, the session is closed',
+        () async {
+      final printed = await printedBy(
+        ioWithCommand('dart test'),
+        () => const GateResult.passed(),
+        mode: RunMode.headless,
+      );
+      expect(printed, isNot(contains(nextStep)));
+      expect(
+        printed,
+        contains(UserText.debugHeadlessApplyingPlan.template),
+      );
+    });
+
+    test('headless, none configured: it says why nothing was written',
+        () async {
+      final lines = <String>[];
+      await runZoned(
+        () async {
+          try {
+            await runDebug(
+              seams: CommandSeams(io: ioWithCommand(null), projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0),
+              executor: _executorWithPlanText(plan),
+              dartFileAnalyzer: (_, __) => true,
+              mode: RunMode.headless,
+            );
+          } on _ExitException {
+            // the run ends without writing
+          }
+        },
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => lines.add(line),
+        ),
+      );
+      final printed = lines.join('\n');
+      expect(
+        printed,
+        contains(
+          UserText.debugHeadlessNeedsVerificationCommand
+              .format({'configPath': configPathFor(_workspace)}),
+        ),
+      );
+      expect(
+        printed,
+        isNot(contains(UserText.debugHeadlessApplyingPlan.template)),
+      );
     });
 
     test('configured: the end does not suggest setting one', () async {

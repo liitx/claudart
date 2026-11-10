@@ -14,17 +14,20 @@ cd "$(dirname "$0")/.."
 make topology >/dev/null 2>&1
 make ownership >/dev/null 2>&1
 
+# Errors and warnings fail the gate; the older infos are tolerated up to the baseline of 13.
+errors=$(dart analyze 2>&1 | grep -E "^\s*(error|warning) -" | grep -v analysis_options)
+if [ -n "$errors" ]; then echo "ANALYZER FAIL"; echo "$errors" | head -5; exit 1; fi
+analyzer_summary=$(dart analyze 2>&1 | tail -1)
+echo "analyzer: $analyzer_summary"
+issue_count=$(echo "$analyzer_summary" | grep -oE '^[0-9]+' || echo 0)
+if [ "$issue_count" -gt 13 ]; then echo "ANALYZER FAIL: $issue_count issues, the baseline is 13"; exit 1; fi
+
 dart test --timeout 4x --test-randomize-ordering-seed=random </dev/null >/tmp/claudart_gate_suite.txt 2>&1
 if ! tail -1 /tmp/claudart_gate_suite.txt | grep -q "All tests passed"; then
   echo "SUITE FAIL"
   grep "\[E\]" /tmp/claudart_gate_suite.txt | cut -c1-200 | head -8
   exit 1
 fi
-
-# Errors and warnings fail the gate; the older infos (13 today) are tolerated.
-errors=$(dart analyze 2>&1 | grep -E "^\s*(error|warning) -" | grep -v analysis_options)
-if [ -n "$errors" ]; then echo "ANALYZER FAIL"; echo "$errors" | head -5; exit 1; fi
-echo "analyzer: $(dart analyze 2>&1 | tail -1)"
 
 lint=$(dart run custom_lint 2>&1 | tail -1)
 if ! echo "$lint" | grep -q "No issues found"; then

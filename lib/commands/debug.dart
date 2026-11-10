@@ -177,7 +177,6 @@ Future<void> runDebug({
   // after that blocks the session (debugBlocked) and rethrows, so the failure
   // is never silent and the handoff never stays at ready-for-debug.
 
-
   final store = HandoffStore(
     io: fileIO,
     handoffFile: handoffFile,
@@ -386,9 +385,9 @@ Future<void> runDebug({
     '  $written file${written == 1 ? '' : 's'} written'
     '  ${ansi.dim}→${ansi.reset}  status: debug-complete\n\n',
   );
-  // A fix nothing verified, in a workspace that names no verification command:
-  // say how to set one where the owner sees it (gap R17).
-  if (!verified && verificationCommand == null) {
+  // Only a run with no verification command can end unverified (a failing
+  // command throws above): say how to set one where the owner sees it (R17).
+  if (verificationCommand == null) {
     print(UserText.statusVerificationHint
         .format({'configPath': configPathFor(workspace)}));
   }
