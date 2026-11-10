@@ -31,6 +31,7 @@ const int _maxTransitions = 500;
 const int _trimSlackLines = 50;
 const int _maxModelRecords = 500;
 const int _maxGateRecords = 500;
+const int _maxProofRecords = 5000;
 const int _maxStepRecords = 2000;
 
 /// The keys of a session log entry; the names are the keys. (The keys of a
@@ -48,12 +49,36 @@ enum InteractionRowKind {
   outcome,
 }
 
+/// How a seeded fault ended in the proof audit.
+enum ProofVerdict {
+  /// At least one test of the proof's checking set failed: the proof sees it.
+  caught,
+
+  /// Every test passed with the fault in place: the proof cannot see it.
+  missed,
+
+  /// The faulty source did not compile or the tests did not load, so nothing
+  /// was shown either way; the fault itself is wrong.
+  invalid,
+}
+
 enum LogEntryField {
   /// The schema version the row follows; a row without it predates it.
   schema,
   /// Which [InteractionRowKind] an interaction row is; a row without it
   /// predates the marking.
   rowKind,
+
+  /// The audit rows: which proof was checked, the fault seeded, the source
+  /// location it stands for, how it ended, the checking tier that ended it and
+  /// the tests that failed.
+  proof,
+  fault,
+  sourceFile,
+  sourceLine,
+  verdict,
+  tier,
+  caughtBy,
   gate,
   evidence,
   shellCommand,
@@ -153,6 +178,7 @@ class SessionLogger {
   String get _modelsPath => logFilePath(_logsDir, LogFile.models);
   String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
   String get _gatesPath => logFilePath(_logsDir, LogFile.gates);
+  String get _proofsPath => logFilePath(_logsDir, LogFile.proofs);
 
   void logInteraction({
     required InteractionRowKind rowKind,
@@ -229,6 +255,37 @@ class SessionLogger {
         LogEntryField.outputTail.name: _safe(result.outputTail),
       },
       _maxGateRecords,
+    );
+  }
+
+  /// A fault the proof audit seeded and what became of it: the proof it was
+  /// seeded against, the fault, the source file and line it stands for, the
+  /// verdict, the checking tier that decided it and the tests that failed.
+  /// Enum names and test titles only, so nothing here needs masking.
+  void logProofFault({
+    required String proof,
+    required String fault,
+    required String sourceFile,
+    required int sourceLine,
+    required ProofVerdict verdict,
+    required int tier,
+    required List<String> caughtBy,
+    required int durationMs,
+  }) {
+    _appendJsonl(
+      _proofsPath,
+      {
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.proof.name: proof,
+        LogEntryField.fault.name: fault,
+        LogEntryField.sourceFile.name: sourceFile,
+        LogEntryField.sourceLine.name: sourceLine,
+        LogEntryField.verdict.name: verdict.name,
+        LogEntryField.tier.name: tier,
+        LogEntryField.caughtBy.name: caughtBy,
+        LogEntryField.durationMs.name: durationMs,
+      },
+      _maxProofRecords,
     );
   }
 

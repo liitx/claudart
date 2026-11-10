@@ -29,6 +29,9 @@ enum LogFile {
   /// how long it took and the tail of its output.
   gates,
 
+  /// Every fault the proof audit seeded: where, and whether a proof caught it.
+  proofs,
+
   /// Each categorize step's routing decision. Unlike the others it is global:
   /// it sits beside the registry in the workspaces root, not in a workspace's
   /// logs directory.
@@ -42,6 +45,7 @@ enum LogFile {
         LogFile.models => 'models.jsonl',
         LogFile.steps => 'steps.jsonl',
         LogFile.gates => 'gates.jsonl',
+        LogFile.proofs => 'proofs.jsonl',
         LogFile.planner => 'planner.jsonl',
       };
 }

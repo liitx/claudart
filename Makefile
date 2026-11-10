@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+.PHONY: proof-audit diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
 
 ## Draw the runs a logs directory holds as Mermaid sequence diagrams.
 ##   make diagram DIR="<global-logs> <workspace-logs>" [CMD=debug] [HTML=<file>]
@@ -10,6 +10,13 @@ DART    := dart
 ##   CLAUDART_TEST_TRACE=<file> dart test <files>; make diagram TRACE=<file> [HTML=<file>]
 diagram:
 	$(DART) run tool/run_diagram.dart $(DIR) $(if $(TRACE),--trace=$(TRACE)) $(if $(CMD),--command=$(CMD)) $(if $(HTML),--html=$(HTML))
+
+## Seed every single-cell change to the handoff transition table in scratch
+## copies and log whether the proofs saw it (logs/proofs.jsonl); writes the
+## report. Takes about half an hour with 3 workers; never touches the tree.
+##   make proof-audit [WORKERS=3] [LIMIT=n] [ONLY=text]
+proof-audit:
+	$(DART) run tool/proof_audit/run.dart --workers=$(or $(WORKERS),3) --report=docs/topology/proof_audit.md $(if $(LIMIT),--limit=$(LIMIT)) $(if $(ONLY),--only="$(ONLY)")
 
 ## Every check a change must pass: suite, analyzer errors, custom_lint. With
 ## MSG="..." it commits after they pass. See tool/gate.sh.
