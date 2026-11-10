@@ -201,6 +201,7 @@ void main() {
     const invalid = TestJudgement(failed: [], invalid: true);
     const caught = TestJudgement(failed: ['a proof'], invalid: false);
     const passed = TestJudgement(failed: [], invalid: false);
+    const hung = TestJudgement(failed: [], invalid: true, timedOut: true);
 
     Future<FaultResult> checkWith(List<TestJudgement> answers) {
       final queue = [...answers];
@@ -222,6 +223,12 @@ void main() {
       final result = await checkWith([invalid, invalid]);
       expect(result.verdict, ProofVerdict.invalid);
       expect(result.attempts, 2);
+    });
+
+    test('is not run again when the run hit its time limit', () async {
+      final result = await checkWith([hung, caught]);
+      expect(result.verdict, ProofVerdict.invalid);
+      expect(result.attempts, 1);
     });
 
     test('is not run again when the first run caught it', () async {

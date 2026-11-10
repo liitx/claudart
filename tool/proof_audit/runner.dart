@@ -43,7 +43,15 @@ class FaultResult {
 
 /// What a `dart test -r json` run said.
 class TestJudgement {
-  const TestJudgement({required this.failed, required this.invalid});
+  const TestJudgement({
+    required this.failed,
+    required this.invalid,
+    this.timedOut = false,
+  });
+
+  /// The run was killed at its time limit: a repeat would only wait as long
+  /// again, so it is not repeated.
+  final bool timedOut;
 
   /// Titles of the tests that failed.
   final List<String> failed;
@@ -188,7 +196,7 @@ class AuditRunner {
   /// The run, and the judgement of a second run if the first showed nothing.
   Future<(TestJudgement, int)> _runOnceMoreIfInvalid(List<String> tests) async {
     final first = await (_runTests ?? _run)(tests);
-    if (!first.invalid) return (first, 1);
+    if (!first.invalid || first.timedOut) return (first, 1);
     return (await (_runTests ?? _run)(tests), 2);
   }
 
@@ -202,14 +210,19 @@ class AuditRunner {
     final reading = process.stdout.transform(utf8.decoder).forEach(output.write);
     process.stderr.drain<void>();
     process.stdin.close().ignore();
+    var timedOut = false;
     final exitCode = await process.exitCode.timeout(
       _testTimeout,
       onTimeout: () {
+        timedOut = true;
         process.kill(ProcessSignal.sigkill);
         return -1;
       },
     );
     await reading;
-    return judgeTestRun(output.toString(), exitCode);
+    final judged = judgeTestRun(output.toString(), exitCode);
+    return timedOut
+        ? TestJudgement(failed: judged.failed, invalid: true, timedOut: true)
+        : judged;
   }
 }

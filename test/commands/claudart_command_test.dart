@@ -46,6 +46,37 @@ String? _sourceFor(ClaudartCommand command) {
 String _runCall(ClaudartCommand command) =>
     'run${command.name[0].toUpperCase()}${command.name.substring(1)}(';
 
+/// What each command is typed as, written out from the README's command table
+/// and not read from the enum, so renaming a command fails a test.
+const _typedName = <ClaudartCommand, String>{
+  ClaudartCommand.add: 'add',
+  ClaudartCommand.archives: 'archives',
+  ClaudartCommand.chat: 'chat',
+  ClaudartCommand.compile: 'compile',
+  ClaudartCommand.confirmPending: 'confirm-pending',
+  ClaudartCommand.debug: 'debug',
+  ClaudartCommand.doctor: 'doctor',
+  ClaudartCommand.experiment: 'experiment',
+  ClaudartCommand.flow: 'flow',
+  ClaudartCommand.hook: 'hook',
+  ClaudartCommand.init: 'init',
+  ClaudartCommand.kill: 'kill',
+  ClaudartCommand.link: 'link',
+  ClaudartCommand.map: 'map',
+  ClaudartCommand.preflight: 'preflight',
+  ClaudartCommand.report: 'report',
+  ClaudartCommand.resume: 'resume',
+  ClaudartCommand.rotate: 'rotate',
+  ClaudartCommand.save: 'save',
+  ClaudartCommand.scan: 'scan',
+  ClaudartCommand.setup: 'setup',
+  ClaudartCommand.status: 'status',
+  ClaudartCommand.suggest: 'suggest',
+  ClaudartCommand.teardown: 'teardown',
+  ClaudartCommand.unlink: 'unlink',
+  ClaudartCommand.workspaces: 'workspaces',
+};
+
 void main() {
   group('wireName and fromString', () {
     for (final command in ClaudartCommand.values) {
@@ -53,6 +84,16 @@ void main() {
         expect(ClaudartCommand.fromString(command.wireName), command);
       });
     }
+
+    for (final command in ClaudartCommand.values) {
+      test('${command.name} is typed as ${_typedName[command]}', () {
+        expect(command.wireName, _typedName[command]);
+      });
+    }
+
+    test('every command has a typed name written out here', () {
+      expect(_typedName.keys.toSet(), ClaudartCommand.values.toSet());
+    });
 
     test('confirmPending is typed with a hyphen', () {
       expect(ClaudartCommand.confirmPending.wireName, 'confirm-pending');
