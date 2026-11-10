@@ -120,6 +120,22 @@ rule was added directly to the live generated section instead of here, and silen
 disappeared the next time `claudart link` regenerated it — exactly as the marker's own
 header warns it will.
 
+**Mandatory line proof — every `lib/` line a change touches is guarded, and no test is
+added where one already exists.** `tool/gate.sh` seeds a one-line mutant of each touched
+line in a scratch copy and fails if no test does, so a green suite no longer proves a new
+line is checked. A survivor is closed by adding the missing assertion to a test that
+already guards the same declaration — `/tmp/claudart_proof_changed.md` names those tests —
+never by writing a second test for logic a test already covers (dartrix's triage rule: the
+mirrored file, then its group). Changing logic does not call for a new test: `make impact
+TARGET=lib/x.dart:LINE` names the tests that fail when the line is wrong, and those are the
+ones to update. Rules that keep this from decaying: a mutant no test can tell from the
+original is accepted only by a line in `tool/proof_audit/accepted_equivalents.txt` with its
+reason; the per-file survivor counts of `docs/topology/ledger/claudart_survivors.txt` can
+only fall (`make ledger-check`); every `lib/` file needs a test at its mirrored path or a
+typed entry in `test/topology/test_homes_test.dart` that can only shrink; every decision
+table is decided with and audited (`matrix_consumers_test.dart`). Never bypass with
+`PROOF=skip` to commit logic; it exists for commits that change no `lib/` line.
+
 ---
 
 ## Additional git rules (project-specific, not template-generated)
