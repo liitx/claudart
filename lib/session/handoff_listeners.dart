@@ -17,8 +17,8 @@ enum HandoffListenerKind {
   /// exits right after a move has still recorded it.
   recordTransition(mayEmit: {}),
 
-  /// Closes a verified, converged session with `teardown`. Declared and
-  /// proven, not yet attached: only headless and flow runs may attach it.
+  /// Closes a converged session with `teardown`. Only a headless run attaches
+  /// it (`debug --headless`); flow does not yet.
   teardownWhenConverged(mayEmit: {HandoffEvent.tornDown});
 
   const HandoffListenerKind({required this.mayEmit});

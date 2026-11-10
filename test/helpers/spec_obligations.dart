@@ -146,6 +146,14 @@ enum SpecObligation {
     consultingSymbol: 'drain',
     definedIn: 'lib/session/handoff_store.dart',
     consultedUnder: 'lib/commands/',
+    check: (
+      file: 'test/commands/debug_test.dart',
+      title: 'headless: debug returns only after the close has finished',
+    ),
+    weakened: (
+      file: 'test/commands/debug_test.dart',
+      title: 'debug has not returned while the close is still running',
+    ),
   ),
   commandAttachesReaction(
     statement: 'A headless or flow run attaches teardownWhenConverged, so a '
@@ -153,6 +161,14 @@ enum SpecObligation {
     consultingSymbol: 'react',
     definedIn: 'lib/session/handoff_store.dart',
     consultedUnder: 'lib/commands/',
+    check: (
+      file: 'test/commands/debug_test.dart',
+      title: 'headless, verified: the session closes itself',
+    ),
+    weakened: (
+      file: 'test/commands/debug_test.dart',
+      title: 'interactive, verified: nothing closes the session itself',
+    ),
   );
 
   const SpecObligation({

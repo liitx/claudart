@@ -731,18 +731,26 @@ void main() {
       expect(printed, isNot(contains(hint)));
     });
 
-    Future<void> headlessRun(MemoryFileIO io, GateResult Function() gate) =>
+    Future<void> headlessRun(
+      MemoryFileIO io,
+      GateResult Function() gate, {
+      Future<void> Function()? closeSession,
+      RunMode mode = RunMode.headless,
+    }) =>
         runDebug(
           seams: CommandSeams(
             io: io,
             projectRootOverride: root.path,
             exitFn: _throwExit,
-            pickFn: (_) => throw StateError('headless never asks'),
+            pickFn: (_) => mode == RunMode.headless
+                ? throw StateError('headless never asks')
+                : 0,
           ),
           executor: _executorWithPlanText(plan),
           dartFileAnalyzer: (_, __) => true,
           runVerification: (command, projectRoot) => gate(),
-          mode: RunMode.headless,
+          mode: mode,
+          closeSession: closeSession,
         );
 
     test('headless, none configured: nothing is written, nothing is asked',
@@ -760,9 +768,81 @@ void main() {
     test('headless, configured and passing: applied without asking, verified',
         () async {
       final io = ioWithCommand('dart test');
-      await headlessRun(io, () => const GateResult.passed());
+      await headlessRun(
+        io,
+        () => const GateResult.passed(),
+        closeSession: () async {},
+      );
       expect(File('${root.path}/lib/foo.dart').existsSync(), isTrue);
       expect(recorded(io), DebugDisposition.verified);
+    });
+
+    test('headless, verified: the session closes itself', () async {
+      final io = ioWithCommand('dart test');
+      final closedWith = <DebugDisposition>[];
+      await headlessRun(
+        io,
+        () => const GateResult.passed(),
+        closeSession: () async => closedWith.add(recorded(io)),
+      );
+      expect(closedWith, [DebugDisposition.verified]);
+    });
+
+    test('interactive, verified: nothing closes the session itself', () async {
+      final io = ioWithCommand('dart test');
+      var closed = 0;
+      await headlessRun(
+        io,
+        () => const GateResult.passed(),
+        mode: RunMode.interactive,
+        closeSession: () async => closed++,
+      );
+      expect(closed, 0);
+    });
+
+    test('headless, failing verification: no close is started', () async {
+      final io = ioWithCommand('dart test');
+      var closed = 0;
+      await expectLater(
+        headlessRun(
+          io,
+          () => const GateResult.failed(exitCode: 1, outputTail: 'red'),
+          closeSession: () async => closed++,
+        ),
+        throwsA(isA<EditPlanException>()),
+      );
+      expect(closed, 0);
+    });
+
+    test('headless: debug returns only after the close has finished', () async {
+      final io = ioWithCommand('dart test');
+      var finished = false;
+      await headlessRun(
+        io,
+        () => const GateResult.passed(),
+        closeSession: () async {
+          await Future<void>.microtask(() {});
+          await Future<void>.microtask(() {});
+          finished = true;
+        },
+      );
+      expect(finished, isTrue);
+    });
+
+    test('debug has not returned while the close is still running', () async {
+      final io = ioWithCommand('dart test');
+      var returned = false;
+      var returnedWhenCloseEnded = true;
+      await headlessRun(
+        io,
+        () => const GateResult.passed(),
+        closeSession: () async {
+          await Future<void>.microtask(() {});
+          returnedWhenCloseEnded = returned;
+        },
+      );
+      returned = true;
+      expect(returnedWhenCloseEnded, isFalse);
     });
 
     test('headless, configured and failing: the files are restored', () async {

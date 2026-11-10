@@ -28,6 +28,8 @@ import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
+import '../session/handoff_listeners.dart';
+import 'teardown.dart';
 import '../io/process_exit.dart';
 import '../io/gate_runner.dart';
 import '../io/process_runner.dart';
@@ -82,6 +84,7 @@ Future<void> runDebug({
   DartFileAnalyzer? dartFileAnalyzer,
   GateResult Function(String command, String projectRoot)? runVerification,
   RunMode mode = RunMode.interactive,
+  Future<void> Function()? closeSession,
 }) async {
   final io = seams.io;
   final exitFn = seams.exitFn;
@@ -181,6 +184,23 @@ Future<void> runDebug({
     logger: logger,
     command: ClaudartCommand.debug.name,
   );
+
+  // A headless run has no one to run `teardown` afterwards, so a fix recorded
+  // as done closes the session itself; `teardown` decides from the evidence
+  // whether that archives it or saves a reminder.
+  if (mode == RunMode.headless) {
+    final close = closeSession ??
+        () => runTeardown(
+              io: fileIO,
+              projectRootOverride: projectRoot,
+              mode: RunMode.headless,
+              exitFn: exit_,
+            );
+    store.react(HandoffListenerKind.teardownWhenConverged, (move) async {
+      await close();
+      return null;
+    });
+  }
 
   void blockDebug() =>
       store.apply(fileIO.read(handoffFile), HandoffEvent.debugBlocked);
@@ -372,7 +392,11 @@ Future<void> runDebug({
     print(UserText.statusVerificationHint
         .format({'configPath': configPathFor(workspace)}));
   }
-  print(UserText.debugNextClaudartSaveThenRunTests.styled({}));
+  // Awaited so the close it started has finished before the process can exit.
+  await store.drain();
+  if (mode == RunMode.interactive) {
+    print(UserText.debugNextClaudartSaveThenRunTests.styled({}));
+  }
 }
 
 /// Runs [command] through the shell in [projectRoot].
