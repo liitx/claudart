@@ -230,7 +230,9 @@ class AuditRunner {
       var (judgement, attempts) = tier == 1
           ? await _runOnceMoreIfInvalid(provider.tierOneTests)
           : (const TestJudgement(failed: [], invalid: false), 0);
-      if (tier == 2 || (!judgement.invalid && judgement.failed.isEmpty)) {
+      final missedByTierOne = tier == 1 && !judgement.invalid && judgement.failed.isEmpty;
+      // A provider with no wider tests ends at tier one: the mirror missed it.
+      if (tier == 2 || (missedByTierOne && provider.tierTwoTests.isNotEmpty)) {
         tier = 2;
         (judgement, attempts) = await _runOnceMoreIfInvalid(
           expandTests(

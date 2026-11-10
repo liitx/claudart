@@ -21,6 +21,24 @@ String? mirroredTest(String root, String libFile) {
   return null;
 }
 
+/// The test that guards [libFile]: its exact mirror (`mirrored`), or else the
+/// only test of the same file name anywhere under `test/` (not `mirrored`, so
+/// the layout deviates from the convention). Null when there is none, or when
+/// two tests share the name and the home cannot be told.
+({String path, bool mirrored})? homeTest(String root, String libFile) {
+  final exact = mirroredTest(root, libFile);
+  if (exact != null) return (path: exact, mirrored: true);
+  final name = libFile.split('/').last.replaceFirst(RegExp(r'\.dart$'), '_test.dart');
+  final tests = Directory('$root/test');
+  if (!tests.existsSync()) return null;
+  final found = [
+    for (final entity in tests.listSync(recursive: true))
+      if (entity is File && entity.path.endsWith('/$name'))
+        entity.path.substring(root.length + 1),
+  ];
+  return found.length == 1 ? (path: found.single, mirrored: false) : null;
+}
+
 /// The `.dart` files under [directory] of [root], relative to [root], sorted.
 List<String> sourceFilesUnder(String root, String directory) {
   final base = Directory('$root/$directory');

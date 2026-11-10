@@ -1,7 +1,8 @@
 // ledger_run.dart — writes the ledger of a mutants run
 //
 //   dart run tool/proof_audit/ledger_run.dart --root=<repo> --logs=<workspace dir>
-//       --out=<markdown file> [--lcov=<tracefile>] [--title=<heading>]
+//       --out=<markdown file> [--lcov=<tracefile>] [--equivalents=<registry>]
+//       [--title=<heading>]
 
 import 'dart:convert';
 import 'dart:io';
@@ -22,6 +23,7 @@ void main(List<String> args) {
   final logs = _option(args, 'logs') ?? '/tmp/claudart_proof_audit/ws';
   final out = _option(args, 'out')!;
   final lcovPath = _option(args, 'lcov');
+  final equivalentsPath = _option(args, 'equivalents');
   final rows = mutantRows([
     for (final line in File(logFilePath('$logs/logs', LogFile.proofs)).readAsLinesSync())
       if (line.trim().isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
@@ -36,6 +38,9 @@ void main(List<String> args) {
     lcov: lcovPath == null ? const {} : lineHits(File(lcovPath).readAsStringSync()),
     root: root,
     title: _option(args, 'title') ?? 'Test ledger',
+    equivalents: equivalentsPath == null
+        ? const {}
+        : parseEquivalents(File(equivalentsPath).readAsStringSync()),
   ));
   stdout.writeln('ledger: $out, from ${rows.length} mutants of ${sources.length} files');
 }

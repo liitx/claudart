@@ -110,6 +110,194 @@ void main() {
     });
   });
 
+  group('accepted equivalent mutants', () {
+    test('a line of the registry is file, line, operator and a reason', () {
+      final accepted = parseEquivalents(
+        '# a comment\n'
+        '\n'
+        'lib/a.dart|3|greaterThan|equal values give the same maximum\n',
+      );
+      expect(accepted, {
+        'lib/a.dart|3|greaterThan': 'equal values give the same maximum',
+      });
+    });
+
+    test('a line without a reason is refused: an exemption must say why', () {
+      expect(() => parseEquivalents('lib/a.dart|3|greaterThan|\n'), throwsFormatException);
+    });
+
+    test('the operator is read from the description of a mutant', () {
+      expect(mutantId('line 41 greaterThan: `a > b` -> `a >= b`'), 'greaterThan');
+    });
+
+    test('a second match on a line keeps its number', () {
+      expect(mutantId('line 12 equals#2: `a == b` -> `a != b`'), 'equals#2');
+    });
+
+    test('a survivor in the registry is listed as accepted, not as unguarded', () {
+      final text = renderLedger(
+        rows: [_mutant('line 3 minus: `a - b` -> `a + b`', verdict: ProofVerdict.missed, caughtBy: const [])],
+        sources: {'lib/a.dart': 'int f(int a, int b) {\n  return 1;\n  return a - b;\n}\n'},
+        lcov: const {},
+        root: '/nonexistent',
+        title: 'T',
+        equivalents: {'lib/a.dart|3|minus': 'the branch is unreachable'},
+      );
+      expect(text, contains('the branch is unreachable'));
+      expect(text, isNot(contains('## Lines no test guards\n\n- ')));
+    });
+
+    test('a registry entry no mutant matches is reported stale', () {
+      final text = renderLedger(
+        rows: [_mutant('line 2 plus: `a + b` -> `a - b`')],
+        sources: {'lib/a.dart': 'x\ny\n'},
+        lcov: const {},
+        root: '/nonexistent',
+        title: 'T',
+        equivalents: {'lib/a.dart|9|minus': 'old reason'},
+      );
+      expect(text, contains('Registry entries no mutant matches'));
+    });
+
+    test('the survivors that are not accepted are counted apart', () {
+      final rows = [
+        _mutant('line 3 minus: `a` -> `b`', verdict: ProofVerdict.missed, caughtBy: const []),
+        _mutant('line 4 plus: `a` -> `b`', line: 4, verdict: ProofVerdict.missed, caughtBy: const []),
+      ];
+      expect(
+        unacceptedSurvivors(rows, {'lib/a.dart|3|minus': 'why'}).map((r) => r.line),
+        [4],
+      );
+    });
+  });
+
+  group('why a mutant survived', () {
+    final survivor = _mutant('line 3 minus: `a` -> `b`', line: 3, verdict: ProofVerdict.missed, caughtBy: const []);
+
+    test('a line no test runs is not run', () {
+      expect(survivalCause(survivor, {'lib/a.dart': {3: 0}}), SurvivalCause.notRun);
+    });
+
+    test('a line tests run but none asserts on is unasserted', () {
+      expect(survivalCause(survivor, {'lib/a.dart': {3: 4}}), SurvivalCause.unasserted);
+    });
+
+    test('a line the tracefile does not mention is unmeasured', () {
+      expect(survivalCause(survivor, const {}), SurvivalCause.unmeasured);
+    });
+
+    test('the family table counts each cause', () {
+      final text = renderLedger(
+        rows: [
+          survivor,
+          _mutant('line 4 plus: `a` -> `b`', line: 4, verdict: ProofVerdict.missed, caughtBy: const []),
+        ],
+        sources: {'lib/a.dart': 'x\ny\nz\nw\n'},
+        lcov: {'lib/a.dart': {3: 0, 4: 2}},
+        root: '/nonexistent',
+        title: 'T',
+      );
+      expect(text, contains('| untouched x pure | 1 | 2 | 2 | 1 | 1 |'));
+    });
+  });
+
+  group('the family of a file', () {
+    test('is named in the ledger from what the file does', () {
+      final text = renderLedger(
+        rows: [_mutant('line 2 plus: `a` -> `b`', line: 2)],
+        sources: {'lib/a.dart': 'int f(int a) {\n  return a + 1;\n}\n'},
+        lcov: const {},
+        root: '/nonexistent',
+        title: 'T',
+      );
+      expect(text, contains('untouched x pure'));
+    });
+  });
+
+  group('the survivor baseline', () {
+    test('a file is written as its name and its survivors', () {
+      expect(
+        renderBaseline({'lib/b.dart': 2, 'lib/a.dart': 5, 'lib/c.dart': 0}),
+        '# Surviving line mutants by file: the debt, which can only shrink.\n'
+        '# Regenerate with `make ledger-baseline` after a full ledger run.\n'
+        'lib/a.dart|5\n'
+        'lib/b.dart|2\n',
+      );
+    });
+
+    test('reading it back gives the same counts', () {
+      expect(parseBaseline('# c\nlib/a.dart|5\nlib/b.dart|2\n'), {'lib/a.dart': 5, 'lib/b.dart': 2});
+    });
+
+    test('a file with more survivors than its baseline is a regression', () {
+      final result = compareToBaseline({'lib/a.dart': 6}, {'lib/a.dart': 5});
+      expect(result.regressions, {'lib/a.dart': (before: 5, now: 6)});
+    });
+
+    test('a file the baseline does not name starts at zero', () {
+      final result = compareToBaseline({'lib/new.dart': 1}, {});
+      expect(result.regressions, {'lib/new.dart': (before: 0, now: 1)});
+    });
+
+    test('fewer survivors is an improvement to write down, not a failure', () {
+      final result = compareToBaseline({'lib/a.dart': 3}, {'lib/a.dart': 5});
+      expect(result.regressions, isEmpty);
+      expect(result.improvements, {'lib/a.dart': (before: 5, now: 3)});
+    });
+
+    test('a file that went clean is an improvement', () {
+      final result = compareToBaseline({}, {'lib/a.dart': 5});
+      expect(result.improvements, {'lib/a.dart': (before: 5, now: 0)});
+    });
+
+    test('the same counts change nothing', () {
+      final result = compareToBaseline({'lib/a.dart': 5}, {'lib/a.dart': 5});
+      expect(result.regressions, isEmpty);
+      expect(result.improvements, isEmpty);
+    });
+
+    test('survivors are counted by file, leaving out the accepted ones', () {
+      final rows = [
+        _mutant('line 3 minus: `a` -> `b`', line: 3, verdict: ProofVerdict.missed, caughtBy: const []),
+        _mutant('line 4 plus: `a` -> `b`', line: 4, verdict: ProofVerdict.missed, caughtBy: const []),
+        _mutant('line 5 plus: `a` -> `b`', line: 5),
+      ];
+      expect(survivorsByFile(rows, {'lib/a.dart|3|minus': 'why'}), {'lib/a.dart': 1});
+    });
+  });
+
+  group('what a changed line affects', () {
+    const source = 'int size(int b) {\n'
+        '  final c = b + 1;\n'
+        '  final d = c - 1;\n'
+        '  return d;\n'
+        '}\n';
+    final rows = [
+      _mutant('line 2 plus: `a` -> `b`', line: 2, caughtBy: ['size adds one', 'size is stable']),
+      _mutant('line 3 minus: `a` -> `b`', line: 3, verdict: ProofVerdict.missed, caughtBy: const []),
+    ];
+
+    test('names the tests to update for a guarded line', () {
+      expect(
+        describeImpact(rows, 'lib/a.dart', 2, source.split('\n')),
+        contains('update: size adds one; size is stable'),
+      );
+    });
+
+    test('says no test guards an unguarded line, and where the assertion goes', () {
+      final text = describeImpact(rows, 'lib/a.dart', 3, source.split('\n'));
+      expect(text, contains('no test fails when this line is wrong'));
+      expect(text, contains('size adds one'));
+    });
+
+    test('says a line with no mutant was not measured', () {
+      expect(
+        describeImpact(rows, 'lib/a.dart', 4, source.split('\n')),
+        contains('not measured'),
+      );
+    });
+  });
+
   group('the tracefile', () {
     test('hit counts are read by line and file, from the lib segment', () {
       final hits = lineHits('SF:/home/x/app/lib/a.dart\nDA:1,3\nDA:2,0\nend_of_record\n');

@@ -2,8 +2,8 @@
 //
 //   dart run tool/proof_audit/run.dart [--workers=N] [--limit=N] [--only=text]
 //       [--proof=name] [--root=<repo>] [--mutants=<lib file or dir>]
-//       [--changed-since=<git ref>] [--ledger=<markdown file>]
-//       [--fail-on-survivors] [--run-timeout=<seconds>] [--skip-controls]
+//       [--mirror-only] [--learned=<file>] [--faults-from=<file of file|description>] [--scratch=<dir>] [--changed-since=<git ref>] [--ledger=<markdown file>]
+//       [--equivalents=<registry>] [--fail-on-survivors] [--run-timeout=<seconds>] [--skip-controls]
 //       [--report-only]
 //       [--logs=<workspace dir>]
 //       [--report=<markdown file>]
@@ -104,6 +104,16 @@ Future<void> main(List<String> args) async {
   // A mutants run seeds one-line mutants of the named files, each checked by
   // the file's mirrored test and then by the whole test directory; otherwise the
   // matrices of providers.dart are seeded.
+  final mirrorOnly = args.contains('--mirror-only');
+  // Only the faults a file names, one `file|description` per line: a rerun of
+  // chosen mutants, for instance survivors of a mirror-only run against the
+  // whole suite.
+  final chosen = _option(args, 'faults-from') == null
+      ? null
+      : File(_option(args, 'faults-from')!).readAsLinesSync().where((l) => l.trim().isNotEmpty).toSet();
+  // Each run's working copies live under their own directory, so two runs never
+  // delete each other's.
+  final scratchBase = _option(args, 'scratch') ?? '/tmp/claudart_proof_audit';
   final changedRef = _option(args, 'changed-since');
   final changed =
       changedRef == null ? null : await _changedSince(repository, changedRef);
@@ -111,26 +121,43 @@ Future<void> main(List<String> args) async {
       ? auditProviders
       : <FaultProvider>[
           for (final file in sourceFilesUnder(repository, mutantsPath))
-            if (changed == null || changed.containsKey(file))
-            FileMutantFaults(
-              file: file,
-              tierOne: [
-                if (mirroredTest(repository, file) case final mirror?) mirror,
-              ],
-              tierTwo: const ['test'],
-            ),
+            if ((changed == null || changed.containsKey(file)) &&
+                (!mirrorOnly || homeTest(repository, file) != null))
+              FileMutantFaults(
+                file: file,
+                tierOne: [
+                  if (homeTest(repository, file) case final home?) home.path,
+                ],
+                tierTwo: mirrorOnly ? const [] : const ['test'],
+              ),
         ];
   final controlFile = mutantsPath == null
       ? defaultControlFile
       : (sourceFilesUnder(repository, mutantsPath)
-          .where((file) => changed == null || changed.containsKey(file))
+          .where((file) =>
+              (changed == null || changed.containsKey(file)) &&
+              (!mirrorOnly || homeTest(repository, file) != null))
           .firstOrNull ??
           defaultControlFile);
+  // The controls always check against the wider suite, so a test that reacts to
+  // any edit is learned even in a mirror-only run.
+  // A change gate runs on every commit, so its controls stop at tier one: the
+  // source-reading tests learned by earlier full runs are read from a file.
+  final controlProvider = mutantsPath == null
+      ? providers.first
+      : FileMutantFaults(
+          file: controlFile,
+          tierOne: [
+            if (homeTest(repository, controlFile) case final home?) home.path,
+          ],
+          tierTwo: changed != null ? const [] : const ['test'],
+        );
   final work = <(FaultProvider, SeededFault)>[
     for (final provider in providers)
       if (proofName == null || provider.proof == proofName)
         for (final fault in provider.faults(repository))
           if ((only == null || fault.description.contains(only)) &&
+              (chosen == null || chosen.contains('${fault.sourceFile}|${fault.description}')) &&
               (changed == null ||
                   isChanged(changed[fault.sourceFile] ?? const [], fault.sourceLine)))
             (provider, fault),
@@ -141,10 +168,15 @@ Future<void> main(List<String> args) async {
 
   // Test files a change that alters no behavior makes fail: they read source
   // text, so a wider run leaves them out. Learned by the controls below.
-  final learned = <String>[];
+  final learnedPath = _option(args, 'learned') ?? 'tool/proof_audit/source_sensitive_tests.txt';
+  final learned = <String>[
+    if (File(learnedPath).existsSync())
+      for (final line in File(learnedPath).readAsLinesSync())
+        if (line.trim().isNotEmpty && !line.startsWith('#')) line.trim(),
+  ];
 
   if (!skipControls) {
-    const controlScratch = '/tmp/claudart_proof_audit/control';
+    final controlScratch = '$scratchBase/control';
     if (Directory(controlScratch).existsSync()) Directory(controlScratch).deleteSync(recursive: true);
     await _copyRepository(repository, controlScratch);
     final runner = AuditRunner(
@@ -154,15 +186,20 @@ Future<void> main(List<String> args) async {
       learnedExclusions: learned,
     );
     for (final control in controlsFor(controlFile)) {
-      var result = await runner.check(providers.first, control.fault);
+      var result = await runner.check(controlProvider, control.fault);
       if (result.verdict != control.expected &&
           control.expected == ProofVerdict.missed &&
           result.verdict == ProofVerdict.caught &&
           result.failedFiles.isNotEmpty) {
         learned.addAll(result.failedFiles);
+        File(learnedPath).writeAsStringSync(
+          '# Test files that fail on a change that alters no behavior: they read\n'
+          '# source text, so a wider run leaves them out. Learned by the controls.\n'
+          '${(learned.toSet().toList()..sort()).join('\n')}\n',
+        );
         stdout.writeln('learned: ${result.failedFiles.join(', ')} fail on a change '
             'that alters no behavior, so wider runs leave them out');
-        result = await runner.check(providers.first, control.fault);
+        result = await runner.check(controlProvider, control.fault);
       }
       stdout.writeln('control ${result.verdict.name} (expected '
           '${control.expected.name}): ${control.fault.description}');
@@ -178,7 +215,7 @@ Future<void> main(List<String> args) async {
   final counts = {for (final verdict in ProofVerdict.values) verdict: 0};
 
   Future<void> worker(int number) async {
-    final scratch = '/tmp/claudart_proof_audit/w$number';
+    final scratch = '$scratchBase/w$number';
     if (Directory(scratch).existsSync()) Directory(scratch).deleteSync(recursive: true);
     await _copyRepository(repository, scratch);
     final runner = AuditRunner(
@@ -200,9 +237,17 @@ Future<void> main(List<String> args) async {
 
   await Future.wait([for (var i = 0; i < workers; i++) worker(i)]);
   stdout.writeln('done: ${counts.entries.map((e) => '${e.key.name} ${e.value}').join(', ')}');
-  final survivors = counts[ProofVerdict.missed]!;
 
   final ledgerPath = _option(args, 'ledger');
+  final equivalentsPath = _option(args, 'equivalents') ?? 'tool/proof_audit/accepted_equivalents.txt';
+  final equivalents = File(equivalentsPath).existsSync()
+      ? parseEquivalents(File(equivalentsPath).readAsStringSync())
+      : <String, String>{};
+  final thisRun = mutantRows([
+    for (final line in proofsLog.readAsLinesSync())
+      if (line.trim().isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+  ].where((row) => !DateTime.parse(row[LogEntryField.ts.name] as String).isBefore(started)).toList());
+  final survivors = unacceptedSurvivors(thisRun, equivalents).length;
   if (ledgerPath != null) {
     final rows = mutantRows([
       for (final line in proofsLog.readAsLinesSync())
@@ -216,6 +261,7 @@ Future<void> main(List<String> args) async {
       },
       lcov: const {},
       excludedTests: learned,
+      equivalents: equivalents,
       root: repository,
       title: 'Lines changed since ${changedRef ?? 'the start'}: which test guards them',
     ));

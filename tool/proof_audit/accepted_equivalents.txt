@@ -1,0 +1,3 @@
+# claudart's accepted equivalent mutants: no test can tell them from the original.
+# file|line|operator|reason
+# An entry needs its reason; one no mutant matches is reported stale.

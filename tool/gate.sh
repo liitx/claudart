@@ -34,6 +34,20 @@ if ! echo "$lint" | grep -q "No issues found"; then
   echo "LINT FAIL: $lint"; dart run custom_lint 2>&1 | head -6; exit 1
 fi
 
+# Every line of lib/ this change touches must be guarded: a one-line mutant of
+# it is run, and none may survive (the ledger names the tests it belongs with).
+# Skipped when no lib/ line changed, or with PROOF=skip.
+if [ "${PROOF:-on}" != "skip" ] && [ -n "$(git diff --name-only HEAD -- lib; git ls-files --others --exclude-standard -- lib)" ]; then
+  if ! dart run tool/proof_audit/run.dart --mutants=lib --changed-since=HEAD --workers=3 \
+       --fail-on-survivors --ledger=/tmp/claudart_proof_changed.md >/tmp/claudart_proof_changed.txt 2>&1; then
+    echo "PROOF FAIL: a changed line is guarded by no test"
+    grep -E "survived|\] missed" /tmp/claudart_proof_changed.txt | head -8 | cut -c1-200
+    echo "see /tmp/claudart_proof_changed.md for the tests each belongs with; PROOF=skip to bypass"
+    exit 1
+  fi
+  echo "proof: $(grep -E '^done:' /tmp/claudart_proof_changed.txt)"
+fi
+
 echo "ALL GATES PASS: $(tail -1 /tmp/claudart_gate_suite.txt | cut -c1-40)"
 
 if [ -n "${1:-}" ]; then

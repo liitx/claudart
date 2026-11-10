@@ -1,0 +1,6 @@
+# Mutants of dartrix that no test can tell from the original, with the reason.
+# file|line|operator|reason
+lib/src/renderer/matrix_renderer.dart|41|greaterThan|the longest name is found with a > b ? a : b; for equal lengths either answer is the same length, so >= gives the same width
+lib/src/renderer/matrix_renderer.dart|42|greaterThan|the longest feature name is found with a > b ? a : b; equal lengths give the same width either way
+lib/src/shoelace/shoelace_layout.dart|89|number|n == 0 is guarded inside a loop that does not run when n is 0, so n == 1 changes nothing for i == 0 (the angle is 0 either way)
+lib/src/shoelace/shoelace_layout.dart|89|number#2|the 0 of n == 0 ? 0 : ... sits on a branch the loop never reaches (n is at least 1 inside it), so changing it is not observable; the guard is dead code

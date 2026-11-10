@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: proof-changed proof-audit diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+.PHONY: ledger ledger-check ledger-baseline impact proof-changed proof-audit diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
 
 ## Draw the runs a logs directory holds as Mermaid sequence diagrams.
 ##   make diagram DIR="<global-logs> <workspace-logs>" [CMD=debug] [HTML=<file>]
@@ -17,6 +17,26 @@ diagram:
 ##   make proof-audit [WORKERS=3] [LIMIT=n] [ONLY=text] [PROOF=transitionTable|closureEvidence|claudartCommand|handoffListeners]
 proof-audit:
 	$(DART) run tool/proof_audit/run.dart --workers=$(or $(WORKERS),3) --report=docs/topology/proof_audit.md $(if $(LIMIT),--limit=$(LIMIT)) $(if $(ONLY),--only="$(ONLY)") $(if $(PROOF),--proof=$(PROOF))
+
+## The full ledger: every line of every file with a mirrored test mutated, checked
+## by that test alone (about an hour with 3 workers). Never touches the tree.
+##   make ledger [WORKERS=3]; make ledger-check; make ledger-baseline
+ledger:
+	$(DART) run tool/proof_audit/run.dart --mutants=lib --mirror-only --workers=$(or $(WORKERS),3) --run-timeout=120 --logs=/tmp/claudart_full_ledger/ws
+
+## Fail if any file has more surviving mutants than the checked-in baseline.
+ledger-check:
+	$(DART) run tool/proof_audit/ledger_check.dart
+
+## Write down the lower counts of the last full ledger (never raises one).
+ledger-baseline:
+	$(DART) run tool/proof_audit/ledger_check.dart --write
+
+## Which tests to update when a line changes (from the last ledger run, LOGS
+## defaults to the full run's), or that none guards it.
+##   make impact TARGET=lib/session/md_io.dart:42 [LOGS=/tmp/claudart_full_ledger/ws]
+impact:
+	$(DART) run tool/proof_audit/impact.dart --logs=$(or $(LOGS),/tmp/claudart_full_ledger/ws) $(TARGET)
 
 ## Seed one-line mutants on the lines this change touched (since BASE, default
 ## main) and fail if a test does not fail for each; the ledger it writes names

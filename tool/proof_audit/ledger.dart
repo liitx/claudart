@@ -16,6 +16,7 @@
 
 import 'package:claudart/logging/logger.dart';
 
+import '../../test/helpers/topology_family.dart';
 import 'mirror.dart';
 
 /// One mutant row, read from the log.
@@ -29,6 +30,99 @@ typedef MutantRow = ({
 });
 
 const mutantProofPrefix = 'mutants:';
+
+/// The operator (and occurrence) a mutant's description names.
+String mutantId(String description) =>
+    RegExp(r'^line \d+ ([\w#]+):').firstMatch(description)?.group(1) ?? '';
+
+/// The key an accepted-equivalent registry uses for [row].
+String equivalentKey(MutantRow row) => '${row.file}|${row.line}|${mutantId(row.description)}';
+
+/// The accepted-equivalent registry: one `file|line|operator|reason` per line,
+/// `#` for comments. A mutant that no test can tell from the original (an
+/// unreachable branch, an equal-value comparison) stays out of the survivors only
+/// by being named here with the reason, so an exemption is never silent.
+Map<String, String> parseEquivalents(String text) {
+  final accepted = <String, String>{};
+  for (final line in text.split('\n')) {
+    if (line.trim().isEmpty || line.trimLeft().startsWith('#')) continue;
+    final parts = line.split('|');
+    if (parts.length < 4 || parts.sublist(3).join('|').trim().isEmpty) {
+      throw FormatException('an equivalent mutant needs file|line|operator|reason: $line');
+    }
+    accepted['${parts[0]}|${parts[1]}|${parts[2]}'] = parts.sublist(3).join('|').trim();
+  }
+  return accepted;
+}
+
+/// Why a mutant that no test failed for survived.
+enum SurvivalCause {
+  /// No test runs the line: it needs a test that reaches it.
+  notRun,
+
+  /// Tests run the line and assert nothing that depends on it: it needs an
+  /// assertion in the tests that already run it.
+  unasserted,
+
+  /// The tracefile does not mention the line (no tracefile, or no executable code
+  /// on it), so the cause is not known.
+  unmeasured,
+}
+
+/// The cause of [row]'s survival, from [lcov] hit counts by file and line.
+SurvivalCause survivalCause(MutantRow row, Map<String, Map<int, int>> lcov) {
+  final hits = lcov[row.file]?[row.line];
+  if (hits == null) return SurvivalCause.unmeasured;
+  return hits > 0 ? SurvivalCause.unasserted : SurvivalCause.notRun;
+}
+
+/// Unaccepted survivors counted by file.
+Map<String, int> survivorsByFile(List<MutantRow> rows, Map<String, String> equivalents) {
+  final counts = <String, int>{};
+  for (final row in unacceptedSurvivors(rows, equivalents)) {
+    counts[row.file] = (counts[row.file] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/// The baseline file for [counts]: files with survivors, sorted.
+String renderBaseline(Map<String, int> counts) {
+  final out = StringBuffer()
+    ..writeln('# Surviving line mutants by file: the debt, which can only shrink.')
+    ..writeln('# Regenerate with `make ledger-baseline` after a full ledger run.');
+  for (final file in counts.keys.toList()..sort()) {
+    if (counts[file]! > 0) out.writeln('$file|${counts[file]}');
+  }
+  return out.toString();
+}
+
+/// The counts a baseline file holds.
+Map<String, int> parseBaseline(String text) => {
+      for (final line in text.split('\n'))
+        if (line.trim().isNotEmpty && !line.trimLeft().startsWith('#'))
+          line.split('|').first: int.parse(line.split('|').last),
+    };
+
+/// How [current] survivor counts stand against [baseline]: files that got worse
+/// (a failure) and files that got better (to be written down).
+({Map<String, ({int before, int now})> regressions, Map<String, ({int before, int now})> improvements})
+    compareToBaseline(Map<String, int> current, Map<String, int> baseline) {
+  final regressions = <String, ({int before, int now})>{};
+  final improvements = <String, ({int before, int now})>{};
+  for (final file in {...current.keys, ...baseline.keys}) {
+    final before = baseline[file] ?? 0;
+    final now = current[file] ?? 0;
+    if (now > before) regressions[file] = (before: before, now: now);
+    if (now < before) improvements[file] = (before: before, now: now);
+  }
+  return (regressions: regressions, improvements: improvements);
+}
+
+/// The surviving mutants of [rows] that [equivalents] does not accept.
+List<MutantRow> unacceptedSurvivors(List<MutantRow> rows, Map<String, String> equivalents) => [
+      for (final row in rows)
+        if (row.verdict == ProofVerdict.missed && !equivalents.containsKey(equivalentKey(row))) row,
+    ];
 
 /// The mutant rows in [rows], the latest row for each mutant.
 List<MutantRow> mutantRows(List<Map<String, dynamic>> rows) {
@@ -128,6 +222,32 @@ List<String> testsGuarding(List<MutantRow> rows, String file, int line) => {
     }.toList()
       ..sort();
 
+/// What a change to [line] of [file] affects: the tests to update, or that none
+/// guards it and which tests guard the rest of its declaration.
+String describeImpact(List<MutantRow> rows, String file, int line, List<String> lines) {
+  final here = rows.where((r) => r.file == file && r.line == line).toList();
+  if (here.isEmpty) {
+    return '$file:$line: not measured (no mutant of this line: it has nothing an '
+        'operator changes, or the file was not mutated)';
+  }
+  final guarding = testsGuarding(rows, file, line);
+  if (guarding.isNotEmpty) {
+    return '$file:$line is guarded; when it changes, update: ${guarding.join('; ')}';
+  }
+  final declaration = enclosingDeclaration(lines, line);
+  final neighbors = <String, int>{};
+  for (final row in rows) {
+    if (row.file != file || row.verdict != ProofVerdict.caught) continue;
+    if (enclosingDeclaration(lines, row.line) != declaration) continue;
+    for (final test in row.caughtBy) {
+      neighbors[test] = (neighbors[test] ?? 0) + 1;
+    }
+  }
+  final ranked = neighbors.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  return '$file:$line: no test fails when this line is wrong. '
+      '${ranked.isEmpty ? 'No test guards anything in `$declaration` either.' : 'Add the assertion to the tests that guard `$declaration`: ${ranked.take(3).map((e) => e.key).join('; ')}'}';
+}
+
 /// The markdown ledger. [sources] holds each file's text, [lcov] the line hits
 /// (empty when none was measured) and [root] finds the mirrored tests.
 String renderLedger({
@@ -137,6 +257,7 @@ String renderLedger({
   required String root,
   required String title,
   List<String> excludedTests = const [],
+  Map<String, String> equivalents = const {},
 }) {
   final byFile = <String, List<MutantRow>>{};
   final excludedNote = excludedTests.isEmpty
@@ -147,6 +268,22 @@ String renderLedger({
   for (final row in rows) {
     (byFile[row.file] ??= []).add(row);
   }
+  final familyTotals = <String, ({int files, int mutants, int survived, int notRun, int unasserted})>{};
+  for (final entry in byFile.entries) {
+    final family = topologyFamilyOf(sources[entry.key] ?? '');
+    final key = '${family.role.name} x ${family.reach.name}';
+    final previous = familyTotals[key] ?? (files: 0, mutants: 0, survived: 0, notRun: 0, unasserted: 0);
+    final survivors = unacceptedSurvivors(entry.value, equivalents);
+    int caused(SurvivalCause cause) =>
+        survivors.where((r) => survivalCause(r, lcov) == cause).length;
+    familyTotals[key] = (
+      files: previous.files + 1,
+      mutants: previous.mutants + entry.value.length,
+      survived: previous.survived + survivors.length,
+      notRun: previous.notRun + caused(SurvivalCause.notRun),
+      unasserted: previous.unasserted + caused(SurvivalCause.unasserted),
+    );
+  }
   final out = StringBuffer()
     ..writeln('# $title')
     ..writeln()
@@ -156,8 +293,20 @@ String renderLedger({
         'rest of the suite (the mirrored test is weak or missing), or it '
         'survives: no test guards that line.$excludedNote')
     ..writeln()
-    ..writeln('| File | Mirrored test | Mutants | Caught by the mirror | Caught only by the wider suite | Survived | Invalid | Lines run by the suite |')
-    ..writeln('|---|---|---|---|---|---|---|---|');
+    ..writeln('## By family')
+    ..writeln()
+    ..writeln('| Family | Files | Mutants | Survived (not accepted) | of those, no test runs the line | of those, tests run it and assert nothing about it |')
+    ..writeln('|---|---|---|---|---|---|');
+  for (final key in familyTotals.keys.toList()..sort()) {
+    final total = familyTotals[key]!;
+    out.writeln('| $key | ${total.files} | ${total.mutants} | ${total.survived} | ${total.notRun} | ${total.unasserted} |');
+  }
+  out
+    ..writeln()
+    ..writeln('## By file')
+    ..writeln()
+    ..writeln('| File | Family | Mirrored test | Mutants | Caught by the mirror | Caught only by the wider suite | Survived | Accepted equivalent | Invalid | Lines run by the suite |')
+    ..writeln('|---|---|---|---|---|---|---|---|---|---|');
   final files = byFile.keys.toList()..sort();
   for (final file in files) {
     final fileRows = byFile[file]!;
@@ -168,9 +317,15 @@ String renderLedger({
     final coverage = hits == null || hits.isEmpty
         ? '—'
         : '${hits.values.where((h) => h > 0).length}/${hits.length}';
-    out.writeln('| `$file` | ${mirroredTest(root, file) ?? 'none'} | ${fileRows.length} | '
+    final home = homeTest(root, file);
+    final family = topologyFamilyOf(sources[file] ?? '');
+    final accepted = fileRows
+        .where((r) => r.verdict == ProofVerdict.missed && equivalents.containsKey(equivalentKey(r)))
+        .length;
+    out.writeln('| `$file` | ${family.role.name} x ${family.reach.name} | '
+        '${home == null ? 'none' : home.mirrored ? home.path : '${home.path} (not mirrored)'} | ${fileRows.length} | '
         '${count(ProofVerdict.caught, tier: 1)} | ${count(ProofVerdict.caught, tier: 2)} | '
-        '${count(ProofVerdict.missed)} | ${count(ProofVerdict.invalid)} | $coverage |');
+        '${count(ProofVerdict.missed) - accepted} | $accepted | ${count(ProofVerdict.invalid)} | $coverage |');
   }
 
   out
@@ -189,7 +344,7 @@ String renderLedger({
         counts[test] = (counts[test] ?? 0) + 1;
       }
     }
-    final survivors = byFile[file]!.where((r) => r.verdict == ProofVerdict.missed).toList()
+    final survivors = unacceptedSurvivors(byFile[file]!, equivalents)
       ..sort((a, b) => a.line.compareTo(b.line));
     for (final row in survivors) {
       anySurvivor = true;
@@ -207,6 +362,27 @@ String renderLedger({
     }
   }
   if (!anySurvivor) out.writeln('None.');
+
+  final accepted = [
+    for (final row in rows)
+      if (row.verdict == ProofVerdict.missed && equivalents.containsKey(equivalentKey(row))) row,
+  ];
+  out
+    ..writeln()
+    ..writeln('## Accepted as equivalent (no test can tell them from the original)')
+    ..writeln();
+  if (accepted.isEmpty) out.writeln('None.');
+  for (final row in accepted) {
+    out.writeln('- `${row.file}:${row.line}` ${row.description} - ${equivalents[equivalentKey(row)]}');
+  }
+  final matched = {for (final row in rows) equivalentKey(row)};
+  final stale = equivalents.keys.where((key) => !matched.contains(key)).toList();
+  if (stale.isNotEmpty) {
+    out
+      ..writeln()
+      ..writeln('Registry entries no mutant matches (the line moved or the mutant is gone; remove them): '
+          '${stale.map((k) => '`$k`').join(', ')}');
+  }
 
   final tierTwo = rows.where((r) => r.verdict == ProofVerdict.caught && r.tier == 2).toList();
   out

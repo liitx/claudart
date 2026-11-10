@@ -201,6 +201,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | T7 | `automaticClosureMatrixDoesNotDriveTheClose` | The proof audit seeded 29 single changes to the closure-evidence matrix (`closureEvidenceOf`, `automaticClosureFor`); all were caught, but only by the matrix's own test. `automaticClosureFor`, the mapping from evidence to what an automatic close does, is read in one place, `status.dart`, which prints its label; headless `teardown` does not read it, it tests `evidence == verified` directly and saves a reminder for everything else. The two disagree for a converged handoff whose fix was applied but never verified (matrix: remind the owner and run no teardown; `teardown`: saves a reminder) and for a handoff with no evidence (matrix: stay open; `teardown`: saves a reminder). So the matrix that says what an automatic close does is not what decides it, the same shape as T1 | `docs/topology/proof_audit.md`, `automaticClosureFor` consulted only at `status.dart:72` | open, owner's decision: which action is intended for those two cases; then `teardown` reads `automaticClosureFor` so the matrix and the behavior are one thing Why the topology had not shown it, and the rule built from it: see "The perspectives a decision table must answer". `matrix_consumers_test.dart` now fails for any decision table nothing decides with that is not named with a reason; `automaticClosureFor` is named there as `decisionPending`, so the gap stays visible until it is decided |
 | T8 | `commandWireNamesPinnedOnlyByARoundTrip` | The proof audit changed each fact of each of the 26 `ClaudartCommand` variants (546 faults). A command's wire name was checked in tier 1 only by `fromString(wireName)` round-tripping through the same field, so renaming a command passed the tests meant to carry the matrix and was seen only by the wider suite, where a renamed `chat` made the run hang for 24 minutes | the audit's first command run, `claudart_command_test.dart` | closed 2026-11-10: a table of what each command is typed as, written out from the README's command table, one test per command and a coverage check; renaming a command now fails in about a second. Result: 546 of 546 caught by the named proofs, none missed, none only by a generated doc; 75 faults rest on a single independent test (25 of them the new wire-name table, the rest `ownsProjectOption` 13, `supportsProjectSelector` 21, `handoffEvents` 14, headless and step models 1 each). Two pairs of faults ended `invalid` at the time limit while two workers ran together, and all four were caught in under two seconds each when run alone; the stall was not reproduced and its cause is unknown |
 | T9 | `listenerMatrixHadNoExactExpectation` | The proof audit seeded 45 single changes to which reactions each status change calls for (`listenersFor`) and to the events a reaction may return (`mayEmit`). Two kinds were not caught by the tests meant to carry the matrix: a second reaction added to a move that can never happen (a fix applied landing anywhere but on a finished fix), because the totality test asserts only that the record is among the reactions and the teardown test looks at legal cells only; and an extra legal event permitted to the closing reaction (`reminderSaved`), because the safety proof accepts any event the landing status allows and nothing pinned the exact set. A first reading of these was wrong: both were reported as caught or invalid only because the audit's own test, which reads the source a fault changes, failed in the wider run, so the audit now leaves its own tests out of that run | `docs/topology/proof_audit.md` | closed 2026-11-10: the exact reactions for each of the 112 (event, landing status) pairs and the exact permitted events of each reaction are written out in `handoff_listeners_test.dart`; rerun: 45 of 45 caught by the named proofs, none weak, none invalid |
+| T10 | `linesNothingGuards` | The full line-mutation ledger found 956 surviving mutants of 2145 across 79 of 114 files: 432 on lines no test executes, 524 on lines tests run and assert nothing about (84% of a 60-mutant sample of those is caught by no test in the suite); 65% sit in the command families that reach the terminal and processes, and 2 commands have no test at all. Green tests, line coverage per directory and the matrix audits could not say it: nothing asked, per line, whether a failing test exists | `docs/topology/ledger/claudart.md`, `claudart_survivors.txt`, `test_homes_test.dart` | open: the plan "closing the ledger's survivors" orders the work by family; the inheritance mechanisms (gate line proof, survivor baseline, accepted-equivalent registry, test-home rule, CLAUDE.md rule) are built, the survivors are not yet closed |
 | R16 | `teardownReminderLeavesNoMoveRecord` | A `teardown` that saves a reminder (the owner declined, or headless without verified evidence) writes an archive entry, leaves the handoff untouched and exits 0, and logs no transition: `reminderSaved` is reachable only from the resolved path. Found writing the headless evidence matrix | `teardown_test.dart` 'headless closes only on verified evidence' | closed 2026-11-06: a `teardown` that archives, saves a reminder, or has its reminder declined writes an interaction row with a typed `TeardownOutcome` and the `evidence` it found (`archived`, `reminderSaved`, `reminderDeclined`); the run diagram draws the row as a note; `teardown.dart` is not mutation-measured (the tool hangs on it, issue 77) |
 | R17 | `noProjectSetsAVerificationCommand` | Of the 7 registered projects none sets `verificationCommand` (the key is new) and only 1 has a `config.json`. With the headless rule, every headless `teardown` therefore ends as a reminder until a project opts in; claudart's own caution, measured | the registry and workspace `config.json` files, read 2026-11-06 | mitigated 2026-11-06: `status` shows a hint, with the key and the config file, when a fix was applied but never verified and no verification command is set; mitigated further 2026-11-10: `debug` prints the same hint at its own end when its fix was not verified and no command is set, where the owner sees it (measured with the real binary: hint shown with no command; with `verificationCommand` set, no hint, a `gates.jsonl` row exit 0, and `status` reads `verified`); still open: no prompt in `link`, nothing in the README, and 0 of 7 projects set it today |
 | R18 | `flowWroteTheHandoffDirectly` | `flow` was the one command that wrote `handoff.md` itself: it read no existing handoff, archived nothing, logged no move, and silently overwrote a live one. Its success path (the write) had no command-level test. Raised by the owner ("flow writes the handoff directly") | `flow.dart` before the fix; `handoff_store_test.dart`'s ledger of one | closed 2026-11-09: `flow` is an entry event, `flowConstructed: noHandoff → readyForSuggest`, and writes through `HandoffStore.replace`; over a live handoff it still writes and the move is logged as rejected, so the overwrite is on record; the ledger of direct writers is empty; the write path is tested |
@@ -294,6 +295,7 @@ variant is not in the proposals below.
 | T7 | drivesState x pure | existing |
 | T8 | observesState x pure | existing |
 | T9 | drivesState x pure | existing |
+| T10 | drivesState x processBound | existing |
 | R16 | drivesState x workspaceBound | existing |
 | R17 | untouched x workspaceBound | existing |
 | R18 | drivesState x workspaceBound | existing |
@@ -764,6 +766,80 @@ still does not compile is `invalid`, not counted; a test that guards a line only
 through another package's code is not seen. Mutants on every claudart file were
 not run (about 5 seconds each): the gate covers changed lines, and a full ledger
 for the framework is a background run.
+
+### Plan: closing the ledger's survivors, and making the debt inherited (2026-11-10)
+
+**Measured.** The full ledger (`docs/topology/ledger/claudart.md`, every line of the
+114 files that have a test home, checked by that test alone): 2145 mutants, 970
+caught, 956 survived, 219 invalid. 35 files are clean; the 20 worst hold 71% of the
+survivors; `lib/commands` holds 509. The layers built under the matrix discipline
+(`errors`, `providers`, `codegen`, `io`, `config`, `logging`) survive at 0 to 18%,
+`commands` at 50%, `ui` at 81%. Where they survive: 334 logic and 98 display
+survivors are on lines no test executes; 269 logic and 255 display survivors are on
+lines tests run and assert nothing about. Kill rates by operator: removed call 30%,
+literal 43%, `and` and `or` 36%, `>` 16%, `==` 48%.
+
+**Is the 524 a gap or a misplaced test?** A stratified sample of 60 logic survivors
+on executed lines was run against the whole suite: 48 were caught by nothing (84% of
+the 57 that compiled), 4 were caught by a behavioral test that lives outside the
+file's mirror (misplaced: `status`, `config`, `debug_steps`, `token_map`), 5 by an
+incidental test (a source-usage scan, a doc-drift check, a lock test): not guards.
+So about 84% of "run but unasserted" is real, about 7% is misplaced.
+
+**Why the gaps exist.** (1) Nothing asked, per line, whether a failing test exists;
+coverage floors are per directory and only say a line ran. (2) Commands were tested
+by outcome (an exit code, one printed line) and not by each decision: the
+conditions inside them survive. (3) Printed output is asserted rarely: 313 of the
+357 display survivors are a removed print or write. (4) 2 commands (`init`,
+`experiment`) and 30 other files have no test of their own name (`test_homes_test.dart`).
+
+**The order, by family (the family that owns the code owns the remedy).**
+
+| Order | Family | Survivors | Owner test group | Remedy |
+|---|---|---|---|---|
+| 1 | drivesState x processBound (`debug`, `flow`, `kill`, `rotate`, `setup`, `suggest`, `teardown`) | 249 | the lifecycle scenarios and each command's test | a contract table per command: scenario -> exit reason, logged moves, printed keys, written files; the oracle is written from `docs/design.md` and the README, never read from the command |
+| 2 | drivesState x pure and workspaceBound (`handoff_listeners`, `claudart_command`, `md_io`, `session_state`) | 41 | the matrix tests and proof audit | extend the existing matrices; most survivors are in `md_io` (30) |
+| 3 | untouched x processBound (`report`, `pipeline_executor`, `scanner`, `link`, `launch`, `archives`; 236 without `ui`) | 327 | each command's test | same contract tables; `pipeline_executor` through its fake runner |
+| 4 | observesState x pure (`templates`, `render`) | 64 | one golden per template variant | the expected text written out as an independent literal (role 4); `knowledge_templates` and `debug_template` survive 100% and 94% |
+| 5 | untouched x fileSeam and x pure | 186 | the mirrored files | per-file slices |
+| 6 | the terminal code of that family (`ui/line_editor`, `ui/menu`; counted in row 3) | 91 | none yet | a key-stream seam first, then tests; `line_editor` survives 90% |
+| 7 | never-run commands (`init`, `experiment`) | n/a | none | a mirrored test file each |
+
+Display survivors are closed by one helper, `test/helpers/printed_keys.dart`, that
+maps captured output back to the `UserText` key it came from, so each scenario
+asserts the ordered keys and a removed print fails; no `lib/` change.
+
+**One slice, repeated.** (1) Pick the file with most survivors in the family.
+(2) `dart run tool/proof_audit/run.dart --mutants=<file> --mirror-only` (minutes).
+(3) For each survivor: `make impact` and the ledger name the tests that guard its
+declaration, and the assertion goes there; where nothing guards it, it goes in the
+mirrored file's group (dartrix's triage); a mutant no test can tell from the
+original (an unreachable branch, an equal-value comparison) is proved so and
+registered with its reason, never skipped. (4) Re-run the file; `make
+ledger-baseline` lowers the baseline; `tool/gate.sh` commits. One commit per file.
+dartrix first was the pilot: 15 survivors and 11 uncovered lines became 4 proved
+equivalents and 100% coverage in one branch.
+
+**What makes the next development inherit this.**
+
+| Mechanism | Enforced by |
+|---|---|
+| a touched `lib/` line is guarded, or the commit fails | `tool/gate.sh` runs `proof-changed` on the lines the change touched |
+| the survivor count of a file only falls | `make ledger-check` against `claudart_survivors.txt` |
+| an exemption names its reason | `accepted_equivalents.txt` (and stale entries are reported) |
+| a new `lib/` file has a test at its mirrored path | `test_homes_test.dart`; its debt lists only shrink |
+| a decision table is decided with and audited | `matrix_consumers_test.dart` |
+| changing logic updates a test, it does not add one | CLAUDE.md rule; `make impact` names the test |
+| a session knows all of this | CLAUDE.md above the marker; the project memory |
+
+**Needs the owner.** (1) Whether a behavioral test that lives outside its mirror
+(the 4 misplaced) is moved to the mirror: recommended yes, and none of the
+incidental scanners. (2) Display output: assert it through printed keys
+(recommended) or accept it. (3) `init` and `experiment`: tests now, or remove the
+commands. (4) A proposal to dartrix's `PARADIGMS.md`: a changed line must have a
+failing test in its mirrored group, an unkillable mutant is registered with a
+reason, and a source that has no test of its own name is a triage gap. (5) The gate
+now runs the line proof on every commit that changes `lib/`: a few minutes each.
 
 ### The perspectives a decision table must answer (2026-11-10, from gap T7)
 

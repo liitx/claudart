@@ -15,6 +15,7 @@ import '../../tool/proof_audit/closure_faults.dart';
 import '../../tool/proof_audit/command_faults.dart';
 import '../../tool/proof_audit/fault.dart';
 import '../../tool/proof_audit/listener_faults.dart';
+import '../../tool/proof_audit/mirror.dart';
 import '../../tool/proof_audit/mutant_faults.dart';
 import '../../tool/proof_audit/providers.dart';
 import '../../tool/proof_audit/report.dart';
@@ -310,6 +311,25 @@ void main() {
       expect(result.verdict, ProofVerdict.caught);
     });
 
+    test('with no wider tests a mutant the mirror missed is missed, not run wider', () async {
+      final calls = <List<String>>[];
+      final runner = AuditRunner(
+        scratchRoot: scratch.path,
+        logger: logger,
+        runTests: (tests) async {
+          calls.add(tests);
+          return passed;
+        },
+      );
+      final result = await runner.check(
+        const FileMutantFaults(file: 'lib/a.dart', tierOne: ['test/a_test.dart'], tierTwo: []),
+        const _ChangesTheText(),
+      );
+      expect(calls, hasLength(1));
+      expect(result.verdict, ProofVerdict.missed);
+      expect(result.tier, 1);
+    });
+
     test('is not run again when the run hit its time limit', () async {
       final result = await checkWith([hung, caught]);
       expect(result.verdict, ProofVerdict.invalid);
@@ -485,6 +505,42 @@ void main() {
           .faults(root.path);
       root.deleteSync(recursive: true);
       expect(faults.map((f) => f.description), contains(startsWith('line 2 equals:')));
+    });
+  });
+
+  group('the test that is a file\'s home', () {
+    late Directory root;
+
+    setUp(() {
+      root = Directory.systemTemp.createTempSync('proof_audit_home_');
+      for (final path in [
+        'test/x/one_test.dart',
+        'test/y/two_test.dart',
+        'test/y/other/dup_test.dart',
+        'test/z/dup_test.dart',
+      ]) {
+        File('${root.path}/$path')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('');
+      }
+    });
+
+    tearDown(() => root.deleteSync(recursive: true));
+
+    test('the exactly mirrored test is its home and conforms', () {
+      expect(homeTest(root.path, 'lib/x/one.dart'), (path: 'test/x/one_test.dart', mirrored: true));
+    });
+
+    test('a test of the same name elsewhere is its home but does not conform', () {
+      expect(homeTest(root.path, 'lib/y/support/two.dart'), (path: 'test/y/two_test.dart', mirrored: false));
+    });
+
+    test('two tests of that name are not a home: which one is unknown', () {
+      expect(homeTest(root.path, 'lib/q/dup.dart'), isNull);
+    });
+
+    test('a file with no test of its name has no home', () {
+      expect(homeTest(root.path, 'lib/x/nothing.dart'), isNull);
     });
   });
 

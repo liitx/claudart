@@ -6,8 +6,8 @@
 
 | repo | lib files | public components | test files |
 |---|---|---|---|
-| claudart | 163 | 209 | 221 |
-| dartrix | 14 | 22 | 7 |
+| claudart | 163 | 209 | 222 |
+| dartrix | 14 | 22 | 8 |
 | zedup | 192 | 230 | 119 |
 
 ## Names declared in more than one repo
@@ -27,6 +27,7 @@
 |---|---|---|---|---|
 | `test/shoelace/gap_cross_reference_test.dart` | `BranchType` | 2 | 0 | — |
 | `test/shoelace/shoelace_snapshot_test.dart` | `BranchType` | 6 | 0 | — |
+| `test/shoelace/shoelace_snapshot_test.dart` | `WorkStatus` | 2 | 0 | — |
 
 ### zedup
 
