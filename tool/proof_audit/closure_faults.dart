@@ -25,6 +25,9 @@ class ClosureEvidenceFaults extends FaultProvider {
   String get proof => 'closureEvidence';
 
   @override
+  List<String> get coveredTables => const ['closureEvidenceOf', 'automaticClosureFor'];
+
+  @override
   List<String> get tierOneTests => const [
         'test/session/closure_evidence_test.dart',
         'test/commands/teardown_test.dart',

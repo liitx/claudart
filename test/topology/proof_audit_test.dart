@@ -14,6 +14,7 @@ import '../../tool/proof_audit/closure_faults.dart';
 import '../../tool/proof_audit/command_faults.dart';
 import '../../tool/proof_audit/fault.dart';
 import '../../tool/proof_audit/listener_faults.dart';
+import '../../tool/proof_audit/providers.dart';
 import '../../tool/proof_audit/report.dart';
 import '../../tool/proof_audit/runner.dart';
 import '../../tool/proof_audit/table_faults.dart';
@@ -371,14 +372,7 @@ void main() {
   });
 
   group('every provider', () {
-    const providers = <FaultProvider>[
-      TransitionTableFaults(),
-      ClosureEvidenceFaults(),
-      ClaudartCommandFaults(),
-      HandoffListenerFaults(),
-    ];
-
-    for (final provider in providers) {
+    for (final provider in auditProviders) {
       group(provider.proof, () {
         final all = provider.faults('.');
 

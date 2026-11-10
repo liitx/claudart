@@ -198,7 +198,7 @@ move writes a checkpoint with no transition and no log. Status: open (E1, `exits
 | R15 | `gateOutputNotLogged` | Neither gate records the command's exit code or output: a failing `debug` gate leaves only `fixVerificationFailed`, a failing `rotate` gate leaves no log row at all (nothing names the command or says why it failed), so the data to judge a gate is lost | `gate_topology_test.dart`, `docs/topology/gates.md` | closed 2026-11-06 (owner agreed): both gates run through `runGate` and `runGateSync` (`lib/io/gate_runner.dart`, the one place that spells `sh -c`), which return a `GateResult` (exit code, the last 20 lines of output, duration); each result is logged to the new `gates.jsonl` with its gate kind, and the run diagram draws it |
 | T5 | `fixtureShapeDiffersFromTheRealLog` | The run diagram's first tests wrote a completed step's `detail` as the string `'1200ms'`; the real log writes it as the integer `10824`. The tests passed and the diagram showed no unit for real data, found only by drawing a real run. A fixture that does not have the shape of the real data proves nothing about it | `run_diagram_test.dart` before the fix; `steps.jsonl` from the sandboxed run | closed for the diagram (the fixture is now an integer and the renderer says `ms`); the test trace (2026-11-09) records the input, expectation and answer of a check so a fixture that differs from real data is visible; recording rows from real runs, not only fixtures, is still open |
 | T6 | `legalMoveTargetsHadNoIndependentExpectation` | The proof audit seeded all 896 single-cell changes to `HandoffStatus.after` (each of the 112 cells to every other value) in scratch copies. All were caught, but 125 were caught only by the checked-in generated docs, which `make topology` regenerates: a legal move redirected to a different legal status (for example `flowConstructed` from `noHandoff` landing on `readyForDebug`) was seen by no independent test, because the size pin counts legal cells and the graph proofs check shape, and neither says where a move lands | `docs/topology/proof_audit.md`, `proofs.jsonl`, `tool/proof_audit/` | closed 2026-11-10: `transition_expectation_test.dart` writes out where every legal move lands from `docs/design.md` (not read from the code; 37 legal moves, one test per cell, 114 tests) and it agrees with the table. Rerun: 896 of 896 caught by the named proofs, 0 only by a generated doc, 0 missed, 0 invalid; every fault has at least one independent catcher, and 130 rest on the new table alone. The audit itself was found and fixed to be wrong twice before this result: it dropped test events that raw spinner output was spliced in front of (49 lines on one real run; this had produced four `invalid` verdicts and could have produced a false `missed`), and a self-referential exit-code test. Controls (a no-op change must come out `missed`, non-compiling source `invalid`) run first and stop the audit if they do not. Only the transition table has a provider so far; the other matrices (feature x variant, `ClaudartCommand`, the evidence matrix, `HandoffListenerKind`) still need one |
-| T7 | `automaticClosureMatrixDoesNotDriveTheClose` | The proof audit seeded 29 single changes to the closure-evidence matrix (`closureEvidenceOf`, `automaticClosureFor`); all were caught, but only by the matrix's own test. `automaticClosureFor`, the mapping from evidence to what an automatic close does, is read in one place, `status.dart`, which prints its label; headless `teardown` does not read it, it tests `evidence == verified` directly and saves a reminder for everything else. The two disagree for a converged handoff whose fix was applied but never verified (matrix: remind the owner and run no teardown; `teardown`: saves a reminder) and for a handoff with no evidence (matrix: stay open; `teardown`: saves a reminder). So the matrix that says what an automatic close does is not what decides it, the same shape as T1 | `docs/topology/proof_audit.md`, `automaticClosureFor` consulted only at `status.dart:72` | open, owner's decision: which action is intended for those two cases; then `teardown` reads `automaticClosureFor` so the matrix and the behavior are one thing |
+| T7 | `automaticClosureMatrixDoesNotDriveTheClose` | The proof audit seeded 29 single changes to the closure-evidence matrix (`closureEvidenceOf`, `automaticClosureFor`); all were caught, but only by the matrix's own test. `automaticClosureFor`, the mapping from evidence to what an automatic close does, is read in one place, `status.dart`, which prints its label; headless `teardown` does not read it, it tests `evidence == verified` directly and saves a reminder for everything else. The two disagree for a converged handoff whose fix was applied but never verified (matrix: remind the owner and run no teardown; `teardown`: saves a reminder) and for a handoff with no evidence (matrix: stay open; `teardown`: saves a reminder). So the matrix that says what an automatic close does is not what decides it, the same shape as T1 | `docs/topology/proof_audit.md`, `automaticClosureFor` consulted only at `status.dart:72` | open, owner's decision: which action is intended for those two cases; then `teardown` reads `automaticClosureFor` so the matrix and the behavior are one thing Why the topology had not shown it, and the rule built from it: see "The perspectives a decision table must answer". `matrix_consumers_test.dart` now fails for any decision table nothing decides with that is not named with a reason; `automaticClosureFor` is named there as `decisionPending`, so the gap stays visible until it is decided |
 | T8 | `commandWireNamesPinnedOnlyByARoundTrip` | The proof audit changed each fact of each of the 26 `ClaudartCommand` variants (546 faults). A command's wire name was checked in tier 1 only by `fromString(wireName)` round-tripping through the same field, so renaming a command passed the tests meant to carry the matrix and was seen only by the wider suite, where a renamed `chat` made the run hang for 24 minutes | the audit's first command run, `claudart_command_test.dart` | closed 2026-11-10: a table of what each command is typed as, written out from the README's command table, one test per command and a coverage check; renaming a command now fails in about a second. Result: 546 of 546 caught by the named proofs, none missed, none only by a generated doc; 75 faults rest on a single independent test (25 of them the new wire-name table, the rest `ownsProjectOption` 13, `supportsProjectSelector` 21, `handoffEvents` 14, headless and step models 1 each). Two pairs of faults ended `invalid` at the time limit while two workers ran together, and all four were caught in under two seconds each when run alone; the stall was not reproduced and its cause is unknown |
 | T9 | `listenerMatrixHadNoExactExpectation` | The proof audit seeded 45 single changes to which reactions each status change calls for (`listenersFor`) and to the events a reaction may return (`mayEmit`). Two kinds were not caught by the tests meant to carry the matrix: a second reaction added to a move that can never happen (a fix applied landing anywhere but on a finished fix), because the totality test asserts only that the record is among the reactions and the teardown test looks at legal cells only; and an extra legal event permitted to the closing reaction (`reminderSaved`), because the safety proof accepts any event the landing status allows and nothing pinned the exact set. A first reading of these was wrong: both were reported as caught or invalid only because the audit's own test, which reads the source a fault changes, failed in the wider run, so the audit now leaves its own tests out of that run | `docs/topology/proof_audit.md` | closed 2026-11-10: the exact reactions for each of the 112 (event, landing status) pairs and the exact permitted events of each reaction are written out in `handoff_listeners_test.dart`; rerun: 45 of 45 caught by the named proofs, none weak, none invalid |
 | R16 | `teardownReminderLeavesNoMoveRecord` | A `teardown` that saves a reminder (the owner declined, or headless without verified evidence) writes an archive entry, leaves the handoff untouched and exits 0, and logs no transition: `reminderSaved` is reachable only from the resolved path. Found writing the headless evidence matrix | `teardown_test.dart` 'headless closes only on verified evidence' | closed 2026-11-06: a `teardown` that archives, saves a reminder, or has its reminder declined writes an interaction row with a typed `TeardownOutcome` and the `evidence` it found (`archived`, `reminderSaved`, `reminderDeclined`); the run diagram draws the row as a note; `teardown.dart` is not mutation-measured (the tool hangs on it, issue 77) |
@@ -714,6 +714,57 @@ analyzer pass, not a regex), single source per datum (I3), layout (I5), inline
 text (I6), boolean flag parameters that select behavior, and an if-else chain on
 one variable that should be a switch. Each is a fact the table already has a rule
 for; what is missing is the detector.
+
+### The perspectives a decision table must answer (2026-11-10, from gap T7)
+
+A decision table is a function whose result is an enum value, or a list or set of
+them, chosen by a `switch` (`HandoffStatus.after`, `automaticClosureFor`,
+`listenersFor`). `docs/topology/matrix_consumers.md` lists every one, who calls
+it, and whether a caller decides with the result or only prints it.
+
+**Why T7 was uncovered.** Three things looked at the table and none asked who
+decides with it. (1) The topological families classify a file by how far it
+reaches (state role x reach layer): `closure_evidence.dart` sits in
+`untouched x pure` with 85 other files, and nothing in that cell asks whether the
+results of its functions are used to decide. (2) The "is the symbol consulted"
+checks (`SpecObligation.isConsulted`, the test-only-symbol ratchet) count any
+reader, and a display is a reader: `status.dart` read `automaticClosureFor` to
+print a label, so it counted as consulted. (3) The proofs of the table (the
+evidence matrix, then the proof audit) test its outputs, and they pass whatever
+the runtime does with them.
+
+**The perspectives, and the test group each belongs to.** A decision table is a
+subject; each question below is a perspective on it, answered by a test group
+that already exists:
+
+| Perspective | Question | Test group |
+|---|---|---|
+| expectation | does a test hold, written out independently of the code, what the table returns for every input? | the matrix tests (T6, T8, T9 closed this way) |
+| decided with | does a caller use the result to decide, not only to print it? | `matrix_consumers_test.dart` (this rule; T7 is the first it names) |
+| audited | does the proof audit seed single changes to it and show the proofs catch each? | `tool/proof_audit/` providers (`coveredTables`) |
+
+A new decision table fails the topology tests until it has a decider (or is named
+in `_notDecidedWith` with a typed reason and its evidence) and is audited (or is
+named in `_notAuditedYet`). Both lists can only shrink: a name that no longer
+applies fails too.
+
+**Does the perspective call for a new family?** The test is whether the family
+of a file predicts that it holds a decision table. It does not: the census finds
+tables in five family cells, and `untouched x pure` holds five among its 86
+files (`matrix_consumers.md`, last section; pinned by a test). A family is read
+from what a whole file reaches; "does something decide with this result" is asked
+of a table, whatever file it is in and whatever that file reaches. So it is not a
+new family and not a new axis on the existing families: it is a perspective on
+the matrix test group, which the families do not need to carry.
+
+**What the rule does not see.** Matrices written as data (an enum's constructor
+arguments, as `ClaudartCommand` and `ExitReason`) are not decision tables here;
+the proof audit and an independent table cover them. A caller is classified by
+text: reading `.label` or `.name`, or sitting inside a printed message, is a
+display, anything else decides. A getter whose name another declaration shares
+(`hue`, `kind`) cannot be attributed from text and is listed, not counted. A table
+whose consumer is another package (`StepStatusFromEvent.fromEvent`, used by
+zedup) must be exported and is named with that evidence.
 
 ### Proofs against missed consolidation (defined 2026-10-28, owner's direction)
 

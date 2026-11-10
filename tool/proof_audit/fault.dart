@@ -34,6 +34,11 @@ abstract class FaultProvider {
   /// The proof or matrix name, as the log records it.
   String get proof;
 
+  /// The decision tables of `lib/` this provider seeds faults into, by name
+  /// (see `test/helpers/matrix_consumers.dart`). A matrix written as data, not
+  /// as a function, names none.
+  List<String> get coveredTables => const [];
+
   /// The tests that are meant to carry the proof: run first, fast.
   List<String> get tierOneTests;
 

@@ -29,6 +29,9 @@ class HandoffListenerFaults extends FaultProvider {
   String get proof => 'handoffListeners';
 
   @override
+  List<String> get coveredTables => const ['listenersFor'];
+
+  @override
   List<String> get tierOneTests => const [
         'test/session/handoff_listeners_test.dart',
         'test/session/handoff_store_test.dart',

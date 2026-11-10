@@ -17,21 +17,11 @@ import 'package:claudart/io/file_io.dart';
 import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/logging/logger.dart';
 
-import 'closure_faults.dart';
-import 'command_faults.dart';
 import 'controls.dart';
 import 'fault.dart';
-import 'listener_faults.dart';
+import 'providers.dart';
 import 'report.dart';
 import 'runner.dart';
-import 'table_faults.dart';
-
-const _providers = <FaultProvider>[
-  TransitionTableFaults(),
-  ClosureEvidenceFaults(),
-  ClaudartCommandFaults(),
-  HandoffListenerFaults(),
-];
 
 String? _option(List<String> args, String name) {
   for (final arg in args) {
@@ -84,7 +74,7 @@ Future<void> main(List<String> args) async {
   );
 
   final work = <(FaultProvider, SeededFault)>[
-    for (final provider in _providers)
+    for (final provider in auditProviders)
       if (proofName == null || provider.proof == proofName)
         for (final fault in provider.faults(repository))
           if (only == null || fault.description.contains(only)) (provider, fault),
@@ -104,7 +94,7 @@ Future<void> main(List<String> args) async {
     final runner = AuditRunner(scratchRoot: scratch, logger: logger);
     if (number == 0 && !skipControls) {
       for (final control in controls) {
-        final result = await runner.check(_providers.first, control.fault);
+        final result = await runner.check(auditProviders.first, control.fault);
         stdout.writeln('control ${result.verdict.name} (expected '
             '${control.expected.name}): ${control.fault.description}');
         if (result.verdict != control.expected) {

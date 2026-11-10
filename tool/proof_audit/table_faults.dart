@@ -94,6 +94,9 @@ class TransitionTableFaults extends FaultProvider {
   String get proof => 'transitionTable';
 
   @override
+  List<String> get coveredTables => const ['after'];
+
+  @override
   List<String> get tierOneTests => const [
         'test/topology/transition_proofs_test.dart',
         'test/topology/transition_matrix_test.dart',
