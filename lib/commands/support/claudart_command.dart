@@ -135,7 +135,7 @@ enum ClaudartCommand {
   debug(
     wireName: 'debug',
     reachedFrom: _cliOnly,
-    supportsHeadless: false,
+    supportsHeadless: true,
     handoffEvents: {
       HandoffEvent.debugStarted,
       HandoffEvent.debugBlocked,

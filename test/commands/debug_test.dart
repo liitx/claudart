@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/generated/user_text.g.dart';
 import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/debug.dart';
@@ -730,6 +731,53 @@ void main() {
       expect(printed, isNot(contains(hint)));
     });
 
+    Future<void> headlessRun(MemoryFileIO io, GateResult Function() gate) =>
+        runDebug(
+          seams: CommandSeams(
+            io: io,
+            projectRootOverride: root.path,
+            exitFn: _throwExit,
+            pickFn: (_) => throw StateError('headless never asks'),
+          ),
+          executor: _executorWithPlanText(plan),
+          dartFileAnalyzer: (_, __) => true,
+          runVerification: (command, projectRoot) => gate(),
+          mode: RunMode.headless,
+        );
+
+    test('headless, none configured: nothing is written, nothing is asked',
+        () async {
+      final io = ioWithCommand(null);
+      await expectLater(
+        headlessRun(io, () => const GateResult.passed()),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(File('${root.path}/lib/foo.dart').existsSync(), isFalse);
+      expect(_statusOf(io), HandoffStatus.debugInProgress);
+      expect(recorded(io), isNot(DebugDisposition.done));
+    });
+
+    test('headless, configured and passing: applied without asking, verified',
+        () async {
+      final io = ioWithCommand('dart test');
+      await headlessRun(io, () => const GateResult.passed());
+      expect(File('${root.path}/lib/foo.dart').existsSync(), isTrue);
+      expect(recorded(io), DebugDisposition.verified);
+    });
+
+    test('headless, configured and failing: the files are restored', () async {
+      final io = ioWithCommand('dart test');
+      await expectLater(
+        headlessRun(
+          io,
+          () => const GateResult.failed(exitCode: 1, outputTail: 'red'),
+        ),
+        throwsA(isA<EditPlanException>()),
+      );
+      expect(File('${root.path}/lib/foo.dart').existsSync(), isFalse);
+      expect(_statusOf(io), HandoffStatus.needsSuggest);
+    });
+
     test('a failing analysis is never verified: the command is not run', () async {
       final io = ioWithCommand('dart test');
       var asked = false;
@@ -760,6 +808,7 @@ void main() {
       DebugExitKind.readerProducedNothing: 1,
       DebugExitKind.implementerProducedNothing: 1,
       DebugExitKind.ownerDeclinedWrite: 0,
+      DebugExitKind.headlessWithoutVerification: 1,
     };
     for (final kind in DebugExitKind.values) {
       test('${kind.name} exits with ${exitCodeByKind[kind]}', () {
@@ -843,6 +892,19 @@ void main() {
           executor: _executorWithPlan(),
           pickFn: (_) => 1,
         );
+        return outcomes(io, logsDirFor(_workspace));
+      },
+      DebugExitKind.headlessWithoutVerification: () async {
+        final io = _io();
+        try {
+          await runDebug(
+            seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: unscriptedPick),
+            executor: _executorWithPlan(),
+            mode: RunMode.headless,
+          );
+        } on _ExitException {
+          // the run ends without writing
+        }
         return outcomes(io, logsDirFor(_workspace));
       },
     };

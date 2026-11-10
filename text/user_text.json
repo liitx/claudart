@@ -14,6 +14,8 @@
   "debugNoHandoffFoundRunClaudartSuggest": "✗ No handoff found. Run `claudart suggest` first.",
   "debugIsClaudeCliInstalledAndAuthenticated": "     Is claude CLI installed and authenticated?",
   "debugExitNoFilesWritten": "\n  Exit — no files written.\n",
+  "debugHeadlessApplyingPlan": "(headless — applying the plan without confirmation; the verification command decides whether it stays)\n",
+  "debugHeadlessNeedsVerificationCommand": "\n  Headless debug writes files only when a verification command can check them. Set \"verificationCommand\" in {configPath}, or run debug in a terminal.\n\n  Exit — no files written.\n",
   "experimentUsageClaudartExperimentNameCommandArgs": "Usage: claudart experiment <name> -- <command> [args...]",
   "flowASavedCheckpointWasFoundFrom": "  A saved checkpoint was found from a previous session.\n",
   "flowNoPromptEnteredAborted": "\n  No prompt entered. Aborted.\n",

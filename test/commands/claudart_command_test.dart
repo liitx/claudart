@@ -70,6 +70,7 @@ void main() {
       ClaudartCommand.teardown,
       ClaudartCommand.rotate,
       ClaudartCommand.kill,
+      ClaudartCommand.debug,
     };
 
     for (final command in ClaudartCommand.values) {

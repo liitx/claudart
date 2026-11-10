@@ -17,6 +17,7 @@ import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
 import '../session/debug_disposition.dart';
 import '../session/handoff_event.dart';
+import '../session/run_mode.dart';
 import '../session/invalid_handoff_transition_exception.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
@@ -54,7 +55,11 @@ enum DebugExitKind {
   implementerProducedNothing,
 
   /// The owner reviewed the plan and chose not to write the files.
-  ownerDeclinedWrite;
+  ownerDeclinedWrite,
+
+  /// A headless run reached the review with no verification command to check
+  /// the plan, so it wrote nothing: nobody reviewed it and nothing could.
+  headlessWithoutVerification;
 
   /// The process exit code for this ending. Declining the write is a normal
   /// ending; every other kind is a failure.
@@ -65,7 +70,8 @@ enum DebugExitKind {
         DebugExitKind.noHandoff ||
         DebugExitKind.emptyScope ||
         DebugExitKind.readerProducedNothing ||
-        DebugExitKind.implementerProducedNothing =>
+        DebugExitKind.implementerProducedNothing ||
+        DebugExitKind.headlessWithoutVerification =>
           1,
       };
 }
@@ -75,6 +81,7 @@ Future<void> runDebug({
   PipelineExecutor? executor,
   DartFileAnalyzer? dartFileAnalyzer,
   GateResult Function(String command, String projectRoot)? runVerification,
+  RunMode mode = RunMode.interactive,
 }) async {
   final io = seams.io;
   final exitFn = seams.exitFn;
@@ -289,10 +296,28 @@ Future<void> runDebug({
 
   print('${ansi.dim}${'─' * 44}${ansi.reset}\n');
 
-  final choice = pick_([
-    'apply  ${ansi.dim}(write all files to disk)${ansi.reset}',
-    'exit  ${ansi.dim}(quit without writing)${ansi.reset}',
-  ]);
+  // The workspace's verification command, when it names one, decides whether
+  // the fix is verified; none configured means nothing verifies it.
+  final verificationCommand =
+      loadWorkspaceConfig(workspace, io: fileIO).verificationCommand;
+
+  // Headless asks nobody, so the plan is applied only when a command can check
+  // it (a failing check restores the files); with none it writes nothing.
+  final int choice;
+  if (mode == RunMode.headless) {
+    if (verificationCommand == null) {
+      print(UserText.debugHeadlessNeedsVerificationCommand
+          .format({'configPath': configPathFor(workspace)}));
+      leave(DebugExitKind.headlessWithoutVerification);
+    }
+    print(UserText.debugHeadlessApplyingPlan.template);
+    choice = 0;
+  } else {
+    choice = pick_([
+      'apply  ${ansi.dim}(write all files to disk)${ansi.reset}',
+      'exit  ${ansi.dim}(quit without writing)${ansi.reset}',
+    ]);
+  }
 
   if (choice == 1) {
     print(UserText.debugExitNoFilesWritten.template);
@@ -305,10 +330,6 @@ Future<void> runDebug({
 
   // Write, then verify every file; a failure restores the files, blocks the
   // session and throws before fixApplied is applied.
-  // The workspace's verification command, when it names one, decides whether
-  // the fix is verified; none configured means nothing verifies it.
-  final verificationCommand =
-      loadWorkspaceConfig(workspace, io: fileIO).verificationCommand;
   final runVerification_ = runVerification ??
       (command, root) => _runVerificationCommand(command, root, seams.clock);
   final verified = await blockOnFailure(() async {

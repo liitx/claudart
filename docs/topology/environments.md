@@ -18,7 +18,7 @@ Where each command can be started, whether it takes `--headless`, whether `--pro
 | status | cliSubcommand | false | true | — |
 | teardown | cliSubcommand | true | true | tornDown, reminderSaved |
 | suggest | cliSubcommand, chatShell | false | true | saveConfirmedReady, suggestResumed |
-| debug | cliSubcommand | false | true | debugStarted, debugBlocked, fixApplied |
+| debug | cliSubcommand | true | true | debugStarted, debugBlocked, fixApplied |
 | flow | cliSubcommand, chatShell | false | true | flowConstructed |
 | save | cliSubcommand | false | true | saveUnconfirmed, saveConfirmedExploring |
 | rotate | cliSubcommand | true | true | rotated, rotatedEmpty |

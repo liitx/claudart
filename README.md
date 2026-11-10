@@ -538,7 +538,7 @@ Commands:
   status [--prompt]      Show current session state; --prompt outputs a compact colored string for shell RPROMPT/PS1
   teardown [--headless]  Close session: update knowledge, archive handoff, suggest commit; --headless resolves every decision itself and prints a summary instead of prompting
   suggest                Run suggest pipeline: haiku classifies the bug and reads scope files, routed model writes handoff KT
-  debug                  Run debug pipeline: haiku reads scope files, routed model emits EDIT_FILE edits written to disk
+  debug [--headless]     Run debug pipeline: haiku reads scope files, routed model emits EDIT_FILE edits written to disk; --headless applies the plan without review only when a verificationCommand can check it
   flow                   [experimental] Agent-constructed session: classify intent, plan, approve, build handoff
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
   rotate [--headless]    Archive current session, run build gate, seed next handoff from Pending Issues; --headless skips the confirmation (needed when there is no terminal to ask on)
