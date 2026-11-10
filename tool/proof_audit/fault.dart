@@ -41,6 +41,10 @@ abstract class FaultProvider {
   /// proofs is told apart from a gap in the whole suite.
   List<String> get tierTwoTests;
 
+  /// Test files left out of the wider set. The audit's own tests read the very
+  /// sources a fault changes, so their failing says nothing about a proof.
+  List<String> get excludedTests => const ['test/topology/proof_audit_test.dart'];
+
   /// Every fault, in a fixed order, built from the unchanged source.
   List<SeededFault> faults(String repositoryRoot);
 }

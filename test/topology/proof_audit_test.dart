@@ -253,6 +253,54 @@ void main() {
     });
   });
 
+  group('the tests a wider run is made of', () {
+    late Directory root;
+
+    setUp(() {
+      root = Directory.systemTemp.createTempSync('proof_audit_expand_');
+      for (final path in [
+        'test/a/one_test.dart',
+        'test/a/helper.dart',
+        'test/b/deep/two_test.dart',
+        'test/b/proof_audit_test.dart',
+      ]) {
+        File('${root.path}/$path')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('');
+      }
+    });
+
+    tearDown(() => root.deleteSync(recursive: true));
+
+    test('a directory is every test file under it', () {
+      expect(
+        expandTests(root.path, ['test/b'], const []),
+        ['test/b/deep/two_test.dart', 'test/b/proof_audit_test.dart'],
+      );
+    });
+
+    test('a file named twice is run once, and files that are not tests are left out', () {
+      expect(
+        expandTests(root.path, ['test/a/one_test.dart', 'test/a'], const []),
+        ['test/a/one_test.dart'],
+      );
+    });
+
+    test('an excluded test is left out of a directory it is in', () {
+      expect(
+        expandTests(root.path, ['test/b'], ['test/b/proof_audit_test.dart']),
+        ['test/b/deep/two_test.dart'],
+      );
+    });
+
+    test('the audit never runs its own tests as part of a wider run', () {
+      expect(
+        const TransitionTableFaults().excludedTests,
+        contains('test/topology/proof_audit_test.dart'),
+      );
+    });
+  });
+
   group('the report', () {
     Map<String, dynamic> row(
       String verdict, {

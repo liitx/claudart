@@ -107,6 +107,51 @@ void main() {
     });
   });
 
+  // Written out from the design: every move is recorded, and the one move that
+  // closes a verified fix calls for a teardown as well. Nothing else does.
+  group('which reactions a move calls for', () {
+    for (final event in HandoffEvent.values) {
+      for (final to in HandoffStatus.values) {
+        final closesAFix =
+            event == HandoffEvent.fixApplied && to == HandoffStatus.debugComplete;
+        test(
+          '${event.name} landing on ${to.name} calls for '
+          '${closesAFix ? 'the record and a teardown' : 'the record alone'}',
+          () {
+            expect(
+              listenersFor(
+                HandoffTransition(
+                  from: HandoffStatus.unknown,
+                  event: event,
+                  to: to,
+                ),
+              ),
+              closesAFix
+                  ? [
+                      HandoffListenerKind.recordTransition,
+                      HandoffListenerKind.teardownWhenConverged,
+                    ]
+                  : [HandoffListenerKind.recordTransition],
+            );
+          },
+        );
+      }
+    }
+  });
+
+  group('what a reaction may return', () {
+    test('the record returns nothing', () {
+      expect(HandoffListenerKind.recordTransition.mayEmit, isEmpty);
+    });
+
+    test('the teardown returns only tornDown', () {
+      expect(
+        HandoffListenerKind.teardownWhenConverged.mayEmit,
+        {HandoffEvent.tornDown},
+      );
+    });
+  });
+
   group('safety', () {
     test('no listener may emit an event the landing status forbids', () {
       expect(

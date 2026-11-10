@@ -136,6 +136,26 @@ int? _closingBrace(String line, int start) {
   return null;
 }
 
+/// The test files [tests] name under [root]: a directory is every `_test.dart`
+/// file in it, a file stands for itself, and [excluded] files are left out.
+/// Paths stay relative to [root], sorted, each once.
+List<String> expandTests(String root, List<String> tests, List<String> excluded) {
+  final files = <String>{};
+  for (final test in tests) {
+    final directory = Directory('$root/$test');
+    if (directory.existsSync()) {
+      for (final entity in directory.listSync(recursive: true)) {
+        if (entity is File && entity.path.endsWith('_test.dart')) {
+          files.add(entity.path.substring(root.length + 1));
+        }
+      }
+    } else {
+      files.add(test);
+    }
+  }
+  return (files..removeAll(excluded)).toList()..sort();
+}
+
 class AuditRunner {
   AuditRunner({
     required this.scratchRoot,
@@ -161,7 +181,9 @@ class AuditRunner {
       var (judgement, attempts) = await _runOnceMoreIfInvalid(provider.tierOneTests);
       if (!judgement.invalid && judgement.failed.isEmpty) {
         tier = 2;
-        (judgement, attempts) = await _runOnceMoreIfInvalid(provider.tierTwoTests);
+        (judgement, attempts) = await _runOnceMoreIfInvalid(
+          expandTests(scratchRoot, provider.tierTwoTests, provider.excludedTests),
+        );
       }
       final verdict = judgement.invalid
           ? ProofVerdict.invalid
