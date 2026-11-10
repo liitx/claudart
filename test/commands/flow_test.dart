@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:claudart/commands/flow.dart';
+import 'package:claudart/commands/support/live_handoff.dart';
 import 'package:claudart/logging/planner_log.dart';
 import 'package:claudart/config/paths.dart';
 import 'package:claudart/workspace/workspace_config.dart';
@@ -92,6 +93,28 @@ PipelineExecutor _executorAnswering(String text) => PipelineExecutor(
         text: text,
         usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
       ),
+    );
+
+/// An executor that counts the model calls it is asked for.
+PipelineExecutor _countingExecutor(void Function() onCall) => PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        required allowedTools,
+        required helperModel,
+        StepMode mode = StepMode.project,
+      }) async {
+        onCall();
+        return StepResult(
+          text:
+              '<${RouteTag.handoff.wireTag}>$_constructedHandoff</${RouteTag.handoff.wireTag}>',
+          usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+        );
+      },
     );
 
 const _constructedHandoff = '''## Status
@@ -278,15 +301,58 @@ void main() {
       ]);
     });
 
-    test('over a live handoff it still writes, and the move is logged as '
-        'rejected so the overwrite is visible', () async {
-      final io = ioWith(
-        existingHandoff: withHandoffStatus(
-          blankHandoff.replaceFirst('_Not yet determined._', 'an older bug'),
-          HandoffStatus.debugInProgress,
-        ),
+    // What `setup` does over a live handoff (measured with the real binary):
+    // it asks, "Start fresh" archives the old handoff first, and the move is
+    // logged as one the table lacks.
+    final liveHandoff = withHandoffStatus(
+      blankHandoff.replaceFirst('_Not yet determined._', 'an older bug'),
+      HandoffStatus.debugInProgress,
+    );
+
+    int Function(List<String>) choosing(LiveHandoffMenu choice) => (items) =>
+        items.any((item) => item.contains('Start fresh'))
+            ? choice.index
+            : 0; // approve the saved plan
+
+    Future<({int modelCalls})> runOver(
+      MemoryFileIO io,
+      LiveHandoffMenu choice,
+    ) async {
+      var modelCalls = 0;
+      try {
+        await runZoned(
+          () => runFlow(
+            io: io,
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            plannerLog: _silentPlannerLog(),
+            executor: _countingExecutor(() => modelCalls++),
+            pickFn: choosing(choice),
+          ),
+          zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+        );
+      } on _ExitException {
+        // Continue and Back leave through exit 0.
+      }
+      return (modelCalls: modelCalls);
+    }
+
+    int archived(MemoryFileIO io) => io.files.keys
+        .where((path) => path.startsWith(archiveDirFor(_workspace)))
+        .length;
+
+    test('over a live handoff "Start fresh" archives the old one first, then '
+        'writes, and the move is logged as rejected', () async {
+      final io = ioWith(existingHandoff: liveHandoff);
+      await runOver(io, LiveHandoffMenu.startFresh);
+      expect(archived(io), greaterThan(0));
+      expect(
+        io.files.entries
+            .where((e) => e.key.startsWith(archiveDirFor(_workspace)))
+            .any((e) => e.value.contains('an older bug')),
+        isTrue,
+        reason: 'the replaced handoff is kept in the archive',
       );
-      await runWith(io);
       expect(io.read(handoffPathFor(_workspace)),
           contains('The splitter stops early.'));
       expect(loggedMoves(io, _workspace), [
@@ -297,6 +363,46 @@ void main() {
           'rejected': true,
         },
       ]);
+    });
+
+    test('over a live handoff "Continue" keeps it, spends no model call and '
+        'archives nothing', () async {
+      final io = ioWith(existingHandoff: liveHandoff);
+      final result = await runOver(io, LiveHandoffMenu.resume);
+      expect(io.read(handoffPathFor(_workspace)), liveHandoff);
+      expect(result.modelCalls, 0);
+      expect(archived(io), 0);
+      expect(loggedMoves(io, _workspace), isEmpty);
+    });
+
+    test('over a live handoff "Back" cancels the same way', () async {
+      final io = ioWith(existingHandoff: liveHandoff);
+      final result = await runOver(io, LiveHandoffMenu.back);
+      expect(io.read(handoffPathFor(_workspace)), liveHandoff);
+      expect(result.modelCalls, 0);
+      expect(archived(io), 0);
+    });
+
+    test('with no live handoff it does not ask and archives nothing', () async {
+      final io = ioWith();
+      var asked = false;
+      await runZoned(
+        () => runFlow(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          plannerLog: _silentPlannerLog(),
+          executor: _executorAnswering(
+              '<${RouteTag.handoff.wireTag}>$_constructedHandoff</${RouteTag.handoff.wireTag}>'),
+          pickFn: (items) {
+            asked = asked || items.any((item) => item.contains('Start fresh'));
+            return 0;
+          },
+        ),
+        zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+      );
+      expect(asked, isFalse);
+      expect(archived(io), 0);
     });
   });
 

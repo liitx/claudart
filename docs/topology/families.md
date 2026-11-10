@@ -7,7 +7,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 | role \ reach | pure | fileSeam | workspaceBound | processBound |
 |---|---|---|---|---|
 | drivesState | 3 | 1 | 2 | 7 |
-| observesState | 10 | 1 | 4 | 3 |
+| observesState | 10 | 1 | 5 | 3 |
 | untouched | 85 | 16 | 6 | 24 |
 
 ## drivesState x pure
@@ -56,6 +56,7 @@ A family is a cell of two axes read from what a file's code does (`test/helpers/
 
 - `lib/commands/hook.dart`
 - `lib/commands/status.dart`
+- `lib/commands/support/live_handoff.dart`
 - `lib/session/session_ops.dart`
 - `lib/session/sync_check.dart`
 

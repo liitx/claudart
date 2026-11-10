@@ -38,6 +38,7 @@ import '../session/handoff_store.dart';
 import '../session/handoff_event.dart';
 import '../session/session_state.dart';
 import '../registry.dart';
+import 'support/live_handoff.dart';
 
 Future<void> runFlow({
   FileIO? io,
@@ -66,6 +67,18 @@ Future<void> runFlow({
   final projectRoot = project.projectRoot;
   final entry = project.entry;
   printProjectLine(entry);
+
+  // A session under way is not lost: ask first, and archive it before it is
+  // replaced, as `setup` does.
+  final startedFrom = settleLiveHandoff(
+    io: fileIO,
+    entry: entry,
+    gitBranch: project.gitContext?.branch,
+    pick: pick_,
+    exit_: exit_,
+    resumeText: UserText.flowContinueExisting,
+    cancelledText: UserText.flowCancelled,
+  );
 
   final workspace    = entry.workspacePath;
   final wsConfig     = WorkspaceConfig.load(workspace, io: fileIO);
@@ -127,7 +140,7 @@ Future<void> runFlow({
           displayStep:  3,
           displayTotal: 3,
         );
-        await _writeHandoff(ctx, entry, fileIO, exit_);
+        await _writeHandoff(ctx, entry, fileIO, exit_, startedFrom);
         fileIO.delete(checkpointPath);
         return;
       }
@@ -145,7 +158,7 @@ Future<void> runFlow({
         displayStep:  3,
         displayTotal: 3,
       );
-      await _writeHandoff(ctx, entry, fileIO, exit_);
+      await _writeHandoff(ctx, entry, fileIO, exit_, startedFrom);
       fileIO.delete(checkpointPath);
       return;
     } on FormatException {
@@ -205,7 +218,7 @@ Future<void> runFlow({
     displayTotal: 3,
   );
 
-  await _writeHandoff(ctx, entry, fileIO, exit_);
+  await _writeHandoff(ctx, entry, fileIO, exit_, startedFrom);
 }
 
 // ── Classification display ───────────────────────────────────────────────────
@@ -317,6 +330,7 @@ Future<void> _writeHandoff(
   RegistryEntry         entry,
   FileIO                fileIO,
   Never Function(int)   exit_,
+  HandoffStatus         startedFrom,
 ) async {
   final workspace = entry.workspacePath;
   final handoffContent =
@@ -342,9 +356,6 @@ Future<void> _writeHandoff(
   // own and writes through the one writer. Over a live handoff it still writes
   // (as it always has), and the move is logged as rejected, so the overwrite is
   // on record.
-  final previous = fileIO.fileExists(handoffPath)
-      ? SessionState.parse(fileIO.read(handoffPath)).effectiveStatus
-      : HandoffStatus.noHandoff;
   HandoffStore(
     io: fileIO,
     handoffFile: handoffPath,
@@ -352,7 +363,7 @@ Future<void> _writeHandoff(
     command: ClaudartCommand.flow.name,
   ).replace(
     '$header${handoffContent.trim()}',
-    from: previous,
+    from: startedFrom,
     event: HandoffEvent.flowConstructed,
   );
   stdout.write(

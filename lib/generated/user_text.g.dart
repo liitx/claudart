@@ -286,7 +286,10 @@ enum UserText {
   indentedLine('  {line}'),
   leadingBlankLine('\n{line}'),
   statusClosureLine('Closure  : {evidence} — {closure}'),
-  statusVerificationHint('  Verify    : no verification command is set, so a headless teardown will only save a reminder. Set "verificationCommand" in {configPath}');
+  statusVerificationHint('  Verify    : no verification command is set, so a headless teardown will only save a reminder. Set "verificationCommand" in {configPath}'),
+  previousSessionArchived('  Previous session archived → {archivedName}'),
+  flowCancelled('\nFlow cancelled.'),
+  flowContinueExisting('\nContinuing the existing session. Open your editor and run /suggest.');
 
   const UserText(this.template);
 

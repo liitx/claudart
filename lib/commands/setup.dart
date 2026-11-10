@@ -10,12 +10,9 @@ import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
 import '../logging/logger.dart';
 import '../session/handoff_event.dart';
-import '../session/session_state.dart' show SessionState, HandoffStatus;
-import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import 'support/claudart_command.dart';
 import 'scan.dart';
-import '../session/session_ops.dart';
 import '../ui/render.dart' as render;
 import '../util/prompt_with_default.dart';
 import '../io/process_runner.dart';
@@ -23,6 +20,7 @@ import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
+import 'support/live_handoff.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.
@@ -77,41 +75,18 @@ Future<void> runSetup({
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
 
-  // Check for active handoff — offer menu if one exists with real content.
-  final existing =
-      fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
-  // The status this setup starts from: none when there is no live handoff, or
-  // the one a "Start fresh" overwrites.
-  var startedFrom = HandoffStatus.noHandoff;
-  if (existing.isNotEmpty) {
-    final state = SessionState.parse(existing);
-    if (state.hasActiveContent) {
-      final statusColour = render.statusColour(state.status);
-      print(UserText.projectHeadingRule.format({'name': entry.name}));
-      print(UserText.killBranch.format({'branch': gitCtx?.branch ?? state.branch}));
-      print(UserText.statusValueLine.format({'status': ansi.c(statusColour, state.status.value)}));
-      print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
-      print('');
-
-      final choice = chooseFrom(SetupMenu.values, (m) => m.label, pick_);
-      switch (choice) {
-        case SetupMenu.back:
-          print(UserText.setupSetupCancelled.template);
-          exit_(0);
-        case SetupMenu.resume:
-          print(UserText.setupOpenYourEditorAndRunSuggest.template);
-          exit_(0);
-        case SetupMenu.startFresh:
-          break;
-      }
-      startedFrom = state.status;
-      final archivedName = archiveCurrentHandoff(workspace: workspace, io: fileIO);
-      if (archivedName != null) {
-        print(ansi.c(ansi.dim, '  Previous session archived → $archivedName'));
-      }
-      // Fall through to questions below.
-    }
-  }
+  // A live handoff is settled first: continue it, start fresh (archiving it),
+  // or go back. The status this setup starts from is none when there is no
+  // live handoff, or the one a "Start fresh" replaced.
+  final startedFrom = settleLiveHandoff(
+    io: fileIO,
+    entry: entry,
+    gitBranch: gitCtx?.branch,
+    pick: pick_,
+    exit_: exit_,
+    resumeText: UserText.setupOpenYourEditorAndRunSuggest,
+    cancelledText: UserText.setupSetupCancelled,
+  );
 
   // Detect branch — use git context already resolved, or fall back to prompt.
   final branch = gitCtx?.branch ??
@@ -225,25 +200,7 @@ Future<void> runSetup({
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
 
-/// The choices offered when a session already exists for the project.
-enum SetupMenu {
-  resume,
 
-  /// Overwrites the handoff and proceeds to the questions.
-  startFresh,
-  back;
-
-  String get label => switch (this) {
-        resume => '${ansi.c(ansi.green, 'Continue')}  resume existing session',
-        startFresh => '${ansi.c(ansi.yellow, 'Start fresh')}  '
-            'overwrite handoff with new context',
-        back => 'Back',
-      };
-}
-
-
-String _truncate(String s, {int max = 60}) =>
-    s.length > max ? '${s.substring(0, max)}…' : s;
 
 // ── File resolution ───────────────────────────────────────────────────────────
 
