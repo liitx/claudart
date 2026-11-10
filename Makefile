@@ -14,9 +14,9 @@ diagram:
 ## Seed every single-cell change to the handoff transition table in scratch
 ## copies and log whether the proofs saw it (logs/proofs.jsonl); writes the
 ## report. Takes about half an hour with 3 workers; never touches the tree.
-##   make proof-audit [WORKERS=3] [LIMIT=n] [ONLY=text]
+##   make proof-audit [WORKERS=3] [LIMIT=n] [ONLY=text] [PROOF=transitionTable|closureEvidence|claudartCommand]
 proof-audit:
-	$(DART) run tool/proof_audit/run.dart --workers=$(or $(WORKERS),3) --report=docs/topology/proof_audit.md $(if $(LIMIT),--limit=$(LIMIT)) $(if $(ONLY),--only="$(ONLY)")
+	$(DART) run tool/proof_audit/run.dart --workers=$(or $(WORKERS),3) --report=docs/topology/proof_audit.md $(if $(LIMIT),--limit=$(LIMIT)) $(if $(ONLY),--only="$(ONLY)") $(if $(PROOF),--proof=$(PROOF))
 
 ## Every check a change must pass: suite, analyzer errors, custom_lint. With
 ## MSG="..." it commits after they pass. See tool/gate.sh.

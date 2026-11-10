@@ -1,7 +1,7 @@
 // run.dart — audits the proofs against seeded faults and logs what it finds
 //
 //   dart run tool/proof_audit/run.dart [--workers=N] [--limit=N] [--only=text]
-//       [--skip-controls] [--report-only] [--logs=<workspace dir>]
+//       [--proof=name] [--skip-controls] [--report-only] [--logs=<workspace dir>]
 //       [--report=<markdown file>]
 //
 // Seeds every fault of every provider in scratch copies of the repository, one
@@ -17,13 +17,19 @@ import 'package:claudart/io/file_io.dart';
 import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/logging/logger.dart';
 
+import 'closure_faults.dart';
+import 'command_faults.dart';
 import 'controls.dart';
 import 'fault.dart';
 import 'report.dart';
 import 'runner.dart';
 import 'table_faults.dart';
 
-const _providers = <FaultProvider>[TransitionTableFaults()];
+const _providers = <FaultProvider>[
+  TransitionTableFaults(),
+  ClosureEvidenceFaults(),
+  ClaudartCommandFaults(),
+];
 
 String? _option(List<String> args, String name) {
   for (final arg in args) {
@@ -53,6 +59,7 @@ Future<void> main(List<String> args) async {
   final workers = int.parse(_option(args, 'workers') ?? '1');
   final limit = int.tryParse(_option(args, 'limit') ?? '');
   final only = _option(args, 'only');
+  final proofName = _option(args, 'proof');
   final workspace = _option(args, 'logs') ?? '/tmp/claudart_proof_audit/ws';
   final reportPath = _option(args, 'report');
   final skipControls = args.contains('--skip-controls');
@@ -76,8 +83,9 @@ Future<void> main(List<String> args) async {
 
   final work = <(FaultProvider, SeededFault)>[
     for (final provider in _providers)
-      for (final fault in provider.faults(repository))
-        if (only == null || fault.description.contains(only)) (provider, fault),
+      if (proofName == null || provider.proof == proofName)
+        for (final fault in provider.faults(repository))
+          if (only == null || fault.description.contains(only)) (provider, fault),
   ];
   final queue = limit == null ? work : work.take(limit).toList();
   stdout.writeln('${queue.length} faults, $workers worker(s), logging to '

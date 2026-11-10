@@ -10,6 +10,8 @@ import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 
+import '../../tool/proof_audit/closure_faults.dart';
+import '../../tool/proof_audit/command_faults.dart';
 import '../../tool/proof_audit/fault.dart';
 import '../../tool/proof_audit/report.dart';
 import '../../tool/proof_audit/runner.dart';
@@ -309,6 +311,69 @@ void main() {
     test('names the tests that carried the proof', () {
       final text = renderReport([row('caught', caughtBy: const ['the size pin'])]);
       expect(text, contains('| the size pin | 1 |'));
+    });
+  });
+
+  group('every provider', () {
+    const providers = <FaultProvider>[
+      TransitionTableFaults(),
+      ClosureEvidenceFaults(),
+      ClaudartCommandFaults(),
+    ];
+
+    for (final provider in providers) {
+      group(provider.proof, () {
+        final all = provider.faults('.');
+
+        test('has faults, and the same ones each time', () {
+          expect(all, isNotEmpty);
+          expect(
+            provider.faults('.').map((f) => f.description).toList(),
+            all.map((f) => f.description).toList(),
+          );
+        });
+
+        test('describes each fault once', () {
+          final descriptions = all.map((f) => f.description).toList();
+          expect(descriptions.toSet(), hasLength(descriptions.length));
+        });
+
+        test('changes the source with every fault', () {
+          for (final fault in all) {
+            final original = File(fault.sourceFile).readAsStringSync();
+            expect(fault.apply(original), isNot(original),
+                reason: fault.description);
+          }
+        });
+
+        test('stands for a line inside its file', () {
+          for (final fault in all) {
+            final length = File(fault.sourceFile).readAsLinesSync().length;
+            expect(fault.sourceLine, inInclusiveRange(1, length),
+                reason: fault.description);
+          }
+        });
+
+        test('names tests that exist', () {
+          for (final path in [...provider.tierOneTests, ...provider.tierTwoTests]) {
+            expect(
+              File(path).existsSync() || Directory(path).existsSync(),
+              isTrue,
+              reason: path,
+            );
+          }
+        });
+      });
+    }
+
+    test('the evidence matrix has 29 faults: five returns and two guards, and '
+        'four arms each retargeted three ways', () {
+      expect(const ClosureEvidenceFaults().faults('.'), hasLength(29));
+    });
+
+    test('the command matrix has 546 faults: for each of the 26 commands four '
+        'flags, a wire name, two other entry sets and 14 events', () {
+      expect(const ClaudartCommandFaults().faults('.'), hasLength(546));
     });
   });
 }
