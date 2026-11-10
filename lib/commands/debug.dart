@@ -345,6 +345,12 @@ Future<void> runDebug({
     '  $written file${written == 1 ? '' : 's'} written'
     '  ${ansi.dim}→${ansi.reset}  status: debug-complete\n\n',
   );
+  // A fix nothing verified, in a workspace that names no verification command:
+  // say how to set one where the owner sees it (gap R17).
+  if (!verified && verificationCommand == null) {
+    print(UserText.statusVerificationHint
+        .format({'configPath': configPathFor(workspace)}));
+  }
   print(UserText.debugNextClaudartSaveThenRunTests.styled({}));
 }
 

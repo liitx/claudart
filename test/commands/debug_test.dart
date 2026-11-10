@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:claudart/generated/user_text.g.dart';
 import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/debug.dart';
 import 'package:claudart/errors/failure_type.dart';
@@ -691,6 +692,42 @@ void main() {
       final row = gateRows(io).single;
       expect(row['exitCode'], 1);
       expect(row['outputTail'], 'Some tests failed');
+    });
+
+    Future<String> printedBy(MemoryFileIO io, GateResult Function() gate) async {
+      final lines = <String>[];
+      await runZoned(
+        () => runDebug(
+          seams: CommandSeams(io: io, projectRootOverride: root.path, exitFn: _throwExit, pickFn: (_) => 0),
+          executor: _executorWithPlanText(plan),
+          dartFileAnalyzer: (_, __) => true,
+          runVerification: (command, projectRoot) => gate(),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => lines.add(line),
+        ),
+      );
+      return lines.join('\n');
+    }
+
+    final hint = UserText.statusVerificationHint
+        .format({'configPath': configPathFor(_workspace)});
+
+    test('none configured: the end says how to set a verification command',
+        () async {
+      final printed = await printedBy(
+        ioWithCommand(null),
+        () => const GateResult.passed(),
+      );
+      expect(printed, contains(hint));
+    });
+
+    test('configured: the end does not suggest setting one', () async {
+      final printed = await printedBy(
+        ioWithCommand('dart test'),
+        () => const GateResult.passed(),
+      );
+      expect(printed, isNot(contains(hint)));
     });
 
     test('a failing analysis is never verified: the command is not run', () async {
