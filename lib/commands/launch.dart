@@ -15,6 +15,7 @@ import '../workspace/workspace_link_state.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
@@ -49,7 +50,7 @@ Future<void> runLauncher({
     } else {
       print(UserText.launchNavigateToAProjectDirectoryAnd.template);
     }
-    exit_(0);
+    leaveFor(ExitReason.launchOutsideProject, exit_: exit_);
   }
 
   final currentEntry = currentRoot != null

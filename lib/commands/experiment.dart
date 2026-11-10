@@ -7,6 +7,7 @@ import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Runs an experiment: executes [command] with [args], tees stdout/stderr to a
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the
@@ -31,7 +32,7 @@ Future<void> runExperiment(
   final sepIdx = args.indexOf('--');
   if (sepIdx < 1 || sepIdx == args.length - 1) {
     print(UserText.experimentUsageClaudartExperimentNameCommandArgs.template);
-    exit_(1);
+    leaveFor(ExitReason.experimentUsageShown, exit_: exit_);
   }
   final name = args.first;
   final cmdArgs = args.sublist(sepIdx + 1);
@@ -87,5 +88,11 @@ Future<void> runExperiment(
   stdout.writeln('  Log: $logFile\n');
   await stdout.flush();
 
-  if (exitCode != 0) exit_(exitCode);
+  if (exitCode != 0) {
+    leaveFor(
+      ExitReason.experimentCommandFailed,
+      exit_: exit_,
+      childCode: exitCode,
+    );
+  }
 }

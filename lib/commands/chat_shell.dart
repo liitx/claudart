@@ -27,6 +27,7 @@ import 'support/command_seams.dart';
 import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// What the user typed. Conversation is the default: only slash commands invoke
 /// structured work; everything else is a [message] to the agent.
@@ -122,7 +123,7 @@ Future<void> runChatShell({
   print(render.header('CLAUDART'));
   if (entry == null) {
     print(UserText.chatShellNotInARegisteredProjectRun.template);
-    exit_(0);
+    leaveFor(ExitReason.chatShellNotInRegisteredProject, exit_: exit_);
   }
 
   final systemPrompt = _chatSystemPrompt(fileIO, entry.workspacePath);

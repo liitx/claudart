@@ -15,6 +15,7 @@ import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Result of the skills.md pending update — used in reports and tests.
 enum SkillsUpdateResult { written, skipped }
@@ -49,7 +50,7 @@ Future<SkillsUpdateResult> runSave({
   // 2 — Read handoff.
   if (!fileIO.fileExists(handoffFile)) {
     print(UserText.saveNoHandoffFoundInWorkspaceNothing.template);
-    exit_(0);
+    leaveFor(ExitReason.saveNoHandoff, exit_: exit_);
   }
 
   var handoff = fileIO.read(handoffFile);

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'ansi.dart' as ansi;
 import 'terminal_support.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Shows an arrow-key navigable menu and returns the **0-based** index of the
 /// selected item.
@@ -58,7 +59,7 @@ int _arrowSelect(List<String> items, {int startIndex = 0}) {
         case _Key.ctrlC:
           _clearMenu(items.length);
           stdout.write(ansi.showCursor);
-          exitProcess(0);
+          leaveFor(ExitReason.menuInterrupted);
         case _Key.other:
           break;
       }
@@ -152,7 +153,7 @@ int selectNumbered(
   final String? Function() read = readLine ?? () => stdin.readLineSync();
   final void Function(String) out = write ?? (String s) => stdout.write(s);
   final void Function(String) err = writeError ?? (String s) => stderr.writeln(s);
-  final Never Function(int) quit = exitFn ?? (int code) => exitProcess(code);
+  final Never Function(int) quit = exitFn ?? exitProcess;
   for (var i = 0; i < items.length; i++) {
     out('  ${i + 1}. ${items[i]}\n');
   }
@@ -163,7 +164,7 @@ int selectNumbered(
     if (raw == null) {
       err('\n✗ No input available (stdin closed). Nothing was selected; '
           'aborting without making changes. Re-run in a terminal.');
-      quit(1);
+      leaveFor(ExitReason.menuHasNoInput, exit_: quit);
     }
     final n = int.tryParse(raw.trim());
     if (n != null && n >= 1 && n <= items.length) return n - 1;

@@ -21,6 +21,7 @@ import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
 import 'support/live_handoff.dart';
+import '../io/exit_reason.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.
@@ -54,12 +55,12 @@ Future<void> runSetup({
 
   if (projectRoot == null) {
     print(UserText.notInGitRepositoryRoot.template.trimRight());
-    exit_(1);
+    leaveFor(ExitReason.setupNotInGitRepository, exit_: exit_);
   }
 
   if (!fileIO.dirExists(projectRoot)) {
     print(UserText.setupPathNotFound.format({'projectRoot': projectRoot}));
-    exit_(1);
+    leaveFor(ExitReason.setupPathNotFound, exit_: exit_);
   }
 
   // Registry lookup.
@@ -68,7 +69,7 @@ Future<void> runSetup({
   if (entry == null) {
     print(UserText.setupNoClaudartSessionFoundForThis.template);
     print(UserText.setupRunClaudartLinkToRegisterIt.template);
-    exit_(1);
+    leaveFor(ExitReason.setupNotLinked, exit_: exit_);
   }
   printProjectLine(entry);
 
@@ -112,7 +113,7 @@ Future<void> runSetup({
 
   if (bug == null || expected == null) {
     print(UserText.setupSetupRequiresAnInteractiveTerminal.template);
-    exit_(1);
+    leaveFor(ExitReason.setupNeedsTerminal, exit_: exit_);
   }
 
   final files = promptWithDefault(prompt_, '3. Any files already in mind?', defaultFiles,
@@ -136,7 +137,7 @@ Future<void> runSetup({
 
   if (!confirm_('Write handoff with this context?')) {
     print(UserText.setupCancelledLeadingBlank.template);
-    exit_(0);
+    leaveFor(ExitReason.setupCancelled, exit_: exit_);
   }
 
   // Run sensitivity scan if enabled.

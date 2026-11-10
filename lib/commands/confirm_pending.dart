@@ -5,6 +5,7 @@ import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Sets or clears the pending confirmation for the current project's
 /// workspace. A skill's confirmation-gate step (see
@@ -49,7 +50,7 @@ Future<void> runConfirmPending(
 
   if (question == null || onConfirm == null) {
     print(UserText.confirmPendingBothQuestionAndOnConfirmAre.template);
-    exit_(1);
+    leaveFor(ExitReason.confirmPendingMissingArguments, exit_: exit_);
   }
 
   PendingConfirmationStore.write(

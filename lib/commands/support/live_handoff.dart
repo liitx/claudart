@@ -16,6 +16,7 @@ import '../../config/paths.dart';
 import '../../ui/ansi.dart' as ansi;
 import '../../ui/menu.dart';
 import '../../ui/render.dart' as render;
+import '../../io/exit_reason.dart';
 
 /// What the owner chooses about a live handoff.
 enum LiveHandoffMenu {
@@ -73,10 +74,10 @@ HandoffStatus settleLiveHandoff({
   switch (chooseFrom(LiveHandoffMenu.values, (m) => m.label, pick)) {
     case LiveHandoffMenu.back:
       print(cancelledText.template);
-      exit_(0);
+      leaveFor(ExitReason.liveHandoffLeftAlone, exit_: exit_);
     case LiveHandoffMenu.resume:
       print(resumeText.template);
-      exit_(0);
+      leaveFor(ExitReason.liveHandoffContinued, exit_: exit_);
     case LiveHandoffMenu.startFresh:
       break;
   }

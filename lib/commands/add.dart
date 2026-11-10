@@ -27,6 +27,7 @@ import 'link.dart' show createProjectLinks;
 import '../config/environment.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Project shape — drives `claudeTemplate`'s optional Flutter constraint
 /// line. Not named `WorkspaceConfig` — that name belongs to
@@ -81,7 +82,7 @@ Future<void> runAdd({
   final projectRoot = projectRootOverride ?? detectGitContext()?.root;
   if (projectRoot == null) {
     print(UserText.notInGitRepositoryRoot.template);
-    exit_(1);
+    leaveFor(ExitReason.addNotInGitRepository, exit_: exit_);
   }
 
   // 2 — Pre-fill from git: author, project name, pubspec.yaml content.

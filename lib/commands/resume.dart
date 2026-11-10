@@ -17,6 +17,7 @@ import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runResume({
   FileIO? io,
@@ -44,7 +45,7 @@ Future<void> runResume({
   final archives = loadIndex(workspace, io: fileIO);
   if (archives.isEmpty) {
     print(UserText.resumeNoArchivesFoundForThisProject.template);
-    exit_(0);
+    leaveFor(ExitReason.resumeNoArchives, exit_: exit_);
   }
 
   final newest = archives.first;

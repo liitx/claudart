@@ -23,6 +23,7 @@ import '../registry.dart';
 import 'support/command_seams.dart';
 import '../config/environment.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 const _ghExecutable = 'gh';
 const _claudeExecutable = 'claude';
@@ -571,5 +572,8 @@ Future<void> runDoctor({
     );
   }
 
-  exit_(failed.isEmpty ? 0 : 1);
+  leaveFor(
+    failed.isEmpty ? ExitReason.doctorChecksPassed : ExitReason.doctorChecksFailed,
+    exit_: exit_,
+  );
 }

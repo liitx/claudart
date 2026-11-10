@@ -29,6 +29,7 @@ import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runSuggest({
   FileIO? io,
@@ -82,7 +83,7 @@ Future<void> runSuggest({
 
   if (!fileIO.fileExists(handoffFile)) {
     print(UserText.suggestNoHandoffFoundRunClaudartSetup.template);
-    exit_(1);
+    leaveFor(ExitReason.suggestNoHandoff, exit_: exit_);
   }
 
   var handoff = fileIO.read(handoffFile);
@@ -102,7 +103,7 @@ Future<void> runSuggest({
     print(UserText.suggestAlreadyRan.styled({'status': status.value}));
     if (!confirm_('Re-run suggest and overwrite?')) {
       print('Aborted.');
-      exit_(0);
+      leaveFor(ExitReason.suggestOverwriteDeclined, exit_: exit_);
     }
     // Overwriting a completed handoff — preserve it first.
     archiveCurrentHandoff(workspace: workspace, io: fileIO);
@@ -117,7 +118,7 @@ Future<void> runSuggest({
 
   if (files.isEmpty) {
     print(UserText.noScopeFilesAddViaSetup.template);
-    exit_(1);
+    leaveFor(ExitReason.suggestNoScopeFiles, exit_: exit_);
   }
 
   // Picking up a blocked handoff (needs-suggest) moves it back to
@@ -165,7 +166,7 @@ Future<void> runSuggest({
 
   if (ctx.readerOut.isEmpty) {
     print(UserText.debugIsClaudeCliInstalledAndAuthenticated.template);
-    exit_(1);
+    leaveFor(ExitReason.suggestReaderProducedNothing, exit_: exit_);
   }
 
   // ── Phase 2: reasoner ──────────────────────────────────────────────────────
@@ -178,7 +179,7 @@ Future<void> runSuggest({
   );
 
   if (ctx.reasonerOut.isEmpty) {
-    exit_(1);
+    leaveFor(ExitReason.suggestReasonerProducedNothing, exit_: exit_);
   }
 
   // ── Review + refinement loop ───────────────────────────────────────────────
@@ -209,7 +210,7 @@ Future<void> runSuggest({
 
     if (choice == 2) {
       print(UserText.suggestExitHandoffNotWritten.template);
-      exit_(0);
+      leaveFor(ExitReason.suggestHandoffNotWritten, exit_: exit_);
     }
 
     // ── Refine ────────────────────────────────────────────────────────────────

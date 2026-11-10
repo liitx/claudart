@@ -37,9 +37,9 @@ import 'package:claudart/commands/unlink.dart';
 import 'package:claudart/commands/support/command_seams.dart';
 import 'package:claudart/config/environment.dart';
 import 'package:claudart/io/process_runner.dart';
-import 'package:claudart/io/process_exit.dart';
 import 'package:claudart/commands/support/interaction_boundary.dart';
 import 'package:claudart/logging/logger.dart';
+import 'package:claudart/io/exit_reason.dart';
 
 const _usage = '''
 claudart — Dart CLI for structured project debug and suggestion sessions
@@ -114,7 +114,7 @@ Future<void> main(List<String> rawArgs) async {
   if (projectOption.missingValue) {
     print('--project needs a project name. '
         'Run `claudart workspaces` to see the linked ones.');
-    exitProcess(1);
+    leaveFor(ExitReason.projectOptionMissingName);
   }
   args
     ..clear()
@@ -122,12 +122,12 @@ Future<void> main(List<String> rawArgs) async {
 
   if (args.firstOrNull == '-h' || args.firstOrNull == '--help') {
     print(_usage);
-    exitProcess(0);
+    leaveFor(ExitReason.usageShown);
   }
 
   if (args.firstOrNull == '--version' || args.firstOrNull == 'version') {
     print(claudartVersion);
-    exitProcess(0);
+    leaveFor(ExitReason.versionShown);
   }
 
   final command = args.isEmpty ? 'launch' : args.first;
@@ -139,7 +139,7 @@ Future<void> main(List<String> rawArgs) async {
     if (claudartCommand == null) {
       print('Unknown command: $command\n');
       print(_usage);
-      exitProcess(1);
+      leaveFor(ExitReason.unknownCommand);
     }
   }
 
@@ -151,12 +151,12 @@ Future<void> main(List<String> rawArgs) async {
     if (claudartCommand == null) {
       print('--project needs a command, '
           'e.g. claudart --project $projectName status');
-      exitProcess(1);
+      leaveFor(ExitReason.projectOptionMissingCommand);
     }
     if (!claudartCommand.supportsProjectSelector) {
       print('--project is not supported by '
           '`claudart ${claudartCommand.wireName}`.');
-      exitProcess(1);
+      leaveFor(ExitReason.projectOptionUnsupported);
     }
     final selection = selectProject(Registry.load(), projectName);
     switch (selection) {
@@ -165,7 +165,7 @@ Future<void> main(List<String> rawArgs) async {
         logProjectTargeted(entry, claudartCommand.wireName);
       case ProjectNotFound():
         print(selection.message);
-        exitProcess(1);
+        leaveFor(ExitReason.projectOptionNotFound);
       case NoProjectSelected():
         break;
     }
@@ -195,7 +195,7 @@ Future<void> main(List<String> rawArgs) async {
       // like running them directly would -- confirmed real, launch.dart
       // has no catch of its own, so this previously propagated uncaught.
       await runLauncher();
-      exitProcess(0);
+      leaveFor(ExitReason.launcherClosed);
     }
     // Every command runs inside the one boundary that records how it ended,
     // so no command can be outside it (see interaction_boundary.dart). The
@@ -219,7 +219,7 @@ Future<void> main(List<String> rawArgs) async {
     );
     print('\n✗ ${failure.toString()}');
     print('  ${failure.failureType.suggestedAction}\n');
-    exitProcess(1);
+    leaveFor(ExitReason.commandFailed);
   }
 }
 
@@ -267,7 +267,7 @@ Future<void> _dispatch(
     case ClaudartCommand.rotate:
       final rotated = await runRotate(seams: CommandSeams(projectRootOverride: projectRoot), mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive);
       // A failed build gate must be visible to scripts (zedup, CI): exit 1.
-      if (rotated == RotateResult.buildFailed) exitProcess(1);
+      if (rotated == RotateResult.buildFailed) leaveFor(ExitReason.rotateBuildFailed);
     case ClaudartCommand.kill:
       await runKill(seams: CommandSeams(projectRootOverride: projectRoot), mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive);
     case ClaudartCommand.resume:
@@ -316,7 +316,13 @@ Future<void> _dispatch(
     case ClaudartCommand.experiment:
       await runExperiment(rest);
     case ClaudartCommand.compile:
-      exitProcess(_compile());
+      final compileCode = _compile();
+      leaveFor(
+        compileCode == 0
+            ? ExitReason.compileSucceeded
+            : ExitReason.compileFailed,
+        childCode: compileCode == 0 ? null : compileCode,
+      );
     case ClaudartCommand.workspaces:
       await runWorkspaces(
         projectRootOverride: projectRoot,
@@ -327,7 +333,7 @@ Future<void> _dispatch(
         stderr.writeln(
             'Usage: claudart hook ${HookWire.preEditSubcommand} (reads the '
             'tool call as JSON on stdin)');
-        exitProcess(1);
+        leaveFor(ExitReason.hookUsageShown);
       }
       runHook(stdinText: await utf8.decoder.bind(stdin).join());
     case ClaudartCommand.doctor:

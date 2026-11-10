@@ -19,6 +19,7 @@ import 'support/project_resolution.dart';
 import '../generated/user_text.g.dart';
 import '../ui/styled_text.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runArchives({
   CommandSeams seams = const CommandSeams(),
@@ -39,7 +40,7 @@ Future<void> runArchives({
 
   if (entries.isEmpty) {
     print(UserText.archivesNoArchivesFoundForThisProject.template);
-    exit_(0);
+    leaveFor(ExitReason.archivesNone, exit_: exit_);
   }
 
   // ── Display list ───────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ Future<void> runArchives({
   final chosen = pick_(labels);
   if (chosen >= entries.length) {
     print(UserText.archivesCancelled.template);
-    exit_(0);
+    leaveFor(ExitReason.archivesCancelled, exit_: exit_);
   }
 
   final selected = entries[chosen];

@@ -22,6 +22,7 @@ import '../generated/user_text.g.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
 import '../io/gate_runner.dart';
+import '../io/exit_reason.dart';
 
 
 enum RotateResult {
@@ -117,7 +118,7 @@ Future<RotateResult>  runRotate({
     if (answer == null) {
       print(UserText.rotateNoInputAvailableToConfirmThe.template);
       print(UserText.rotateReRunInATerminalOr.template);
-      exit_(1);
+      leaveFor(ExitReason.rotateNoInputToConfirm, exit_: exit_);
     }
     if (!answer) {
       print(UserText.rotateRotateCancelled.template);

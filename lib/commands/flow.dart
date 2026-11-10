@@ -39,6 +39,7 @@ import '../session/handoff_event.dart';
 import '../session/session_state.dart';
 import '../registry.dart';
 import 'support/live_handoff.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runFlow({
   FileIO? io,
@@ -126,7 +127,7 @@ Future<void> runFlow({
 
       if (resumeChoice == 2) {
         print(UserText.flowCheckpointKeptAt.styled({'checkpointPath': checkpointPath}));
-        exit_(0);
+        leaveFor(ExitReason.flowCheckpointKept, exit_: exit_);
       }
 
       if (resumeChoice == 0) {
@@ -177,7 +178,7 @@ Future<void> runFlow({
   final taskPrompt = prompt_('  →', optional: true)?.trim() ?? '';
   if (taskPrompt.isEmpty) {
     print(UserText.flowNoPromptEnteredAborted.template);
-    exit_(0);
+    leaveFor(ExitReason.flowNoPrompt, exit_: exit_);
   }
 
   // ── Pipeline ───────────────────────────────────────────────────────────────
@@ -312,12 +313,12 @@ Future<PipelineContext> _runPhase2(
   if (result[PipelineSlot.flowExit] == 'true') {
     _saveCheckpoint(result, checkpointPath, fileIO);
     print(UserText.flowCheckpointSaved.styled({'checkpointPath': checkpointPath}));
-    exit_(0);
+    leaveFor(ExitReason.flowCheckpointSaved, exit_: exit_);
   }
 
   if (result[PipelineSlot.approved] != 'true') {
     print(UserText.flowFlowAbortedHandoffNotWritten.template);
-    exit_(0);
+    leaveFor(ExitReason.flowNotApproved, exit_: exit_);
   }
 
   return result;
@@ -337,7 +338,7 @@ Future<void> _writeHandoff(
       tagOrNull(ctx[PipelineSlot.construct] ?? '', RouteTag.handoff.wireTag);
   if (handoffContent == null || handoffContent.isEmpty) {
     print(UserText.flowConstructProducedNoHandoff.styled());
-    exit_(1);
+    leaveFor(ExitReason.flowProducedNoHandoff, exit_: exit_);
   }
 
   final handoffPath  = handoffPathFor(workspace);

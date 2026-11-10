@@ -6,6 +6,7 @@ import 'support/project_resolution.dart';
 import 'support/command_seams.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Runs a preflight sync check for [operation] and prints results.
 ///
@@ -56,7 +57,7 @@ Future<void> runPreflightCmd(
       'operation': operation,
       'operations': ClaudartOperation.values.map((o) => o.name).join(', '),
     }));
-    exit_(1);
+    leaveFor(ExitReason.preflightUnknownOperation, exit_: exit_);
   }
 
   // 5 — Read test files when operation is 'test'.
@@ -85,7 +86,7 @@ Future<void> runPreflightCmd(
   // 6 — Print results.
   if (result.isClean) {
     print(UserText.preflightCmdPreflightCleanNoIssuesFound.template);
-    exit_(0);
+    leaveFor(ExitReason.preflightClean, exit_: exit_);
   }
 
   for (final issue in result.issues) {
@@ -93,7 +94,10 @@ Future<void> runPreflightCmd(
   }
 
   // Warnings allow continuation; errors block it.
-  exit_(result.hasErrors ? 1 : 0);
+  leaveFor(
+    result.hasErrors ? ExitReason.preflightErrors : ExitReason.preflightWarnings,
+    exit_: exit_,
+  );
 }
 
 // Test command files checked for coverage gaps.

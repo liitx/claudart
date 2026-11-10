@@ -29,6 +29,7 @@ import '../ui/styled_text.dart';
 import '../session/handoff_store.dart';
 import '../io/process_exit.dart';
 import '../session/closure_evidence.dart';
+import '../io/exit_reason.dart';
 
 /// The question `teardown` asks when a handoff is confirmed resolved but debug
 /// did not run: debug must be recorded as skipped on purpose, never assumed.
@@ -99,7 +100,7 @@ Future<void> runTeardown({
 
   if (handoff.isEmpty) {
     print(UserText.teardownNoActiveHandoffFoundNothingTo.template);
-    exit_(0);
+    leaveFor(ExitReason.teardownNoHandoff, exit_: exit_);
   }
 
   // Extract session info upfront so we can pre-populate prompts.
@@ -189,7 +190,7 @@ Future<void> runTeardown({
       recordOutcome(TeardownOutcome.reminderDeclined);
     }
     print(UserText.teardownComeBackWhenTheFixIs.template);
-    exit_(0);
+    leaveFor(ExitReason.teardownDeferredUntilFixed, exit_: exit_);
   }
 
   // ── Run teardown analyzer (haiku) to pre-fill all metadata ─────────────────
@@ -401,7 +402,7 @@ Future<void> runTeardown({
     }, io: fileIO);
   } on WorkspaceLockedException catch (e) {
     print(UserText.errorMessageLine.format({'toString': e.toString()}));
-    exit_(1);
+    leaveFor(ExitReason.teardownWorkspaceLocked, exit_: exit_);
   }
 
   recordOutcome(

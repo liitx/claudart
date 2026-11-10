@@ -20,6 +20,7 @@ import '../workspace/workspace_config.dart';
 import '../config/environment.dart';
 import '../generated/user_text.g.dart';
 import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
@@ -62,14 +63,14 @@ Future<void> runLink(
   if (unknownFlags.isNotEmpty) {
     print(UserText.linkUnknownOption.format({'first': unknownFlags.first}));
     print(UserText.linkUsageClaudartLinkProjectName.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag, 'recompileFlag': _recompileFlag}));
-    exit_(1);
+    leaveFor(ExitReason.linkUnknownOption, exit_: exit_);
   }
   final wantsSensitive = args.contains(_sensitiveFlag);
   final wantsNoSensitive = args.contains(_noSensitiveFlag);
   final wantsRecompile = args.contains(_recompileFlag);
   if (wantsSensitive && wantsNoSensitive) {
     print(UserText.linkPassOnlyOneOf.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag}));
-    exit_(1);
+    leaveFor(ExitReason.linkConflictingSensitivityFlags, exit_: exit_);
   }
   final positional = args.where((a) => !a.startsWith('--')).toList();
 
@@ -79,7 +80,7 @@ Future<void> runLink(
   final projectRoot = resolveProjectRoot(override: projectRootOverride);
   if (projectRoot == null) {
     print(UserText.notInGitRepositoryRoot.template);
-    exit_(1);
+    leaveFor(ExitReason.linkNotInGitRepository, exit_: exit_);
   }
 
   // 2 — Resolve project name: arg > git remote > directory name.
@@ -128,7 +129,7 @@ Future<void> runLink(
   if (decided == null) {
     print(UserText.linkNoInputForSensitivityQuestion.template);
     print(UserText.linkReRunInATerminalOr.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag}));
-    exit_(1);
+    leaveFor(ExitReason.linkNoInputForSensitivity, exit_: exit_);
   }
   final ownerMarkedSensitive =
       WorkspaceConfig.load(workspace, io: fileIO)?.session.sensitivityMode ??
