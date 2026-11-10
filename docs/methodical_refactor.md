@@ -715,6 +715,56 @@ text (I6), boolean flag parameters that select behavior, and an if-else chain on
 one variable that should be a switch. Each is a fact the table already has a rule
 for; what is missing is the detector.
 
+### The test ledger: which test guards which line (2026-11-10)
+
+The owner's goal: every line of claudart and dartrix is guarded, no test is
+identical to another, and a change to logic names the existing test to update
+instead of adding one. Tests passing proves none of that. The ledger measures it.
+
+**Method.** `tool/proof_audit/` changes one line of one file by one operator (an
+equality flipped, a comparison moved, a literal raised, a call removed), in a
+scratch copy, and runs the file's mirrored test (tier 1), then the rest of the
+suite (tier 2). Every mutant is logged to `proofs.jsonl` with its file, line,
+verdict and the tests that failed. From those rows `ledger.dart` writes:
+
+- the impact map: for a line, the tests that fail when it is wrong (change the
+  line, update those tests, add none);
+- survivors, each with the existing tests that guard its neighbors in the same
+  declaration, which is where the missing assertion goes;
+- tests that kill exactly the same mutants (merge or link candidates).
+
+`make proof-changed` does this for the lines a change touched and fails if a
+mutant survives, so a development cannot add logic nothing guards. A test that
+fails on a change that alters no behavior (it reads source text) is learned from
+a control and left out of the wider run.
+
+**What it found, measured 2026-11-10.**
+
+| | claudart | dartrix |
+|---|---|---|
+| line coverage | 89.3% (5261 of 5893), 632 lines uncovered in 61 of 148 files | 94.1% (177 of 188), 11 lines uncovered, all `ShoelaceSchema.supportsScopeContext` |
+| literal duplicate tests | 2 groups of 2328 (`registry_test`, `unlink_test`) | none of 63 |
+| line mutants | 4 on the 101 lines changed since `HEAD~12`: 3 caught, 1 survived | 57: 38 caught, 15 survived, 4 invalid (compile errors) |
+
+dartrix survivors (`docs/topology/ledger/dartrix.md`): `matrix_renderer.dart` has no
+mirrored test file (its tests are in `matrix_test.dart`) and its column widths are
+unchecked (6); the `n == 0` and empty-participants special cases of the layout
+(3); the `?? 0` defaults for `line` (2); the `&&` of `aggregateStateFor`; and the
+three comparisons of `supportsScopeContext`, which no test runs. Not yet changed:
+dartrix is its own repository with its own git rules.
+
+claudart survivor, closed: the retention caps of the interactions, transitions,
+gates and proofs logs (`_maxGateRecords` and `_maxProofRecords` survived; the
+README gates row had no cap). A matrix in `logger_test.dart` now writes each
+documented cap out as a literal and shows the log trims at cap plus 50 slack and
+not before.
+
+**Limits.** The operators are generic (they do not know a domain); a mutant that
+still does not compile is `invalid`, not counted; a test that guards a line only
+through another package's code is not seen. Mutants on every claudart file were
+not run (about 5 seconds each): the gate covers changed lines, and a full ledger
+for the framework is a background run.
+
 ### The perspectives a decision table must answer (2026-11-10, from gap T7)
 
 A decision table is a function whose result is an enum value, or a list or set of

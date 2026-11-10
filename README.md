@@ -711,7 +711,7 @@ Each workspace keeps its own logs under `logs/`, all written by [`SessionLogger`
 | `errors.jsonl` | distinct error, deduplicated by fingerprint with a count | 200 |
 | `models.jsonl` | model a step ran on: intended alias, the id the `claude` stream reported, context used, drift from the declared `AgentModel` (shown by `claudart status`) | 500 |
 | `steps.jsonl` | pipeline event: `kind`, `stepId`, `detail` (a failure's reason, a completed step's duration), `failureType` for a failed step; a failed step is also written to `errors.jsonl` by its type | 2000 |
-| `gates.jsonl` | a gate command a command ran (`debug`'s `verificationCommand`, `rotate`'s `afterFixCommand`): `gate`, `shellCommand`, `exitCode`, `durationMs` and the last lines of its output (`outputTail`) |
+| `gates.jsonl` | a gate command a command ran (`debug`'s `verificationCommand`, `rotate`'s `afterFixCommand`): `gate`, `shellCommand`, `exitCode`, `durationMs` and the last lines of its output (`outputTail`) | 500 |
 | `proofs.jsonl` | a fault the proof audit seeded (`make proof-audit`): `proof`, `fault`, `sourceFile`, `sourceLine`, `verdict` (`caught`, `missed` or `invalid`), `tier` (1 the named proofs, 2 the wider suite), `caughtBy` (the failing tests) and `durationMs` | 5000 |
 | `performance.md` | timed command, as a markdown table row | 50 |
 

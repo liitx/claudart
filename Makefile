@@ -2,7 +2,7 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: proof-audit diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+.PHONY: proof-changed proof-audit diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
 
 ## Draw the runs a logs directory holds as Mermaid sequence diagrams.
 ##   make diagram DIR="<global-logs> <workspace-logs>" [CMD=debug] [HTML=<file>]
@@ -17,6 +17,13 @@ diagram:
 ##   make proof-audit [WORKERS=3] [LIMIT=n] [ONLY=text] [PROOF=transitionTable|closureEvidence|claudartCommand|handoffListeners]
 proof-audit:
 	$(DART) run tool/proof_audit/run.dart --workers=$(or $(WORKERS),3) --report=docs/topology/proof_audit.md $(if $(LIMIT),--limit=$(LIMIT)) $(if $(ONLY),--only="$(ONLY)") $(if $(PROOF),--proof=$(PROOF))
+
+## Seed one-line mutants on the lines this change touched (since BASE, default
+## main) and fail if a test does not fail for each; the ledger it writes names
+## the existing tests a missing assertion belongs with. About 5 s a mutant.
+##   make proof-changed [BASE=main] [WORKERS=3]
+proof-changed:
+	$(DART) run tool/proof_audit/run.dart --mutants=lib --changed-since=$(or $(BASE),main) --workers=$(or $(WORKERS),3) --fail-on-survivors --ledger=/tmp/claudart_proof_changed.md
 
 ## Every check a change must pass: suite, analyzer errors, custom_lint. With
 ## MSG="..." it commits after they pass. See tool/gate.sh.

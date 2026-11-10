@@ -10,10 +10,12 @@ import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 
+import '../../tool/proof_audit/changed_lines.dart';
 import '../../tool/proof_audit/closure_faults.dart';
 import '../../tool/proof_audit/command_faults.dart';
 import '../../tool/proof_audit/fault.dart';
 import '../../tool/proof_audit/listener_faults.dart';
+import '../../tool/proof_audit/mutant_faults.dart';
 import '../../tool/proof_audit/providers.dart';
 import '../../tool/proof_audit/report.dart';
 import '../../tool/proof_audit/runner.dart';
@@ -104,6 +106,36 @@ void main() {
   group('reading a test run', () {
     const start = '{"type":"testStart","test":{"id":1,"name":"a proof"}}\n';
 
+    test('the file of a failing test is recorded', () {
+      final judgement = judgeTestRun(
+        '{"type":"suite","suite":{"id":0,"path":"test/a_test.dart"}}\n'
+        '{"type":"testStart","test":{"id":1,"name":"a proof","suiteID":0}}\n'
+        '{"type":"testDone","testID":1,"result":"failure"}\n',
+        1,
+      );
+      expect(judgement.failedFiles, ['test/a_test.dart']);
+    });
+
+    test('a file that threw while loading is recorded by its path', () {
+      final judgement = judgeTestRun(
+        '{"type":"testStart","test":{"id":2,"name":"loading test/x_test.dart"}}\n'
+        '{"type":"error","testID":2,"error":"RangeError","isFailure":false}\n'
+        '{"type":"testDone","testID":2,"result":"error"}\n',
+        1,
+      );
+      expect(judgement.failedFiles, ['test/x_test.dart']);
+    });
+
+    test('a passing file is not recorded', () {
+      final judgement = judgeTestRun(
+        '{"type":"suite","suite":{"id":0,"path":"test/a_test.dart"}}\n'
+        '{"type":"testStart","test":{"id":1,"name":"fine","suiteID":0}}\n'
+        '{"type":"testDone","testID":1,"result":"success"}\n',
+        0,
+      );
+      expect(judgement.failedFiles, isEmpty);
+    });
+
     test('a failing test is a catch, named by its title', () {
       final judgement = judgeTestRun(
         '$start{"type":"testDone","testID":1,"result":"failure"}\n',
@@ -138,6 +170,38 @@ void main() {
       );
       expect(judgement.invalid, isTrue);
       expect(judgement.failed, isEmpty);
+    });
+
+    test('a suite that throws while loading is a catch, named for the file', () {
+      final judgement = judgeTestRun(
+        '{"type":"testStart","test":{"id":2,"name":"loading test/x_test.dart"}}\n'
+        '{"type":"error","testID":2,"error":"Failed to load \\"test/x_test.dart\\": RangeError (length): Invalid value","isFailure":false}\n'
+        '{"type":"testDone","testID":2,"result":"error"}\n',
+        1,
+      );
+      expect(judgement.invalid, isFalse);
+      expect(judgement.failed, ['test/x_test.dart fails while loading']);
+    });
+
+    test('a suite that does not compile is invalid, whatever its text says', () {
+      final judgement = judgeTestRun(
+        '{"type":"testStart","test":{"id":2,"name":"loading test/x_test.dart"}}\n'
+        '{"type":"error","testID":2,"error":"Failed to load \\"test/x_test.dart\\": Compilation failed","isFailure":false}\n'
+        '{"type":"testDone","testID":2,"result":"error"}\n',
+        1,
+      );
+      expect(judgement.invalid, isTrue);
+      expect(judgement.failed, isEmpty);
+    });
+
+    test('a compiler diagnostic in the error is a failure to compile', () {
+      final judgement = judgeTestRun(
+        '{"type":"testStart","test":{"id":2,"name":"loading test/x_test.dart"}}\n'
+        '{"type":"error","testID":2,"error":"lib/a.dart:3:5: Error: Expected an identifier.","isFailure":false}\n'
+        '{"type":"testDone","testID":2,"result":"error"}\n',
+        1,
+      );
+      expect(judgement.invalid, isTrue);
     });
 
     test('a failing exit with no failed test is invalid', () {
@@ -227,6 +291,25 @@ void main() {
       expect(result.attempts, 2);
     });
 
+    test('with no tier-one tests goes straight to the wider run', () async {
+      final calls = <List<String>>[];
+      final runner = AuditRunner(
+        scratchRoot: scratch.path,
+        logger: logger,
+        runTests: (tests) async {
+          calls.add(tests);
+          return caught;
+        },
+      );
+      final result = await runner.check(
+        const FileMutantFaults(file: 'lib/a.dart', tierOne: [], tierTwo: ['test']),
+        const _ChangesTheText(),
+      );
+      expect(calls, hasLength(1));
+      expect(result.tier, 2);
+      expect(result.verdict, ProofVerdict.caught);
+    });
+
     test('is not run again when the run hit its time limit', () async {
       final result = await checkWith([hung, caught]);
       expect(result.verdict, ProofVerdict.invalid);
@@ -245,12 +328,163 @@ void main() {
       expect(result.attempts, 1);
     });
 
+    test('leaves out a test file it learned reacts to any edit', () async {
+      Directory('${scratch.path}/test').createSync();
+      for (final name in ['keep_test.dart', 'reads_source_test.dart']) {
+        File('${scratch.path}/test/$name').writeAsStringSync('');
+      }
+      final calls = <List<String>>[];
+      final runner = AuditRunner(
+        scratchRoot: scratch.path,
+        logger: logger,
+        runTests: (tests) async {
+          calls.add(tests);
+          return passed;
+        },
+      )..learnedExclusions.add('test/reads_source_test.dart');
+      await runner.check(
+        const FileMutantFaults(file: 'lib/a.dart', tierOne: ['test/keep_test.dart'], tierTwo: ['test']),
+        const _ChangesTheText(),
+      );
+      expect(calls.last, ['test/keep_test.dart']);
+    });
+
     test('leaves the scratch source as it was', () async {
       await checkWith([caught]);
       expect(
         File('${scratch.path}/lib/session/session_state.dart').readAsStringSync(),
         'original',
       );
+    });
+  });
+
+  group('the lines a change touched', () {
+    const diff = 'diff --git a/lib/a.dart b/lib/a.dart\n'
+        '--- a/lib/a.dart\n'
+        '+++ b/lib/a.dart\n'
+        '@@ -3,0 +4,2 @@ class A {\n'
+        '+x\n'
+        '+y\n'
+        '@@ -10 +12 @@\n'
+        '-old\n'
+        '+new\n'
+        '@@ -20,2 +21,0 @@\n'
+        '-gone\n'
+        '-gone\n'
+        'diff --git a/lib/b.dart b/lib/b.dart\n'
+        '--- a/lib/b.dart\n'
+        '+++ b/lib/b.dart\n'
+        '@@ -1,3 +1,3 @@\n';
+
+    final changed = parseChangedLines(diff);
+
+    test('an added block is a range of its new lines', () {
+      expect(changed['lib/a.dart']!.first, (first: 4, last: 5));
+    });
+
+    test('a hunk with no count is one line', () {
+      expect(changed['lib/a.dart']![1], (first: 12, last: 12));
+    });
+
+    test('lines only deleted leave no range', () {
+      expect(changed['lib/a.dart'], hasLength(2));
+    });
+
+    test('each file has its own ranges', () {
+      expect(changed['lib/b.dart'], [(first: 1, last: 3)]);
+    });
+
+    test('a line is changed when a range holds it', () {
+      final ranges = changed['lib/a.dart']!;
+      expect([isChanged(ranges, 4), isChanged(ranges, 5), isChanged(ranges, 6), isChanged(ranges, 12)],
+          [true, true, false, true]);
+    });
+  });
+
+  group('line mutants', () {
+    List<String> idsOf(String line) =>
+        [for (final (id, _) in mutantsOfLine(line, 1)) id];
+
+    String? changed(String line, String id) =>
+        mutantsOfLine(line, 1).firstWhere((m) => m.$1 == id).$2;
+
+    test('an equality is flipped', () {
+      expect(changed('  if (a == b) {', 'equals'), '  if (a != b) {');
+    });
+
+    test('a generic\'s angle bracket is never changed', () {
+      expect(idsOf('  List<int> values = [];'), isNot(contains('lessThan')));
+    });
+
+    test('a comparison is changed to its neighbor', () {
+      expect(changed('  if (a < b) {', 'lessThan'), '  if (a <= b) {');
+    });
+
+    test('nothing inside a string literal is changed', () {
+      expect(idsOf("  final text = 'a == b && true';"), isEmpty);
+    });
+
+    test('nothing in a trailing comment is changed', () {
+      expect(idsOf('  final x = a; // is a == b true'), isEmpty);
+    });
+
+    test('a number is raised by one', () {
+      expect(changed('  final limit = 10;', 'number'), '  final limit = 11;');
+    });
+
+    test('a number inside an identifier is left alone', () {
+      expect(idsOf('  final step2 = a;'), isEmpty);
+    });
+
+    test('a call statement can be removed', () {
+      expect(idsOf('  notify(user);'), contains('deleteStatement'));
+    });
+
+    test('the tail of an expression body is never removed', () {
+      expect(
+        [for (final (id, _) in mutantsOfLine('      names.contains(feature);', 1, previous: '  bool has(String feature) =>')) id],
+        isNot(contains('deleteStatement')),
+      );
+    });
+
+    test('a call that starts a statement can be removed', () {
+      expect(
+        [for (final (id, _) in mutantsOfLine('  notify(user);', 1, previous: '  final a = 1;')) id],
+        contains('deleteStatement'),
+      );
+    });
+
+    test('a return is never removed', () {
+      expect(idsOf('  return notify(user);'), isNot(contains('deleteStatement')));
+    });
+
+    test('a declaration is not a call statement', () {
+      expect(idsOf('  final x = notify(user);'), isNot(contains('deleteStatement')));
+    });
+
+    test('an import is never changed', () {
+      expect(idsOf("import 'package:a/a.dart';"), isEmpty);
+    });
+
+    test('a comment line is never changed', () {
+      expect(idsOf('  // a == b'), isEmpty);
+    });
+
+    test('a negation is dropped', () {
+      expect(changed('  if (!ready) {', 'negation'), '  if (ready) {');
+    });
+
+    test('a second match on a line is named apart from the first', () {
+      expect(idsOf('  final ok = a == b && c == d;'), containsAll(['equals', 'equals#2']));
+    });
+
+    test('a mutant is described by its line and what changed', () {
+      final root = Directory.systemTemp.createTempSync('mutant_desc_');
+      File('${root.path}/a.dart').writeAsStringSync('int f() => 1;\nbool g(int a) => a == 2;\n');
+      final faults = const FileMutantFaults(file: 'a.dart', tierOne: [], tierTwo: [])
+          .faults(root.path);
+      root.deleteSync(recursive: true);
+      expect(faults.map((f) => f.description), contains(startsWith('line 2 equals:')));
     });
   });
 

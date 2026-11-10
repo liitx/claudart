@@ -24,6 +24,7 @@ class FaultResult {
     required this.tier,
     required this.attempts,
     required this.caughtBy,
+    required this.failedFiles,
     required this.durationMs,
   });
 
@@ -38,6 +39,9 @@ class FaultResult {
   /// was repeated, since three workers compiling at once can do that.
   final int attempts;
   final List<String> caughtBy;
+
+  /// The test files with a failing test, for the exclusions the controls learn.
+  final List<String> failedFiles;
   final int durationMs;
 }
 
@@ -47,7 +51,11 @@ class TestJudgement {
     required this.failed,
     required this.invalid,
     this.timedOut = false,
+    this.failedFiles = const [],
   });
+
+  /// The test files that had a failing test.
+  final List<String> failedFiles;
 
   /// The run was killed at its time limit: a repeat would only wait as long
   /// again, so it is not repeated.
@@ -65,28 +73,58 @@ class TestJudgement {
 /// [TestJudgement.invalid], never a catch.
 TestJudgement judgeTestRun(String reporterLines, int exitCode) {
   final names = <int, String>{};
+  final errors = <int, String>{};
+  final suitePaths = <int, String>{};
+  final testSuite = <int, int>{};
+  final failedFiles = <String>{};
   final failed = <String>[];
   var invalid = false;
   for (final line in const LineSplitter().convert(reporterLines)) {
     final event = _eventIn(line);
     if (event == null) continue;
     final test = event['test'];
-    if (event['type'] == 'testStart' && test is Map<String, dynamic>) {
+    final suite = event['suite'];
+    if (event['type'] == 'suite' && suite is Map<String, dynamic>) {
+      suitePaths[suite['id'] as int] = suite['path'] as String;
+    } else if (event['type'] == 'testStart' && test is Map<String, dynamic>) {
       names[test['id'] as int] = test['name'] as String;
+      if (test['suiteID'] is int) testSuite[test['id'] as int] = test['suiteID'] as int;
+    } else if (event['type'] == 'error') {
+      errors[event['testID'] as int] =
+          '${errors[event['testID'] as int] ?? ''}${event['error']}';
     } else if (event['type'] == 'testDone') {
       final result = event['result'];
       if (result != 'failure' && result != 'error') continue;
-      final name = names[event['testID'] as int] ?? noRecordedStartName;
-      if (name.startsWith('loading ')) {
+      final id = event['testID'] as int;
+      final name = names[id] ?? noRecordedStartName;
+      if (!name.startsWith('loading ')) {
+        failed.add(name);
+        final path = suitePaths[testSuite[id]];
+        if (path != null) failedFiles.add(path);
+      } else if (errors[id] == null || _failedToCompile(errors[id]!)) {
+        // No error text, or text that says the source did not compile: nothing
+        // was shown about the tests.
         invalid = true;
       } else {
-        failed.add(name);
+        // The file compiled and then threw while loading (a group body ran the
+        // changed code): the file breaks on the change, so it caught it.
+        failed.add('${name.substring('loading '.length)} fails while loading');
+        failedFiles.add(name.substring('loading '.length));
       }
     }
   }
   if (exitCode != 0 && failed.isEmpty) invalid = true;
-  return TestJudgement(failed: failed, invalid: invalid);
+  return TestJudgement(
+    failed: failed,
+    invalid: invalid,
+    failedFiles: failedFiles.toList()..sort(),
+  );
 }
+
+/// Whether a suite's load error says the source did not compile.
+bool _failedToCompile(String error) =>
+    error.contains('Compilation failed') ||
+    RegExp(r'\.dart:\d+:\d+: Error:').hasMatch(error);
 
 /// What a failure is called when its start was never read.
 const noRecordedStartName = 'a test whose start was not recorded';
@@ -161,7 +199,18 @@ class AuditRunner {
     required this.scratchRoot,
     required this.logger,
     Future<TestJudgement> Function(List<String> tests)? runTests,
-  }) : _runTests = runTests;
+    this.testTimeout = const Duration(minutes: 6),
+    List<String>? learnedExclusions,
+  })  : _runTests = runTests,
+        learnedExclusions = learnedExclusions ?? [];
+
+  /// Test files left out of every wider run because a change that alters no
+  /// behavior made them fail: they read source text, so they are not proofs of
+  /// anything the program does. Learned from the controls, shared by workers.
+  final List<String> learnedExclusions;
+
+  /// How long one test run may take before it is killed.
+  final Duration testTimeout;
 
   final Future<TestJudgement> Function(List<String> tests)? _runTests;
 
@@ -169,20 +218,26 @@ class AuditRunner {
   final String scratchRoot;
   final SessionLogger logger;
 
-  static const _testTimeout = Duration(minutes: 6);
-
   Future<FaultResult> check(FaultProvider provider, SeededFault fault) async {
     final clock = Stopwatch()..start();
     final path = '$scratchRoot/${fault.sourceFile}';
     final original = File(path).readAsStringSync();
     try {
       File(path).writeAsStringSync(fault.apply(original));
-      var tier = 1;
-      var (judgement, attempts) = await _runOnceMoreIfInvalid(provider.tierOneTests);
-      if (!judgement.invalid && judgement.failed.isEmpty) {
+      // With no tier-one tests (a file nothing mirrors) there is nothing to run
+      // first: `dart test` with no paths would run everything as tier one.
+      var tier = provider.tierOneTests.isEmpty ? 2 : 1;
+      var (judgement, attempts) = tier == 1
+          ? await _runOnceMoreIfInvalid(provider.tierOneTests)
+          : (const TestJudgement(failed: [], invalid: false), 0);
+      if (tier == 2 || (!judgement.invalid && judgement.failed.isEmpty)) {
         tier = 2;
         (judgement, attempts) = await _runOnceMoreIfInvalid(
-          expandTests(scratchRoot, provider.tierTwoTests, provider.excludedTests),
+          expandTests(
+            scratchRoot,
+            provider.tierTwoTests,
+            [...provider.excludedTests, ...learnedExclusions],
+          ),
         );
       }
       final verdict = judgement.invalid
@@ -196,6 +251,7 @@ class AuditRunner {
         tier: tier,
         attempts: attempts,
         caughtBy: judgement.failed,
+        failedFiles: judgement.failedFiles,
         durationMs: clock.elapsedMilliseconds,
       );
       logger.logProofFault(
@@ -234,7 +290,7 @@ class AuditRunner {
     process.stdin.close().ignore();
     var timedOut = false;
     final exitCode = await process.exitCode.timeout(
-      _testTimeout,
+      testTimeout,
       onTimeout: () {
         timedOut = true;
         process.kill(ProcessSignal.sigkill);
@@ -244,7 +300,12 @@ class AuditRunner {
     await reading;
     final judged = judgeTestRun(output.toString(), exitCode);
     return timedOut
-        ? TestJudgement(failed: judged.failed, invalid: true, timedOut: true)
+        ? TestJudgement(
+            failed: judged.failed,
+            invalid: true,
+            timedOut: true,
+            failedFiles: judged.failedFiles,
+          )
         : judged;
   }
 }

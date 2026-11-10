@@ -9,7 +9,8 @@ import 'package:claudart/logging/logger.dart';
 
 import 'fault.dart';
 
-const _sourceFilePath = 'lib/session/session_state.dart';
+/// The file the controls change when none is given.
+const defaultControlFile = 'lib/session/session_state.dart';
 
 /// The proof name the control faults are logged under.
 const controlProof = 'control';
@@ -23,16 +24,16 @@ class Control {
 }
 
 class _NoBehaviorChange extends SeededFault {
-  const _NoBehaviorChange();
+  const _NoBehaviorChange(this.sourceFile);
+
+  @override
+  final String sourceFile;
 
   @override
   String get proof => controlProof;
 
   @override
   String get description => 'control: a comment appended, no behavior changed';
-
-  @override
-  String get sourceFile => _sourceFilePath;
 
   @override
   int get sourceLine => 1;
@@ -42,7 +43,10 @@ class _NoBehaviorChange extends SeededFault {
 }
 
 class _DoesNotCompile extends SeededFault {
-  const _DoesNotCompile();
+  const _DoesNotCompile(this.sourceFile);
+
+  @override
+  final String sourceFile;
 
   @override
   String get proof => controlProof;
@@ -51,16 +55,14 @@ class _DoesNotCompile extends SeededFault {
   String get description => 'control: source that does not compile';
 
   @override
-  String get sourceFile => _sourceFilePath;
-
-  @override
   int get sourceLine => 1;
 
   @override
   String apply(String source) => '$source\nthis is not dart;\n';
 }
 
-const controls = <Control>[
-  Control(_NoBehaviorChange(), ProofVerdict.missed),
-  Control(_DoesNotCompile(), ProofVerdict.invalid),
-];
+/// The controls, changing [file].
+List<Control> controlsFor(String file) => [
+      Control(_NoBehaviorChange(file), ProofVerdict.missed),
+      Control(_DoesNotCompile(file), ProofVerdict.invalid),
+    ];

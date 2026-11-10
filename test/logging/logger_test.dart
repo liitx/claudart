@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/io/gate_runner.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/model_observation.dart';
@@ -188,6 +189,74 @@ void main() {
       expect(entries.last['command'], equals('new_cmd'));
       expect(entries.first['n'], 52);
     });
+
+    // What each log keeps, as the README's log table documents it (and 50 lines
+    // of slack past it): written out here, not read from the logger, so a changed
+    // cap fails. The logs that share the append-and-trim path.
+    final writers = <LogFile, ({int cap, void Function(SessionLogger) write})>{
+      LogFile.interactions: (
+        cap: 500,
+        write: (logger) => logger.logInteraction(
+            rowKind: InteractionRowKind.outcome, command: 'x', outcome: 'ok'),
+      ),
+      LogFile.transitions: (
+        cap: 500,
+        write: (logger) => logger.logTransition(
+          command: 'x',
+          transition: const HandoffTransition(
+            from: HandoffStatus.noHandoff,
+            event: HandoffEvent.setup,
+            to: HandoffStatus.suggestInvestigating,
+          ),
+        ),
+      ),
+      LogFile.gates: (
+        cap: 500,
+        write: (logger) => logger.logGate(
+          command: 'debug',
+          gate: GateKind.debugVerification,
+          shellCommand: 'dart test',
+          result: const GateResult.passed(),
+        ),
+      ),
+      LogFile.proofs: (
+        cap: 5000,
+        write: (logger) => logger.logProofFault(
+          proof: 'p',
+          fault: 'f',
+          sourceFile: 'lib/a.dart',
+          sourceLine: 1,
+          verdict: ProofVerdict.caught,
+          tier: 1,
+          attempts: 1,
+          caughtBy: const [],
+          durationMs: 1,
+        ),
+      ),
+    };
+
+    for (final entry in writers.entries) {
+      final path = p.join(logsDirFor('/workspaces/app'), entry.key.fileName);
+      final cap = entry.value.cap;
+
+      List<String> seeded(int count) =>
+          [for (var i = 0; i < count; i++) jsonEncode({'ts': 'x', 'n': i})];
+
+      test('rotation: ${entry.key.name} keeps its newest $cap past cap plus slack',
+          () {
+        io.write(path, '${seeded(cap + 51).join('\n')}\n');
+        entry.value.write(
+            SessionLogger.plain(io: io, workspacePath: '/workspaces/app'));
+        expect(io.read(path).trim().split('\n'), hasLength(cap));
+      });
+
+      test('rotation: ${entry.key.name} trims nothing within its slack', () {
+        io.write(path, '${seeded(cap + 49).join('\n')}\n');
+        entry.value.write(
+            SessionLogger.plain(io: io, workspacePath: '/workspaces/app'));
+        expect(io.read(path).trim().split('\n'), hasLength(cap + 50));
+      });
+    }
 
     test('rotation: within the slack nothing is trimmed', () {
       final within = '${List.generate(
