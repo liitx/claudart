@@ -79,6 +79,10 @@ enum LogEntryField {
   verdict,
   tier,
   caughtBy,
+
+  /// How many times the deciding tier's tests were run for a proof row: 2 when
+  /// the first run showed nothing and was repeated.
+  attempts,
   gate,
   evidence,
   shellCommand,
@@ -269,6 +273,7 @@ class SessionLogger {
     required int sourceLine,
     required ProofVerdict verdict,
     required int tier,
+    required int attempts,
     required List<String> caughtBy,
     required int durationMs,
   }) {
@@ -282,6 +287,7 @@ class SessionLogger {
         LogEntryField.sourceLine.name: sourceLine,
         LogEntryField.verdict.name: verdict.name,
         LogEntryField.tier.name: tier,
+        LogEntryField.attempts.name: attempts,
         LogEntryField.caughtBy.name: caughtBy,
         LogEntryField.durationMs.name: durationMs,
       },

@@ -11,6 +11,9 @@ import 'fault.dart';
 
 const _sourceFilePath = 'lib/session/session_state.dart';
 
+/// The proof name the control faults are logged under.
+const controlProof = 'control';
+
 /// A fault and the verdict the runner must give it.
 class Control {
   const Control(this.fault, this.expected);
@@ -23,7 +26,7 @@ class _NoBehaviorChange extends SeededFault {
   const _NoBehaviorChange();
 
   @override
-  String get proof => 'control';
+  String get proof => controlProof;
 
   @override
   String get description => 'control: a comment appended, no behavior changed';
@@ -42,7 +45,7 @@ class _DoesNotCompile extends SeededFault {
   const _DoesNotCompile();
 
   @override
-  String get proof => 'control';
+  String get proof => controlProof;
 
   @override
   String get description => 'control: source that does not compile';

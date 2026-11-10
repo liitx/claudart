@@ -36,6 +36,7 @@ void main() {
         sourceLine: 148,
         verdict: verdict,
         tier: 1,
+        attempts: 1,
         caughtBy: caughtBy,
         durationMs: 4200,
       );
@@ -51,6 +52,7 @@ void main() {
       expect(row['sourceLine'], 148);
       expect(row['verdict'], 'caught');
       expect(row['tier'], 1);
+      expect(row['attempts'], 1);
       expect(row['caughtBy'], ['P9 replay']);
       expect(row['durationMs'], 4200);
     });

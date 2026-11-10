@@ -97,6 +97,7 @@ class TransitionTableFaults extends FaultProvider {
   List<String> get tierOneTests => const [
         'test/topology/transition_proofs_test.dart',
         'test/topology/transition_matrix_test.dart',
+        'test/topology/transition_expectation_test.dart',
         'test/topology/handoff_topology_test.dart',
         'test/session/session_state_test.dart',
       ];

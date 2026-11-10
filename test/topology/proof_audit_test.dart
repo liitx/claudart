@@ -4,12 +4,35 @@
 
 import 'dart:io';
 
+import 'package:claudart/io/file_io.dart';
+import 'package:claudart/logging/logger.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
 
+import '../../tool/proof_audit/fault.dart';
+import '../../tool/proof_audit/report.dart';
 import '../../tool/proof_audit/runner.dart';
 import '../../tool/proof_audit/table_faults.dart';
+
+class _ChangesTheText extends SeededFault {
+  const _ChangesTheText();
+
+  @override
+  String get proof => 'test';
+
+  @override
+  String get description => 'changes the text';
+
+  @override
+  String get sourceFile => 'lib/session/session_state.dart';
+
+  @override
+  int get sourceLine => 1;
+
+  @override
+  String apply(String source) => 'changed';
+}
 
 void main() {
   final faults = const TransitionTableFaults().faults('.');
@@ -117,8 +140,175 @@ void main() {
       expect(judgeTestRun('', 1).invalid, isTrue);
     });
 
+    test('an event with raw output in front of it is still read', () {
+      final judgement = judgeTestRun(
+        '$start  \x1B[36m⠋\x1B[0m  Categorizing intent'
+        '{"type":"testDone","testID":1,"result":"failure"}\n',
+        1,
+      );
+      expect(judgement.failed, ['a proof']);
+    });
+
+    test('a test start with raw output in front of it still names the test', () {
+      final judgement = judgeTestRun(
+        'Writing files…{"type":"testStart","test":{"id":1,"name":"a proof"}}\n'
+        '{"type":"testDone","testID":1,"result":"failure"}\n',
+        1,
+      );
+      expect(judgement.failed, ['a proof']);
+    });
+
+    test('raw output after an event is ignored', () {
+      final judgement = judgeTestRun(
+        '$start{"type":"testDone","testID":1,"result":"failure"}  \x1B[2Kdone\n',
+        1,
+      );
+      expect(judgement.failed, ['a proof']);
+    });
+
+    test('a failure with no recorded start is named for what is missing', () {
+      final judgement = judgeTestRun(
+        '{"type":"testDone","testID":9,"result":"failure"}\n',
+        1,
+      );
+      expect(judgement.failed, [noRecordedStartName]);
+    });
+
     test('lines that are not JSON events are ignored', () {
       expect(judgeTestRun('not json\n{broken\n', 0).failed, isEmpty);
+    });
+  });
+
+  group('a fault whose test run showed nothing', () {
+    late Directory scratch;
+    late SessionLogger logger;
+
+    setUp(() {
+      scratch = Directory.systemTemp.createTempSync('proof_audit_test_');
+      Directory('${scratch.path}/lib/session').createSync(recursive: true);
+      File('${scratch.path}/lib/session/session_state.dart')
+          .writeAsStringSync('original');
+      logger = SessionLogger.plain(
+        io: const RealFileIO(),
+        workspacePath: scratch.path,
+      );
+    });
+
+    tearDown(() => scratch.deleteSync(recursive: true));
+
+    const invalid = TestJudgement(failed: [], invalid: true);
+    const caught = TestJudgement(failed: ['a proof'], invalid: false);
+    const passed = TestJudgement(failed: [], invalid: false);
+
+    Future<FaultResult> checkWith(List<TestJudgement> answers) {
+      final queue = [...answers];
+      final runner = AuditRunner(
+        scratchRoot: scratch.path,
+        logger: logger,
+        runTests: (_) async => queue.removeAt(0),
+      );
+      return runner.check(const TransitionTableFaults(), const _ChangesTheText());
+    }
+
+    test('is run again once, and the retry is counted', () async {
+      final result = await checkWith([invalid, caught]);
+      expect(result.verdict, ProofVerdict.caught);
+      expect(result.attempts, 2);
+    });
+
+    test('is invalid when the retry shows nothing either', () async {
+      final result = await checkWith([invalid, invalid]);
+      expect(result.verdict, ProofVerdict.invalid);
+      expect(result.attempts, 2);
+    });
+
+    test('is not run again when the first run caught it', () async {
+      final result = await checkWith([caught]);
+      expect(result.attempts, 1);
+    });
+
+    test('is not run again when the first run passed: that is a miss, not a doubt',
+        () async {
+      final result = await checkWith([passed, passed]);
+      expect(result.verdict, ProofVerdict.missed);
+      expect(result.attempts, 1);
+    });
+
+    test('leaves the scratch source as it was', () async {
+      await checkWith([caught]);
+      expect(
+        File('${scratch.path}/lib/session/session_state.dart').readAsStringSync(),
+        'original',
+      );
+    });
+  });
+
+  group('the report', () {
+    Map<String, dynamic> row(
+      String verdict, {
+      int tier = 1,
+      int attempts = 1,
+      String fault = 'noHandoff x setup: suggestInvestigating -> unknown',
+      List<String> caughtBy = const ['a proof'],
+    }) =>
+        {
+          'proof': 'transitionTable',
+          'fault': fault,
+          'sourceFile': 'lib/session/session_state.dart',
+          'sourceLine': 149,
+          'verdict': verdict,
+          'tier': tier,
+          'attempts': attempts,
+          'caughtBy': caughtBy,
+        };
+
+    test('counts a fault by its latest row', () {
+      final text = renderReport([
+        row('invalid', caughtBy: const []),
+        row('caught', attempts: 2),
+      ]);
+      expect(text, contains('| caught by the named proofs (tier 1) | 1 |'));
+      expect(text, contains('| invalid (did not compile or load): shows nothing | 0 |'));
+    });
+
+    test('leaves the control faults out of the counts', () {
+      final control = {...row('missed', caughtBy: const []), 'proof': 'control'};
+      final text = renderReport([control, row('caught')]);
+      expect(text, contains('| total | 1 |'));
+    });
+
+    test('counts a fault only a generated-doc drift test caught', () {
+      final text = renderReport([
+        row('caught', caughtBy: const ['the checked-in doc docs/x.md matches the code']),
+        row('caught', fault: 'noHandoff x setup: suggestInvestigating -> readyForDebug'),
+      ]);
+      expect(text, contains('regenerating the docs hides them | 1 |'));
+    });
+
+    test('counts the faults that were run again', () {
+      final text = renderReport([row('caught', attempts: 2)]);
+      expect(text, contains('repeated | 1 |'));
+    });
+
+    test('lists a missed fault with its file and line and says nothing caught it',
+        () {
+      final text = renderReport([row('missed', caughtBy: const [])]);
+      expect(text, contains('`lib/session/session_state.dart:149` | nothing |'));
+    });
+
+    test('marks a cell a tier-2 test caught with a star', () {
+      final text = renderReport([row('caught', tier: 2)]);
+      expect(text, contains('0/1*'));
+    });
+
+    test('marks a cell nothing caught with a bang', () {
+      final text = renderReport([row('missed', caughtBy: const [])]);
+      expect(text, contains('0/1!'));
+    });
+
+    test('names the tests that carried the proof', () {
+      final text = renderReport([row('caught', caughtBy: const ['the size pin'])]);
+      expect(text, contains('| the size pin | 1 |'));
     });
   });
 }

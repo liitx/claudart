@@ -573,6 +573,7 @@ void main() {
       LogEntryField.sourceLine: 'sourceLine',
       LogEntryField.verdict: 'verdict',
       LogEntryField.tier: 'tier',
+      LogEntryField.attempts: 'attempts',
       LogEntryField.caughtBy: 'caughtBy',
       LogEntryField.stepId: 'stepId',
       LogEntryField.detail: 'detail',

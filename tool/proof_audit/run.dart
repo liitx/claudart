@@ -1,7 +1,8 @@
 // run.dart — audits the proofs against seeded faults and logs what it finds
 //
 //   dart run tool/proof_audit/run.dart [--workers=N] [--limit=N] [--only=text]
-//       [--logs=<workspace dir>] [--report=<markdown file>]
+//       [--skip-controls] [--report-only] [--logs=<workspace dir>]
+//       [--report=<markdown file>]
 //
 // Seeds every fault of every provider in scratch copies of the repository, one
 // copy for each worker, and appends one `proofs.jsonl` row per fault under
@@ -54,7 +55,19 @@ Future<void> main(List<String> args) async {
   final only = _option(args, 'only');
   final workspace = _option(args, 'logs') ?? '/tmp/claudart_proof_audit/ws';
   final reportPath = _option(args, 'report');
+  final skipControls = args.contains('--skip-controls');
   final started = DateTime.now().toUtc();
+  final proofsLog = File(logFilePath('$workspace/logs', LogFile.proofs));
+
+  if (args.contains('--report-only')) {
+    final rows = [
+      for (final line in proofsLog.readAsLinesSync())
+        if (line.trim().isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+    ];
+    File(reportPath!).writeAsStringSync(renderReport(rows));
+    stdout.writeln('report: $reportPath, from ${rows.length} logged rows');
+    return;
+  }
 
   final logger = SessionLogger.plain(
     io: const RealFileIO(),
@@ -79,7 +92,7 @@ Future<void> main(List<String> args) async {
     if (Directory(scratch).existsSync()) Directory(scratch).deleteSync(recursive: true);
     await _copyRepository(repository, scratch);
     final runner = AuditRunner(scratchRoot: scratch, logger: logger);
-    if (number == 0) {
+    if (number == 0 && !skipControls) {
       for (final control in controls) {
         final result = await runner.check(_providers.first, control.fault);
         stdout.writeln('control ${result.verdict.name} (expected '

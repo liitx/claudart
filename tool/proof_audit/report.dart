@@ -8,13 +8,32 @@ import 'package:claudart/logging/logger.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart';
 
+import 'controls.dart' show controlProof;
 import 'table_faults.dart';
+
+/// Tests that only compare the code with a document generated from it. They
+/// fail when the code changes, but `make topology` makes them pass again, so
+/// they are a tripwire and not a proof that the change was right.
+const driftTestPrefix = 'the checked-in doc ';
+
+bool _onlyDriftTests(Map<String, dynamic> row) {
+  final names = (row[LogEntryField.caughtBy.name] as List<dynamic>).cast<String>();
+  return names.isNotEmpty && names.every((name) => name.startsWith(driftTestPrefix));
+}
 
 String _field(Map<String, dynamic> row, LogEntryField field) =>
     '${row[field.name]}';
 
-/// The markdown report for [rows] (one run's proof rows).
-String renderReport(List<Map<String, dynamic>> rows) {
+/// The markdown report for [loggedRows], proof rows in the order they were
+/// logged. A fault logged more than once (a rerun) counts by its latest row.
+String renderReport(List<Map<String, dynamic>> loggedRows) {
+  final latest = <String, Map<String, dynamic>>{};
+  for (final row in loggedRows) {
+    if (row[LogEntryField.proof.name] == controlProof) continue;
+    latest['${_field(row, LogEntryField.proof)}|${_field(row, LogEntryField.fault)}'] = row;
+  }
+  final rows = latest.values.toList();
+  final repeated = rows.where((row) => (row[LogEntryField.attempts.name] ?? 1) != 1).length;
   final verdicts = {
     for (final verdict in ProofVerdict.values)
       verdict: rows.where((row) => row[LogEntryField.verdict.name] == verdict.name).toList(),
@@ -25,6 +44,7 @@ String renderReport(List<Map<String, dynamic>> rows) {
   final tierTwoCaught = verdicts[ProofVerdict.caught]!
       .where((row) => row[LogEntryField.tier.name] == 2)
       .toList();
+  final onlyDrift = tierOneCaught.where(_onlyDriftTests).toList();
   final missed = verdicts[ProofVerdict.missed]!;
   final invalid = verdicts[ProofVerdict.invalid]!;
 
@@ -37,15 +57,19 @@ String renderReport(List<Map<String, dynamic>> rows) {
     ..writeln()
     ..writeln('Each fault changes one cell of `HandoffStatus.after` in a scratch '
         'copy. Tier 1 is the tests meant to carry the proof; tier 2 is the wider '
-        'suite, run only for a fault tier 1 missed.')
+        'suite, run only for a fault tier 1 missed. The control faults (a comment that '
+        'changes nothing must come out missed, source that does not compile must '
+        'come out invalid) ran first and are not counted here.')
     ..writeln()
     ..writeln('| Verdict | Faults |')
     ..writeln('|---|---|')
     ..writeln('| caught by the named proofs (tier 1) | ${tierOneCaught.length} |')
+    ..writeln('| of those, caught only by a generated-doc drift test: regenerating the docs hides them | ${onlyDrift.length} |')
     ..writeln('| caught only by the wider suite (tier 2): the proofs are weak here | ${tierTwoCaught.length} |')
     ..writeln('| missed by every test: a gap | ${missed.length} |')
     ..writeln('| invalid (did not compile or load): shows nothing | ${invalid.length} |')
     ..writeln('| total | ${rows.length} |')
+    ..writeln('| faults whose first test run showed nothing and was repeated | $repeated |')
     ..writeln()
     ..writeln('## Cells')
     ..writeln()
@@ -103,6 +127,7 @@ String renderReport(List<Map<String, dynamic>> rows) {
     }
   }
 
+  listFaults('Caught only by a generated-doc drift test', onlyDrift);
   listFaults('Missed by every test', missed);
   listFaults('Caught only by the wider suite', tierTwoCaught);
   listFaults('Invalid faults', invalid);

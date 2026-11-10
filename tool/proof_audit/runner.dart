@@ -22,6 +22,7 @@ class FaultResult {
     required this.fault,
     required this.verdict,
     required this.tier,
+    required this.attempts,
     required this.caughtBy,
     required this.durationMs,
   });
@@ -31,6 +32,11 @@ class FaultResult {
 
   /// The checking tier that decided it: 1 the named proofs, 2 the wider suite.
   final int tier;
+
+  /// How many times the deciding tier's tests were run: 2 when the first run
+  /// showed nothing (it did not load, or failed with no test to explain it) and
+  /// was repeated, since three workers compiling at once can do that.
+  final int attempts;
   final List<String> caughtBy;
   final int durationMs;
 }
@@ -54,21 +60,15 @@ TestJudgement judgeTestRun(String reporterLines, int exitCode) {
   final failed = <String>[];
   var invalid = false;
   for (final line in const LineSplitter().convert(reporterLines)) {
-    if (!line.startsWith('{')) continue;
-    final Object? event;
-    try {
-      event = jsonDecode(line);
-    } on FormatException {
-      continue;
-    }
-    if (event is! Map<String, dynamic>) continue;
+    final event = _eventIn(line);
+    if (event == null) continue;
     final test = event['test'];
     if (event['type'] == 'testStart' && test is Map<String, dynamic>) {
       names[test['id'] as int] = test['name'] as String;
     } else if (event['type'] == 'testDone') {
       final result = event['result'];
       if (result != 'failure' && result != 'error') continue;
-      final name = names[event['testID'] as int] ?? 'unnamed test';
+      final name = names[event['testID'] as int] ?? noRecordedStartName;
       if (name.startsWith('loading ')) {
         invalid = true;
       } else {
@@ -80,8 +80,62 @@ TestJudgement judgeTestRun(String reporterLines, int exitCode) {
   return TestJudgement(failed: failed, invalid: invalid);
 }
 
+/// What a failure is called when its start was never read.
+const noRecordedStartName = 'a test whose start was not recorded';
+
+/// The reporter event on [line]. Commands under test write spinners and status
+/// text straight to standard output, so raw text can come before an event on
+/// its line, or after it; the event is the JSON object that starts at a `{"`
+/// and closes at its matching brace.
+Map<String, dynamic>? _eventIn(String line) {
+  for (var at = line.indexOf('{"'); at >= 0; at = line.indexOf('{"', at + 1)) {
+    final end = _closingBrace(line, at);
+    if (end == null) continue;
+    try {
+      final decoded = jsonDecode(line.substring(at, end + 1));
+      if (decoded is Map<String, dynamic> && decoded['type'] is String) {
+        return decoded;
+      }
+    } on FormatException {
+      continue;
+    }
+  }
+  return null;
+}
+
+/// The index of the brace that closes the object opened at [start], skipping
+/// braces inside strings, or null when the line ends first.
+int? _closingBrace(String line, int start) {
+  var depth = 0;
+  var inString = false;
+  for (var i = start; i < line.length; i++) {
+    final char = line[i];
+    if (inString) {
+      if (char == '\\') {
+        i++;
+      } else if (char == '"') {
+        inString = false;
+      }
+    } else if (char == '"') {
+      inString = true;
+    } else if (char == '{') {
+      depth++;
+    } else if (char == '}') {
+      depth--;
+      if (depth == 0) return i;
+    }
+  }
+  return null;
+}
+
 class AuditRunner {
-  AuditRunner({required this.scratchRoot, required this.logger});
+  AuditRunner({
+    required this.scratchRoot,
+    required this.logger,
+    Future<TestJudgement> Function(List<String> tests)? runTests,
+  }) : _runTests = runTests;
+
+  final Future<TestJudgement> Function(List<String> tests)? _runTests;
 
   /// A scratch copy of the repository, owned by this runner alone.
   final String scratchRoot;
@@ -96,10 +150,10 @@ class AuditRunner {
     try {
       File(path).writeAsStringSync(fault.apply(original));
       var tier = 1;
-      var judgement = await _run(provider.tierOneTests);
+      var (judgement, attempts) = await _runOnceMoreIfInvalid(provider.tierOneTests);
       if (!judgement.invalid && judgement.failed.isEmpty) {
         tier = 2;
-        judgement = await _run(provider.tierTwoTests);
+        (judgement, attempts) = await _runOnceMoreIfInvalid(provider.tierTwoTests);
       }
       final verdict = judgement.invalid
           ? ProofVerdict.invalid
@@ -110,6 +164,7 @@ class AuditRunner {
         fault: fault,
         verdict: verdict,
         tier: tier,
+        attempts: attempts,
         caughtBy: judgement.failed,
         durationMs: clock.elapsedMilliseconds,
       );
@@ -120,6 +175,7 @@ class AuditRunner {
         sourceLine: fault.sourceLine,
         verdict: verdict,
         tier: tier,
+        attempts: attempts,
         caughtBy: judgement.failed,
         durationMs: result.durationMs,
       );
@@ -127,6 +183,13 @@ class AuditRunner {
     } finally {
       File(path).writeAsStringSync(original);
     }
+  }
+
+  /// The run, and the judgement of a second run if the first showed nothing.
+  Future<(TestJudgement, int)> _runOnceMoreIfInvalid(List<String> tests) async {
+    final first = await (_runTests ?? _run)(tests);
+    if (!first.invalid) return (first, 1);
+    return (await (_runTests ?? _run)(tests), 2);
   }
 
   Future<TestJudgement> _run(List<String> tests) async {
