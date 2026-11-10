@@ -9,6 +9,7 @@ Each fault changes one fact of a matrix in a scratch copy. Tier 1 is the tests m
 | transitionTable | 896 | 896 | 0 | 0 | 0 | 0 |
 | closureEvidence | 29 | 29 | 0 | 0 | 0 | 0 |
 | claudartCommand | 546 | 546 | 0 | 0 | 0 | 0 |
+| handoffListeners | 45 | 45 | 0 | 0 | 0 | 0 |
 
 ## transitionTable
 
@@ -206,3 +207,65 @@ Tier-1 tests that failed for at least one fault, and for how many. A proof test 
 | handoffEvents flow: handoffEvents matches the literal table | 14 |
 
 Faults by how many tests other than a generated-doc drift test caught them (a fault with one rests on one test): 1: 75, 2: 470, 3: 1.
+
+## handoffListeners
+
+| Verdict | Faults |
+|---|---|
+| caught by the named proofs (tier 1) | 45 |
+| of those, caught only by a generated-doc drift test: regenerating the docs hides them | 0 |
+| caught only by the wider suite (tier 2): the proofs are weak here | 0 |
+| missed by every test: a gap | 0 |
+| invalid (did not compile or load): shows nothing | 0 |
+| total | 45 |
+| faults whose first test run showed nothing and was repeated | 0 |
+
+### Caught only by a generated-doc drift test
+
+None.
+
+### Missed by every test
+
+None.
+
+### Caught only by the wider suite
+
+None.
+
+### Invalid faults
+
+None.
+
+### Which tests carry the proof
+
+Tier-1 tests that failed for at least one fault, and for how many. A proof test that appears nowhere here is not what protects this matrix.
+
+| Test | Faults it caught |
+|---|---|
+| safety no listener may emit an event the landing status forbids | 37 |
+| what a reaction may return the teardown returns only tornDown | 27 |
+| termination the events listeners may emit form no cycle | 17 |
+| HandoffStore an event a reaction returns is applied by the store, after the move | 15 |
+| what a reaction may return the record returns nothing | 14 |
+| HandoffStore an event outside what its kind may emit is refused and reported | 3 |
+| which reactions a move calls for fixApplied landing on debugComplete calls for the record and a teardown | 2 |
+| HandoffStore a reaction runs only for the moves listenersFor names its kind for | 2 |
+| totality over events only a fix landing on a finished fix calls for a teardown | 2 |
+| which reactions a move calls for saveConfirmedReady landing on suggestInvestigating calls for the record alone | 1 |
+| which reactions a move calls for setup landing on readyForSuggest calls for the record alone | 1 |
+| which reactions a move calls for setup landing on readyForDebug calls for the record alone | 1 |
+| which reactions a move calls for setup landing on debugInProgress calls for the record alone | 1 |
+| which reactions a move calls for setup landing on debugComplete calls for the record alone | 1 |
+| which reactions a move calls for setup landing on needsSuggest calls for the record alone | 1 |
+| which reactions a move calls for setup landing on noHandoff calls for the record alone | 1 |
+| which reactions a move calls for setup landing on unknown calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on suggestInvestigating calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on readyForSuggest calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on readyForDebug calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on debugInProgress calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on debugComplete calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on needsSuggest calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on noHandoff calls for the record alone | 1 |
+| which reactions a move calls for flowConstructed landing on unknown calls for the record alone | 1 |
+
+Faults by how many tests other than a generated-doc drift test caught them (a fault with one rests on one test): 1: 1, 2: 13, 3: 26, 4: 2, 5 or more: 3.
