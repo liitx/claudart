@@ -21,6 +21,7 @@ import 'closure_faults.dart';
 import 'command_faults.dart';
 import 'controls.dart';
 import 'fault.dart';
+import 'listener_faults.dart';
 import 'report.dart';
 import 'runner.dart';
 import 'table_faults.dart';
@@ -29,6 +30,7 @@ const _providers = <FaultProvider>[
   TransitionTableFaults(),
   ClosureEvidenceFaults(),
   ClaudartCommandFaults(),
+  HandoffListenerFaults(),
 ];
 
 String? _option(List<String> args, String name) {

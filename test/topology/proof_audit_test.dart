@@ -13,6 +13,7 @@ import 'package:test/test.dart';
 import '../../tool/proof_audit/closure_faults.dart';
 import '../../tool/proof_audit/command_faults.dart';
 import '../../tool/proof_audit/fault.dart';
+import '../../tool/proof_audit/listener_faults.dart';
 import '../../tool/proof_audit/report.dart';
 import '../../tool/proof_audit/runner.dart';
 import '../../tool/proof_audit/table_faults.dart';
@@ -326,6 +327,7 @@ void main() {
       TransitionTableFaults(),
       ClosureEvidenceFaults(),
       ClaudartCommandFaults(),
+      HandoffListenerFaults(),
     ];
 
     for (final provider in providers) {
@@ -376,6 +378,12 @@ void main() {
     test('the evidence matrix has 29 faults: five returns and two guards, and '
         'four arms each retargeted three ways', () {
       expect(const ClosureEvidenceFaults().faults('.'), hasLength(29));
+    });
+
+    test('the listener matrix has 45 faults: two reactions dropped from the '
+        'debugComplete move, two lists given a second reaction, 14 events '
+        'for the recorder, and 27 changes to the closer\'s permitted events', () {
+      expect(const HandoffListenerFaults().faults('.'), hasLength(45));
     });
 
     test('the command matrix has 546 faults: for each of the 26 commands four '
