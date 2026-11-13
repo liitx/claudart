@@ -6,8 +6,8 @@
 
 | repo | lib files | public components | test files |
 |---|---|---|---|
-| claudart | 163 | 209 | 222 |
-| dartrix | 14 | 22 | 8 |
+| claudart | 163 | 209 | 223 |
+| dartrix | 18 | 30 | 13 |
 | zedup | 192 | 230 | 119 |
 
 ## Names declared in more than one repo
@@ -20,6 +20,14 @@
 | `FaultSeverity` | claudart, zedup |
 
 ## Tests that read another repo's components
+
+### claudart
+
+| test file | component | reads | asserts its behavior | first assertion |
+|---|---|---|---|---|
+| `test/topology/candidacy_ledger_test.dart` | `CandidateLedger` | 3 | 0 | — |
+| `test/topology/candidacy_ledger_test.dart` | `CandidateStatus` | 3 | 0 | — |
+| `test/topology/candidacy_ledger_test.dart` | `LedgerRefusal` | 1 | 0 | — |
 
 ### dartrix
 
