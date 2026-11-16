@@ -342,3 +342,22 @@ a comparison of two equal durations is equivalent (registered).
 Not yet done for these two: volume stress of the timing reader, and a run of the
 installed binary (`claudart status` over a real workspace), which a candidate that
 claims the real log format should have.
+
+## R22 closed: R3b (2026-11-16)
+
+The run row now goes through `loggerForProject`, the same choice the failure boundary
+makes. Real binary, before and after: `claudart status` wrote its run row to the
+global log (0 rows in the workspace); after, 1 row in the workspace log and a Timing
+block in the output. R3b is proven for the spec as written. Two things it cost:
+
+- Two CLI tests expected exactly one row; a command now leaves its own outcome row
+  and then the boundary's run row, and they say so.
+- The line mutants of the new function's null checks cannot be judged (a flipped
+  check breaks the null promotion on the next line, so the mutant does not compile).
+  The choice is audited by seven hand-seeded faults instead (`ProjectLoggerFaults`).
+
+**A limit of the ledger found here, not fixed:** evidence is `path :: text` with no
+commit, so once a refuted candidate's bug is fixed the code it cited is gone and the
+citation test fails. R3's evidence was rewritten once to cite what still exists (the
+spec, the gap row, the test that now guards the fix). A durable fix is dartrix's: an
+evidence citation that carries the commit it was true at.

@@ -10,9 +10,7 @@
 import '../../errors/claudart_exception.dart';
 import '../../errors/failure_type.dart';
 import '../../io/file_io.dart';
-import '../../io/git_utils.dart';
-import '../../logging/logger.dart';
-import '../../registry.dart';
+import 'project_logger.dart';
 
 /// The keys of the context [reportFailure] puts on a failure it had to wrap.
 /// The enum name is the key.
@@ -44,23 +42,7 @@ ClaudartException reportFailure({
           context: {FailureContextKey.cause.name: error.toString()},
         );
 
-  final root = projectRoot ?? detectGitContext()?.root;
-  RegistryEntry? entry;
-  var registryReadable = true;
-  if (root != null) {
-    try {
-      entry = Registry.load(io: fileIO).findByProjectRoot(root);
-    } on CorruptRegistryException {
-      registryReadable = false;
-    }
-  }
-  // An unreadable registry cannot say whether the project is sensitive, so no
-  // text is logged rather than guessing it is not.
-  final logger = !registryReadable
-      ? SessionLogger.labelOnly(io: fileIO)
-      : entry == null
-          ? SessionLogger.plain(io: fileIO)
-          : SessionLogger.forEntry(entry, io: fileIO);
+  final logger = loggerForProject(projectRoot: projectRoot, io: fileIO);
   logger.logError(
     command: command,
     errorType: failure.errorType.name,

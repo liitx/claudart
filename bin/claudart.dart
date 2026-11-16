@@ -38,7 +38,7 @@ import 'package:claudart/commands/support/command_seams.dart';
 import 'package:claudart/config/environment.dart';
 import 'package:claudart/io/process_runner.dart';
 import 'package:claudart/commands/support/interaction_boundary.dart';
-import 'package:claudart/logging/logger.dart';
+import 'package:claudart/commands/support/project_logger.dart';
 import 'package:claudart/io/exit_reason.dart';
 
 const _usage = '''
@@ -203,7 +203,7 @@ Future<void> main(List<String> rawArgs) async {
     final dispatched = claudartCommand!;
     await runRecorded(
       command: dispatched,
-      logger: SessionLogger.plain(),
+      logger: loggerForProject(projectRoot: selectedRoot),
       body: () => _dispatch(dispatched, rest, projectRoot: selectedRoot),
     );
   } on Object catch (error, stackTrace) {

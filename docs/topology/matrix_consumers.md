@@ -40,5 +40,5 @@ If the family of a file said whether it holds a decision table, every cell would
 | drivesState x pure | 3 | 1 |
 | drivesState x workspaceBound | 2 | 1 |
 | observesState x workspaceBound | 5 | 1 |
-| untouched x fileSeam | 17 | 2 |
+| untouched x fileSeam | 18 | 2 |
 | untouched x pure | 86 | 5 |

@@ -60,7 +60,7 @@ List<String> directReaders(DatumSource source, Map<String, String> sources) {
 /// lists every project.
 const _ownLookupLedger = {
   'lib/commands/doctor.dart',
-  'lib/commands/support/failure_boundary.dart',
+  'lib/commands/support/project_logger.dart',
   'lib/commands/launch.dart',
   'lib/commands/link.dart',
   'lib/commands/setup.dart',
