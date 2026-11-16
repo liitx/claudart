@@ -39,3 +39,9 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   axiom needs a justified threshold, and the weights and factors are uncalibrated
   judgments. Next decision for the owner: the threshold and a calibration of the
   weights; until then agents treat them as evidence.
+- **Phase 5 first pass** written at the end of `docs/candidacy.md`: four topology
+  claims, each with its candidate, its standing and what stays on trust. The
+  handoff-state cells have no candidates yet (T7 only): that is the next place to
+  start. T10 (956 survivors) and `make ledger` (about an hour, then `make
+  ledger-check`) were not started; run the ledger with no other test or mutation run
+  alive.

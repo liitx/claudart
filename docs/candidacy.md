@@ -361,3 +361,23 @@ commit, so once a refuted candidate's bug is fixed the code it cited is gone and
 citation test fails. R3's evidence was rewritten once to cite what still exists (the
 spec, the gap row, the test that now guards the fix). A durable fix is dartrix's: an
 evidence citation that carries the commit it was true at.
+
+# Phase 5: what the topology rests on, so far (2026-11-16)
+
+Cites only what the ledger holds (`docs/candidacy/index.md`). No axiom exists yet, so
+nothing below is stated as an axiom; each line says what a proven or bounded
+candidate supports and what is left on trust.
+
+| Topology claim | Supported by | Standing | Still on trust |
+|---|---|---|---|
+| Every log keeps its documented cap, newest rows, in order | R1b | proven | concurrency at volume; the global planner log |
+| Every log's timing is read or proven absent; a row is a record or a named gap | R2 | bounded | `scanDuration` has no unit, so it is not read |
+| A command's run row lands in its project's logs, through one logger choice | R3b | proven | rows written before this change sit in the global log |
+| `teardown --headless` does what `automaticClosureFor` says | T7 | refuted for `debugUnrecorded` and `none` | the intended action is the owner's decision |
+
+What this says about the state-driven plan: the log layer, which every later proof
+reads as the expected-versus-actual record, now has a proven shape (R1b, R3b) and a
+typed way to read timing (R2). The handoff state machine's own cells have no
+candidate yet except T7; the next candidates belong to the matrix of
+`HandoffStatus` x `HandoffEvent` (the lifecycle conformance test is their mock
+data). Nothing on that side is proven by this ledger, whatever the tests say.
