@@ -1,6 +1,7 @@
 import 'dart:io';
 import '../io/file_io.dart';
 import '../logging/logger.dart';
+import '../logging/timed_source.dart';
 import '../pipeline/model_observation.dart' show describeModelRecord;
 import '../config/paths.dart';
 import '../session/session_state.dart';
@@ -119,6 +120,31 @@ Future<void> runStatus({
     for (final record in modelRecords) {
       print(UserText.statusModelRecordLine.format({'record': describeModelRecord(record)}));
     }
+  }
+
+  final timing = [
+    for (final source in TimedSource.values)
+      readTimedLog(fileIO, logsDirFor(workspace), source),
+  ];
+  final runs = summarizeTimed([
+    for (final reading in timing)
+      for (final record in reading.records)
+        if (record.source == TimedSource.commandRun) record,
+  ]);
+  if (runs.isNotEmpty) {
+    print(UserText.statusTimingHeading.template);
+    for (final run in runs) {
+      print(UserText.statusTimingLine.format({
+        'label': run.label,
+        'runs': '${run.runs}',
+        'latest': '${run.latestMs}',
+        'slowest': '${run.slowestMs}',
+      }));
+    }
+  }
+  final unreadable = timing.fold<int>(0, (sum, r) => sum + r.gaps.length);
+  if (unreadable > 0) {
+    print(UserText.statusTimingGaps.format({'count': '$unreadable'}));
   }
 
   print(UserText.nextStepHeading.template);

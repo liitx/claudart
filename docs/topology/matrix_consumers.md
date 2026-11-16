@@ -8,9 +8,10 @@ A decision table is a function whose result is an enum value (or a list or set o
 |---|---|---|---|---|---|
 | `stateOf` (`lib/codegen/artifact_state.dart:45`) | `ArtifactState` | untouched x fileSeam | 1 | 0 | drives |
 | `settleLiveHandoff` (`lib/commands/support/live_handoff.dart:50`) | `HandoffStatus` | observesState x workspaceBound | 2 | 0 | drives |
+| `logFile` (`lib/logging/timed_source.dart:32`) | `LogFile` | untouched x fileSeam | 1 | 0 | drives |
 | `hue` (`lib/pipeline/agent_response.dart:53`) | `StateHue` | untouched x pure | 11 | 0 | unattributed |
 | `routeModel` (`lib/pipeline/agents/categorization.dart:271`) | `AgentModel` | untouched x pure | 1 | 0 | drives |
-| `kind` (`lib/pipeline/pipeline_event.dart:78`) | `PipelineEventKind` | untouched x pure | 4 | 2 | unattributed |
+| `kind` (`lib/pipeline/pipeline_event.dart:78`) | `PipelineEventKind` | untouched x pure | 4 | 3 | unattributed |
 | `fromEvent` (`lib/pipeline/step_status.dart:56`) | `StepStatus` | untouched x pure | 0 | 0 | unconsumed |
 | `closureEvidenceOf` (`lib/session/closure_evidence.dart:57`) | `ClosureEvidence` | untouched x pure | 2 | 0 | drives |
 | `automaticClosureFor` (`lib/session/closure_evidence.dart:78`) | `AutomaticClosure` | untouched x pure | 0 | 1 | displayOnly |
@@ -23,7 +24,7 @@ A decision table is a function whose result is an enum value (or a list or set o
 - `fromEvent` (unconsumed):
   - no caller
 - `automaticClosureFor` (displayOnly):
-  - `lib/commands/status.dart:72` `'closure': automaticClosureFor(closureEvidence).label,`
+  - `lib/commands/status.dart:73` `'closure': automaticClosureFor(closureEvidence).label,`
 
 ## Getters whose readers cannot be told apart
 
@@ -39,5 +40,5 @@ If the family of a file said whether it holds a decision table, every cell would
 | drivesState x pure | 3 | 1 |
 | drivesState x workspaceBound | 2 | 1 |
 | observesState x workspaceBound | 5 | 1 |
-| untouched x fileSeam | 16 | 1 |
+| untouched x fileSeam | 17 | 2 |
 | untouched x pure | 86 | 5 |

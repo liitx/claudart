@@ -2,3 +2,4 @@
 # file|line|operator|reason
 # An entry needs its reason; one no mutant matches is reported stale.
 lib/logging/logger.dart|552|greaterThan|the errors log is trimmed to its cap by keeping the last cap entries; when the length equals the cap, sublist(length - cap) is the whole list, so > and >= write the same file for every volume
+lib/logging/timed_source.dart|161|greaterThan|the slowest of two equal durations is the same number whichever is kept, so > and >= give the same answer for every input

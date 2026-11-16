@@ -293,3 +293,52 @@ those cases, so keeping them would be duplicates.
   lines every judged mutant is caught except the registered equivalent. The other
   misses (`logSchemaVersion`, two optional-field guards, the error count seed) are
   outside R1's lines and stay in the survivors ledger.
+
+# R1b and R2: performance is derived, not a second log (2026-11-16)
+
+R1 was bounded only because the README listed `performance.md`, a log removed on
+2026-11-06 (methodical_refactor S9, closed by removal; each run's `durationMs`
+is on its interactions row). The owner chose to derive performance from the logs
+that already hold durations. The stale rows are gone from the README, and:
+
+- **R1b** (proven) restates R1 under the corrected spec. A bounded candidate cannot
+  move, so a corrected spec is a new candidate; R1 stays as the record.
+- **R2** (bounded): every log is either read for timing or proven to hold no
+  duration-like field, and every timed row reads as a record or a named gap.
+  `scanDuration` (fractional, no unit) is the one timing not read; the spec says so,
+  which is why R2 is bounded and not proven.
+
+What was built (enum driven, each piece with its proof written first):
+`TimedSource` (four variants; `logFile`, `qualifies`, `rawDurationOf` and `labelOf`
+are exhaustive switches with no default arm), `readTimedLog` (records and gaps, a gap
+carries its reason), `summarizeTimed`, a Timing block in `claudart status`, the
+template `docs/templates/timed_source.md`, and a fault provider for the `logFile`
+table (28 faults, all caught; the matrix rule requires every decision table to be
+audited). Three guards fired during the build and each pointed at a real slip: a log
+file name spelled in a test, a test title naming a type as text, and the unaudited
+table. The gate also found two survivors: a duration of zero had no test (added), and
+a comparison of two equal durations is equivalent (registered).
+
+## The procedure, as it was followed (the template for the next candidate)
+
+1. **State** the postulate and the spec section it is about; append a `candidate` entry.
+2. **List what the spec needs from the mocks** (one writer per variant, the axis
+   around each boundary, rows that identify themselves, expected values written by
+   hand) and mark which the existing tests already hold. Seed faults against the
+   existing tests: a fault no test catches is a Phase 0 finding.
+3. **Fix the spec if the spec is wrong** (stale README rows) before testing it.
+4. **Change the tests that own the behavior**, not a new file: extend the matrix,
+   remove the tests the matrix now duplicates.
+5. **Build with the enum first**: the compiler lists what a new variant must answer;
+   the template says how to add one.
+6. **Run the gate**: analyzer, suite, lint and a mutant of every touched lib line;
+   every decision table audited. Close survivors in the tests that own the line, or
+   register an equivalent with its reason.
+7. **Derive the evidence**: run the mutants of the cited files, snapshot the rows on
+   the cited lines, append `underTest` with the audit, then the result
+   (`proven`, `bounded` with its boundary, or `refuted`) with factors.
+8. **Log the assumptions** (weights, factors, anything not measured).
+
+Not yet done for these two: volume stress of the timing reader, and a run of the
+installed binary (`claudart status` over a real workspace), which a candidate that
+claims the real log format should have.

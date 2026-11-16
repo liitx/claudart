@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:claudart/commands/status.dart';
 import 'package:claudart/generated/user_text.g.dart';
+import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/closure_evidence.dart';
@@ -321,6 +322,57 @@ _Nothing yet.
     test('shows no Models section when nothing was recorded', () async {
       final out = await statusText(ioWithModels(const []));
       expect(out, isNot(contains('Models')));
+    });
+
+    group('timing from the logs', () {
+      MemoryFileIO ioWithRows(LogFile log, List<String> rows) {
+        final io = ioWithModels(const []);
+        io.write(
+          logFilePath(logsDirFor(workspaceFor(_projectName)), log),
+          '${rows.join('\n')}\n',
+        );
+        return io;
+      }
+
+      String runRow(String command, int? durationMs) =>
+          '{"rowKind":"run","command":"$command","outcome":"ok",'
+          '"durationMs":${durationMs ?? 'null'}}';
+
+      test('shows each command: how many runs, the latest and the slowest',
+          () async {
+        final out = await statusText(ioWithRows(LogFile.interactions, [
+          runRow('debug', 100),
+          runRow('save', 40),
+          runRow('debug', 300),
+          runRow('debug', 200),
+        ]));
+        expect(out, contains('Timing (command runs):'));
+        expect(out, contains('  debug  3x, latest 200ms, slowest 300ms'));
+        expect(out, contains('  save  1x, latest 40ms, slowest 40ms'));
+      });
+
+      test('a command outcome row is not a run', () async {
+        final out = await statusText(ioWithRows(LogFile.interactions, [
+          '{"rowKind":"outcome","command":"scan","outcome":"ok","durationMs":9}',
+        ]));
+        expect(out, isNot(contains('Timing')));
+      });
+
+      test('says how many timed rows could not be read, and still shows the rest',
+          () async {
+        final out = await statusText(ioWithRows(LogFile.interactions, [
+          runRow('debug', 100),
+          runRow('debug', null),
+        ]));
+        expect(out, contains('  debug  1x, latest 100ms, slowest 100ms'));
+        expect(out, contains('timed rows that could not be read as a duration: 1'));
+      });
+
+      test('shows nothing about timing when there are no rows', () async {
+        final out = await statusText(ioWithModels(const []));
+        expect(out, isNot(contains('Timing')));
+        expect(out, isNot(contains('could not be read')));
+      });
     });
   });
 

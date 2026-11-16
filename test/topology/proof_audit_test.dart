@@ -12,6 +12,7 @@ import 'package:test/test.dart';
 
 import '../../tool/proof_audit/changed_lines.dart';
 import '../../tool/proof_audit/closure_faults.dart';
+import '../../tool/proof_audit/timed_source_faults.dart';
 import '../../tool/proof_audit/command_faults.dart';
 import '../../tool/proof_audit/fault.dart';
 import '../../tool/proof_audit/listener_faults.dart';
@@ -716,6 +717,11 @@ void main() {
         'debugComplete move, two lists given a second reaction, 14 events '
         'for the recorder, and 27 changes to the closer\'s permitted events', () {
       expect(const HandoffListenerFaults().faults('.'), hasLength(45));
+    });
+
+    test('the timed-source matrix has 28 faults: four arms each retargeted to '
+        'the seven other logs', () {
+      expect(const TimedSourceFaults().faults('.'), hasLength(28));
     });
 
     test('the command matrix has 546 faults: for each of the 26 commands four '

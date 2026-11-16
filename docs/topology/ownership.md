@@ -6,8 +6,8 @@
 
 | repo | lib files | public components | test files |
 |---|---|---|---|
-| claudart | 163 | 209 | 224 |
-| dartrix | 20 | 34 | 15 |
+| claudart | 164 | 211 | 225 |
+| dartrix | 21 | 34 | 15 |
 | zedup | 192 | 230 | 119 |
 
 ## Names declared in more than one repo
@@ -27,9 +27,9 @@
 |---|---|---|---|---|
 | `test/topology/candidacy_evidence_test.dart` | `CandidateLedger` | 1 | 0 | — |
 | `test/topology/candidacy_evidence_test.dart` | `ProofAuditCheck` | 1 | 0 | — |
-| `test/topology/candidacy_evidence_test.dart` | `ProofAuditOutcome` | 7 | 0 | — |
+| `test/topology/candidacy_evidence_test.dart` | `ProofAuditOutcome` | 12 | 0 | — |
 | `test/topology/candidacy_ledger_test.dart` | `CandidateLedger` | 3 | 0 | — |
-| `test/topology/candidacy_ledger_test.dart` | `CandidateStatus` | 3 | 0 | — |
+| `test/topology/candidacy_ledger_test.dart` | `CandidateStatus` | 5 | 0 | — |
 | `test/topology/candidacy_ledger_test.dart` | `LedgerRefusal` | 1 | 0 | — |
 
 ### dartrix
