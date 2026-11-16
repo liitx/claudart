@@ -132,3 +132,23 @@ fails that case and only that case. The T7 entry stays `refuted`: the ledger is
 append-only and the claim is still false for `debugUnrecorded` and `none` until the
 owner decides the intended action; the mocks are now fit to prove the claim that
 follows that decision.
+
+## Deriving `everyTestCanFail` from the line ledger (2026-11-16)
+
+A ledger entry's outcome for `everyTestCanFail` is no longer only read off by hand.
+`make candidacy-evidence LOGS=<dir>` keeps, for each `lib/` line an entry cites, the
+verdict of every one-line mutant the line ledger ran on it
+(`docs/candidacy/evidence_rows.jsonl`). `test/topology/candidacy_evidence_test.dart`
+derives the outcome by a written-out rule (no judged mutant: not checked; any missed:
+failed; else passed), fails when a recorded outcome differs from the derived one, and
+fails when a cited line no longer reads as it did when the mutants ran. Two seeded
+edits of the snapshot (a verdict, a line's text) were each caught.
+
+**What this does and does not prove, stated plainly.** T7 cites one mutable line
+(`teardown.dart`, the headless decision): its mutant is caught, so the recorded
+`passed` is now derived. The cited lines of `closure_evidence.dart` are switch arms
+that no line operator mutates; the table is guarded by the matrix audit's 29 seeded
+faults instead, which this derivation does not read. So a line-ledger outcome covers
+only lines the operators can mutate; the next link is reading the matrix audit's rows
+the same way. While deriving, a scratch copy of this repository failed to resolve a
+local `pubspec_overrides.yaml` path; the audit now makes such paths absolute, tested.

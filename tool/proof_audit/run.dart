@@ -26,6 +26,7 @@ import 'controls.dart';
 import 'ledger.dart';
 import 'fault.dart';
 import 'mirror.dart';
+import 'overrides.dart';
 import 'mutant_faults.dart';
 import 'providers.dart';
 import 'report.dart';
@@ -68,6 +69,12 @@ Future<void> _copyRepository(String from, String to) async {
     '$to/',
   ]);
   if (copied.exitCode != 0) throw StateError('rsync failed: ${copied.stderr}');
+  final overrides = File('$to/pubspec_overrides.yaml');
+  if (overrides.existsSync()) {
+    overrides.writeAsStringSync(
+      absolutizeOverridePaths(overrides.readAsStringSync(), from),
+    );
+  }
   final pub = await Process.run('dart', ['pub', 'get', '--offline'], workingDirectory: to);
   if (pub.exitCode != 0) throw StateError('pub get failed in $to: ${pub.stderr}');
 }

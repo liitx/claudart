@@ -6,6 +6,7 @@ import 'package:claudart/logging/logger.dart';
 import 'package:test/test.dart';
 
 import '../../tool/proof_audit/ledger.dart';
+import '../../tool/proof_audit/overrides.dart';
 
 Map<String, dynamic> _row(
   String description, {
@@ -198,6 +199,25 @@ void main() {
         title: 'T',
       );
       expect(text, contains('| untouched x pure | 1 | 2 | 2 | 1 | 1 |'));
+    });
+  });
+
+  group('overrides in a scratch copy', () {
+    test('a relative path points at the original place', () {
+      expect(
+        absolutizeOverridePaths('dependency_overrides:\n  dartrix:\n    path: ../dartrix\n', '/work/claudart'),
+        'dependency_overrides:\n  dartrix:\n    path: /work/dartrix\n',
+      );
+    });
+
+    test('an absolute path is left alone', () {
+      const yaml = '  dartrix:\n    path: /elsewhere/dartrix\n';
+      expect(absolutizeOverridePaths(yaml, '/work/claudart'), yaml);
+    });
+
+    test('a line that is not a path is left alone', () {
+      const yaml = 'dependency_overrides:\n  dartrix:\n    git: x\n';
+      expect(absolutizeOverridePaths(yaml, '/work/claudart'), yaml);
     });
   });
 

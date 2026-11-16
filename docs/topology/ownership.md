@@ -6,7 +6,7 @@
 
 | repo | lib files | public components | test files |
 |---|---|---|---|
-| claudart | 163 | 209 | 223 |
+| claudart | 163 | 209 | 224 |
 | dartrix | 18 | 30 | 13 |
 | zedup | 192 | 230 | 119 |
 
@@ -25,6 +25,9 @@
 
 | test file | component | reads | asserts its behavior | first assertion |
 |---|---|---|---|---|
+| `test/topology/candidacy_evidence_test.dart` | `CandidateLedger` | 1 | 0 | — |
+| `test/topology/candidacy_evidence_test.dart` | `ProofAuditCheck` | 1 | 0 | — |
+| `test/topology/candidacy_evidence_test.dart` | `ProofAuditOutcome` | 7 | 0 | — |
 | `test/topology/candidacy_ledger_test.dart` | `CandidateLedger` | 3 | 0 | — |
 | `test/topology/candidacy_ledger_test.dart` | `CandidateStatus` | 3 | 0 | — |
 | `test/topology/candidacy_ledger_test.dart` | `LedgerRefusal` | 1 | 0 | — |

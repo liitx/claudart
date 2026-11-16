@@ -38,6 +38,13 @@ ledger-baseline:
 impact:
 	$(DART) run tool/proof_audit/impact.dart --logs=$(or $(LOGS),/tmp/claudart_full_ledger/ws) $(TARGET)
 
+## Re-derive the candidate ledger's "every test can fail" from line mutants: run
+## the mutants of each cited lib file (run.dart --mutants=<file> --mirror-only
+## --logs=<dir>), then keep the rows on the cited lines.
+##   make candidacy-evidence LOGS=<dir>
+candidacy-evidence:
+	$(DART) run tool/candidacy/evidence_audit.dart --logs=$(LOGS)
+
 ## Seed one-line mutants on the lines this change touched (since BASE, default
 ## main) and fail if a test does not fail for each; the ledger it writes names
 ## the existing tests a missing assertion belongs with. About 5 s a mutant.
