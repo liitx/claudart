@@ -119,12 +119,6 @@ void main() {
   });
 
   group('every evidence decides an exit', () {
-    for (final evidence in ClosureEvidence.values) {
-      test('${evidence.name} has an automatic closure', () {
-        expect(AutomaticClosure.values, contains(automaticClosureFor(evidence)));
-      });
-    }
-
     test('only verified evidence archives', () {
       final archiving = [
         for (final evidence in ClosureEvidence.values)

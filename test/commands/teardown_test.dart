@@ -937,6 +937,13 @@ _None recorded yet._
         archives: false,
         evidence: ClosureEvidence.confirmedBySuggest,
       ),
+      (
+        name: 'a handoff suggest is still investigating',
+        status: 'suggest-investigating',
+        disposition: null,
+        archives: false,
+        evidence: ClosureEvidence.none,
+      ),
     ];
 
     for (final scenario in cases) {

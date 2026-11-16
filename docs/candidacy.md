@@ -120,3 +120,15 @@ what moves it forward; it will be a new candidate, not an edit of this one.
 - The audit outcomes in the T7 entries were set by reading the mocks and the
   recorded runs; nothing yet derives them. Deriving `everyTestCanFail` from
   `proofs.jsonl` rows is the next link between the line ledger and this one.
+
+## T7's Phase 0 findings, closed (2026-11-16)
+
+Both findings in T7's ledger entry were closed in the tests that already own the
+behavior, none added beside them: `closure_evidence_test.dart` lost `has an automatic
+closure` (the evidence matrix above it already has one row per value, and the test
+could not fail), and the headless teardown cases in `teardown_test.dart` gained the
+`none` case. A seeded change that makes headless teardown treat `none` as verified
+fails that case and only that case. The T7 entry stays `refuted`: the ledger is
+append-only and the claim is still false for `debugUnrecorded` and `none` until the
+owner decides the intended action; the mocks are now fit to prove the claim that
+follows that decision.
