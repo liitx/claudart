@@ -14,16 +14,14 @@ import 'package:dartrix/dartrix.dart';
 import 'package:test/test.dart';
 
 import '../../tool/candidacy/evidence_audit.dart';
-import '../../tool/proof_audit/ledger.dart';
 
-MutantRow _row(ProofVerdict verdict, {String file = 'lib/a.dart', int line = 1}) =>
+EvidenceRow _row(ProofVerdict verdict, {String file = 'lib/a.dart', int line = 1}) =>
     (
+      proof: 'seed',
       file: file,
       line: line,
       description: 'seed',
       verdict: verdict,
-      tier: 1,
-      caughtBy: const [],
     );
 
 /// The outcome each set of verdicts derives, written out here.
@@ -65,6 +63,14 @@ const _derivation = <({
   ),
 ];
 
+EvidenceRow _snapshotRow(Map<String, dynamic> json) => (
+      proof: json['proof'] as String,
+      file: json['file'] as String,
+      line: json['line'] as int,
+      description: json['description'] as String,
+      verdict: ProofVerdict.values.byName(json['verdict'] as String),
+    );
+
 String _fakeSource(String path) => 'first\nthe needle here\nthird\nneedle again';
 
 void main() {
@@ -77,6 +83,51 @@ void main() {
         );
       });
     }
+  });
+
+  group('evidenceRows', () {
+    Map<String, dynamic> logged(String proof, String fault, String verdict) => {
+          'proof': proof,
+          'fault': fault,
+          'sourceFile': 'lib/a.dart',
+          'sourceLine': 7,
+          'verdict': verdict,
+        };
+
+    test('keeps a matrix fault and a mutant alike', () {
+      expect(
+        evidenceRows([
+          logged('closureEvidence', 'one', 'caught'),
+          logged('mutants:lib/a.dart', 'two', 'missed'),
+        ]).map((r) => r.proof),
+        ['closureEvidence', 'mutants:lib/a.dart'],
+      );
+    });
+
+    test('leaves out the audit checking itself', () {
+      expect(evidenceRows([logged('control', 'a comment appended', 'missed')]),
+          isEmpty);
+    });
+
+    test('the latest verdict of a fault wins', () {
+      expect(
+        evidenceRows([
+          logged('closureEvidence', 'one', 'missed'),
+          logged('closureEvidence', 'one', 'caught'),
+        ]).map((r) => r.verdict),
+        [ProofVerdict.caught],
+      );
+    });
+
+    test('the same fault text under another proof is another row', () {
+      expect(
+        evidenceRows([
+          logged('closureEvidence', 'one', 'caught'),
+          logged('other', 'one', 'caught'),
+        ]),
+        hasLength(2),
+      );
+    });
   });
 
   group('citedLines', () {
@@ -149,16 +200,7 @@ void main() {
     final parsed = CandidateLedger.parse(File(candidateLedgerPath).readAsStringSync());
     final rows = [
       for (final line in File(evidenceRowsPath).readAsLinesSync())
-        if (line.trim().isNotEmpty)
-          (
-            file: (jsonDecode(line) as Map<String, dynamic>)['file'] as String,
-            line: (jsonDecode(line) as Map<String, dynamic>)['line'] as int,
-            description: (jsonDecode(line) as Map<String, dynamic>)['description'] as String,
-            verdict: ProofVerdict.values.byName(
-                (jsonDecode(line) as Map<String, dynamic>)['verdict'] as String),
-            tier: 1,
-            caughtBy: const <String>[],
-          ),
+        if (line.trim().isNotEmpty) _snapshotRow(jsonDecode(line) as Map<String, dynamic>),
     ];
 
     for (final entry in parsed.ledger.entries) {

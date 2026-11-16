@@ -144,7 +144,15 @@ failed; else passed), fails when a recorded outcome differs from the derived one
 fails when a cited line no longer reads as it did when the mutants ran. Two seeded
 edits of the snapshot (a verdict, a line's text) were each caught.
 
-**What this does and does not prove, stated plainly.** T7 cites one mutable line
+**Closed the same day:** the derivation reads every audit row on a cited line, a
+line mutant or a matrix fault alike (`closureEvidence`: 29 faults, 29 caught). T7's
+cited `closure_evidence.dart` lines now have rows (6 matrix faults on the two arms
+it cites, all caught) beside the one teardown mutant, so the recorded `passed` is
+derived end to end. One seeded edit (a matrix row marked missed) fails the
+consistency test.
+
+**What this does and does not prove, stated plainly (as first written, before the
+matrix rows were read; the table lines are no longer the gap):** T7 cites one mutable line
 (`teardown.dart`, the headless decision): its mutant is caught, so the recorded
 `passed` is now derived. The cited lines of `closure_evidence.dart` are switch arms
 that no line operator mutates; the table is guarded by the matrix audit's 29 seeded

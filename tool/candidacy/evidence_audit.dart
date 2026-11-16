@@ -17,7 +17,8 @@ import 'package:claudart/logging/logger.dart';
 import 'package:claudart/logging/log_file.dart';
 import 'package:dartrix/dartrix.dart';
 
-import '../proof_audit/ledger.dart';
+import '../proof_audit/controls.dart' show controlProof;
+
 
 /// Separates a cited file from the text it must contain.
 const citationSeparator = ' :: ';
@@ -27,6 +28,35 @@ const evidenceRowsPath = 'docs/candidacy/evidence_rows.jsonl';
 
 /// Where the candidate ledger is kept.
 const candidateLedgerPath = 'docs/candidacy/ledger.jsonl';
+
+/// One verdict of the audit about one line: a one-line mutant of the line ledger
+/// or a single-fact fault of a matrix audit.
+typedef EvidenceRow = ({
+  String proof,
+  String file,
+  int line,
+  String description,
+  ProofVerdict verdict,
+});
+
+/// The audit rows of a proofs log, the latest verdict of each fault. Controls
+/// are the audit checking itself and are not evidence about a line.
+List<EvidenceRow> evidenceRows(List<Map<String, dynamic>> logged) {
+  final latest = <String, EvidenceRow>{};
+  for (final row in logged) {
+    final proof = row[LogEntryField.proof.name] as String;
+    if (proof == controlProof) continue;
+    final description = row[LogEntryField.fault.name] as String;
+    latest['$proof|$description'] = (
+      proof: proof,
+      file: row[LogEntryField.sourceFile.name] as String,
+      line: row[LogEntryField.sourceLine.name] as int,
+      description: description,
+      verdict: ProofVerdict.values.byName(row[LogEntryField.verdict.name] as String),
+    );
+  }
+  return latest.values.toList();
+}
 
 /// The `lib/` lines a citation points at: every line of the file that contains
 /// the cited text. A citation outside `lib/` cites no line of code.
@@ -50,7 +80,7 @@ List<({String file, int line, String text})> citedLines(
 /// - no row, or only rows no test run could judge: not checked;
 /// - a mutant that no test failed on: failed;
 /// - otherwise every judged mutant was caught: passed.
-ProofAuditOutcome everyTestCanFailFrom(List<MutantRow> rows) {
+ProofAuditOutcome everyTestCanFailFrom(List<EvidenceRow> rows) {
   final judged = rows.where((r) => r.verdict != ProofVerdict.invalid);
   if (judged.isEmpty) return ProofAuditOutcome.notChecked;
   if (judged.any((r) => r.verdict == ProofVerdict.missed)) {
@@ -59,9 +89,9 @@ ProofAuditOutcome everyTestCanFailFrom(List<MutantRow> rows) {
   return ProofAuditOutcome.passed;
 }
 
-/// The mutant rows that sit on one of [cited].
-List<MutantRow> rowsOnCitedLines(
-  List<MutantRow> rows,
+/// The rows that sit on one of [cited].
+List<EvidenceRow> rowsOnCitedLines(
+  List<EvidenceRow> rows,
   List<({String file, int line, String text})> cited,
 ) =>
     [
@@ -79,7 +109,7 @@ void main(List<String> args) {
       for (final citation in entry.evidence)
         ...citedLines(citation, (p) => File(p).readAsStringSync()),
   ];
-  final rows = mutantRows([
+  final rows = evidenceRows([
     for (final line in File(logFilePath('$logs/logs', LogFile.proofs)).readAsLinesSync())
       if (line.trim().isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
   ]);
@@ -87,6 +117,7 @@ void main(List<String> args) {
   final out = [
     for (final row in kept)
       jsonEncode({
+        'proof': row.proof,
         'file': row.file,
         'line': row.line,
         'lineText': cited
@@ -94,9 +125,8 @@ void main(List<String> args) {
             .text,
         'description': row.description,
         'verdict': row.verdict.name,
-        'caughtBy': row.caughtBy,
       }),
   ]..sort();
   File(evidenceRowsPath).writeAsStringSync('${out.join('\n')}\n');
-  stdout.writeln('${kept.length} mutant rows on ${cited.length} cited lines -> $evidenceRowsPath');
+  stdout.writeln('${kept.length} audit rows on ${cited.length} cited lines -> $evidenceRowsPath');
 }
