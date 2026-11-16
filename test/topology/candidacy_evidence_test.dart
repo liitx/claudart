@@ -14,13 +14,19 @@ import 'package:dartrix/dartrix.dart';
 import 'package:test/test.dart';
 
 import '../../tool/candidacy/evidence_audit.dart';
+import '../../tool/proof_audit/ledger.dart' show parseEquivalents;
 
-EvidenceRow _row(ProofVerdict verdict, {String file = 'lib/a.dart', int line = 1}) =>
+EvidenceRow _row(
+  ProofVerdict verdict, {
+  String file = 'lib/a.dart',
+  int line = 1,
+  String description = 'seed',
+}) =>
     (
       proof: 'seed',
       file: file,
       line: line,
-      description: 'seed',
+      description: description,
       verdict: verdict,
     );
 
@@ -83,6 +89,55 @@ void main() {
         );
       });
     }
+
+    // A mutant the registry names (file, line, operator) is the same program, so
+    // it is not judged; one that differs in any of the three still counts.
+    group('with an accepted equivalent registered for lib/a.dart line 1 greaterThan', () {
+      final registry = parseEquivalents('lib/a.dart|1|greaterThan|same result');
+      const named = 'line 1 greaterThan: x';
+      final cases = <({
+        String name,
+        List<EvidenceRow> rows,
+        ProofAuditOutcome outcome,
+      })>[
+        (
+          name: 'the named mutant missed beside a caught one is passed',
+          rows: [
+            _row(ProofVerdict.missed, description: named),
+            _row(ProofVerdict.caught, line: 2),
+          ],
+          outcome: ProofAuditOutcome.passed,
+        ),
+        (
+          name: 'the named mutant alone is not checked',
+          rows: [_row(ProofVerdict.missed, description: named)],
+          outcome: ProofAuditOutcome.notChecked,
+        ),
+        (
+          name: 'another operator on the line is failed',
+          rows: [_row(ProofVerdict.missed, description: 'line 1 lessThan: x')],
+          outcome: ProofAuditOutcome.failed,
+        ),
+        (
+          name: 'the same operator on another line is failed',
+          rows: [_row(ProofVerdict.missed, line: 2, description: 'line 2 greaterThan: x')],
+          outcome: ProofAuditOutcome.failed,
+        ),
+        (
+          name: 'the same operator on another file is failed',
+          rows: [_row(ProofVerdict.missed, file: 'lib/b.dart', description: named)],
+          outcome: ProofAuditOutcome.failed,
+        ),
+      ];
+      for (final scenario in cases) {
+        test(scenario.name, () {
+          expect(
+            everyTestCanFailFrom(scenario.rows, acceptedEquivalents: registry),
+            scenario.outcome,
+          );
+        });
+      }
+    });
   });
 
   group('evidenceRows', () {
@@ -198,6 +253,9 @@ void main() {
 
   group('what the ledger records matches what the rows derive', () {
     final parsed = CandidateLedger.parse(File(candidateLedgerPath).readAsStringSync());
+    final equivalents = parseEquivalents(
+      File('tool/proof_audit/accepted_equivalents.txt').readAsStringSync(),
+    );
     final rows = [
       for (final line in File(evidenceRowsPath).readAsLinesSync())
         if (line.trim().isNotEmpty) _snapshotRow(jsonDecode(line) as Map<String, dynamic>),
@@ -212,7 +270,10 @@ void main() {
             ...citedLines(citation, (p) => File(p).readAsStringSync()),
         ];
         expect(
-          everyTestCanFailFrom(rowsOnCitedLines(rows, cited)).name,
+          everyTestCanFailFrom(
+            rowsOnCitedLines(rows, cited),
+            acceptedEquivalents: equivalents,
+          ).name,
           recorded,
         );
       });

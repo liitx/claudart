@@ -16,9 +16,14 @@ import 'package:test/test.dart';
 /// Separates a cited file from the text it must contain.
 const _citationSeparator = ' :: ';
 
+/// The candidate whose proof failed the mock audit (T7: a mock that mirrors
+/// the assertion), used to show a failed audit blocks bounded and proven.
+const _failedAuditCandidate = 'T7';
+
 /// The status each candidate stands at, written out here.
 const _expectedStatus = <String, CandidateStatus>{
-  'T7': CandidateStatus.refuted,
+  _failedAuditCandidate: CandidateStatus.refuted,
+  'R1': CandidateStatus.bounded,
 };
 
 ({String path, String needle}) _cite(String citation) {
@@ -68,14 +73,15 @@ void main() {
 
     group('a proof on mocks that failed Phase 0 cannot be bounded or proven', () {
       for (final target in [CandidateStatus.bounded, CandidateStatus.proven]) {
-        test('T7 as ${target.name} is refused: noTautologicalMock failed', () {
+        test('$_failedAuditCandidate as ${target.name} is refused: noTautologicalMock failed', () {
+          final t7 = entries.where((e) => e.candidateId == _failedAuditCandidate);
           final underTest = CandidateLedger.parse(
-            entries
+            t7
                 .where((e) => e.status != CandidateStatus.refuted)
                 .map(CandidateLedger.encode)
                 .join('\n'),
           ).ledger;
-          final refuted = entries.last;
+          final refuted = t7.last;
           final attempt = CandidateLedgerEntry(
             candidateId: refuted.candidateId,
             status: target,

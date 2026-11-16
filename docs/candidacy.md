@@ -219,3 +219,77 @@ volume" (axis: entries written, in multiples of the cap), because the code, the
 existing cap matrix in `test/logging/logger_test.dart` and an obvious breaking point
 (the trim slack of 50 lines) all exist. Running it extends that matrix's levels rather
 than adding a test beside it.
+
+# Candidate R1: every log keeps its cap at any volume (2026-11-16)
+
+The first candidate run end to end with the machinery, and the first use of the
+stress and bounds phase on claudart's own logs. It supports the audit logs the
+architecture work reads (`docs/methodical_refactor.md` reads logs as the
+expected-versus-actual record, so a log that silently loses or keeps the wrong rows
+breaks every proof that reads it).
+
+## The postulate
+
+For every log the README table gives a cap (`README.md`, "Each workspace keeps its
+own logs"), at any number of lines already written and after any number of writes,
+the file holds exactly what the trim rule says: a jsonl log may run 50 lines past its
+cap and is then cut back to the cap; `errors.jsonl` (rewritten on each error,
+deduplicated by fingerprint) is cut to the cap with no slack. What is kept is the
+newest rows, in order; a repeated error is counted, not added.
+
+## What the spec needs from the mocks (Phase 0, before any test was changed)
+
+| Need | Why | Held before? |
+|---|---|---|
+| One writer per log named in the spec (7 jsonl logs) | A cap is per log; a log with no writer in a test is unproven | No: 4 of 7 (interactions, transitions, gates, proofs); errors, steps absent from the matrix, models in a separate test |
+| A volume axis around each boundary: below the cap, at it, at cap + 49 (no trim), at cap + 50 (first trim), far past it | The rule changes at exactly those points | Partly: cap + 49 and cap + 51 only |
+| Several writes, not one | The trim cycle (grow 50, cut) is only seen across writes | No (interactions only, single write) |
+| Rows that identify themselves | "Newest kept, in order" cannot be seen from a length | No: three of the four matrix logs asserted length only |
+| Expected counts written from the spec, not computed by the code under test | A mock that mirrors the code proves nothing | Yes (hand-written), kept |
+| A repeat of an error already held, at the cap | Dedup must not drop or grow the file | No |
+| The README row for each log states its cap | The spec must say what the test says | No: `proofs.jsonl` had none; fixed |
+
+Verified by seeding faults, not by reading: with the old tests a change of the errors
+cap (200), of the steps cap (2000) and of the errors trim all passed every test.
+
+## What changed, in the tests that own the behavior
+
+`test/logging/logger_test.dart`: the log-cap matrix now covers all seven jsonl logs
+(13 volume and write-count cases each, expected counts and surviving rows written by
+hand), with a separate matrix for `errors.jsonl`. The three tests that covered one
+log's cap alone (interactions twice, models once) were removed: the matrix covers
+those cases, so keeping them would be duplicates.
+
+## Results
+
+- 16 hand-seeded faults on the trim and caps (every cap, the slack both ways, the
+  comparison at the slack, which end is kept, the blank-line filter, the errors trim
+  disabled or keeping the oldest): all caught except `>` to `>=` at the errors trim,
+  which is equivalent (`sublist(length - cap)` is the whole list when the length is
+  the cap) and is registered with that reason.
+- Candidate R1 is recorded as `bounded`, not `proven`: `performance.md` is in the
+  README table with a cap of 50 and has no writer, so one of the eight spec variants
+  cannot be covered. Boundary: up to 10 times the cap in one write and 160 writes
+  from the cap; concurrency is tested only at small volume.
+
+## Assumptions logged
+
+- The confidence factors for R1 (boundary 0.7, topology reach 0.875 = 7 of 8
+  variants, impact 0.5) are judgments, as are the weights; neither is calibrated yet.
+- The monotone assumption of boundary search was not needed: the trim rule has
+  known thresholds, so the volume axis is written out, not bisected. Bisection is
+  for the first claim whose threshold is not known in advance.
+- The global planner log and `performance.md` are outside this candidate.
+
+## What R1 added to the machinery
+
+- The derived `everyTestCanFail` no longer counts a mutant the accepted-equivalents
+  registry names (file, line, operator): that mutant is the same program, so no test
+  could fail on it. It is not judged; a different operator, line or file still is.
+  Needed because R1's cited errors-trim line has exactly one such mutant. Five
+  cases in `candidacy_evidence_test.dart` pin the three dimensions.
+- R1's snapshot rows come from a `run.dart --mutants=lib/logging/logger.dart
+  --mirror-only` run (40 caught, 5 missed, 5 invalid of 50): on the six cited
+  lines every judged mutant is caught except the registered equivalent. The other
+  misses (`logSchemaVersion`, two optional-field guards, the error count seed) are
+  outside R1's lines and stay in the survivors ledger.

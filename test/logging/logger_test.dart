@@ -29,6 +29,38 @@ String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
 String get _modelsPath => logFilePath(_logsDir, LogFile.models);
 String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
 
+/// The key a seeded row carries so a test can tell which rows survived.
+const _seededIndexKey = 'seededIndex';
+
+/// The fingerprint of an error no log holds yet.
+const _freshFingerprint = 'new';
+
+/// The slack a jsonl log may run past its cap before it is trimmed back.
+const _slackLines = 50;
+
+typedef _Volume = ({int lines, int writes, int kept});
+
+/// How many lines a log holds after `writes` writes onto `lines` seeded lines,
+/// written out by hand from the rule (trim to the cap once the file runs past
+/// cap plus [_slackLines]), not computed by the code under test. The writes
+/// cases walk the trim cycle: from the cap, the file grows to cap + 50, the
+/// next write trims it back, and 160 = 3 * 51 + 7 is three whole cycles and 7.
+List<_Volume> _volumesFor(int cap) => [
+      (lines: 1, writes: 1, kept: 2),
+      (lines: cap - 1, writes: 1, kept: cap),
+      (lines: cap, writes: 1, kept: cap + 1),
+      (lines: cap + _slackLines - 2, writes: 1, kept: cap + _slackLines - 1),
+      (lines: cap + _slackLines - 1, writes: 1, kept: cap + _slackLines),
+      (lines: cap + _slackLines, writes: 1, kept: cap),
+      (lines: cap + _slackLines + 1, writes: 1, kept: cap),
+      (lines: 2 * cap, writes: 1, kept: cap),
+      (lines: 10 * cap, writes: 1, kept: cap),
+      (lines: cap, writes: _slackLines, kept: cap + _slackLines),
+      (lines: cap, writes: _slackLines + 1, kept: cap),
+      (lines: cap, writes: _slackLines + 2, kept: cap + 1),
+      (lines: cap, writes: 160, kept: cap + 7),
+    ];
+
 void main() {
   group('SessionLogger', () {
     late MemoryFileIO io;
@@ -171,25 +203,6 @@ void main() {
       expect(entries.first['count'], equals(2));
     });
 
-    // The log may run 50 lines past its 500-line cap before it is trimmed back
-    // to 500, so the rewrite happens once per 50 appends, not on every one.
-    test('rotation: past cap plus slack, the newest 500 remain', () {
-      final manyEntries = '${List.generate(
-        551,
-        (i) => jsonEncode({'ts': 'x', 'command': 'setup', 'n': i, 'outcome': 'ok'}),
-      ).join('\n')}\n';
-      io.write(_interactionsPath, manyEntries);
-
-      // Simulate new log — recreate logger and log one more
-      final l2 = SessionLogger.plain(io: io);
-      l2.logInteraction(rowKind: InteractionRowKind.outcome, command: 'new_cmd', outcome: 'ok');
-
-      final entries = readJsonl(_interactionsPath);
-      expect(entries.length, 500);
-      expect(entries.last['command'], equals('new_cmd'));
-      expect(entries.first['n'], 52);
-    });
-
     // What each log keeps, as the README's log table documents it (and 50 lines
     // of slack past it): written out here, not read from the logger, so a changed
     // cap fails. The logs that share the append-and-trim path.
@@ -207,6 +220,33 @@ void main() {
             from: HandoffStatus.noHandoff,
             event: HandoffEvent.setup,
             to: HandoffStatus.suggestInvestigating,
+          ),
+        ),
+      ),
+      LogFile.models: (
+        cap: 500,
+        write: (logger) => logger.logStepModels(
+          command: 'x',
+          event: AgentCompleted(
+            stepId: 'reader',
+            usage: const Usage(),
+            intendedModel: AgentModel.haiku,
+            models: const [
+              ModelObservation(observedModelId: 'claude-haiku-4-5-20251001'),
+            ],
+          ),
+        ),
+      ),
+      LogFile.steps: (
+        cap: 2000,
+        write: (logger) => logger.logPipelineEvent(
+          command: 'x',
+          event: const AgentStarted(
+            stepId: 'reader',
+            label: 'Reading',
+            model: AgentModel.haiku,
+            displayStep: 1,
+            displayTotal: 1,
           ),
         ),
       ),
@@ -239,38 +279,96 @@ void main() {
       final path = p.join(logsDirFor('/workspaces/app'), entry.key.fileName);
       final cap = entry.value.cap;
 
-      List<String> seeded(int count) =>
-          [for (var i = 0; i < count; i++) jsonEncode({'ts': 'x', 'n': i})];
-
-      test('rotation: ${entry.key.name} keeps its newest $cap past cap plus slack',
-          () {
-        io.write(path, '${seeded(cap + 51).join('\n')}\n');
-        entry.value.write(
-            SessionLogger.plain(io: io, workspacePath: '/workspaces/app'));
-        expect(io.read(path).trim().split('\n'), hasLength(cap));
-      });
-
-      test('rotation: ${entry.key.name} trims nothing within its slack', () {
-        io.write(path, '${seeded(cap + 49).join('\n')}\n');
-        entry.value.write(
-            SessionLogger.plain(io: io, workspacePath: '/workspaces/app'));
-        expect(io.read(path).trim().split('\n'), hasLength(cap + 50));
+      group('rotation: ${entry.key.name} keeps its newest $cap lines', () {
+        for (final volume in _volumesFor(cap)) {
+          test(
+              '${volume.lines} lines then ${volume.writes} '
+              '${volume.writes == 1 ? 'write' : 'writes'} holds ${volume.kept}',
+              () {
+            io.write(
+              path,
+              '${[
+                for (var i = 0; i < volume.lines; i++)
+                  jsonEncode({'ts': 'x', _seededIndexKey: i}),
+              ].join('\n')}\n',
+            );
+            final writer =
+                SessionLogger.plain(io: io, workspacePath: '/workspaces/app');
+            for (var i = 0; i < volume.writes; i++) {
+              entry.value.write(writer);
+            }
+            final rows = [
+              for (final line in io.read(path).trim().split('\n'))
+                jsonDecode(line) as Map<String, dynamic>,
+            ];
+            expect(rows, hasLength(volume.kept));
+            // The oldest rows go and the order stays: what survives of the
+            // seeded rows is one unbroken run ending where the seed ended, and
+            // every row after it is one a write made (it carries no index).
+            final dropped = volume.lines + volume.writes - volume.kept;
+            final survivingSeeded =
+                dropped < volume.lines ? volume.lines - dropped : 0;
+            expect(
+              [for (final row in rows) row[_seededIndexKey]],
+              [
+                for (var i = 0; i < survivingSeeded; i++) dropped + i,
+                for (var i = survivingSeeded; i < volume.kept; i++) null,
+              ],
+            );
+          },
+          );
+        }
       });
     }
 
-    test('rotation: within the slack nothing is trimmed', () {
-      final within = '${List.generate(
-        549,
-        (i) => jsonEncode(
-          {'ts': 'x', 'command': 'setup', 'n': i, 'outcome': 'ok'},
-        ),
-      ).join('\n')}\n';
-      io.write(_interactionsPath, within);
-      SessionLogger.plain(io: io)
-          .logInteraction(rowKind: InteractionRowKind.outcome, command: 'new_cmd', outcome: 'ok');
-      final entries = readJsonl(_interactionsPath);
-      expect(entries.length, 550);
-      expect(entries.first['n'], 0);
+    // errors.jsonl is not on the append-and-trim path: each error rewrites the
+    // file, deduplicated by fingerprint, and keeps the newest 200 with no slack.
+    group('rotation: errors keeps its newest 200 distinct errors', () {
+      const cap = 200;
+      final volumes = <({int lines, String fingerprint, int kept})>[
+        (lines: cap - 1, fingerprint: _freshFingerprint, kept: cap),
+        (lines: cap, fingerprint: _freshFingerprint, kept: cap),
+        (lines: cap + 1, fingerprint: _freshFingerprint, kept: cap),
+        (lines: 5 * cap, fingerprint: _freshFingerprint, kept: cap),
+        // A repeat of one already held is counted, not added: nothing is dropped.
+        (lines: cap, fingerprint: 'fp-${cap - 1}', kept: cap),
+      ];
+      for (final volume in volumes) {
+        test(
+            '${volume.lines} errors then ${volume.fingerprint} holds ${volume.kept}',
+            () {
+          io.write(
+            _errorsPath,
+            '${[
+              for (var i = 0; i < volume.lines; i++)
+                jsonEncode({
+                  LogEntryField.fingerprint.name: 'fp-$i',
+                  LogEntryField.count.name: 1,
+                  _seededIndexKey: i,
+                }),
+            ].join('\n')}\n',
+          );
+          logger.logError(
+            command: 'x',
+            errorType: 'e',
+            fingerprint: volume.fingerprint,
+            reason: 'r',
+          );
+          final rows = readJsonl(_errorsPath);
+          expect(rows, hasLength(volume.kept));
+          final isRepeat = volume.fingerprint != _freshFingerprint;
+          final dropped = isRepeat ? 0 : volume.lines + 1 - volume.kept;
+          final survivingSeeded = volume.lines - dropped;
+          expect(
+            [for (final row in rows) row[_seededIndexKey]],
+            [
+              for (var i = 0; i < survivingSeeded; i++) dropped + i,
+              if (!isRepeat) null,
+            ],
+          );
+          expect(rows.last[LogEntryField.count.name], isRepeat ? 2 : 1);
+        });
+      }
     });
 
     test('sensitive mode abstracts stack trace before write', () {
@@ -503,22 +601,6 @@ void main() {
 
     test('readStepModelRecords is empty when nothing was logged', () {
       expect(logger.readStepModelRecords(), isEmpty);
-    });
-
-    test('appends across steps; past the cap plus slack, the newest 500 remain',
-        () {
-      for (var step = 0; step < 551; step++) {
-        logger.logStepModels(
-          command: 'debug',
-          event: completed(
-            models: [ModelObservation(observedModelId: haikuId, inputTokens: step)],
-          ),
-        );
-      }
-      final written = records();
-      expect(written.length, 500);
-      final first = written.first[ModelRecordField.observation.name] as Map;
-      expect(first[ModelObservationField.inputTokens.jsonKey], 51);
     });
   });
 

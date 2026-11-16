@@ -18,6 +18,7 @@ import 'package:claudart/logging/log_file.dart';
 import 'package:dartrix/dartrix.dart';
 
 import '../proof_audit/controls.dart' show controlProof;
+import '../proof_audit/ledger.dart' show mutantId;
 
 
 /// Separates a cited file from the text it must contain.
@@ -77,11 +78,23 @@ List<({String file, int line, String text})> citedLines(
 
 /// What the mutants of the cited lines say about whether the tests can fail.
 /// Written out so a change to a rule fails a test:
+/// - a mutant the registry of accepted equivalents names (file, line, operator)
+///   is the same program as the original, so no test could fail on it and it is
+///   not judged;
 /// - no row, or only rows no test run could judge: not checked;
 /// - a mutant that no test failed on: failed;
 /// - otherwise every judged mutant was caught: passed.
-ProofAuditOutcome everyTestCanFailFrom(List<EvidenceRow> rows) {
-  final judged = rows.where((r) => r.verdict != ProofVerdict.invalid);
+ProofAuditOutcome everyTestCanFailFrom(
+  List<EvidenceRow> rows, {
+  Map<String, String> acceptedEquivalents = const {},
+}) {
+  final judged = rows.where(
+    (r) =>
+        r.verdict != ProofVerdict.invalid &&
+        !acceptedEquivalents.containsKey(
+          '${r.file}|${r.line}|${mutantId(r.description)}',
+        ),
+  );
   if (judged.isEmpty) return ProofAuditOutcome.notChecked;
   if (judged.any((r) => r.verdict == ProofVerdict.missed)) {
     return ProofAuditOutcome.failed;
