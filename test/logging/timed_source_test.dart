@@ -255,6 +255,25 @@ void main() {
           expect(reading.records.single.durationMs, 0);
         });
 
+        // At the largest cap any log has (5000), every other row broken: each is
+        // read as a record or as a gap, none lost, and the order is kept.
+        test('at 5000 rows, half of them broken, every row is a record or a gap',
+            () {
+          const rows = 5000;
+          io.write(
+            logFilePath(_logsDirectory, c.source.logFile),
+            '${[
+              for (var i = 0; i < rows; i++)
+                jsonEncode(c.rawRow(i.isEven ? i : null, c.label)),
+            ].join('\n')}\n',
+          );
+          final reading = readTimedLog(io, _logsDirectory, c.source);
+          expect(reading.records, hasLength(rows ~/ 2));
+          expect(reading.gaps, hasLength(rows ~/ 2));
+          expect(reading.records.first.durationMs, 0);
+          expect(reading.records.last.durationMs, rows - 2);
+        });
+
         for (final broken in _breaks) {
           test('a row with ${broken.name} is a gap: ${broken.reason.name}', () {
             final row = c.rawRow(broken.duration, broken.label);
