@@ -7,7 +7,7 @@
 | repo | lib files | public components | test files |
 |---|---|---|---|
 | claudart | 163 | 209 | 224 |
-| dartrix | 18 | 30 | 13 |
+| dartrix | 20 | 34 | 15 |
 | zedup | 192 | 230 | 119 |
 
 ## Names declared in more than one repo

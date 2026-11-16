@@ -160,3 +160,62 @@ faults instead, which this derivation does not read. So a line-ledger outcome co
 only lines the operators can mutate; the next link is reading the matrix audit's rows
 the same way. While deriving, a scratch copy of this repository failed to resolve a
 local `pubspec_overrides.yaml` path; the audit now makes such paths absolute, tested.
+
+# Slice 2: repeated entries, confidence, boundary search (2026-11-16)
+
+Phase 3 (find where a candidate breaks) and Phase 4 (grade it, flag a stall). Machinery
+in dartrix, first use in claudart after it is proven. Corpus growth, topology
+recommendations and handoff templates stay later slices.
+
+## What changes, and the assumptions it logs
+
+| Piece | Rule |
+|---|---|
+| Re-test | `underTest -> underTest` is legal: a proof is re-run as the code or the corpus changes, and each run is an entry. (Slice 1 refused it on purpose; this is the planned change.) |
+| Factors | An entry carries three measured factors in 0..1: `boundary` (normalized), `topologyReach` (neighbors confirmed / named), `impact` (duplication or dead paths removed). A fourth, variant coverage, is **derived** from the entry's own variant lists, never stored, so it cannot be made up. |
+| Confidence | `w1*coverage + w2*boundary + w3*reach + w4*impact`, weights sum to 1. Initial weights 0.4, 0.2, 0.2, 0.2 are an **assumption**: coverage of the spec is the claim itself, so it weighs most; the rest are equal until a calibration against seeded faults says otherwise (not done: logged, not hidden). |
+| Required factors | `proven`, `bounded` and `axiom` need factors; `refuted` and `candidate` do not; a re-test may carry them. |
+| Axiom threshold | A number in 0..1 the entry states; the axiom's computed confidence must be at least it. The justification says why that threshold. |
+| Trend | Over a candidate's entries that carry factors: `rising`, `stalled` (equal), `dropped`, or `notEnoughHistory`. A stalled or dropped candidate is listed as flagged. A drop is accepted (it is data) and flagged. |
+| Boundary search | Given ascending complexity levels and a predicate, bisect to the highest level that holds and the lowest that fails; report "never broke" when the top holds, "never held" when the bottom fails. It assumes holding is monotone in level; a separate check finds a level that holds after one that failed, and that is recorded as a refuted assumption. |
+
+## Pass conditions (tests first)
+
+| # | Condition |
+|---|---|
+| D1 | The legal-move table of the status test gains `underTest -> underTest`; every pair is still classified by a table written out in the test |
+| D2 | Confidence equals the written-out weighted sum for a table of factor sets; weights that do not sum to 1 are refused at construction |
+| D3 | Variant coverage as a factor is the covered fraction of the spec's variants; an empty spec counts as 1 only when nothing is covered outside it |
+| D4 | One refusal per new rule: factors missing, a factor outside 0..1, threshold outside 0..1, confidence below the stated threshold |
+| D5 | Trend over a table of confidence series: none, one, rising, equal, falling, and a series whose last step differs from earlier ones |
+| D6 | Boundary search over a table of predicates (all hold, none hold, boundary at each position of a small level list, one level), with the number of evaluations bounded by log2(n)+2; non-monotone predicates are found by the monotonicity check and not hidden |
+| D7 | JSON: factors and numeric threshold round trip; a mistyped factor is malformed |
+| D8 | Line mutants of the changed and new dartrix files: none missed, or accepted with a reason |
+
+## Result of slice 2 (2026-11-16)
+
+| Condition | Result |
+|---|---|
+| D1-D7 | dartrix `test/candidacy/` (322 tests, suite 427): the legal-move table with `underTest -> underTest`, the confidence sum for a table of factor sets, the derived coverage, one refusal per new rule, the trend over a table of series, bisecting over a table of predicates with the run count of each worked out by hand, the monotone check, JSON round trips |
+| D8 | line mutants of the candidacy files: 97 caught, 26 invalid (do not compile), 3 missed and registered as equivalent in `docs/topology/ledger/dartrix_equivalents.txt` with reasons (an exact-tolerance comparison no floating point test can reach, and a `>=` after the equal case was already handled). The first run missed nine: six were closed by tests added to the files that already hold those groups (an exact run count per boundary case, weight 0, a tolerance on either side, thresholds 0 and 1), three were these |
+
+The run count test is the one that mattered: the bound I first wrote (log2(n)+2) let
+a mutant that makes the search probe one extra level pass; the exact hand-derived
+count kills it.
+
+**Assumptions logged, not hidden.** The initial weights (0.4, 0.2, 0.2, 0.2) are not
+calibrated; calibrating them means taking candidates whose truth is known (a seeded
+fault, a refuted claim) and checking that the score separates them, which needs more
+candidates than the ledger has. The boundary search assumes holding is monotone in the
+level, and `firstNonMonotone` is how a candidate checks that instead of trusting it.
+The ledger's `confidenceBelowThreshold` compares floating point values without a
+tolerance; a threshold of exactly 1 with every factor at 1 was tested and accepted,
+and a case that fails by rounding would show up as a refused axiom, not a wrong one.
+
+**Not yet used on a claudart candidate.** The machinery is proven on its own tests;
+its first real use needs a candidate with a complexity axis whose truth is not known in
+advance. The candidate that fits best is "every log keeps its retention cap at any
+volume" (axis: entries written, in multiples of the cap), because the code, the
+existing cap matrix in `test/logging/logger_test.dart` and an obvious breaking point
+(the trim slack of 50 lines) all exist. Running it extends that matrix's levels rather
+than adding a test beside it.
