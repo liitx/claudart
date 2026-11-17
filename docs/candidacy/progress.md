@@ -79,3 +79,11 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   (claudart 5295 tests). Findings while building it: the analyzer reports another
   package's deprecation (`name2`), so a deprecation counts only when it is new under the
   local dartrix; one claudart test needs a git repository, so the copy is one.
+
+- **Git alignment (2026-11-16):** neither repo is behind main: claudart's `origin/main`
+  (a845f63) and dartrix's (53c0b0d) are inside their branches; PR #104 is mergeable (its
+  state is BLOCKED by branch protection, not by being behind). What is out of step is
+  unpushed commits: claudart 3, dartrix 5, held because claudart's pin predates the new
+  dartrix API. Going forward dartrix's `verify` first checks main is inside the branch,
+  then deprecations, analysis and suites; push order is dartrix, merge, bump the pin,
+  claudart.
