@@ -64,3 +64,11 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   from the enums and drift-tested; all 21 real ledger entries route. Six seeded faults of
   the checker were caught. Moved to dartrix (`lib/src/candidacy/handoff_return.dart`, local commit 53d1f25 on branch `feat/handoff-return`, not pushed yet: the push was refused by the harness); claudart only uses it (template drift test, real-ledger routing) and `citationSeparator` now has one owner, dartrix. The factor keys are not yet
   checked by name (values only).
+
+- **Dependents flow** (dartrix, local branch `feat/handoff-return`, not pushed):
+  `Dependent`, `PinState` (current, behind, floating), `pinnedRefIn`, `renderDependentsReport`
+  and `tool/dependents/report.dart`; a PR template section and a CLAUDE.md rule: a dartrix
+  PR carries the report and every `behind` or `floating` dependent needs its own PR. Real
+  output: claudart `behind`, zedup `floating` (no ref at all; needs a pin PR, zedup is paused
+  so nothing was edited there). claudart keeps a test that its pin is a full commit.
+  Pending the owner: push dartrix, then bump claudart's pin to the merged commit.
