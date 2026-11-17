@@ -72,3 +72,10 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   output: claudart `behind`, zedup `floating` (no ref at all; needs a pin PR, zedup is paused
   so nothing was edited there). claudart keeps a test that its pin is a full commit.
   Pending the owner: push dartrix, then bump claudart's pin to the merged commit.
+
+- **Order of a dartrix change** (dartrix `tool/dependents/verify.dart`): deprecations, then
+  analysis, then each dependent's full suite, in a scratch copy against the local dartrix,
+  then push. Run on the handoff-return branch: claudart and zedup both pass all three
+  (claudart 5295 tests). Findings while building it: the analyzer reports another
+  package's deprecation (`name2`), so a deprecation counts only when it is new under the
+  local dartrix; one claudart test needs a git repository, so the copy is one.
