@@ -28,6 +28,7 @@ const _expectedStatus = <String, CandidateStatus>{
   'R2': CandidateStatus.bounded,
   'R3': CandidateStatus.refuted,
   'R3b': CandidateStatus.proven,
+  'S1': CandidateStatus.proven,
 };
 
 ({String path, String needle}) _cite(String citation) {

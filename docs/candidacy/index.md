@@ -6,7 +6,7 @@ Generated from `docs/candidacy/ledger.jsonl` by `dart run tool/candidacy/index.d
 
 - candidate: none
 - underTest: none
-- proven: R1b, R3b
+- proven: R1b, R3b, S1
 - bounded: R1, R2
 - refuted: T7, R3
 - axiom: none
@@ -118,3 +118,22 @@ Flagged (confidence stalled or dropped): none
   - lib/commands/support/project_logger.dart :: : SessionLogger.forEntry(entry, io: fileIO);
   - test/commands/support/project_logger_test.dart :: records go to its workspace logs
   - test/commands/workspaces_cli_test.dart :: --project records the targeting in the named workspace only
+
+## S1: proven
+
+- Statement: Stated: for every HandoffStatus and every HandoffEvent, status.after(event) equals the landing the spec names (37 legal moves; every other cell is rejected as null).
+- Spec: docs/design.md :: noHandoff --> suggestInvestigating: setup
+- Mocks: transition-landings-2026-11-16
+- Variants covered: 14 of 14
+- Boundary: holds for every cell of the 8 x 14 table; says nothing about writers that bypass applyHandoffEvent
+- Confidence: 0.80
+- History: candidate -> underTest -> proven
+- Evidence:
+  - docs/design.md :: noHandoff --> suggestInvestigating: setup
+  - lib/session/session_state.dart :: noHandoff => suggestInvestigating,
+  - lib/session/session_state.dart :: noHandoff => readyForSuggest,
+  - lib/session/session_state.dart :: suggestInvestigating => readyForSuggest,
+  - lib/session/session_state.dart :: readyForDebug => debugInProgress,
+  - lib/session/session_state.dart :: debugInProgress => needsSuggest,
+  - lib/session/session_state.dart :: needsSuggest => suggestInvestigating,
+  - test/topology/transition_expectation_test.dart :: where a move lands

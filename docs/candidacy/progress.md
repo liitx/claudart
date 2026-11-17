@@ -45,3 +45,11 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   start. T10 (956 survivors) and `make ledger` (about an hour, then `make
   ledger-check`) were not started; run the ledger with no other test or mutation run
   alive.
+
+- **S1** (status x event table): proven. `HandoffStatus.after` lands as docs/design.md
+  says for all 8 x 14 cells; mock is `transition_expectation_test.dart` (written from the
+  spec); Phase 0: 896 seeded single-cell faults, 896 caught (run `run.dart
+  --proof=transitionTable`, about 50 min). Boundary: says nothing about writers that
+  bypass `applyHandoffEvent` (debug, save, suggest, rotate, kill write status directly;
+  agents edit handoff.md): that is the next candidate (S2). Factors are judgments.
+  Not promoted to axiom.
