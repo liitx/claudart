@@ -97,15 +97,6 @@ void main() {
   group('the candidate handoff template', () {
     final template = File('docs/templates/candidate_handoff.md').readAsStringSync();
 
-    for (final field in LedgerField.values) {
-      test('names the field ${field.name}, and whether it is required', () {
-        expect(
-          template,
-          contains('| `${field.name}` | ${field.isRequired ? 'yes' : 'no'} |'),
-        );
-      });
-    }
-
     for (final status in CandidateStatus.values) {
       test('names the status ${status.name}', () {
         expect(template, contains('`${status.name}`'));

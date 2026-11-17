@@ -15,22 +15,24 @@ evidence). The method is `docs/candidacy.md`; read only its procedure section.
 - The spec section it is scoped to. A claim is never wider than its spec.
 - The mock dataset version, and the evidence it may re-run.
 
-## The agent returns an entry with these fields
+## The agent returns an entry with these fields (typed in `tool/candidacy/handoff_return.dart`; a test fails if this table differs from it)
 
-| Field | Required | Meaning |
-|---|---|---|
-| `candidateId` | yes | which postulate |
-| `status` | yes | `candidate`, `underTest`, `proven`, `bounded`, `refuted` or `axiom` |
-| `specReference` | yes | `path :: text` of the spec it is scoped to |
-| `mockDatasetVersion` | yes | the mocks the proof ran on |
-| `evidence` | yes | `path :: text` citations that exist |
-| `justification` | yes | what was run and found, plainly |
-| `variantsInSpec` | yes | every variant the spec names |
-| `variantsCovered` | yes | the ones the tests cover; a partial proof is `bounded` |
-| `audit` | yes | the Phase 0 outcome of each check; no promotion on mocks that did not pass |
-| `boundary` | no | the highest complexity at which it holds |
-| `threshold` | no | for an axiom: the confidence it must reach, justified |
-| `factors` | no | measured boundary, topology reach, impact |
+| Field | Required | Value | Routed to | Meaning |
+|---|---|---|---|---|
+| `candidateId` | yes | `identifier` | `ledgerKey` | which postulate |
+| `status` | yes | `candidateStatus` | `statusMachine` | the status the candidate moves to; a partial proof is `bounded` |
+| `specReference` | yes | `citation` | `specGate` | the spec section it is scoped to |
+| `mockDatasetVersion` | yes | `identifier` | `mockGate` | the mocks the proof ran on |
+| `evidence` | yes | `citationList` | `evidenceGate` | citations that exist |
+| `justification` | yes | `narrative` | `narrativeRecord` | what was run and found, plainly |
+| `variantsInSpec` | yes | `variantList` | `coverageGate` | every variant the spec names |
+| `variantsCovered` | yes | `variantList` | `coverageGate` | the variants the tests cover |
+| `audit` | yes | `auditOutcomes` | `auditGate` | the Phase 0 outcome of each check; no promotion on mocks that did not pass |
+| `boundary` | no | `narrative` | `boundaryRecord` | where it stops holding |
+| `threshold` | no | `unitInterval` | `promotionGate` | for an axiom: the confidence it must reach, justified |
+| `factors` | no | `factorSet` | `gradingInput` | measured boundary, topology reach and impact |
+
+`status` is one of `candidate`, `underTest`, `proven`, `bounded`, `refuted` or `axiom`.
 
 ## Rules the agent is held to
 

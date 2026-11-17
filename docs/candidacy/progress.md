@@ -53,3 +53,15 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   bypass `applyHandoffEvent` (debug, save, suggest, rotate, kill write status directly;
   agents edit handoff.md): that is the next candidate (S2). Factors are judgments.
   Not promoted to axiom.
+
+- **Handoff return typed** (`tool/candidacy/handoff_return.dart`): each field an agent
+  returns is a `HandoffReturnField` with a `ReturnValueKind` (what it carries: identifier,
+  candidateStatus, citation, citationList, narrative, variantList, auditOutcomes,
+  unitInterval, factorSet) and a `ReturnRoute` (what code does with it: ledgerKey,
+  statusMachine, specGate, mockGate, evidenceGate, narrativeRecord, coverageGate,
+  auditGate, boundaryRecord, promotionGate, gradingInput). `checkReturn` refuses an entry
+  with typed faults (missing, wrongShape, notOfKind). The template table is generated
+  from the enums and drift-tested; all 21 real ledger entries route. Six seeded faults of
+  the checker were caught. Assumption: this lives in claudart (usage); the machinery
+  belongs in dartrix next to `LedgerField` once vetted. The factor keys are not yet
+  checked by name (values only).
