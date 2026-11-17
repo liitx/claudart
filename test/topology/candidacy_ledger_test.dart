@@ -13,9 +13,6 @@ import 'dart:io';
 import 'package:dartrix/dartrix.dart';
 import 'package:test/test.dart';
 
-/// Separates a cited file from the text it must contain.
-const _citationSeparator = ' :: ';
-
 /// The candidate whose proof failed the mock audit (T7: a mock that mirrors
 /// the assertion), used to show a failed audit blocks bounded and proven.
 const _failedAuditCandidate = 'T7';
@@ -32,8 +29,8 @@ const _expectedStatus = <String, CandidateStatus>{
 };
 
 ({String path, String needle}) _cite(String citation) {
-  final parts = citation.split(_citationSeparator);
-  return (path: parts.first, needle: parts.sublist(1).join(_citationSeparator));
+  final parts = citation.split(citationSeparator);
+  return (path: parts.first, needle: parts.sublist(1).join(citationSeparator));
 }
 
 void main() {

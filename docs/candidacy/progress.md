@@ -62,6 +62,5 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   auditGate, boundaryRecord, promotionGate, gradingInput). `checkReturn` refuses an entry
   with typed faults (missing, wrongShape, notOfKind). The template table is generated
   from the enums and drift-tested; all 21 real ledger entries route. Six seeded faults of
-  the checker were caught. Assumption: this lives in claudart (usage); the machinery
-  belongs in dartrix next to `LedgerField` once vetted. The factor keys are not yet
+  the checker were caught. Moved to dartrix (`lib/src/candidacy/handoff_return.dart`, local commit 53d1f25 on branch `feat/handoff-return`, not pushed yet: the push was refused by the harness); claudart only uses it (template drift test, real-ledger routing) and `citationSeparator` now has one owner, dartrix. The factor keys are not yet
   checked by name (values only).

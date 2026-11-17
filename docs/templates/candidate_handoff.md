@@ -15,7 +15,7 @@ evidence). The method is `docs/candidacy.md`; read only its procedure section.
 - The spec section it is scoped to. A claim is never wider than its spec.
 - The mock dataset version, and the evidence it may re-run.
 
-## The agent returns an entry with these fields (typed in `tool/candidacy/handoff_return.dart`; a test fails if this table differs from it)
+## The agent returns an entry with these fields (typed by dartrix's `HandoffReturnField`; a test fails if this table differs from it)
 
 | Field | Required | Value | Routed to | Meaning |
 |---|---|---|---|---|

@@ -21,9 +21,6 @@ import '../proof_audit/controls.dart' show controlProof;
 import '../proof_audit/ledger.dart' show mutantId;
 
 
-/// Separates a cited file from the text it must contain.
-const citationSeparator = ' :: ';
-
 /// Where the snapshot of mutant rows for cited lines is kept.
 const evidenceRowsPath = 'docs/candidacy/evidence_rows.jsonl';
 
