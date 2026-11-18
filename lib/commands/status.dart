@@ -1,43 +1,35 @@
 import 'dart:io';
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
+import '../logging/timed_source.dart';
 import '../pipeline/model_observation.dart' show describeModelRecord;
-import '../paths.dart';
-import '../registry.dart';
+import '../config/paths.dart';
 import '../session/session_state.dart';
 import '../session/skills_lookup.dart';
 import '../session/teardown_utils.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
+import '../session/closure_evidence.dart';
+import '../session/debug_disposition.dart';
+import '../config/config.dart' show loadWorkspaceConfig;
 
 Future<void> runStatus({
-  FileIO? io,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
+  CommandSeams seams = const CommandSeams(),
   bool prompt = false,
 }) async {
+  final io = seams.io;
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
 
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-  final currentBranch = gitCtx?.branch;
-
-  if (projectRoot == null) {
-    if (prompt) return; // silent in prompt mode — not in a registered project
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    if (prompt) return; // silent in prompt mode
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it.');
-    exit_(1);
-  }
+  // Silent in prompt mode — not in a registered project.
+  final project = prompt
+      ? lookupProject(seams, withGitContext: true)
+      : requireProject(seams, withGitContext: true);
+  if (project == null) return;
+  final entry = project.entry;
+  final currentBranch = project.gitContext?.branch;
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
@@ -46,7 +38,7 @@ Future<void> runStatus({
 
   if (content.isEmpty) {
     if (prompt) return;
-    print('\nNo active handoff. Run: claudart setup\n');
+    print(UserText.statusNoActiveHandoffRunClaudartSetup.template);
     return;
   }
 
@@ -70,26 +62,40 @@ Future<void> runStatus({
           'What is still unresolved');
 
   print(render.header('CLAUDART SESSION STATUS'));
-  print('Project  : ${entry.name}');
-  print('Branch   : ${currentBranch ?? state.branch}');
+  printProjectLine(entry);
+  print(UserText.statusBranch.format({'branch': currentBranch ?? state.branch}));
   final statusColour = render.statusColour(shown);
-  print('Status   : ${ansi.c(statusColour, shown.value)}');
-  print('Bug      : ${_truncate(state.bug)}');
-  print('Root cause: ${_truncate(state.rootCause)}');
+  print(UserText.statusLine.format({'status': ansi.c(statusColour, shown.value)}));
+  if (state.hasActiveContent) {
+    final closureEvidence = closureEvidenceOf(state);
+    print(UserText.statusClosureLine.format({
+      'evidence': closureEvidence.label,
+      'closure': automaticClosureFor(closureEvidence).label,
+    }));
+    // A fix that was applied and analyzed but never verified, in a workspace
+    // that names no verification command: say how to set one (gap R17).
+    if (state.debugDisposition == DebugDisposition.done &&
+        loadWorkspaceConfig(workspace, io: fileIO).verificationCommand == null) {
+      print(UserText.statusVerificationHint
+          .format({'configPath': configPathFor(workspace)}));
+    }
+  }
+  print(UserText.statusBug.format({'text': _truncate(state.bug.text)}));
+  print(UserText.statusRootCause.format({'text': _truncate(state.rootCause.text)}));
   if (shown == HandoffStatus.debugInProgress ||
       shown == HandoffStatus.needsSuggest) {
-    print('Unresolved: ${_truncate(unresolved)}');
+    print(UserText.statusUnresolved.format({'unresolved': _truncate(unresolved)}));
   }
 
   final skillsFile = skillsPathFor(workspace);
-  if (state.bug.isNotEmpty &&
-      !state.bug.startsWith('_Not') &&
+  if (!state.bug.isBlank &&
       fileIO.fileExists(skillsFile)) {
-    final patterns = relevantSkillPatterns(fileIO.read(skillsFile), state.bug);
+    final patterns =
+        relevantSkillPatterns(fileIO.read(skillsFile), state.bug.text);
     if (patterns.isNotEmpty) {
-      print('\nRelevant past patterns:');
+      print(UserText.statusRelevantPastPatterns.template);
       for (final pattern in patterns) {
-        print('  ${_truncate(pattern, max: 100)}');
+        print(UserText.indentedMaximum.format({'max': _truncate(pattern, max: 100)}));
       }
     }
   }
@@ -97,39 +103,52 @@ Future<void> runStatus({
   if (currentBranch != null &&
       state.branch != 'unknown' &&
       currentBranch != state.branch) {
-    print('\n${ansi.c(ansi.yellow, '⚠️  Current branch "$currentBranch" differs from handoff branch "${state.branch}".')}');
+    final differs = UserText.statusBranchDiffers
+        .format({'currentBranch': currentBranch, 'handoffBranch': state.branch});
+    print(UserText.leadingBlankLine.format({'line': ansi.c(ansi.yellow, differs)}));
   }
 
   print('');
-  print('Handoff  : $handoffFile');
-  print('Skills   : ${skillsPathFor(workspace)}');
+  print(UserText.statusHandoff.format({'handoffFile': handoffFile}));
+  print(UserText.statusSkills.format({'workspace': skillsPathFor(workspace)}));
 
   final modelRecords =
-      SessionLogger(io: fileIO, workspacePath: workspace).readStepModelRecords();
+      SessionLogger.plain(io: fileIO, workspacePath: workspace)
+          .readStepModelRecords();
   if (modelRecords.isNotEmpty) {
-    print('\nModels (newest per step):');
+    print(UserText.statusModelsNewestPerStep.template);
     for (final record in modelRecords) {
-      print('  ${describeModelRecord(record)}');
+      print(UserText.statusModelRecordLine.format({'record': describeModelRecord(record)}));
     }
   }
 
-  print('\nNext step:');
-  switch (shown) {
-    case HandoffStatus.suggestInvestigating:
-      print('  Run /suggest in your editor.');
-    case HandoffStatus.readyForSuggest:
-      print('  Run /suggest in your editor to begin a new cycle.');
-    case HandoffStatus.readyForDebug:
-      print('  Run /debug in your editor.');
-    case HandoffStatus.debugInProgress:
-      print('  Continue with /debug, or run /suggest if you hit a wall.');
-    case HandoffStatus.debugComplete:
-      print('  Verify with dart test, then claudart teardown.');
-    case HandoffStatus.needsSuggest:
-      print('  Run /suggest in your editor — debug has a question for you.');
-    case HandoffStatus.unknown || HandoffStatus.noHandoff:
-      print('  Run: claudart setup');
+  final timing = [
+    for (final source in TimedSource.values)
+      readTimedLog(fileIO, logsDirFor(workspace), source),
+  ];
+  final runs = summarizeTimed([
+    for (final reading in timing)
+      for (final record in reading.records)
+        if (record.source == TimedSource.commandRun) record,
+  ]);
+  if (runs.isNotEmpty) {
+    print(UserText.statusTimingHeading.template);
+    for (final run in runs) {
+      print(UserText.statusTimingLine.format({
+        'label': run.label,
+        'runs': '${run.runs}',
+        'latest': '${run.latestMs}',
+        'slowest': '${run.slowestMs}',
+      }));
+    }
   }
+  final unreadable = timing.fold<int>(0, (sum, r) => sum + r.gaps.length);
+  if (unreadable > 0) {
+    print(UserText.statusTimingGaps.format({'count': '$unreadable'}));
+  }
+
+  print(UserText.nextStepHeading.template);
+  print(UserText.statusNextStepLine.format({'nextStep': shown.nextStep}));
   print('');
 }
 

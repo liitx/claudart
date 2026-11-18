@@ -31,6 +31,8 @@ custom_lint:
     - enum_values_loop_in_single_test
     - ungrouped_identical_switch_cases
     - unconditional_confirm_requires_prompt_fn
+    - wildcard_arm_on_enum_switch
+    - enum_name_compared_to_string
 
 linter:
   rules:

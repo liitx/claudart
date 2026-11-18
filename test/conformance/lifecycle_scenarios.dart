@@ -12,30 +12,41 @@ import 'dart:convert';
 import 'package:claudart/commands/debug.dart';
 import 'package:claudart/commands/kill.dart';
 import 'package:claudart/commands/rotate.dart';
+import 'package:claudart/commands/save.dart';
 import 'package:claudart/commands/setup.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/teardown.dart';
-import 'package:claudart/md_io.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/session/md_io.dart';
+import 'package:claudart/config/paths.dart';
+import 'package:claudart/pipeline/edit_files.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
+import 'package:claudart/pipeline/xml_tags.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';
-import 'package:path/path.dart' as p;
 
+import '../helpers/fake_executors.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
+import 'package:claudart/logging/log_file.dart';
+import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/support/command_seams.dart';
+import 'package:claudart/io/gate_runner.dart';
+import 'package:claudart/commands/flow.dart';
+import 'package:claudart/logging/planner_log.dart';
+import 'package:claudart/pipeline/route_tag.dart';
 
 /// A linked project: its registry name, repo root and claudart workspace.
 typedef LifecycleProject = ({String name, String root, String workspace});
 
 const defaultLifecycleProject = (
   name: 'my-app',
-  root: '/projects/my-app',
-  workspace: '/workspaces/my-app',
+  root: ProjectFixture.root,
+  workspace: ProjectFixture.workspace,
 );
 
 /// A second linked project, for scoping tests across workspaces.
@@ -127,11 +138,16 @@ MemoryFileIO freshLifecycleIo([
 }
 
 PipelineExecutor _exec(String text) => PipelineExecutor(
+  prompter: unscriptedUserPrompter,
+  approvalSelector: unscriptedApprovalSelector,
+  
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
+        required allowedTools,
+        required helperModel,
         StepMode mode = StepMode.project,
       }) async =>
           StepResult(
@@ -165,6 +181,54 @@ Future<void> setup(
   );
 }
 
+const _flowHandoff = '''## Status
+ready-for-suggest
+
+---
+
+## Bug
+The parser drops a line.
+
+---
+
+## Root Cause
+The splitter stops early.
+
+---
+
+## Scope
+### Files in play
+- lib/parser.dart''';
+
+/// A `flow` that resumes a saved plan and constructs the handoff: another way
+/// into a session, in place of `setup`.
+Future<void> flowStart(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) async {
+  io.write(
+    '${project.workspace}/$flowCheckpointFileName',
+    jsonEncode({
+      'createdAt': '2026-01-01T00:00:00',
+      'slots': {'plan': 'Do the thing'},
+      'bug': 'The parser drops a line.',
+      'expected': '',
+      'projectRoot': project.root,
+    }),
+  );
+  await runFlow(
+    io: io,
+    projectRootOverride: project.root,
+    exitFn: _noExit,
+    plannerLog: PlannerLog(path: '/tmp/ignored', appender: (_, __) {}),
+    executor: _exec(
+      '<${RouteTag.handoff.wireTag}>$_flowHandoff</${RouteTag.handoff.wireTag}>',
+    ),
+    pickFn: (_) => 0, // approve the saved plan
+  );
+}
+
+
 Future<void> suggest(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
@@ -179,40 +243,82 @@ Future<void> suggest(
       pickFn: (_) => 0,
     );
 
+/// A debug in a workspace that names a verification command, which passes: the
+/// fix is recorded as verified, so a headless teardown may archive it.
 Future<void> debug(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
+}) {
+  io.write(
+    configPathFor(project.workspace),
+    jsonEncode({'verificationCommand': 'dart test'}),
+  );
+  return runDebug(
+    seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, pickFn: (_) => 0),
+    executor: _exec('<CHANGES>none</CHANGES>'),
+    runVerification: (_, __) => const GateResult.passed(),
+  );
+}
+
+/// A debug in a workspace that names no verification command: the fix is
+/// recorded as applied and analyzed, never as verified.
+Future<void> debugUnverified(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
 }) =>
-    runDebug(
+    runDebug(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, pickFn: (_) => 0), executor: _exec('<CHANGES>none</CHANGES>'));
+
+/// A debug whose plan cannot be applied: an edit block with no closing tag.
+/// The command blocks the session (needs-suggest) and rethrows the failure;
+/// the failure is the point of the step, so it is not an error here.
+Future<void> debugBlocked(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) async {
+  try {
+    await runDebug(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, pickFn: (_) => 0), executor: _exec(
+        '<CHANGES>x</CHANGES>${WireTag.editFile.openPrefix} '
+        'path="lib/a.dart">\nno end',
+      ));
+  } on EditPlanException {
+    // Expected: the unapplied plan blocks the session.
+  }
+}
+
+Future<void> save(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runSave(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit));
+
+/// An interactive teardown of a handoff whose debug did not run: every
+/// confirmation is answered yes, so debug is recorded as skipped and the
+/// session is archived as resolved.
+Future<void> teardownSkippingDebug(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) =>
+    runTeardown(
+      executor: noModelExecutor(),
       io: io,
       projectRootOverride: project.root,
+      confirmFn: (_) => true,
+      promptFn: (question, {optional = false}) => 'answered',
+      pickFn: (items, {startIndex = 0}) => 0,
       exitFn: _noExit,
-      executor: _exec('<CHANGES>none</CHANGES>'),
-      pickFn: (_) => 0,
     );
 
 Future<void> kill(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) =>
-    runKill(
-      io: io,
-      projectRootOverride: project.root,
-      confirmFn: (_) => true,
-      exitFn: _noExit,
-    );
+    runKill(seams: CommandSeams(io: io, projectRootOverride: project.root, confirmFn: (_) => true, exitFn: _noExit));
 
 Future<void> rotate(
   MemoryFileIO io, {
   LifecycleProject project = defaultLifecycleProject,
 }) async {
-  await runRotate(
-    io: io,
-    projectRootOverride: project.root,
-    exitFn: _noExit,
-    confirmFn: (_) => true,
-    buildFn: (_) async => true,
-  );
+  await runRotate(seams: CommandSeams(io: io, projectRootOverride: project.root, exitFn: _noExit, confirmFn: (_) => true), buildFn: (_) async => const GateResult.passed());
 }
 
 Future<void> teardown(
@@ -220,11 +326,25 @@ Future<void> teardown(
   LifecycleProject project = defaultLifecycleProject,
 }) =>
     runTeardown(
+      executor: noModelExecutor(),
       io: io,
       projectRootOverride: project.root,
       mode: RunMode.headless,
       exitFn: _noExit,
     );
+
+/// A headless teardown that saves a reminder: it leaves through exit 0 and the
+/// handoff stays where it was.
+Future<void> teardownReminder(
+  MemoryFileIO io, {
+  LifecycleProject project = defaultLifecycleProject,
+}) async {
+  try {
+    await teardown(io, project: project);
+  } on StateError catch (error) {
+    if (error.message != 'exit(0)') rethrow;
+  }
+}
 
 void seedPending(
   MemoryFileIO io, [
@@ -236,6 +356,21 @@ void seedPending(
         io.read(handoffPathFor(project.workspace)),
         'Pending Issues',
         '- [ ] Next issue to do',
+      ),
+    );
+
+/// Writes a confirmed root cause into the handoff, as an agent or the owner
+/// would before a save.
+void seedRootCause(
+  MemoryFileIO io, [
+  LifecycleProject project = defaultLifecycleProject,
+]) =>
+    io.write(
+      handoffPathFor(project.workspace),
+      updateSection(
+        io.read(handoffPathFor(project.workspace)),
+        'Root Cause',
+        'A confirmed root cause.',
       ),
     );
 
@@ -265,7 +400,7 @@ String? loggedTo(
   LifecycleProject project = defaultLifecycleProject,
 ]) {
   final raw =
-      io.read(p.join(logsDirFor(project.workspace), 'transitions.jsonl'));
+      io.read(logFilePath(logsDirFor(project.workspace), LogFile.transitions));
   final last = raw.split('\n').where((l) => l.isNotEmpty).lastOrNull;
   if (last == null) return null;
   final entry = jsonDecode(last) as Map<String, dynamic>;
@@ -309,6 +444,29 @@ Map<String, List<LifecycleStep>> lifecycleScenarios({
       lifecycleStep('debug', bind(debug), HandoffStatus.debugComplete),
       lifecycleStep('teardown', bind(teardown), HandoffStatus.noHandoff),
     ],
+    'setup, suggest, debug without verification, teardown saves a reminder': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'debug without verification',
+        bind(debugUnverified),
+        HandoffStatus.debugComplete,
+      ),
+      lifecycleStep(
+        'teardown saves a reminder',
+        bind(teardownReminder),
+        HandoffStatus.debugComplete,
+        logged: false,
+      ),
+    ],
+    'flow, kill': [
+      lifecycleStep(
+        'flow',
+        bind(flowStart),
+        HandoffStatus.readyForSuggest,
+      ),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
+    ],
     'setup, suggest, kill': [
       setupStep,
       lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
@@ -316,6 +474,94 @@ Map<String, List<LifecycleStep>> lifecycleScenarios({
     ],
     'setup, kill': [
       setupStep,
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
+    ],
+    'setup, unconfirmed save': [
+      setupStep,
+      lifecycleStep('save', bind(save), HandoffStatus.suggestInvestigating),
+    ],
+    'setup, confirmed save, kill': [
+      setupStep,
+      lifecycleStep(
+        'seed root cause',
+        (io) async => seedRootCause(io, project),
+        HandoffStatus.suggestInvestigating,
+        logged: false,
+      ),
+      lifecycleStep('save', bind(save), HandoffStatus.readyForSuggest),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
+    ],
+    'setup, suggest, debug blocked, suggest again': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'debug blocked',
+        bind(debugBlocked),
+        HandoffStatus.needsSuggest,
+      ),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+    ],
+    'setup, rotate with a pending issue': [
+      setupStep,
+      lifecycleStep(
+        'seed pending',
+        (io) async => seedPending(io, project),
+        HandoffStatus.suggestInvestigating,
+        logged: false,
+      ),
+      lifecycleStep(
+        'rotate',
+        bind(rotate),
+        HandoffStatus.suggestInvestigating,
+      ),
+    ],
+    'setup, rotate with nothing pending': [
+      setupStep,
+      lifecycleStep('rotate', bind(rotate), HandoffStatus.noHandoff),
+    ],
+    'setup, suggest, debug blocked, kill': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'debug blocked',
+        bind(debugBlocked),
+        HandoffStatus.needsSuggest,
+      ),
+      lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
+    ],
+    'setup, suggest, suggest again': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+    ],
+    'setup, suggest, teardown without debug': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep(
+        'teardown skipping debug',
+        bind(teardownSkippingDebug),
+        HandoffStatus.noHandoff,
+      ),
+    ],
+    'setup, confirmed save, teardown without debug': [
+      setupStep,
+      lifecycleStep(
+        'seed root cause',
+        (io) async => seedRootCause(io, project),
+        HandoffStatus.suggestInvestigating,
+        logged: false,
+      ),
+      lifecycleStep('save', bind(save), HandoffStatus.readyForSuggest),
+      lifecycleStep(
+        'teardown skipping debug',
+        bind(teardownSkippingDebug),
+        HandoffStatus.noHandoff,
+      ),
+    ],
+    'setup, suggest, debug, kill': [
+      setupStep,
+      lifecycleStep('suggest', bind(suggest), HandoffStatus.readyForDebug),
+      lifecycleStep('debug', bind(debug), HandoffStatus.debugComplete),
       lifecycleStep('kill', bind(kill), HandoffStatus.noHandoff),
     ],
     'rotate with a pending issue seeds the next session': [

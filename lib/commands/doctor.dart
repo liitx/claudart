@@ -5,28 +5,30 @@
 // fixing a failure, each check re-reads live state rather than caching.
 
 import 'dart:async' show TimeoutException;
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
 import '../codegen/artifact_state.dart';
 import '../codegen/claudart_artifact.dart';
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
 import '../harness/harness_check.dart';
 import '../logging/logger.dart';
-import '../paths.dart';
-import '../process_runner.dart';
+import '../config/paths.dart';
+import '../io/process_runner.dart';
 import '../providers/agent_provider.dart';
 import '../providers/claude_settings_env.dart';
 import '../registry.dart';
+import 'support/command_seams.dart';
+import '../config/environment.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
-const _gitExecutable = 'git';
 const _ghExecutable = 'gh';
 const _claudeExecutable = 'claude';
 const _awsExecutable = 'aws';
-const _requiredTools = [_gitExecutable, _ghExecutable, _claudeExecutable];
+const _requiredTools = [gitExecutable, _ghExecutable, _claudeExecutable];
 const _doctorCommandName = 'doctor';
 const _ec2MetadataDisabledVar = 'AWS_EC2_METADATA_DISABLED';
 const _notUsingBedrockDetail = 'not using Bedrock';
@@ -68,7 +70,7 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
 }) async {
   final proc = runner ?? const RealProcessRunner();
   final fileIO = io ?? const RealFileIO();
-  final environment = env ?? Platform.environment;
+  final environment = env ?? processEnvironment;
   final root = projectRoot ?? Directory.current.path;
 
   final activeProvider = await _detectActiveProvider(proc, environment, io: io, settingsPath: claudeSettingsPath);
@@ -115,7 +117,17 @@ Future<List<HarnessCheckOutcome>> runDoctorChecks({
 /// would otherwise always report "not registered" for a project that is.
 HarnessCheckOutcome _checkArtifactFreshness(ProcessRunner proc, String root, FileIO io) {
   final resolvedRoot = detectGitContext(runner: proc)?.root ?? root;
-  final entry = Registry.load(io: io).findByProjectRoot(resolvedRoot);
+  final Registry registry;
+  try {
+    registry = Registry.load(io: io);
+  } on CorruptRegistryException {
+    return (
+      id: HarnessCheckId.artifactFreshness,
+      result: HarnessCheckResult.skip,
+      detail: 'registry.json is unreadable — see the registry health check',
+    );
+  }
+  final entry = registry.findByProjectRoot(resolvedRoot);
   if (entry == null) {
     return (
       id: HarnessCheckId.artifactFreshness,
@@ -259,7 +271,7 @@ HarnessCheckOutcome _checkProviderEnv(
 /// this check exists for, invisible to any process that inherits the
 /// override correctly and never looks at the fallback at all.
 HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env, FileIO io) {
-  final home = env[homeEnvVar] ?? '';
+  final home = homeDirectoryFrom(env) ?? '';
   final fallbackRoot = p.join(home, '.claudart');
   final value = env[claudartWorkspaceEnvVar];
 
@@ -304,12 +316,9 @@ HarnessCheckOutcome _checkWorkspaceRoot(Map<String, String> env, FileIO io) {
   );
 }
 
-/// `Registry.load` (`lib/registry.dart`) silently swallows a JSON parse
-/// failure and returns an empty registry — correct for its own callers
-/// (a wizard flow failing shouldn't crash over a corrupt file), but it
-/// means a corrupt registry.json and a genuinely-fresh one were
-/// indistinguishable from doctor's output alone. This re-reads the raw
-/// file to tell those two apart before falling through to `Registry.load`.
+/// A missing or empty registry.json means nothing is linked yet; one that
+/// cannot be read is a failure, reported with its cause, never an empty list
+/// (`Registry.load` throws `CorruptRegistryException` for it).
 HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
   if (!io.fileExists(registryPath)) {
     return (
@@ -328,18 +337,18 @@ HarnessCheckOutcome _checkRegistryHealth(FileIO io) {
     );
   }
 
+  final Registry registry;
   try {
-    jsonDecode(raw);
-  } on FormatException {
+    registry = Registry.load(io: io);
+  } on CorruptRegistryException catch (e) {
     return (
       id: HarnessCheckId.registryHealth,
       result: HarnessCheckResult.fail,
       detail: 'registry.json exists at $workspacesRoot but failed to '
-          'parse — back it up and investigate before linking anything new',
+          'parse (${e.cause}) — back it up and investigate before linking '
+          'anything new',
     );
   }
-
-  final registry = Registry.load(io: io);
   if (registry.isEmpty) {
     return (
       id: HarnessCheckId.registryHealth,
@@ -396,7 +405,7 @@ HarnessCheckOutcome _checkBedrockMetadataDisabled(
 }
 
 HarnessCheckOutcome _checkPathConfiguration(Map<String, String> env) {
-  final home = env[homeEnvVar] ?? '';
+  final home = homeDirectoryFrom(env) ?? '';
   final binDir = '$home/bin';
   final path = env['PATH'] ?? '';
   final onPath = path.split(':').contains(binDir);
@@ -523,15 +532,16 @@ Future<HarnessCheckOutcome> _checkGitHooksConfigured(
 /// (so it's visible later via `claudart report` instead of only whatever
 /// gets pasted into chat), exits 1 if any failed (0 if clean or skip-only).
 Future<void> runDoctor({
+  CommandSeams seams = const CommandSeams(),
   ProcessRunner? runner,
   Map<String, String>? env,
-  String? projectRootOverride,
-  FileIO? io,
   String? claudeSettingsPath,
   String? workspacePath,
-  Never Function(int code)? exitFn,
 }) async {
-  final exit_ = exitFn ?? exit;
+  final projectRootOverride = seams.projectRootOverride;
+  final io = seams.io;
+  final exitFn = seams.exitFn;
+  final exit_ = exitFn ?? exitProcess;
   final outcomes = await runDoctorChecks(
     runner: runner,
     env: env,
@@ -547,8 +557,9 @@ Future<void> runDoctor({
     for (final o in outcomes)
       if (o.result == HarnessCheckResult.fail) o,
   ];
-  final logger = SessionLogger(io: io, workspacePath: workspacePath);
+  final logger = SessionLogger.plain(io: io, workspacePath: workspacePath);
   logger.logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: _doctorCommandName,
     outcome: failed.isEmpty ? 'ok' : 'failed',
     platform: Platform.operatingSystem,
@@ -562,5 +573,8 @@ Future<void> runDoctor({
     );
   }
 
-  exit_(failed.isEmpty ? 0 : 1);
+  leaveFor(
+    failed.isEmpty ? ExitReason.doctorChecksPassed : ExitReason.doctorChecksFailed,
+    exit_: exit_,
+  );
 }

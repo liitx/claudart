@@ -12,6 +12,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import '../config/environment.dart';
 
 // ── Env-var + path constants ──────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ void suppressAmbientDebug(bool value) {
 bool debugEnabled({Map<String, String>? environment}) {
   if (_runtimeDebugEnabled) return true;
   if (_ambientDebugSuppressed) return false;
-  final env = environment ?? Platform.environment;
+  final env = environment ?? processEnvironment;
   return env[kClaudartDebugEnvVar] == kClaudartDebugEnabledValue;
 }
 
@@ -101,7 +102,7 @@ bool debugEnabled({Map<String, String>? environment}) {
 /// Callers pass `null` straight through their conditional writes.
 File? debugLogFile({Map<String, String>? environment}) {
   if (!debugEnabled(environment: environment)) return null;
-  final env = environment ?? Platform.environment;
+  final env = environment ?? processEnvironment;
   final path = env[kClaudartDebugPathEnvVar] ?? kDefaultClaudartDebugLogPath;
   return File(path);
 }

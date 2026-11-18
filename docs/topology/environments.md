@@ -17,10 +17,10 @@ Where each command can be started, whether it takes `--headless`, whether `--pro
 | setup | cliSubcommand, launcherMenu | false | true | setup |
 | status | cliSubcommand | false | true | — |
 | teardown | cliSubcommand | true | true | tornDown, reminderSaved |
-| suggest | cliSubcommand, chatShell | false | true | saveConfirmedReady |
-| debug | cliSubcommand | false | true | fixApplied |
-| flow | cliSubcommand, chatShell | false | true | — |
-| save | cliSubcommand | false | true | — |
+| suggest | cliSubcommand, chatShell | false | true | saveConfirmedReady, suggestResumed |
+| debug | cliSubcommand | true | true | debugStarted, debugBlocked, fixApplied |
+| flow | cliSubcommand, chatShell | false | true | flowConstructed |
+| save | cliSubcommand | false | true | saveUnconfirmed, saveConfirmedExploring |
 | rotate | cliSubcommand | true | true | rotated, rotatedEmpty |
 | kill | cliSubcommand, launcherMenu | true | true | killed |
 | resume | cliSubcommand | false | true | — |
@@ -70,6 +70,6 @@ How the pipeline renders. zedup's TUI is the `tui` surface: it runs the pipeline
 
 A project "uses dartrix" when its pubspec declares it. Files that read that today:
 
-`lib/commands/add.dart`, `lib/commands/link.dart`, `lib/dependency_config.dart`, `lib/templates/plan_template.dart`
+`lib/commands/add.dart`, `lib/commands/link.dart`, `lib/config/dependency_config.dart`, `lib/templates/plan_template.dart`
 
 Files that read the generated `dependency_config.g.dart` constant: — no reader yet. (`claudart link` regenerates it; nothing branches on it yet.)

@@ -25,61 +25,69 @@ const String _dartExtension = '.dart';
 /// pre-enum-driven precedence.
 enum DesignSurface {
   /// `**/widgets/**/*.dart` — Flutter/Dart widget definitions.
-  guiWidget,
+  guiWidget(
+    isDesignSurface: true,
+    tag: 'widget',
+    directoryHints: ['/widgets/'],
+    basenameHints: [],
+  ),
 
   /// `**/painters/**/*.dart` or basename containing `painter` — custom
   /// paint logic. Higher priority than [guiUi] so a painter that lives
   /// under `lib/ui/` still routes here.
-  guiPainter,
+  guiPainter(
+    isDesignSurface: true,
+    tag: 'painter',
+    directoryHints: ['/painters/'],
+    basenameHints: ['painter'],
+  ),
 
   /// `**/ui/**/*.dart` — generic UI layer.
-  guiUi,
+  guiUi(
+    isDesignSurface: true,
+    tag: 'ui',
+    directoryHints: ['/ui/'],
+    basenameHints: [],
+  ),
 
   /// `**/theme*/**/*.dart`, `**/style*/**/*.dart`, or basename
   /// containing `theme` / `style` — design tokens.
-  guiTheme,
+  guiTheme(
+    isDesignSurface: true,
+    tag: 'theme',
+    directoryHints: ['/theme/', '/style/'],
+    basenameHints: ['theme', 'style'],
+  ),
 
   /// Any other path — non-design surface.
-  logic;
+  logic(
+    isDesignSurface: false,
+    tag: 'logic',
+    directoryHints: [],
+    basenameHints: [],
+  );
+
+  const DesignSurface({
+    required this.isDesignSurface,
+    required this.tag,
+    required this.directoryHints,
+    required this.basenameHints,
+  });
 
   /// Whether this surface counts toward "this work is design-heavy".
-  bool get isDesignSurface => switch (this) {
-        DesignSurface.guiWidget ||
-        DesignSurface.guiPainter ||
-        DesignSurface.guiUi ||
-        DesignSurface.guiTheme => true,
-        DesignSurface.logic => false,
-      };
+  final bool isDesignSurface;
 
   /// Short label for log lines and the planner JSONL.
-  String get tag => switch (this) {
-        DesignSurface.guiWidget   => 'widget',
-        DesignSurface.guiPainter  => 'painter',
-        DesignSurface.guiUi       => 'ui',
-        DesignSurface.guiTheme    => 'theme',
-        DesignSurface.logic       => 'logic',
-      };
+  final String tag;
 
   /// Directory-name substrings (slash-bounded, lower-case) that signal
   /// this surface. Match wins regardless of basename.
-  List<String> get directoryHints => switch (this) {
-        DesignSurface.guiWidget   => const ['/widgets/'],
-        DesignSurface.guiPainter  => const ['/painters/'],
-        DesignSurface.guiUi       => const ['/ui/'],
-        DesignSurface.guiTheme    => const ['/theme/', '/style/'],
-        DesignSurface.logic       => const [],
-      };
+  final List<String> directoryHints;
 
   /// Basename substrings (lower-case) that signal this surface when
   /// the file ends in `.dart`. Lets `wave_painter.dart` outside a
   /// `/painters/` directory still route to [guiPainter].
-  List<String> get basenameHints => switch (this) {
-        DesignSurface.guiPainter => const ['painter'],
-        DesignSurface.guiTheme   => const ['theme', 'style'],
-        DesignSurface.guiWidget ||
-        DesignSurface.guiUi ||
-        DesignSurface.logic => const [],
-      };
+  final List<String> basenameHints;
 }
 
 /// Classifies a single path into a [DesignSurface] variant. Iterates

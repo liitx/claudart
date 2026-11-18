@@ -1,10 +1,12 @@
-import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../paths.dart';
-import '../registry.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../session/sync_check.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Runs a preflight sync check for [operation] and prints results.
 ///
@@ -19,26 +21,22 @@ Future<void> runPreflightCmd(
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   // 1 — Git context: project root + current branch in one call.
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+    withGitContext: true,
+  );
+  final entry = project.entry;
+  final gitCtx = project.gitContext;
   final currentBranch =
       gitCtx?.branch; // null when override is used (e.g. tests)
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart setup` to start one.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
 
@@ -54,6 +52,13 @@ Future<void> runPreflightCmd(
 
   // 4 — Parse operation string once at boundary.
   final op = ClaudartOperation.fromString(operation);
+  if (op == null) {
+    print(UserText.preflightUnknownOperation.format({
+      'operation': operation,
+      'operations': ClaudartOperation.values.map((o) => o.name).join(', '),
+    }));
+    leaveFor(ExitReason.preflightUnknownOperation, exit_: exit_);
+  }
 
   // 5 — Read test files when operation is 'test'.
   final testFileContents = <String, String>{};
@@ -80,8 +85,8 @@ Future<void> runPreflightCmd(
 
   // 6 — Print results.
   if (result.isClean) {
-    print('✓ Preflight clean — no issues found.');
-    exit_(0);
+    print(UserText.preflightCmdPreflightCleanNoIssuesFound.template);
+    leaveFor(ExitReason.preflightClean, exit_: exit_);
   }
 
   for (final issue in result.issues) {
@@ -89,7 +94,10 @@ Future<void> runPreflightCmd(
   }
 
   // Warnings allow continuation; errors block it.
-  exit_(result.hasErrors ? 1 : 0);
+  leaveFor(
+    result.hasErrors ? ExitReason.preflightErrors : ExitReason.preflightWarnings,
+    exit_: exit_,
+  );
 }
 
 // Test command files checked for coverage gaps.

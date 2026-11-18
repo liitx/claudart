@@ -1,14 +1,13 @@
-import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../codegen/claudart_artifact.dart';
 import '../codegen/dependency_config_codegen.dart';
-import '../dependency_config.dart';
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../knowledge_templates.dart' show projectTemplate;
-import '../md_io.dart' show confirmOrEof, prompt;
-import '../paths.dart';
-import '../process_runner.dart';
+import '../config/dependency_config.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
+import '../project/knowledge_templates.dart' show projectTemplate;
+import '../session/md_io.dart' show confirmOrEof, prompt;
+import '../config/paths.dart';
+import '../io/process_runner.dart';
 import '../pipeline/agent_flow.dart';
 import '../registry.dart';
 import '../templates/claude_settings_template.dart';
@@ -18,6 +17,10 @@ import '../templates/command_template_marker.dart';
 import '../templates/readme_template.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
+import '../config/environment.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 const _sensitiveFlag = '--sensitive';
 const _noSensitiveFlag = '--no-sensitive';
@@ -53,21 +56,21 @@ Future<void> runLink(
   // test simulate "nobody to answer".
   final bool? Function(String question) ask =
       askFn ?? (confirmFn != null ? (String q) => confirmFn(q) : confirmOrEof);
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   final unknownFlags = args.where((a) =>
       a.startsWith('--') && a != _sensitiveFlag && a != _noSensitiveFlag && a != _recompileFlag);
   if (unknownFlags.isNotEmpty) {
-    print('\n✗ Unknown option: ${unknownFlags.first}');
-    print('  Usage: claudart link [project-name] [$_sensitiveFlag | $_noSensitiveFlag] [$_recompileFlag]\n');
-    exit_(1);
+    print(UserText.linkUnknownOption.format({'first': unknownFlags.first}));
+    print(UserText.linkUsageClaudartLinkProjectName.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag, 'recompileFlag': _recompileFlag}));
+    leaveFor(ExitReason.linkUnknownOption, exit_: exit_);
   }
   final wantsSensitive = args.contains(_sensitiveFlag);
   final wantsNoSensitive = args.contains(_noSensitiveFlag);
   final wantsRecompile = args.contains(_recompileFlag);
   if (wantsSensitive && wantsNoSensitive) {
-    print('\n✗ Pass only one of $_sensitiveFlag / $_noSensitiveFlag.\n');
-    exit_(1);
+    print(UserText.linkPassOnlyOneOf.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag}));
+    leaveFor(ExitReason.linkConflictingSensitivityFlags, exit_: exit_);
   }
   final positional = args.where((a) => !a.startsWith('--')).toList();
 
@@ -76,8 +79,8 @@ Future<void> runLink(
   // 1 — Detect project root.
   final projectRoot = resolveProjectRoot(override: projectRootOverride);
   if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project root.\n');
-    exit_(1);
+    print(UserText.notInGitRepositoryRoot.template);
+    leaveFor(ExitReason.linkNotInGitRepository, exit_: exit_);
   }
 
   // 2 — Resolve project name: arg > git remote > directory name.
@@ -87,16 +90,16 @@ Future<void> runLink(
           ? p.basename(projectRootOverride)
           : _detectProjectName(projectRoot));
 
-  print('\n  Project : $projectName');
-  print('  Root    : $projectRoot');
+  print(UserText.linkProject.format({'projectName': projectName}));
+  print(UserText.linkRoot.format({'projectRoot': projectRoot}));
 
   // 3 — Load registry and check for existing entry.
   var registry = Registry.load(io: fileIO);
   final existing = registry.findByProjectRoot(projectRoot);
 
   if (existing != null && existing.name != projectName) {
-    print('\n⚠  This project is already registered as "${existing.name}".');
-    print('   Re-linking under the same name.');
+    print(UserText.linkThisProjectIsAlreadyRegisteredAs.format({'name': existing.name}));
+    print(UserText.linkReLinkingUnderTheSameName.template);
   }
 
   final effectiveName = existing?.name ?? projectName;
@@ -107,11 +110,14 @@ Future<void> runLink(
   bool? decided = wantsSensitive ? true : (wantsNoSensitive ? false : null);
 
   if (decided != null) {
-    print('\n  Sensitivity mode: ${decided ? 'ON' : 'OFF'} '
-        '(${wantsSensitive ? _sensitiveFlag : _noSensitiveFlag})');
+    print(UserText.linkSensitivityModeDecided.format({
+      'mode': (decided ? UserText.on : UserText.off).template,
+      'flag': wantsSensitive ? _sensitiveFlag : _noSensitiveFlag,
+    }));
   } else if (existing != null) {
-    print('\n  Sensitivity mode is currently: '
-        '${currentSensitivity ? 'ON' : 'OFF'}');
+    print(UserText.linkSensitivityModeCurrently.format({
+      'mode': (currentSensitivity ? UserText.on : UserText.off).template,
+    }));
     final change = ask('Change sensitivity mode?');
     decided = change == null
         ? null
@@ -121,10 +127,9 @@ Future<void> runLink(
   }
 
   if (decided == null) {
-    print('\n✗ No input available to answer the sensitivity-mode question, '
-        'so nothing was changed.');
-    print('  Re-run in a terminal, or pass $_sensitiveFlag or $_noSensitiveFlag.\n');
-    exit_(1);
+    print(UserText.linkNoInputForSensitivityQuestion.template);
+    print(UserText.linkReRunInATerminalOr.format({'sensitiveFlag': _sensitiveFlag, 'noSensitiveFlag': _noSensitiveFlag}));
+    leaveFor(ExitReason.linkNoInputForSensitivity, exit_: exit_);
   }
   final ownerMarkedSensitive =
       WorkspaceConfig.load(workspace, io: fileIO)?.session.sensitivityMode ??
@@ -134,8 +139,7 @@ Future<void> runLink(
     ownerMarkedSensitive: ownerMarkedSensitive,
   );
   if (sensitivityMode && !decided) {
-    print('\n  workspace.json marks this project sensitive, so it stays '
-        'sensitive.');
+    print(UserText.linkOwnerMarkedSensitive.template);
   }
 
   // 6 — Write or update registry entry.
@@ -209,17 +213,16 @@ Future<void> runLink(
   // Always non-null: every ClaudartArtifact.values entry is visited before
   // this line, and the commandTemplates case always assigns it.
   final resolvedLinks = links!;
-  print('\n✓ Registered: $effectiveName');
-  print('  Workspace : $workspace');
+  print(UserText.linkRegistered.format({'effectiveName': effectiveName}));
+  print(UserText.addWorkspace.format({'workspace': workspace}));
   if (resolvedLinks.symlinkSkipped) {
-    print(
-        '  Commands  : .claude/commands/ (source directory, no symlink needed)');
+    print(UserText.linkCommandsClaudeCommandsSourceDirectoryNo.template);
   } else {
-    print('  Symlink   : ${resolvedLinks.symlinkPath} → ${resolvedLinks.symlinkTarget}');
+    print(UserText.addSymlink.format({'symlinkPath': resolvedLinks.symlinkPath, 'symlinkTarget': resolvedLinks.symlinkTarget}));
   }
-  print('  Cursor    : ${resolvedLinks.cursorCmdsLink} → ${resolvedLinks.workspaceCmdsDir}');
-  if (sensitivityMode) print('  Sensitivity mode: ON');
-  print('\nRun `claudart setup` to begin a session.\n');
+  print(UserText.linkCursor.format({'cursorCmdsLink': resolvedLinks.cursorCmdsLink, 'workspaceCmdsDir': resolvedLinks.workspaceCmdsDir}));
+  if (sensitivityMode) print(UserText.linkSensitivityModeOn.template);
+  print(UserText.beginSessionHint.template);
 }
 
 // ── ClaudartArtifact regeneration ───────────────────────────────────────────
@@ -284,8 +287,7 @@ void _regenerateClaudeSettings({
       debugTrace: debugTrace,
     );
   } on FormatException {
-    print('⚠  $path is not a JSON object, so the claudart hook was not added. '
-        'Fix the file and run `claudart link` again.');
+    print(UserText.linkHookNotAddedNotJsonObject.format({'path': path}));
     return;
   }
   if (merged != existing) fileIO.write(path, merged);
@@ -398,8 +400,8 @@ void _seedWorkspaceConfig({
 
   final wantsToCreate = ask('workspace.json missing for this project — create it now?');
   if (wantsToCreate != true) {
-    print('\n  workspace.json not created — `claudart setup` needs it.');
-    print('  Re-run `claudart link` in a terminal to create it.');
+    print(UserText.linkWorkspaceJsonNotCreatedClaudartSetup.template);
+    print(UserText.linkReRunClaudartLinkInA.template);
     return;
   }
 
@@ -407,13 +409,21 @@ void _seedWorkspaceConfig({
   final email = prompt_('Owner email');
   final handle = prompt_('Owner handle (e.g. GitHub username)');
   if (name == null || email == null || handle == null) {
-    print('\n  No input available — workspace.json not created.');
+    print(UserText.linkNoInputAvailableWorkspaceJsonNot.template);
     return;
   }
   final strict = ask('Enforce strict architectural validation for this project?') ?? false;
 
   final roleInput = prompt_('Role on this project (maintainer/contributor)', optional: true);
-  final role = roleInput != null ? WorkspaceRole.fromString(roleInput) : WorkspaceRole.contributor;
+  final typedRole =
+      roleInput == null ? null : WorkspaceRole.fromString(roleInput);
+  if (roleInput != null && typedRole == null) {
+    print(UserText.linkRoleNotRecognised.format({
+      'roleInput': roleInput,
+      'role': WorkspaceRole.contributor.name,
+    }));
+  }
+  final role = typedRole ?? WorkspaceRole.contributor;
 
   final stackInput = prompt_('Tech stack, comma-separated (e.g. dart,flutter)', optional: true);
   final stack = (stackInput ?? '')
@@ -450,7 +460,7 @@ void _seedWorkspaceConfig({
     ),
   ).write(workspace, io: fileIO);
 
-  print('\n  ✓ workspace.json created — review `owner` before running `claudart setup`.');
+  print(UserText.linkWorkspaceJsonCreatedReviewOwnerBefore.template);
 }
 
 /// Result of [createProjectLinks] — the paths its caller reports to the user.
@@ -483,14 +493,14 @@ ProjectLinks createProjectLinks({
   final symlinkTarget = p.join(workspace, IdeIntegration.claudeCode.dirName);
 
   if (fileIO.linkExists(symlinkPath)) {
-    print('\n⚠  Removing existing ${IdeIntegration.claudeCode.dirName} symlink.');
+    print(UserText.linkRemovingExistingSymlink.format({'dirName': IdeIntegration.claudeCode.dirName}));
     fileIO.deleteLink(symlinkPath);
   }
 
   final symlinkSkipped = fileIO.dirExists(symlinkPath);
   if (symlinkSkipped) {
-    print('\n⚠  ${IdeIntegration.claudeCode.dirName}/ is a real directory — symlink skipped.');
-    print('  Slash commands in ${IdeIntegration.claudeCode.dirName}/commands/ are already available.');
+    print(UserText.linkIsARealDirectorySymlinkSkipped.format({'dirName': IdeIntegration.claudeCode.dirName}));
+    print(UserText.linkSlashCommandsInCommandsAreAlready.format({'dirName': IdeIntegration.claudeCode.dirName}));
   } else {
     fileIO.createLink(symlinkPath, symlinkTarget);
   }
@@ -599,7 +609,7 @@ void _ensureGitignore(String projectRoot, FileIO fileIO) {
       : '${current.trimRight()}\n${missing.join('\n')}\n';
 
   fileIO.write(path, current);
-  print('  .gitignore: added ${missing.join(', ')}');
+  print(UserText.linkGitignoreAdded.format({'entries': missing.join(', ')}));
 }
 
 const _githooksDirName = '.githooks';
@@ -643,21 +653,21 @@ Future<void> _recompileIfCli(
   final entryPoint = p.join(_binDirName, '$projectName.dart');
   if (!fileIO.fileExists(p.join(projectRoot, entryPoint))) return;
 
-  final home = Platform.environment[homeEnvVar];
-  if (home == null || home.isEmpty) return;
+  final home = homeDirectory;
+  if (home == null) return;
   final output = p.join(home, _binDirName, projectName);
 
-  print('\nRecompiling $projectName ($output)...');
+  print(UserText.linkRecompiling.format({'projectName': projectName, 'output': output}));
   final result = await proc.run(
     _dartExecutable,
     [..._compileArgs, entryPoint, _compileOutputFlag, output],
     workingDirectory: projectRoot,
   );
   if (result.exitCode == 0) {
-    print('✓ Recompiled $projectName.');
+    print(UserText.linkRecompiled.format({'projectName': projectName}));
   } else {
-    print('✗ Failed to recompile $projectName — fix the build, then re-run `claudart link`.');
-    print('  ${result.stderr}');
+    print(UserText.linkFailedToRecompileFixTheBuild.format({'projectName': projectName}));
+    print(UserText.stderrLine.format({'stderr': result.stderr}));
   }
 }
 
@@ -667,26 +677,20 @@ Future<void> _recompileIfCli(
 void _writeCommandFile(FileIO fileIO, String path, String content) {
   if (fileIO.fileExists(path) &&
       !isClaudartGeneratedCommand(fileIO.read(path))) {
-    print('  ⚠  Skipped $path — not a claudart-generated file.');
+    print(UserText.linkSkippedNotAClaudartGeneratedFile.format({'path': path}));
     return;
   }
   fileIO.write(path, content);
 }
 
 String _detectProjectName(String projectRoot) {
-  try {
-    final result = Process.runSync(
-      'git',
-      ['remote', 'get-url', 'origin'],
-      workingDirectory: projectRoot,
-    );
-    if (result.exitCode == 0) {
-      final url = (result.stdout as String).trim();
-      if (url.isNotEmpty) {
-        final name = url.split('/').last.replaceAll('.git', '').trim();
-        if (name.isNotEmpty) return name;
-      }
-    }
-  } on Exception catch (_) {}
+  final url = readGitConfig(
+    GitConfigKey.remoteOriginUrl,
+    workingDirectory: projectRoot,
+  );
+  if (url != null) {
+    final name = url.split('/').last.replaceAll('.git', '').trim();
+    if (name.isNotEmpty) return name;
+  }
   return p.basename(projectRoot);
 }

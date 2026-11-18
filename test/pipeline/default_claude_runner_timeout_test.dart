@@ -4,11 +4,12 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:claudart/config.dart';
+import 'package:claudart/config/config.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/pipeline_step_exception.dart';
+import 'package:claudart/pipeline/step_role.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/providers/agent_provider.dart';
 import 'package:path/path.dart' as p;
@@ -33,12 +34,20 @@ void main() {
     return script.path;
   }
 
-  Future<StepResult?> run(String executable, {Duration? timeout, StepDebugTrace? trace}) =>
+  Future<StepResult?> run(
+    String executable, {
+    Duration? timeout,
+    StepDebugTrace? trace,
+    Set<ClaudeTool> allowedTools = const {},
+    AgentModel helperModel = AgentModel.sonnet,
+  }) =>
       defaultClaudeRunner(
         model: AgentModel.haiku,
         systemPrompt: 'system',
         message: 'hello',
         workingDir: tmp.path,
+        allowedTools: allowedTools,
+        helperModel: helperModel,
         timeout: timeout,
         executable: executable,
         traceOverride: trace,
@@ -174,6 +183,8 @@ void main() {
         systemPrompt: 'system',
         message: 'hello',
         workingDir: tmp.path,
+        allowedTools: const {},
+        helperModel: AgentModel.sonnet,
         executable: exe,
         providerDetector: () => null,
       );
@@ -196,6 +207,8 @@ void main() {
           systemPrompt: 'system',
           message: 'hello',
           workingDir: tmp.path,
+          allowedTools: const {},
+          helperModel: AgentModel.sonnet,
           executable: exe,
           providerDetector: detector,
         );
@@ -220,6 +233,62 @@ void main() {
       final result = await runWith(() async => null);
       expect(result, isA<ProviderNotConfiguredException>());
     });
+  });
+
+  // The fake `claude` records the arguments and the environment it was started
+  // with, so what reaches the CLI is read, not assumed.
+  group('a step\'s tool scope and helper model reach the CLI', () {
+    Future<({List<String> args, Map<String, String> env})> startedWith({
+      required Set<ClaudeTool> allowedTools,
+      required AgentModel helperModel,
+    }) async {
+      final argsFile = p.join(tmp.path, 'args');
+      final envFile = p.join(tmp.path, 'env');
+      final exe = fakeClaude(
+        "printf '%s\\n' \"\$@\" > '$argsFile'\n"
+        "env > '$envFile'\n"
+        "printf '%s\\n' '$resultLine'",
+      );
+      await run(exe, allowedTools: allowedTools, helperModel: helperModel);
+      final env = <String, String>{};
+      for (final line in File(envFile).readAsLinesSync()) {
+        final at = line.indexOf('=');
+        if (at > 0) env[line.substring(0, at)] = line.substring(at + 1);
+      }
+      return (args: File(argsFile).readAsLinesSync(), env: env);
+    }
+
+    String toolsArgument(List<String> args) =>
+        args[args.indexOf('--tools') + 1];
+
+    test('the tool set is passed as --tools, by wire name', () async {
+      final started = await startedWith(
+        allowedTools: {ClaudeTool.read, ClaudeTool.grep},
+        helperModel: AgentModel.sonnet,
+      );
+      expect(
+        toolsArgument(started.args),
+        '${ClaudeTool.read.wire},${ClaudeTool.grep.wire}',
+      );
+    });
+
+    test('an empty tool set passes an empty --tools value', () async {
+      final started = await startedWith(
+        allowedTools: const {},
+        helperModel: AgentModel.sonnet,
+      );
+      expect(toolsArgument(started.args), isEmpty);
+    });
+
+    for (final variable in ClaudeHelperModelVariable.values) {
+      test('${variable.name} pins the CLI helper model', () async {
+        final started = await startedWith(
+          allowedTools: const {},
+          helperModel: AgentModel.opus,
+        );
+        expect(started.env[variable.wire], AgentModel.opus.slug);
+      });
+    }
   });
 
   test('the default limit is 15 minutes', () {

@@ -4,6 +4,7 @@
 // case-insensitive variant introduced for LLM-emitted tags.
 
 import 'package:claudart/pipeline/xml_tags.dart';
+import 'package:claudart/session/handoff_placeholder.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -19,8 +20,11 @@ void main() {
       );
     });
 
-    test('default fallback when none provided', () {
-      expect(tagOr('no tags', 'X'), isNotEmpty);
+    test('default fallback is the handoff placeholder, spelled once', () {
+      expect(
+        tagOr('no tags', 'X'),
+        HandoffPlaceholder.notYetDetermined.text,
+      );
     });
 
     test('case-sensitive — lower-case tag in input misses upper-case lookup',
@@ -136,6 +140,36 @@ void main() {
       // Callers that want null-for-empty must normalize themselves
       // (see CategorizeTag.extractFrom).
       expect(tagOrNull('<X>   \n  </X>', 'X'), equals(''));
+    });
+  });
+
+  // ── Wire tags ─────────────────────────────────────────────────────────────
+
+  group('$WireTag delimiters are built from the tag name', () {
+    for (final tag in WireTag.values) {
+      test(tag.name, () {
+        expect(tag.openPrefix, equals('<${tag.tagName}'));
+        expect(tag.close, equals('</${tag.tagName}>'));
+      });
+    }
+  });
+
+  // ── ASCII fold range ──────────────────────────────────────────────────────
+
+  // The fold maps only 'A'..'Z'. '@' (0x40) sits just below that range and '['
+  // (0x5B) just above it; setting the case bit on either would make it equal
+  // '`' (0x60) or '{' (0x7B), so a tag of one must not match text of the other.
+  group('tagOrNullIgnoreCase folds exactly A to Z', () {
+    test('Z folds to z', () {
+      expect(tagOrNullIgnoreCase('<z>x</z>', 'Z'), equals('x'));
+    });
+
+    test('@ below A is not folded', () {
+      expect(tagOrNullIgnoreCase('<`>x</`>', '@'), isNull);
+    });
+
+    test('[ above Z is not folded', () {
+      expect(tagOrNullIgnoreCase('<{>x</{>', '['), isNull);
     });
   });
 }

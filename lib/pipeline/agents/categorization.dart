@@ -29,20 +29,15 @@ import '../xml_tags.dart';
 /// because the LLM may not honor the system prompt's UPPER_SNAKE_CASE
 /// convention.
 enum CategorizeTag {
-  category,
-  intent,
-  complexity,
-  model;
+  category(wireTag: 'CATEGORY'),
+  intent(wireTag: 'INTENT'),
+  complexity(wireTag: 'COMPLEXITY'),
+  model(wireTag: 'MODEL');
+
+  const CategorizeTag({required this.wireTag});
 
   /// Wire-format tag name as emitted by the categorize system prompt.
-  /// Exhaustive switch — adding a variant is a compile error until the
-  /// arm is filled in.
-  String get wireTag => switch (this) {
-        CategorizeTag.category   => 'CATEGORY',
-        CategorizeTag.intent     => 'INTENT',
-        CategorizeTag.complexity => 'COMPLEXITY',
-        CategorizeTag.model      => 'MODEL',
-      };
+  final String wireTag;
 
   /// Extracts the trimmed content of this tag from [rawOutput]. Returns
   /// null when the tag is absent OR when its content is whitespace-only
@@ -54,41 +49,42 @@ enum CategorizeTag {
     return (content == null || content.isEmpty) ? null : content;
   }
 
-  /// The set of values the LLM may emit inside this tag. Drawn from the
-  /// target enum's `.values` so renaming a variant on any axis
-  /// propagates into the categorize prompt automatically — closing the
-  /// prompt/parser drift seam that silently defeats `ComplexityTier`
-  /// routing when the two get out of sync.
-  ///
-  /// Exhaustive switch — adding a CategorizeTag variant forces a new
-  /// arm here at compile time.
-  List<String> get allowedValues => switch (this) {
-        CategorizeTag.category   =>
-          [for (final v in AgentCategory.values) v.name],
-        CategorizeTag.intent     =>
-          [for (final v in IntentClass.values) v.name],
-        CategorizeTag.complexity =>
-          [for (final v in ComplexityTier.values) v.name],
-        CategorizeTag.model      =>
-          [for (final v in AgentModel.values) v.name],
+  /// Every value the LLM may emit inside this tag, with its one-line
+  /// description. Drawn from the target enum's `.values` so renaming a variant
+  /// on any axis propagates into the categorize prompt automatically — closing
+  /// the prompt/parser drift seam that silently defeats `ComplexityTier`
+  /// routing when the two get out of sync. `model` has no descriptions:
+  /// `AgentModel` names are self-explanatory proper nouns and this
+  /// self-reported tag isn't consulted by [routeModel] anyway.
+  List<({String name, String description})> get _entries => switch (this) {
+        CategorizeTag.category => [
+            for (final v in AgentCategory.values)
+              (name: v.name, description: v.description),
+          ],
+        CategorizeTag.intent => [
+            for (final v in IntentClass.values)
+              (name: v.name, description: v.description),
+          ],
+        CategorizeTag.complexity => [
+            for (final v in ComplexityTier.values)
+              (name: v.name, description: v.description),
+          ],
+        CategorizeTag.model => [
+            for (final v in AgentModel.values) (name: v.name, description: ''),
+          ],
       };
 
+  /// The set of values the LLM may emit inside this tag.
+  List<String> get allowedValues => [for (final e in _entries) e.name];
+
   /// One-line description per allowed value, shown to the LLM as a
-  /// definitions preamble ahead of the wire-format schema — without it,
-  /// the model sees only bare enum names and has no signal to
-  /// distinguish adjacent values (e.g. `design` vs `document` on a task
-  /// like "redesign this README", both plausible bare-word matches).
-  /// Empty for `model`: `AgentModel` names are self-explanatory proper
-  /// nouns and this self-reported tag isn't consulted by [routeModel]
-  /// anyway.
-  Map<String, String> get descriptions => switch (this) {
-        CategorizeTag.category   =>
-          {for (final v in AgentCategory.values) v.name: v.description},
-        CategorizeTag.intent     =>
-          {for (final v in IntentClass.values) v.name: v.description},
-        CategorizeTag.complexity =>
-          {for (final v in ComplexityTier.values) v.name: v.description},
-        CategorizeTag.model      => const {},
+  /// definitions preamble ahead of the wire-format schema — without it, the
+  /// model sees only bare enum names and has no signal to distinguish adjacent
+  /// values (e.g. `design` vs `document` on a task like "redesign this
+  /// README", both plausible bare-word matches). Empty for `model`.
+  Map<String, String> get descriptions => {
+        for (final e in _entries)
+          if (e.description.isNotEmpty) e.name: e.description,
       };
 }
 
@@ -146,40 +142,63 @@ String buildCategorizePrompt() {
 ///
 /// Invariant: active ∪ terminal = AgentCategory.values  (no uncategorised work)
 enum AgentCategory {
-  feature,   // new capability addition
-  bug,       // defect investigation / repair
-  refactor,  // structural improvement without behaviour change
-  research,  // knowledge extraction / reference lookup
-  setup,     // workspace or environment configuration
-  gui;       // visual surface — widgets, painters, theme tokens
+  /// New capability addition.
+  feature(
+    intents: {
+      IntentClass.explore,
+      IntentClass.analyze,
+      IntentClass.implement,
+    },
+    description: 'new capability addition',
+  ),
+
+  /// Defect investigation / repair.
+  bug(
+    intents: {IntentClass.explore, IntentClass.analyze},
+    description: 'defect investigation or repair',
+  ),
+
+  /// Structural improvement without behaviour change.
+  refactor(
+    intents: {IntentClass.analyze, IntentClass.implement},
+    description: 'structural improvement without behaviour change',
+  ),
+
+  /// Knowledge extraction / reference lookup.
+  research(
+    intents: {IntentClass.explore, IntentClass.document},
+    description: 'knowledge extraction or reference lookup',
+  ),
+
+  /// Workspace or environment configuration.
+  setup(
+    intents: {IntentClass.implement, IntentClass.document},
+    description: 'workspace or environment configuration',
+  ),
+
+  /// Visual surface — widgets, painters, theme tokens.
+  gui(
+    intents: {
+      IntentClass.analyze,
+      IntentClass.implement,
+      IntentClass.design,
+    },
+    description: 'visual UI surface — widgets, painters, theme tokens',
+  );
+
+  const AgentCategory({required this.intents, required this.description});
 
   /// Intent classes valid for this category.
   ///
   /// Invariant: feature.intents ∩ {IntentClass.document} = ∅
   /// Invariant: research.intents ∩ {IntentClass.implement} = ∅
   /// Invariant: gui.intents ⊆ {analyze, implement, design}
-  Set<IntentClass> get intents => switch (this) {
-        feature  => {IntentClass.explore, IntentClass.analyze, IntentClass.implement},
-        bug      => {IntentClass.explore, IntentClass.analyze},
-        refactor => {IntentClass.analyze, IntentClass.implement},
-        research => {IntentClass.explore, IntentClass.document},
-        setup    => {IntentClass.implement, IntentClass.document},
-        gui      => {IntentClass.analyze, IntentClass.implement, IntentClass.design},
-      };
+  final Set<IntentClass> intents;
 
   /// One-line description shown to the categorize LLM alongside this
   /// value's bare name — without it, the model sees only enum names with
-  /// zero semantic guidance and effectively guesses. Mirrors the enum
-  /// member's own doc comment; kept as a runtime getter because Dart doc
-  /// comments aren't reflectable.
-  String get description => switch (this) {
-        feature  => 'new capability addition',
-        bug      => 'defect investigation or repair',
-        refactor => 'structural improvement without behaviour change',
-        research => 'knowledge extraction or reference lookup',
-        setup    => 'workspace or environment configuration',
-        gui      => 'visual UI surface — widgets, painters, theme tokens',
-      };
+  /// zero semantic guidance and effectively guesses.
+  final String description;
 }
 
 /// What the agent is primarily doing within the task.
@@ -234,12 +253,13 @@ enum ComplexityTier {
 ///
 /// Total function — exhaustive switch over all 90 cells.
 /// Three-layer rationale:
-///   Theory:  opus excels at broad discovery; sonnet at reasoning + generation;
-///            haiku at fast structured lookup; fable at design specifically.
+///   Theory:  opus excels at broad discovery and design; sonnet at reasoning
+///            and generation. Haiku is not sufficient to reason or implement,
+///            so it is never a result of this function: it only classifies
+///            and reads, outside the coordinator's assignment.
 ///   Rule:    systemic × {explore,analyze} → opus;
-///            * × {analyze,implement} → sonnet (unless systemic);
-///            * × {explore,document} on atomic/compound → haiku;
-///            * × design → fable, at every tier.
+///            * × design → opus, at every tier;
+///            everything else → sonnet, the default.
 ///   Example: "explain how this codebase handles state" =
 ///            research × explore × systemic → opus.
 ///
@@ -262,17 +282,14 @@ AgentModel routeModel(
       (_, IntentClass.analyze, ComplexityTier.systemic) =>
         AgentModel.opus,
 
-      // Any analysis or implementation at compound/atomic tier → balanced.
-      // Compound exploration still benefits from balanced reasoning.
+      // Everything else reasons or generates, so it is sonnet, the default.
+      // Atomic exploration and documentation are included: haiku never
+      // reasons or implements.
       (_, IntentClass.analyze,   _) ||
       (_, IntentClass.implement, _) ||
-      (_, IntentClass.explore,   ComplexityTier.compound) =>
+      (_, IntentClass.explore,   _) ||
+      (_, IntentClass.document,  _) =>
         AgentModel.sonnet,
-
-      // Atomic exploration and all documentation → fast lookup tier.
-      (_, IntentClass.explore,  _) ||
-      (_, IntentClass.document, _) =>
-        AgentModel.haiku,
     };
 
 /// Resolves an [AgentModel] from a categorize step's raw XML output by

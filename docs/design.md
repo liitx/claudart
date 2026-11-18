@@ -27,7 +27,7 @@ work happens across the remaining 6 persisted states.
 Let **C** be the finite set of commands:
 
 ```
-C = { claudart setup, /suggest, /save, /debug, claudart rotate,
+C = { claudart setup, claudart flow, /suggest, /save, /debug, claudart rotate,
       claudart teardown, claudart kill }
 ```
 
@@ -45,6 +45,7 @@ The session is a **deterministic finite automaton** `(S, C, δ, s₀, F)` where:
 | Current state | Command | Next state | Precondition |
 |---|---|---|---|
 | `no-handoff` | `claudart setup` | `suggest-investigating` | — |
+| `no-handoff` | `claudart flow` | `ready-for-suggest` | the construct step declares a root cause and scope |
 | `suggest-investigating` | `/save` | `suggest-investigating` | root cause unconfirmed |
 | `suggest-investigating` | `/save` | `ready-for-suggest` | root cause confirmed, further exploration expected |
 | `suggest-investigating` | `/save` | `ready-for-debug` | root cause confirmed, ready to implement |
@@ -72,7 +73,7 @@ reachable from `no-handoff` and has an exit.
 handoff has no active content, the parsed status otherwise. `test/conformance/lifecycle_test.dart` pins it step by step
 across whole lifecycles, and `make consumer-check` replays the same scenarios against zedup's real reader.
 
-**Events** (`lib/session/handoff_event.dart`) name outcomes, one per row above: `setup`, `saveUnconfirmed`,
+**Events** (`lib/session/handoff_event.dart`) name outcomes, one per row above: `setup`, `flowConstructed`, `saveUnconfirmed`,
 `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`,
 `rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. `rotatedEmpty`, `tornDown`, `reminderSaved` and `killed` land in `no-handoff` (the handoff is reset or erased).
 
@@ -83,6 +84,7 @@ across whole lifecycles, and `make consumer-check` replays the same scenarios ag
 | `ready-for-debug`, `debug-in-progress`, `needs-suggest` | `saveConfirmedReady` | `ready-for-debug` | `/suggest` re-run overwrites an existing handoff after the user confirms |
 | `ready-for-debug`, `debug-in-progress` | `fixApplied` | `debug-complete` | `/debug` applies its plan and marks it complete in one step; claudart does not verify the fix, so "fix verified" is named for what happens |
 | `suggest-investigating`, `ready-for-debug`, `debug-in-progress` | `rotatedEmpty` | `no-handoff` | `claudart rotate` with no pending issue archives the session and resets the handoff to blank |
+| `ready-for-suggest`, `ready-for-debug`, `debug-in-progress` | `tornDown` | `no-handoff` | a handoff whose knowledge transfer is complete may be torn down before debug has run, once `claudart teardown` has recorded debug as skipped (it asks; the move is legal in the table, the question is the command's rule). Provisional, owner's rule of 2026-10-26 |
 | any persisted state | `reminderSaved` | `no-handoff` | `claudart teardown` on an unresolved session saves a reminder and resets the handoff |
 | any persisted state | `killed` | `no-handoff` | `claudart kill` erases the handoff |
 
@@ -92,6 +94,7 @@ across whole lifecycles, and `make consumer-check` replays the same scenarios ag
 stateDiagram-v2
   [*] --> noHandoff
   noHandoff --> suggestInvestigating: setup
+  noHandoff --> readyForSuggest: flow
   suggestInvestigating --> readyForSuggest: explore
   readyForSuggest --> readyForDebug: /save
   readyForDebug --> debugInProgress: /debug

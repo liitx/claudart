@@ -2,17 +2,19 @@
 // WorkspaceConfig (lib/workspace/workspace_config.dart)
 //
 // Distinct from test/config_test.dart, which covers the unrelated
-// WorkspaceConfig in lib/config.dart (workspace.json's local scan/sensitivity
+// WorkspaceConfig in lib/config/config.dart (workspace.json's local scan/sensitivity
 // settings, not the session-scoped owner/project/session config this file
 // parses at Step 0). No file imports both, so there's no active name
 // collision — just a latent one, noted and left alone here.
 
 import 'package:test/test.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _workspaceDir = '/workspaces/my-app';
+const _workspaceDir = ProjectFixture.workspace;
 const _workspaceJsonPath = '$_workspaceDir/workspace.json';
 
 void main() {
@@ -39,9 +41,8 @@ void main() {
           equals(WorkspaceRole.contributor));
     });
 
-    test('unrecognised value defaults to contributor', () {
-      expect(
-          WorkspaceRole.fromString('owner'), equals(WorkspaceRole.contributor));
+    test('an unrecognised value is not a role, and is not guessed', () {
+      expect(WorkspaceRole.fromString('owner'), isNull);
     });
 
     test('maintainer canUpdateReadme is true', () {
@@ -66,10 +67,63 @@ void main() {
       expect(ProofNotation.tsGrounded.value, equals('ts-grounded'));
     });
 
-    test('unrecognised value defaults to generic', () {
-      expect(ProofNotation.fromString('python-grounded'),
-          equals(ProofNotation.generic));
+    test('each description names the language it governs', () {
+      expect(ProofNotation.dartGrounded.description, contains('Dart'));
+      expect(ProofNotation.dartGrounded.description, contains('∀/∃/∧/∨/↔'));
+      expect(ProofNotation.tsGrounded.description, contains('∀/∃/∧/∨/↔'));
+      expect(ProofNotation.dartGrounded.description, contains('Never use iff'));
+      expect(ProofNotation.tsGrounded.description, contains('TypeScript'));
+      expect(ProofNotation.generic.description, contains('plain English'));
+    });
+
+    test('generic round-trips', () {
+      expect(ProofNotation.fromString('generic'), ProofNotation.generic);
       expect(ProofNotation.generic.value, equals('generic'));
+    });
+
+    test('an unrecognised value is not a notation, and is not guessed', () {
+      expect(ProofNotation.fromString('python-grounded'), isNull);
+    });
+  });
+
+  group('$WorkspaceConfig.load with a value it does not know', () {
+    const base = '{"owner": {"name": "n", "email": "e", "handle": "h"}, '
+        '"project": {"name": "p", "stack": ["dart"], "role": ROLE}, '
+        '"session": {"agents": [], "knowledge": [], '
+        '"proofNotation": NOTATION, "sensitivityMode": false}}';
+
+    String json({
+      String role = '"maintainer"',
+      String notation = '"generic"',
+    }) =>
+        base.replaceFirst('ROLE', role).replaceFirst('NOTATION', notation);
+
+    test('a known role and notation load', () {
+      final io = MemoryFileIO(files: {_workspaceJsonPath: json()});
+      expect(
+        WorkspaceConfig.load(_workspaceDir, io: io)!.project.role,
+        WorkspaceRole.maintainer,
+      );
+    });
+
+    test('an unknown role is unreadable, not quietly a contributor', () {
+      final io = MemoryFileIO(
+        files: {_workspaceJsonPath: json(role: '"owner"')},
+      );
+      expect(
+        () => WorkspaceConfig.load(_workspaceDir, io: io),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
+      );
+    });
+
+    test('an unknown proof notation is unreadable, not quietly generic', () {
+      final io = MemoryFileIO(
+        files: {_workspaceJsonPath: json(notation: '"python-grounded"')},
+      );
+      expect(
+        () => WorkspaceConfig.load(_workspaceDir, io: io),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
+      );
     });
   });
 
@@ -79,15 +133,33 @@ void main() {
       expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
     });
 
-    test('returns null when workspace.json is malformed json', () {
-      final io = MemoryFileIO(files: {
-        _workspaceJsonPath: '{not valid json',
-      });
+    test('returns null when workspace.json is empty', () {
+      final io = MemoryFileIO(files: {_workspaceJsonPath: ''});
       expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
     });
 
+    test('throws WorkspaceConfigUnreadableException for malformed json', () {
+      final io = MemoryFileIO(files: {
+        _workspaceJsonPath: '{not valid json',
+      });
+      expect(
+        () => WorkspaceConfig.load(_workspaceDir, io: io),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
+      );
+    });
+
+    test('the exception carries the workspaceConfigUnreadable failure', () {
+      final io = MemoryFileIO(files: {_workspaceJsonPath: '[1, 2]'});
+      try {
+        WorkspaceConfig.load(_workspaceDir, io: io);
+        fail('load should have thrown');
+      } on WorkspaceConfigUnreadableException catch (e) {
+        expect(e.failureType, FailureType.workspaceConfigUnreadable);
+      }
+    });
+
     // Valid JSON of the wrong shape throws a TypeError (an Error, not an
-    // Exception); each of these must be "unparseable", not a crash.
+    // Exception); each of these is unreadable, reported as the typed failure.
     final wrongShapes = <String, String>{
       'a missing section': '{"hand": "written"}',
       'a section of the wrong type':
@@ -97,9 +169,12 @@ void main() {
       'a top-level list': '[1, 2]',
     };
     wrongShapes.forEach((name, text) {
-      test('returns null for $name', () {
+      test('throws WorkspaceConfigUnreadableException for $name', () {
         final io = MemoryFileIO(files: {_workspaceJsonPath: text});
-        expect(WorkspaceConfig.load(_workspaceDir, io: io), isNull);
+        expect(
+          () => WorkspaceConfig.load(_workspaceDir, io: io),
+          throwsA(isA<WorkspaceConfigUnreadableException>()),
+        );
       });
     });
 

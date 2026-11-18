@@ -45,9 +45,10 @@ AgentModel _expectedFor(
   if (intent == IntentClass.explore && complexity == ComplexityTier.compound) {
     return AgentModel.sonnet;
   }
-  // Atomic exploration + all documentation → haiku.
+  // Atomic exploration + all documentation → sonnet. Haiku never reasons or
+  // implements, so no cell routes to it: it only classifies and reads.
   if (intent == IntentClass.explore || intent == IntentClass.document) {
-    return AgentModel.haiku;
+    return AgentModel.sonnet;
   }
   // Visual/architectural design → opus, at every tier (2026-09-27: was
   // fable; reconsidered after comparing output quality directly).
@@ -84,7 +85,7 @@ void main() {
     // matrix above still passes (a constant function satisfies any
     // single column); this invariant catches that.
     const tierSensitiveIntents = {
-      IntentClass.explore, // atomic → haiku, compound → sonnet, systemic → opus
+      IntentClass.explore, // atomic and compound → sonnet, systemic → opus
       IntentClass.analyze, // systemic → opus, others → sonnet
     };
 
@@ -153,10 +154,20 @@ void main() {
       // the type level, but the assertion documents the intent and
       // pins the rendered set for future readers.
       expect(image.difference(AgentModel.values.toSet()), isEmpty);
-      // Currently the τ matrix uses haiku/sonnet/opus. If a new
-      // AgentModel variant is added without wiring, this stays equal
-      // — that's fine; the load-bearing claim is the subset above.
       expect(image, isNotEmpty);
+    });
+
+    // Haiku is the cheapest model and is not sufficient to reason or
+    // implement. The coordinator assigns only these two, defaulting to
+    // sonnet, so no cell may ever resolve to haiku.
+    test('the image is exactly sonnet and opus — never haiku', () {
+      final image = <AgentModel>{
+        for (final category in AgentCategory.values)
+          for (final intent in IntentClass.values)
+            for (final complexity in ComplexityTier.values)
+              routeModel(category, intent, complexity),
+      };
+      expect(image, equals({AgentModel.sonnet, AgentModel.opus}));
     });
   });
 }

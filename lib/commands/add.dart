@@ -13,17 +13,21 @@
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../dependency_config.dart';
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../md_io.dart' show confirm;
-import '../paths.dart';
+import '../config/dependency_config.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
+import '../session/md_io.dart' show confirm;
+import '../config/paths.dart';
 import '../registry.dart';
 import '../templates/claude_template.dart';
 import '../templates/plan_template.dart';
 import '../ui/line_editor.dart' as editor;
 import '../ui/render.dart' as render;
 import 'link.dart' show createProjectLinks;
+import '../config/environment.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Project shape — drives `claudeTemplate`'s optional Flutter constraint
 /// line. Not named `WorkspaceConfig` — that name belongs to
@@ -70,15 +74,15 @@ Future<void> runAdd({
   final fileIO = io ?? const RealFileIO();
   final prompt_ = promptFn ?? _defaultPrompt;
   final confirm_ = confirmFn ?? confirm;
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   print(render.header('CLAUDART ADD'));
 
   // 1 — Detect project root.
   final projectRoot = projectRootOverride ?? detectGitContext()?.root;
   if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project root.\n');
-    exit_(1);
+    print(UserText.notInGitRepositoryRoot.template);
+    leaveFor(ExitReason.addNotInGitRepository, exit_: exit_);
   }
 
   // 2 — Pre-fill from git: author, project name, pubspec.yaml content.
@@ -90,7 +94,10 @@ Future<void> runAdd({
   final defaultSdk = _detectDartSdkConstraint(pubspecContent);
   final defaultUsesDartrix = detectsDartrixDependency(pubspecContent);
 
-  print('\n  Author  : ${author.name ?? '(not set)'} <${author.email ?? '(not set)'}>');
+  print(UserText.addAuthorLine.format({
+    'name': author.name ?? UserText.notSet.template,
+    'email': author.email ?? UserText.notSet.template,
+  }));
 
   // 3 — Questionnaire.
   final projectName = prompt_('Project name', defaultValue: defaultName) ?? defaultName;
@@ -179,7 +186,7 @@ Future<void> runAdd({
   // 9 — Register in Claude Code's own auto-memory so a session started
   // here already knows the project exists.
   final memoryRoot = claudeMemoryRootOverride ??
-      p.join(Platform.environment[homeEnvVar] ?? '', IdeIntegration.claudeCode.dirName, 'projects');
+      p.join(homeDirectory ?? '', IdeIntegration.claudeCode.dirName, 'projects');
   final projectHash = projectRoot.replaceAll('/', '-');
   final memoryDir = p.join(memoryRoot, projectHash, 'memory');
   fileIO.createDir(memoryDir);
@@ -194,15 +201,15 @@ Future<void> runAdd({
     fileIO.write(memoryIndexPath, '${existingIndex.trimRight()}\n$indexLine\n');
   }
 
-  print('\n✓ Scaffolded: ${answers.projectName}');
-  print('  PLAN.md   : $planPath');
-  print('  CLAUDE.md : $claudeMdPath');
-  print('  Workspace : $workspace');
+  print(UserText.addScaffolded.format({'projectName': answers.projectName}));
+  print(UserText.addPlanMd.format({'planPath': planPath}));
+  print(UserText.addClaudeMd.format({'claudeMdPath': claudeMdPath}));
+  print(UserText.addWorkspace.format({'workspace': workspace}));
   if (!links.symlinkSkipped) {
-    print('  Symlink   : ${links.symlinkPath} → ${links.symlinkTarget}');
+    print(UserText.addSymlink.format({'symlinkPath': links.symlinkPath, 'symlinkTarget': links.symlinkTarget}));
   }
-  print('  Memory    : $memoryFilePath');
-  print('\nRun `claudart setup` to begin a session.\n');
+  print(UserText.addMemory.format({'memoryFilePath': memoryFilePath}));
+  print(UserText.beginSessionHint.template);
 }
 
 // ── pubspec.yaml detection — plain string/regex, no yaml package dep ────────

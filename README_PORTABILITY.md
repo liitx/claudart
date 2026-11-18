@@ -160,7 +160,7 @@ Precondition enforcement is explicit, not implied. `claudart debug` prints a war
 
 ## The handoff
 
-`handoff.md` is the single artifact both sides read and write. [`lib/templates/handoff_template.dart`](lib/templates/handoff_template.dart) renders nine top-level sections in a fixed order, and both writers address them by name through `readSection`/`updateSection` in [`lib/md_io.dart`](lib/md_io.dart) — never by offset.
+`handoff.md` is the single artifact both sides read and write. [`lib/templates/handoff_template.dart`](lib/templates/handoff_template.dart) renders nine top-level sections in a fixed order, and both writers address them by name through `readSection`/`updateSection` in [`lib/session/md_io.dart`](lib/session/md_io.dart) — never by offset.
 
 | Section | Written by | Read by |
 |---|---|---|
@@ -415,7 +415,7 @@ claudart debug          # read scope, implement fix, write files
 claudart teardown       # archive, promote skills, suggest commit
 ```
 
-[`ClaudartCommand`](lib/commands/claudart_command.dart#L11) has 23 variants and is the single source of truth for dispatch. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable. That makes 24 reachable entry points.
+[`ClaudartCommand`](lib/commands/support/claudart_command.dart#L11) has 23 variants and is the single source of truth for dispatch. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable. That makes 24 reachable entry points.
 
 <details>
 <summary><strong>Full command table, one row per dispatch arm</strong></summary>
@@ -579,7 +579,7 @@ The audit log at `logs/interactions.jsonl` is written by [`SessionLogger`](lib/l
 
 Routing decisions are a separate, global log. [`PlannerLog`](lib/logging/planner_log.dart#L132) appends one JSON line per categorize step — the three-axis classification (`category`, `intent`, `complexity`), the routed model, and design-surface counts — to `~/.claudart/planner.jsonl`, sibling to `registry.json` rather than per-workspace. It's wired into `claudart flow` only ([`lib/commands/flow.dart`](lib/commands/flow.dart#L42)); `suggest` and `debug`'s own Phase 0 categorize steps don't call it yet.
 
-Path construction is centralized in [`lib/paths.dart`](lib/paths.dart) — one function per artifact, no string concatenation at call sites. [`lib/registry.dart`](lib/registry.dart) resolves a git project root to its workspace; [`lib/workspace/workspace_config.dart`](lib/workspace/workspace_config.dart) parses `workspace.json` once at session entry, and agents read the parsed value rather than the file.
+Path construction is centralized in [`lib/config/paths.dart`](lib/config/paths.dart) — one function per artifact, no string concatenation at call sites. [`lib/registry.dart`](lib/registry.dart) resolves a git project root to its workspace; [`lib/workspace/workspace_config.dart`](lib/workspace/workspace_config.dart) parses `workspace.json` once at session entry, and agents read the parsed value rather than the file.
 
 ```json
 {
@@ -702,7 +702,7 @@ AgentProvider.bedrock.missingFrom(env);              // → ['AWS_REGION', 'ANTH
 
 **Detection gap, found and closed in the same round of testing:** `claude` reads `~/.claude/settings.json` directly, independent of the parent process's env — bare `AgentProvider.detect(Platform.environment)` missed a Bedrock machine configured only there, confirmed as a real false negative. [`AgentProvider.detectEffective`](lib/providers/agent_provider.dart) merges in [`claude_settings_env.dart`](lib/providers/claude_settings_env.dart)'s read of that file (process env wins on conflict, parse failures degrade to empty rather than throwing) and `claudart doctor` now uses it. Still not exhaustive — settings.json's own search path and project-local overrides aren't modeled — so a `[SKIP]` is narrower than before, not proof of absence.
 
-`AgentProvider` is **not** wired into `defaultClaudeRunner` yet, on purpose — that launch path is live and load-bearing, and forcing provider validation into it without the verification harness below to test the change end-to-end first was judged too risky for the handoff that built it. Good thing, too: testing against the real Bedrock machine confirmed that a naive gate on bare `detect()` would have **false-negatived on a working machine** — exactly the detection gap above. See [`docs/provider_setup.md`](docs/provider_setup.md) for the full current-state-vs-target writeup, including why `ProcessRunner` (`lib/process_runner.dart`) turned out to be the wrong seam — it's only used by `commands/report.dart` for git/gh subprocesses, not for `claude` itself.
+`AgentProvider` is **not** wired into `defaultClaudeRunner` yet, on purpose — that launch path is live and load-bearing, and forcing provider validation into it without the verification harness below to test the change end-to-end first was judged too risky for the handoff that built it. Good thing, too: testing against the real Bedrock machine confirmed that a naive gate on bare `detect()` would have **false-negatived on a working machine** — exactly the detection gap above. See [`docs/provider_setup.md`](docs/provider_setup.md) for the full current-state-vs-target writeup, including why `ProcessRunner` (`lib/io/process_runner.dart`) turned out to be the wrong seam — it's only used by `commands/report.dart` for git/gh subprocesses, not for `claude` itself.
 
 `AgentProvider.detectEffective` does have one real consumer today: `claudart doctor` (`lib/commands/doctor.dart`), the fresh-machine verification harness. Run it on any machine to get a one-line `[OK]`/`[SKIP]`/`[FAIL]` per check — tools on PATH, git identity, `gh` auth, and provider env — without touching the live pipeline. Confirmed on the real Bedrock machine: `[OK] provider env: bedrock configured` from the Bedrock agent's own shell, both before and after the settings.json fix (env was exported there); the fix's actual value is a plain terminal with nothing exported now also correctly resolving a settings.json-only configuration, which bare `detect()` could never have seen.
 
@@ -727,7 +727,7 @@ AgentProvider.bedrock.missingFrom(env);              // → ['AWS_REGION', 'ANTH
 
 The discrepancy ledger this fork exists to hold. Each item below was found while setting claudart up fresh on a new machine and is tracked here until it's closed, at which point it moves to the real `README.md` and this entry is deleted — this list is expected to shrink, not grow indefinitely.
 
-Backed by [`PortabilityGap`](lib/portability_gap.dart) — one enum variant per row below, `PortabilityGapStatus` for the open/tabled/planned column, matrix-tested in `test/portability_gap_test.dart`. This table is the human-readable view of that enum; if the two drift, the enum is the source of truth.
+Backed by [`PortabilityGap`](lib/project/portability_gap.dart) — one enum variant per row below, `PortabilityGapStatus` for the open/tabled/planned column, matrix-tested in `test/portability_gap_test.dart`. This table is the human-readable view of that enum; if the two drift, the enum is the source of truth.
 
 | Gap | What's missing | Status | Tracked |
 |---|---|---|---|

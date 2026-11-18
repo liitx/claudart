@@ -34,6 +34,22 @@ void main(List<String> args) {
   }
 }
 
+/// The string literals that appear more than once in [lines], import-style
+/// directive lines excluded. Shared by the advisory hook and the ratchet test.
+List<String> repeatedLiterals(Iterable<String> lines) {
+  final counts = <String, int>{};
+  for (final line in lines) {
+    if (_directiveLine.hasMatch(line)) continue;
+    for (final pattern in [_singleQuoted, _doubleQuoted]) {
+      for (final match in pattern.allMatches(line)) {
+        final literal = match.group(1)!;
+        counts[literal] = (counts[literal] ?? 0) + 1;
+      }
+    }
+  }
+  return counts.entries.where((e) => e.value > 1).map((e) => e.key).toList();
+}
+
 void _checkFile(String path) {
   // Test fixtures legitimately repeat literal values constantly (env var
   // names, sample paths) across unrelated cases — that's expected data,
@@ -43,7 +59,7 @@ void _checkFile(String path) {
   // Real bug, found during a later full-repo audit: `path.contains('/lib/')`
   // alone only matches an ABSOLUTE path — the PostToolUse hook passes one
   // of those, but the pre-push hook's own `find lib -name '*.dart'` produces
-  // relative paths like `lib/paths.dart`, which never contain `/lib/` (no
+  // relative paths like `lib/config/paths.dart`, which never contain `/lib/` (no
   // leading slash). That silently skipped every file on every push since
   // this script was written — `startsWith('lib/')` closes the relative case.
   final isUnderLib = path.contains('/lib/') || path.startsWith('lib/');
@@ -51,18 +67,7 @@ void _checkFile(String path) {
   final file = File(path);
   if (!file.existsSync()) return;
 
-  final counts = <String, int>{};
-  for (final line in file.readAsLinesSync()) {
-    if (_directiveLine.hasMatch(line)) continue;
-    for (final pattern in [_singleQuoted, _doubleQuoted]) {
-      for (final match in pattern.allMatches(line)) {
-        final literal = match.group(1)!;
-        counts[literal] = (counts[literal] ?? 0) + 1;
-      }
-    }
-  }
-
-  final repeated = counts.entries.where((e) => e.value > 1).map((e) => e.key).toList();
+  final repeated = repeatedLiterals(file.readAsLinesSync());
   if (repeated.isEmpty) return;
 
   stdout.writeln(

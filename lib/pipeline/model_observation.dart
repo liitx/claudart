@@ -9,6 +9,7 @@
 // The observation costs nothing extra: it is read from a line claudart already
 // receives and parses, so it adds no model call and no prompt tokens.
 
+import '../util/enum_util.dart';
 import 'agent_model.dart';
 
 /// One model's usage within a step, as `modelUsage[<id>]` reports it.
@@ -144,6 +145,70 @@ enum ModelDriftKind {
   maxOutputTokens;
 }
 
+/// A way the models observed in one step run fail to add up.
+///
+/// A run is accounted for when the model it was meant to run on is among the
+/// observed ones and every observed id is a declared model. An empty set of
+/// findings means the run adds up.
+enum ModelAccountingFinding {
+  /// An observed id is not any [AgentModel.slug].
+  unknownModelObserved,
+
+  /// The intended model is not among the observed models, so the step did not
+  /// run on the model it was assigned.
+  intendedModelNotObserved;
+
+  /// The words a person reads for this finding in `claudart status`.
+  String get label => switch (this) {
+        ModelAccountingFinding.unknownModelObserved =>
+          'an observed model is not a declared model',
+        ModelAccountingFinding.intendedModelNotObserved =>
+          'the intended model did not run',
+      };
+}
+
+/// What an observed model was doing inside a step.
+///
+/// A step's usage can name more than one model, because the CLI makes its own
+/// small helper calls (on haiku) inside a step. Only the step model is the
+/// model claudart assigned.
+enum ObservedModelRole {
+  /// The model the step ran on: the intended one when it ran, otherwise
+  /// whatever ran in its place.
+  stepModel,
+
+  /// A model that ran beside the intended one, such as the CLI's own helper
+  /// call. It was not assigned by claudart and is not drift.
+  incidentalHelper;
+
+  /// The words a person reads for this role in `claudart status`.
+  String get label => switch (this) {
+        ObservedModelRole.stepModel => 'step',
+        ObservedModelRole.incidentalHelper => 'helper call',
+      };
+}
+
+/// What `claudart status` says for a record that carries no recognizable role,
+/// such as one written before roles existed. A missing role is never shown as
+/// the step model, because that would claim something the record does not say.
+const String _roleNotRecordedLabel = 'no role recorded';
+
+/// What `claudart status` says about a record's accounting.
+const String _accountedLabel = 'accounted';
+const String _notAccountedLabel = 'NOT accounted';
+const String _accountingNotRecordedLabel = 'accounting not recorded';
+
+String _describeAccounting(Object? recorded) {
+  if (recorded is! List) return _accountingNotRecordedLabel;
+  if (recorded.isEmpty) return _accountedLabel;
+  final labels = [
+    for (final name in recorded)
+      enumByName(ModelAccountingFinding.values, name as String?)?.label ??
+          '$name',
+  ];
+  return '$_notAccountedLabel: ${labels.join(', ')}';
+}
+
 /// One observation set against the model the step intended.
 class ModelReconciliation {
   const ModelReconciliation({
@@ -153,6 +218,8 @@ class ModelReconciliation {
     required this.drift,
     required this.contextUsedFraction,
     required this.outputCapReached,
+    this.role = ObservedModelRole.stepModel,
+    this.accounting = const {},
   });
 
   final AgentModel intended;
@@ -170,6 +237,40 @@ class ModelReconciliation {
   /// The step produced as many tokens as the output cap allows.
   final bool outputCapReached;
 
+  /// Whether this was the step's model or an incidental helper call.
+  final ObservedModelRole role;
+
+  /// How the models of the whole step run fail to add up; empty when they do.
+  /// Set by [reconcileStepModels], so every record of one run carries the same
+  /// set. A lone [reconcileModel] call leaves it empty without checking.
+  final Set<ModelAccountingFinding> accounting;
+
+  /// This observation as an incidental helper: the same facts, without
+  /// [ModelDriftKind.differsFromIntended], because it was never the step model.
+  ModelReconciliation _asIncidentalHelper() => ModelReconciliation(
+        intended: intended,
+        observation: observation,
+        resolved: resolved,
+        drift: {...drift}..remove(ModelDriftKind.differsFromIntended),
+        contextUsedFraction: contextUsedFraction,
+        outputCapReached: outputCapReached,
+        role: ObservedModelRole.incidentalHelper,
+        accounting: accounting,
+      );
+
+  /// The same observation carrying the step run's [accounting].
+  ModelReconciliation _withAccounting(Set<ModelAccountingFinding> accounting) =>
+      ModelReconciliation(
+        intended: intended,
+        observation: observation,
+        resolved: resolved,
+        drift: drift,
+        contextUsedFraction: contextUsedFraction,
+        outputCapReached: outputCapReached,
+        role: role,
+        accounting: accounting,
+      );
+
   /// The persisted per-step record (keys are [ModelRecordField] names).
   Map<String, Object?> toRecordJson({required String stepId}) => {
         ModelRecordField.stepId.name: stepId,
@@ -178,6 +279,10 @@ class ModelReconciliation {
         ModelRecordField.drift.name: [for (final kind in drift) kind.name],
         ModelRecordField.contextUsedFraction.name: contextUsedFraction,
         ModelRecordField.outputCapReached.name: outputCapReached,
+        ModelRecordField.role.name: role.name,
+        ModelRecordField.accounting.name: [
+          for (final finding in accounting) finding.name,
+        ],
         ModelRecordField.observation.name: observation.toJson(),
       };
 }
@@ -193,10 +298,16 @@ String describeModelRecord(Map<String, dynamic> record) {
   final observedId =
       observation[ModelObservationField.observedModelId.jsonKey];
   final context = fraction == null ? '-' : '${(fraction * 100).round()}%';
+  final role = enumByName(
+    ObservedModelRole.values,
+    record[ModelRecordField.role.name] as String?,
+  );
   return '${record[ModelRecordField.stepId.name]}  '
       '${record[ModelRecordField.intended.name]} -> $observedId  '
+      '(${role?.label ?? _roleNotRecordedLabel})  '
       'context $context  '
-      'drift: ${drift.isEmpty ? 'none' : drift.join(', ')}';
+      'drift: ${drift.isEmpty ? 'none' : drift.join(', ')}  '
+      '${_describeAccounting(record[ModelRecordField.accounting.name])}';
 }
 
 /// The keys of one persisted per-step model record, written by their own
@@ -208,6 +319,8 @@ enum ModelRecordField {
   drift,
   contextUsedFraction,
   outputCapReached,
+  role,
+  accounting,
   observation;
 }
 
@@ -241,4 +354,50 @@ ModelReconciliation reconcileModel({
         window == null || window == 0 ? null : observation.contextTokens / window,
     outputCapReached: cap != null && observation.outputTokens >= cap,
   );
+}
+
+/// Reconciles every model a step's usage names with the model the step
+/// intended, in the order they were observed.
+///
+/// If the intended model is among them, it is the step model and every other
+/// observation is an [ObservedModelRole.incidentalHelper]: the CLI's own helper
+/// call, which is not drift and is not shown as the step's model. If the
+/// intended model did not run, each observation is a step model and a known one
+/// that differs is [ModelDriftKind.differsFromIntended].
+List<ModelReconciliation> reconcileStepModels({
+  required AgentModel intended,
+  required List<ModelObservation> observations,
+}) {
+  final accounting = accountForStepModels(
+    intended: intended,
+    observations: observations,
+  );
+  final reconciliations = [
+    for (final observation in observations)
+      reconcileModel(intended: intended, observation: observation)
+          ._withAccounting(accounting),
+  ];
+  final intendedRan = reconciliations.any((r) => r.resolved == intended);
+  if (!intendedRan) return reconciliations;
+  return [
+    for (final r in reconciliations)
+      r.resolved == intended ? r : r._asIncidentalHelper(),
+  ];
+}
+
+/// How the models observed in one step run fail to add up with the model the
+/// step was meant to run on; empty when they do.
+Set<ModelAccountingFinding> accountForStepModels({
+  required AgentModel intended,
+  required List<ModelObservation> observations,
+}) {
+  final resolved = [
+    for (final observation in observations)
+      AgentModel.fromSlug(observation.observedModelId),
+  ];
+  return {
+    if (resolved.contains(null)) ModelAccountingFinding.unknownModelObserved,
+    if (!resolved.contains(intended))
+      ModelAccountingFinding.intendedModelNotObserved,
+  };
 }

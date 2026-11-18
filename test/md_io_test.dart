@@ -4,7 +4,8 @@ import 'package:claudart/session/handoff_transition.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:test/test.dart';
-import 'package:claudart/md_io.dart';
+import 'package:claudart/session/md_io.dart';
+import 'package:claudart/session/debug_disposition.dart';
 import 'helpers/mocks.dart';
 
 void main() {
@@ -120,6 +121,22 @@ some content
         HandoffStatus.values.where((s) => !s.isPersisted).toSet(),
         {HandoffStatus.noHandoff, HandoffStatus.unknown},
       );
+    });
+  });
+
+  group('withDebugDisposition', () {
+    test('replaces the recorded disposition', () {
+      final result = withDebugDisposition(
+        '# h\n\n## Debug Disposition\n\npending\n',
+        DebugDisposition.done,
+      );
+      expect(result, contains('## Debug Disposition\n\ndone'));
+      expect(result, isNot(contains('pending')));
+    });
+
+    test('adds the section to a handoff that has none', () {
+      final result = withDebugDisposition('# h\n', DebugDisposition.skipped);
+      expect(result, contains('## Debug Disposition\n\nskipped'));
     });
   });
 

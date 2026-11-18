@@ -1,10 +1,11 @@
+
 // debug_steps.dart — AgentStep definitions for the debug pipeline
 //
 // Two linear steps:
 //   [reader]      haiku  — reads scope files, emits raw file contents
 //   [implementer] sonnet — generates file edits from handoff + file contents
 //
-// On PipelineCompleted, the caller parses <EDIT_FILE> tags and writes to disk.
+// On PipelineCompleted, the caller parses the file blocks and writes to disk.
 
 import 'dart:io';
 
@@ -12,8 +13,10 @@ import 'package:path/path.dart' as p;
 
 import '../agent_model.dart';
 import '../agent_step.dart';
+import '../step_role.dart';
 import '../agents/categorization.dart';
 import '../pipeline_context.dart';
+import '../xml_tags.dart';
 
 abstract final class DebugSteps {
   static const String _readerSystem =
@@ -28,19 +31,25 @@ abstract final class DebugSteps {
       '  - Do not touch files listed under Must not touch.\n'
       '  - Only reference types, classes, and enums present in the file contents '
       'and known types list provided. Do not invent or assume types.\n'
+      '  - Never edit files on disk yourself. Your only output is the tags '
+      'below; the owner approves the write.\n'
+      '  - A file body is written verbatim and may contain tag text. A file '
+      'block ends at the first closing tag that is followed only by whitespace '
+      'and then another file block or the end of your output.\n'
       '  - Output ONLY the structured XML tags below. No prose outside tags.\n\n'
       'Output format:\n'
-      '<CHANGES>\n'
+      '<$kChangesTagName>\n'
       'Human-readable description of what was changed and why.\n'
-      '</CHANGES>\n'
+      '</$kChangesTagName>\n'
       'For each file modified:\n'
-      '<EDIT_FILE path="relative/path/to/file.dart">\n'
+      '<$kEditFileTagName path="relative/path/to/file.dart">\n'
       'complete new file content\n'
-      '</EDIT_FILE>';
+      '</$kEditFileTagName>';
 
   static AgentStep reader(int fileCount) => AgentStep(
     id:           PipelineSlot.reader.key,
     label:        'Reading $fileCount scope file${fileCount == 1 ? '' : 's'} (haiku)…',
+    role:        StepRole.fileReading,
     model:        AgentModel.haiku,
     systemPrompt: _readerSystem,
     buildPrompt:  _readerPrompt,
@@ -50,6 +59,7 @@ abstract final class DebugSteps {
   static const AgentStep implementer = AgentStep(
     id:            'implementer',
     label:         'Implementing fix…',
+    role:         StepRole.implementation,
     model:         AgentModel.sonnet,
     modelSelector: _implementerModelSelector,
     systemPrompt:  _implementerSystem,

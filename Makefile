@@ -2,7 +2,60 @@ BIN     := ~/bin/claudart
 ENTRY   := bin/claudart.dart
 DART    := dart
 
-.PHONY: build test clean rebuild lint analyze check-coverage topology consumer-check ownership
+.PHONY: ledger ledger-check ledger-baseline impact proof-changed proof-audit diagram gate build test clean rebuild lint analyze check-coverage topology consumer-check ownership liveness spawn-census handoff-consistency leak-check
+
+## Draw the runs a logs directory holds as Mermaid sequence diagrams.
+##   make diagram DIR="<global-logs> <workspace-logs>" [CMD=debug] [HTML=<file>]
+## or what the tests did:
+##   CLAUDART_TEST_TRACE=<file> dart test <files>; make diagram TRACE=<file> [HTML=<file>]
+diagram:
+	$(DART) run tool/run_diagram.dart $(DIR) $(if $(TRACE),--trace=$(TRACE)) $(if $(CMD),--command=$(CMD)) $(if $(HTML),--html=$(HTML))
+
+## Seed every single-cell change to the handoff transition table in scratch
+## copies and log whether the proofs saw it (logs/proofs.jsonl); writes the
+## report. Takes about half an hour with 3 workers; never touches the tree.
+##   make proof-audit [WORKERS=3] [LIMIT=n] [ONLY=text] [PROOF=transitionTable|closureEvidence|claudartCommand|handoffListeners]
+proof-audit:
+	$(DART) run tool/proof_audit/run.dart --workers=$(or $(WORKERS),3) --report=docs/topology/proof_audit.md $(if $(LIMIT),--limit=$(LIMIT)) $(if $(ONLY),--only="$(ONLY)") $(if $(PROOF),--proof=$(PROOF))
+
+## The full ledger: every line of every file with a mirrored test mutated, checked
+## by that test alone (about an hour with 3 workers). Never touches the tree.
+##   make ledger [WORKERS=3]; make ledger-check; make ledger-baseline
+ledger:
+	$(DART) run tool/proof_audit/run.dart --mutants=lib --mirror-only --workers=$(or $(WORKERS),3) --run-timeout=120 --logs=/tmp/claudart_full_ledger/ws
+
+## Fail if any file has more surviving mutants than the checked-in baseline.
+ledger-check:
+	$(DART) run tool/proof_audit/ledger_check.dart
+
+## Write down the lower counts of the last full ledger (never raises one).
+ledger-baseline:
+	$(DART) run tool/proof_audit/ledger_check.dart --write
+
+## Which tests to update when a line changes (from the last ledger run, LOGS
+## defaults to the full run's), or that none guards it.
+##   make impact TARGET=lib/session/md_io.dart:42 [LOGS=/tmp/claudart_full_ledger/ws]
+impact:
+	$(DART) run tool/proof_audit/impact.dart --logs=$(or $(LOGS),/tmp/claudart_full_ledger/ws) $(TARGET)
+
+## Re-derive the candidate ledger's "every test can fail" from line mutants: run
+## the mutants of each cited lib file (run.dart --mutants=<file> --mirror-only
+## --logs=<dir>), then keep the rows on the cited lines.
+##   make candidacy-evidence LOGS=<dir>
+candidacy-evidence:
+	$(DART) run tool/candidacy/evidence_audit.dart --logs=$(LOGS)
+
+## Seed one-line mutants on the lines this change touched (since BASE, default
+## main) and fail if a test does not fail for each; the ledger it writes names
+## the existing tests a missing assertion belongs with. About 5 s a mutant.
+##   make proof-changed [BASE=main] [WORKERS=3]
+proof-changed:
+	$(DART) run tool/proof_audit/run.dart --mutants=lib --changed-since=$(or $(BASE),main) --workers=$(or $(WORKERS),3) --fail-on-survivors --ledger=/tmp/claudart_proof_changed.md
+
+## Every check a change must pass: suite, analyzer errors, custom_lint. With
+## MSG="..." it commits after they pass. See tool/gate.sh.
+gate:
+	tool/gate.sh "$(MSG)"
 
 ## Compile native binary to ~/bin/claudart
 build:
@@ -24,6 +77,27 @@ topology:
 ## tests that assert another repo's component behavior. Read only.
 ownership:
 	$(DART) run tool/ownership/ownership_scan.dart > docs/topology/ownership.md
+
+## Seed one known defect per shape in a scratch copy and report which tools
+## catch it (CAUGHT / MISSED). Read only: the working tree is never touched.
+liveness:
+	tool/refactor_audit/liveness.sh
+
+## How many saved handoffs disagree with themselves (status ahead of content,
+## or content ahead of status). Read only.
+##   make handoff-consistency DIR=<a workspace's archive directory>
+handoff-consistency:
+	$(DART) run tool/refactor_audit/handoff_consistency.dart $(DIR)
+
+## Run the suite with HOME and the workspace root pointed at empty temp
+## directories; fails if any test leaves a file there (a seam it did not inject).
+leak-check:
+	tool/refactor_audit/write_leak_check.sh
+
+## Count git spawns per real command, using the compiled CLI in a throwaway
+## project. Read only.
+spawn-census:
+	tool/refactor_audit/spawn_census.sh
 
 ## Replay claudart's lifecycle scenarios against zedup's REAL reader, in a
 ## throwaway copy of zedup wired to this checkout (neither repo is modified).
@@ -95,7 +169,7 @@ rebuild: clean build
 ## scoped to one file + its own test file per invocation, never the whole
 ## lib/ tree -- a full-repo run reruns the full suite per mutation point,
 ## which the package's own docs warn can take hours.
-## Usage: make mutation-test FILE=lib/git_utils.dart TEST_FILE=test/git_utils_test.dart
+## Usage: make mutation-test FILE=lib/io/git_utils.dart TEST_FILE=test/git_utils_test.dart
 ##
 ## DANGER, confirmed real: this tool mutates FILE on disk, runs the test
 ## command, then reverts it. If the process is killed mid-run (Ctrl-C, a

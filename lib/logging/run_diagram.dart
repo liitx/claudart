@@ -1,0 +1,279 @@
+// run_diagram.dart — a run, drawn from the logs it left
+//
+// One Mermaid sequence diagram per command run: the owner starts the command,
+// the command moves the handoff and calls models, and the run ends. A run is a
+// boundary row of the interactions log (the one with a duration); the rows of
+// the transitions, steps and errors logs that fall inside its window under the
+// same command belong to it. Nothing is read but what the logs already hold, so
+// a step missing from a diagram is a step the logs did not record.
+
+import 'dart:convert';
+
+import '../pipeline/pipeline_event.dart';
+import '../session/handoff_transition.dart';
+import 'logger.dart';
+import 'mermaid_page.dart';
+import 'recorded_outcome.dart';
+
+/// The rows of a JSONL log: each line that is a JSON object. A blank line, a
+/// broken line and a line that is not an object are skipped, so one bad write
+/// does not hide the rest of a log.
+List<Map<String, dynamic>> rowsOfJsonl(String text) {
+  final rows = <Map<String, dynamic>>[];
+  for (final line in text.split('\n')) {
+    if (line.trim().isEmpty) continue;
+    try {
+      final decoded = jsonDecode(line);
+      if (decoded is Map<String, dynamic>) rows.add(decoded);
+    } on FormatException {
+      continue;
+    }
+  }
+  return rows;
+}
+
+/// One command run and the rows of the other logs that belong to it.
+class RunLog {
+  const RunLog({
+    required this.command,
+    required this.startedAt,
+    required this.endedAt,
+    required this.outcome,
+    required this.durationMs,
+    required this.transitions,
+    required this.steps,
+    required this.errors,
+    this.gates = const [],
+    this.outcomes = const [],
+    this.reason,
+  });
+
+  final String command;
+  final DateTime startedAt;
+  final DateTime endedAt;
+  final String outcome;
+  final int durationMs;
+  final List<Map<String, dynamic>> transitions;
+  final List<Map<String, dynamic>> steps;
+  final List<Map<String, dynamic>> errors;
+  final List<Map<String, dynamic>> gates;
+
+  /// The rows the command wrote itself (an outcome, and what it rested on).
+  final List<Map<String, dynamic>> outcomes;
+
+  /// Why the run ended as it did, when the exit or the failure named one.
+  final String? reason;
+}
+
+/// Which kind an interaction row is: the `rowKind` it was written with. A row
+/// from before the marking has none, and is read as the boundary's if it has a
+/// `durationMs` and as a command's own if it has not.
+InteractionRowKind _kindOf(Map<String, dynamic> row) {
+  final marked = row[LogEntryField.rowKind.name];
+  for (final kind in InteractionRowKind.values) {
+    if (kind.name == marked) return kind;
+  }
+  return row[LogEntryField.durationMs.name] is int
+      ? InteractionRowKind.run
+      : InteractionRowKind.outcome;
+}
+
+/// The runs in the given log rows, oldest first. Only a row the boundary wrote
+/// ([InteractionRowKind.run]) is a run; a command's own row is a note in it.
+List<RunLog> runsFrom({
+  required List<Map<String, dynamic>> interactions,
+  required List<Map<String, dynamic>> transitions,
+  required List<Map<String, dynamic>> steps,
+  required List<Map<String, dynamic>> errors,
+  List<Map<String, dynamic>> gates = const [],
+}) {
+  final runs = <RunLog>[];
+  for (final row in interactions) {
+    if (_kindOf(row) != InteractionRowKind.run) continue;
+    final durationMs = row[LogEntryField.durationMs.name];
+    if (durationMs is! int) continue;
+    final endedAt = _timeOf(row);
+    final startedAt = endedAt.subtract(Duration(milliseconds: durationMs));
+    final command = row[LogEntryField.command.name] as String;
+    List<Map<String, dynamic>> inside(List<Map<String, dynamic>> rows) => [
+          for (final candidate in rows)
+            if (candidate[LogEntryField.command.name] == command &&
+                !_timeOf(candidate).isBefore(startedAt) &&
+                !_timeOf(candidate).isAfter(endedAt))
+              candidate,
+        ];
+    runs.add(RunLog(
+      command: command,
+      startedAt: startedAt,
+      endedAt: endedAt,
+      outcome: row[LogEntryField.outcome.name] as String,
+      durationMs: durationMs,
+      reason: row[LogEntryField.reason.name] as String?,
+      transitions: inside(transitions),
+      steps: inside(steps),
+      errors: inside(errors),
+      gates: inside(gates),
+      outcomes: inside([
+        for (final own in interactions)
+          if (_kindOf(own) == InteractionRowKind.outcome) own,
+      ]),
+    ));
+  }
+  return runs..sort((a, b) => a.endedAt.compareTo(b.endedAt));
+}
+
+DateTime _timeOf(Map<String, dynamic> row) =>
+    DateTime.parse(row[LogEntryField.ts.name] as String);
+
+/// The people and things a run talks to, as the diagram names them.
+enum _Participant {
+  owner('Owner', 'Owner'),
+  command('Command', null),
+  handoff('Handoff', 'Handoff'),
+  model('Model', 'Model'),
+  shell('Shell', 'Shell');
+
+  const _Participant(this.id, this.label);
+  final String id;
+  final String? label;
+}
+
+/// Text from a log made safe to put after a Mermaid message colon: no line
+/// breaks, no statement separator, no entity marker, and not unbounded.
+String _safe(Object? text) {
+  final cleaned = '$text'
+      .replaceAll(RegExp(r'\s*[\r\n]+\s*'), ' ')
+      .replaceAll(';', ',')
+      .replaceAll('#', '');
+  return cleaned.length > 120 ? '${cleaned.substring(0, 119)}…' : cleaned;
+}
+
+/// A step's detail as the diagram says it: the log writes a completed step's
+/// duration as an integer of milliseconds, anything else is text.
+String _durationOrText(Object detail) =>
+    detail is int ? '${detail}ms' : _safe(detail);
+
+/// The Mermaid sequence diagram of [run].
+String renderRunDiagram(RunLog run) {
+  final owner = _Participant.owner.id;
+  final command = _Participant.command.id;
+  final handoff = _Participant.handoff.id;
+  final model = _Participant.model.id;
+  final shell = _Participant.shell.id;
+
+  final timed = <(DateTime, int, String)>[];
+  var order = 0;
+  void add(Map<String, dynamic> row, String line) =>
+      timed.add((_timeOf(row), order++, line));
+
+  for (final row in run.transitions) {
+    final from = row[HandoffTransitionField.from.name];
+    final event = row[HandoffTransitionField.event.name];
+    final to = row[HandoffTransitionField.to.name];
+    add(
+      row,
+      row[LogEntryField.rejected.name] == true
+          ? '$command--x$handoff: ${_safe(event)} rejected from ${_safe(from)}'
+          : '$command->>$handoff: ${_safe(event)}: ${_safe(from)} → ${_safe(to)}',
+    );
+  }
+  for (final row in run.steps) {
+    final kind = row[LogEntryField.kind.name];
+    final step = _safe(row[LogEntryField.stepId.name] ?? '');
+    final Object? detail = row[LogEntryField.detail.name];
+    final failureType = row[LogEntryField.failureType.name];
+    add(
+      row,
+      switch (kind) {
+        _ when kind == PipelineEventKind.agentStarted.name =>
+          '$command->>$model: $step started',
+        _ when kind == PipelineEventKind.agentCompleted.name =>
+          '$model-->>$command: $step completed'
+              '${detail == null ? '' : ' (${_durationOrText(detail)})'}',
+        _ when kind == PipelineEventKind.agentFailed.name =>
+          '$model--x$command: $step failed: ${_safe(failureType ?? detail ?? '')}',
+        _ => 'Note over $command,$model: ${_safe(kind)} $step',
+      },
+    );
+  }
+  for (final row in run.gates) {
+    final exitCode = row[LogEntryField.exitCode.name];
+    final tail = row[LogEntryField.outputTail.name];
+    final ended = 'exit $exitCode after ${row[LogEntryField.durationMs.name]}ms';
+    add(
+      row,
+      '$command->>$shell: ${_safe(row[LogEntryField.gate.name])} gate: '
+      '${_safe(row[LogEntryField.shellCommand.name])}',
+    );
+    add(
+      row,
+      exitCode == 0
+          ? '$shell-->>$command: $ended'
+          : '$shell--x$command: $ended'
+              '${tail is String && tail.isNotEmpty ? ': ${_safe(tail)}' : ''}',
+    );
+  }
+  for (final row in run.outcomes) {
+    final evidence = row[LogEntryField.evidence.name];
+    add(
+      row,
+      'Note over $command: ${_safe(row[LogEntryField.outcome.name])}'
+      '${evidence == null ? '' : ', evidence ${_safe(evidence)}'}',
+    );
+  }
+  for (final row in run.errors) {
+    add(row, 'Note over $command: error ${_safe(row[LogEntryField.fingerprint.name])}');
+  }
+  timed.sort((a, b) {
+    final byTime = a.$1.compareTo(b.$1);
+    return byTime != 0 ? byTime : a.$2.compareTo(b.$2);
+  });
+
+  final ended = run.outcome == RecordedOutcome.ok.name
+      ? '$command-->>$owner: ${_safe(run.outcome)} after ${run.durationMs}ms'
+      : '$command--x$owner: ${_safe(run.outcome)} after ${run.durationMs}ms'
+          '${run.reason == null ? '' : ': ${_safe(run.reason)}'}';
+
+  return [
+    'sequenceDiagram',
+    '    participant $owner',
+    '    participant $command as claudart ${_safe(run.command)}',
+    '    participant $handoff',
+    '    participant $model',
+    if (run.gates.isNotEmpty) '    participant $shell',
+    '    $owner->>$command: claudart ${_safe(run.command)}',
+    for (final (_, _, line) in timed) '    $line',
+    '    $ended',
+    '',
+  ].join('\n');
+}
+
+/// A markdown page with a heading and a fenced diagram for each run.
+String renderRunPage(List<RunLog> runs) {
+  if (runs.isEmpty) return '# Runs\n\nNo runs were recorded.\n';
+  final buffer = StringBuffer('# Runs\n');
+  for (final run in runs) {
+    buffer
+      ..writeln()
+      ..writeln('## ${run.command} — ${run.endedAt.toUtc().toIso8601String()}')
+      ..writeln()
+      ..writeln('```mermaid')
+      ..write(renderRunDiagram(run))
+      ..writeln('```');
+  }
+  return buffer.toString();
+}
+
+/// A web page that draws each run. What the logs wrote is escaped.
+String renderRunHtml(List<RunLog> runs) => renderMermaidHtml(
+      pageTitle: 'claudart runs',
+      heading: 'Runs',
+      emptyText: 'No runs were recorded.',
+      sections: [
+        for (final run in runs)
+          (
+            heading: '${run.command} — ${run.endedAt.toUtc().toIso8601String()}',
+            diagram: renderRunDiagram(run),
+          ),
+      ],
+    );

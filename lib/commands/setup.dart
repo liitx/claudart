@@ -1,24 +1,27 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
 import '../templates/handoff_template.dart';
-import '../md_io.dart';
-import '../paths.dart';
+import '../session/md_io.dart';
+import '../config/paths.dart';
 import '../registry.dart';
 import '../sensitivity/abstractor.dart';
 import '../sensitivity/detector.dart';
-import '../sensitivity/token_map.dart';
 import '../logging/logger.dart';
 import '../session/handoff_event.dart';
-import '../session/session_state.dart' show SessionState, HandoffStatus;
-import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 import 'scan.dart';
-import '../session/session_ops.dart';
 import '../ui/render.dart' as render;
 import '../util/prompt_with_default.dart';
+import '../io/process_runner.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
+import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
+import 'support/live_handoff.dart';
+import '../io/exit_reason.dart';
 
 /// Returns absolute paths of files named [basename] under [projectRoot].
 /// Injectable for tests — default uses the OS `find` command.
@@ -38,7 +41,7 @@ Future<void> runSetup({
   String? defaultEntryPoints,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final confirm_ = confirmFn ?? confirm;
   final prompt_ = promptFn ?? _defaultPrompt;
   final pick_ = pickFn ?? arrowMenu;
@@ -51,93 +54,66 @@ Future<void> runSetup({
   final projectRoot = projectRootOverride ?? gitCtx?.root;
 
   if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project root.');
-    exit_(1);
+    print(UserText.notInGitRepositoryRoot.template.trimRight());
+    leaveFor(ExitReason.setupNotInGitRepository, exit_: exit_);
   }
 
   if (!fileIO.dirExists(projectRoot)) {
-    print('\n✗ Path not found: $projectRoot');
-    exit_(1);
+    print(UserText.setupPathNotFound.format({'projectRoot': projectRoot}));
+    leaveFor(ExitReason.setupPathNotFound, exit_: exit_);
   }
 
   // Registry lookup.
   final registry = Registry.load(io: fileIO);
   final entry = registry.findByProjectRoot(projectRoot);
   if (entry == null) {
-    print('\n✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it first.');
-    exit_(1);
+    print(UserText.setupNoClaudartSessionFoundForThis.template);
+    print(UserText.setupRunClaudartLinkToRegisterIt.template);
+    leaveFor(ExitReason.setupNotLinked, exit_: exit_);
   }
-  print('Project  : ${entry.name}');
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
 
-  // Check for active handoff — offer menu if one exists with real content.
-  final existing =
-      fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
-  // The status this setup starts from: none when there is no live handoff, or
-  // the one a "Start fresh" overwrites.
-  var startedFrom = HandoffStatus.noHandoff;
-  if (existing.isNotEmpty) {
-    final state = SessionState.parse(existing);
-    if (state.hasActiveContent) {
-      final statusColour = render.statusColour(state.status);
-      print('\n─── ${entry.name} ───────────────────────────────');
-      print('  Branch : ${gitCtx?.branch ?? state.branch}');
-      print('  Status : ${ansi.c(statusColour, state.status.value)}');
-      print('  Bug    : ${_truncate(state.bug)}');
-      print('');
-
-      final choice = pick_([
-        '${ansi.c(ansi.green, 'Continue')}  resume existing session',
-        '${ansi.c(ansi.yellow, 'Start fresh')}  overwrite handoff with new context',
-        'Back',
-      ]);
-
-      if (choice == _SetupMenu.back) {
-        print('\nSetup cancelled.\n');
-        exit_(0);
-      }
-      if (choice == _SetupMenu.resume) {
-        print('\nOpen your editor and run /suggest or /debug to continue.\n');
-        exit_(0);
-      }
-      assert(choice == _SetupMenu.startFresh);
-      startedFrom = state.status;
-      final archivedName = archiveCurrentHandoff(workspace: workspace, io: fileIO);
-      if (archivedName != null) {
-        print(ansi.c(ansi.dim, '  Previous session archived → $archivedName'));
-      }
-      // Fall through to questions below.
-    }
-  }
+  // A live handoff is settled first: continue it, start fresh (archiving it),
+  // or go back. The status this setup starts from is none when there is no
+  // live handoff, or the one a "Start fresh" replaced.
+  final startedFrom = settleLiveHandoff(
+    io: fileIO,
+    entry: entry,
+    gitBranch: gitCtx?.branch,
+    pick: pick_,
+    exit_: exit_,
+    resumeText: UserText.setupOpenYourEditorAndRunSuggest,
+    cancelledText: UserText.setupSetupCancelled,
+  );
 
   // Detect branch — use git context already resolved, or fall back to prompt.
   final branch = gitCtx?.branch ??
       prompt_('Could not detect git branch. Enter branch name manually') ??
       'unknown';
 
-  print('\n🌿 Branch: $branch');
+  print(UserText.setupBranch.format({'branch': branch}));
 
   // Surface skills context.
   final skillsFile = skillsPathFor(workspace);
   final skills =
       fileIO.fileExists(skillsFile) ? fileIO.read(skillsFile) : '';
   if (skills.isNotEmpty && !skills.contains('_No sessions recorded yet._')) {
-    print('\n📚 Skills loaded — relevant patterns will inform /suggest.');
+    print(UserText.setupSkillsLoadedRelevantPatternsWillInform.template);
   }
 
   // Prompt for session context.
-  print('\nAnswer the following. Be specific — this seeds the handoff for /suggest.\n');
+  print(UserText.setupAnswerTheFollowingBeSpecificThis.template);
 
   final bug = promptWithDefault(prompt_, '1. What is the bug? (actual behavior)', defaultBug);
   final expected = promptWithDefault(
       prompt_, '2. What should be happening? (expected behavior)', defaultExpected);
 
   if (bug == null || expected == null) {
-    print('\n✗ Setup requires an interactive terminal.');
-    exit_(1);
+    print(UserText.setupSetupRequiresAnInteractiveTerminal.template);
+    leaveFor(ExitReason.setupNeedsTerminal, exit_: exit_);
   }
 
   final files = promptWithDefault(prompt_, '3. Any files already in mind?', defaultFiles,
@@ -151,22 +127,23 @@ Future<void> runSetup({
 
   // Confirm before writing.
   print('\n${render.divider()}');
-  print('Project : ${entry.name}');
-  print('Branch  : $branch');
-  print('Bug     : $bug');
-  print('Expected: $expected');
-  if (files != null) print('Files   : $files');
-  if (entryPoints != null) print('Entry   : $entryPoints');
+  print(UserText.setupProject.format({'name': entry.name}));
+  print(UserText.branchLine.format({'branch': branch}));
+  print(UserText.setupBug.format({'bug': bug}));
+  print(UserText.setupExpected.format({'expected': expected}));
+  if (files != null) print(UserText.setupFiles.format({'files': files}));
+  if (entryPoints != null) print(UserText.setupEntry.format({'entryPoints': entryPoints}));
   print(render.divider());
 
   if (!confirm_('Write handoff with this context?')) {
-    print('\nSetup cancelled.');
-    exit_(0);
+    print(UserText.setupCancelledLeadingBlank.template);
+    leaveFor(ExitReason.setupCancelled, exit_: exit_);
   }
 
   // Run sensitivity scan if enabled.
   if (entry.sensitivityMode) {
     await runScan(
+      io: fileIO,
       scope: null,
       projectRootOverride: projectRoot,
       sensitivityModeOverride: entry.sensitivityMode,
@@ -188,49 +165,44 @@ Future<void> runSetup({
 
   // Abstract sensitive tokens if sensitivity mode on.
   if (entry.sensitivityMode) {
-    final tokenMap = TokenMap.load(tokenMapPathFor(workspace));
-    content = abstractor.abstract(content, tokenMap, defaultDetector);
+    content = abstractTexts(
+      [content],
+      tokenMapPath: tokenMapPathFor(workspace),
+      io: fileIO,
+    ).single;
     if (!abstractor.isNotSensitive(content, defaultDetector)) {
-      print('\n⚠  Handoff still contains sensitive tokens after abstraction.');
-      print('   Review handoff.md manually before sharing.');
+      print(UserText.setupHandoffStillContainsSensitiveTokensAfter.template);
+      print(UserText.setupReviewHandoffMdManuallyBeforeSharing.template);
     }
   }
 
-  fileIO.write(handoffFile, content);
+  // Not enforced: "Start fresh" over a live handoff is allowed today, so a
+  // status the table lacks is logged as a move it lacks rather than thrown.
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.setup.name,
+  ).replace(content, from: startedFrom, event: HandoffEvent.setup);
 
   // Log the setup interaction.
-  final logger = SessionLogger(io: fileIO, sensitivityMode: entry.sensitivityMode, workspacePath: workspace);
   logger.logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: 'setup',
     outcome: 'ok',
     platform: Platform.operatingSystem,
   );
-  // Not enforced: "Start fresh" over a live handoff is allowed today, so it is
-  // logged as a move the table lacks rather than thrown.
-  logger.logHandoffMove(
-    command: ClaudartCommand.setup.name,
-    from: startedFrom,
-    event: HandoffEvent.setup,
-  );
-
-  print('\n✓ Handoff written to $handoffFile');
-  print('\nNext step:');
-  print('  Open your editor and run /suggest to begin exploration.');
-  print('  Or run /debug if you already know the root cause.\n');
+  print(UserText.setupHandoffWrittenTo.format({'handoffFile': handoffFile}));
+  print(UserText.nextStepHeading.template);
+  print(UserText.setupOpenEditorRunSuggestToExplore.template);
+  print(UserText.setupOrRunDebugIfYouAlready.template);
 }
 
 String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
 
-abstract final class _SetupMenu {
-  static const resume = 0;
-  static const startFresh = 1; // fall-through: proceeds to questions
-  static const back = 2;
-}
 
-
-String _truncate(String s, {int max = 60}) =>
-    s.length > max ? '${s.substring(0, max)}…' : s;
 
 // ── File resolution ───────────────────────────────────────────────────────────
 
@@ -251,7 +223,7 @@ final class _NotFound extends _FileResolution {
 /// Default [FileFinderFn] — delegates to the OS `find` command, skipping
 /// hidden dirs and common build artefacts.
 List<String> _defaultFileFinder(String projectRoot, String basename) {
-  final result = Process.runSync(
+  final result = const RealProcessRunner().runSync(
     'find',
     [projectRoot, '-type', 'f', '-name', basename,
      '!', '-path', '*/.dart_tool/*',

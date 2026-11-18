@@ -1,0 +1,151 @@
+import 'package:path/path.dart' as p;
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
+import 'environment.dart';
+
+export 'environment.dart' show homeEnvVar;
+
+// ── Filename constants ─────────────────────────────────────────────────────
+// Single source of truth for all file/dir names used across claudart + consumers.
+
+const String handoffFileName          = 'handoff.md';
+const String skillsFileName           = 'skills.md';
+const String archivesDirName          = 'archive';
+const String archiveIndexFileName     = 'index.json';
+const String flowCheckpointFileName   = 'flow_checkpoint.json';
+const String pendingConfirmationFileName = 'pending_confirmation.json';
+const String knowledgeDirName         = 'knowledge';
+const String claudeMdFileName         = 'CLAUDE.md';
+const String claudeSettingsFileName   = 'settings.json';
+const String registryFileName         = 'registry.json';
+const String configFileName           = 'config.json';
+const String workspaceConfigFileName  = 'workspace.json';
+
+/// Which IDE's slash-command convention a workspace directory serves —
+/// each name is fixed by that tool, not a choice claudart or a project
+/// makes. `claudeCode`'s `commands` dir is real content; `cursor`'s is a
+/// symlink to the same workspace copy (see `link.dart`) — one source,
+/// two IDE-mandated entry points reading it.
+enum IdeIntegration {
+  claudeCode(dirName: '.claude'),
+  cursor(dirName: '.cursor');
+
+  const IdeIntegration({required this.dirName});
+
+  /// The directory name this IDE requires at the project root — fixed by
+  /// the tool itself, never renamed by claudart.
+  final String dirName;
+}
+
+/// Single source of truth for the env var name itself — `workspacesRoot`
+/// below and `claudart doctor`'s workspace-root check both read it; a
+/// second bare-string copy is exactly the drift that let the two ever
+/// disagree about which var they meant.
+const String claudartWorkspaceEnvVar = 'CLAUDART_WORKSPACE';
+
+
+/// Extracts the workspace directory from `claudart status` output.
+/// Parses the `Handoff  : <path>/handoff.md` line and returns the parent dir.
+/// Returns null if the expected pattern is not found.
+String? parseWorkspaceDirFromStatusOutput(String output) {
+  for (final line in output.split('\n')) {
+    final trimmed = line.trim();
+    if (trimmed.startsWith('Handoff') && trimmed.contains(':')) {
+      final path = trimmed.split(':').sublist(1).join(':').trim();
+      if (path.endsWith(handoffFileName)) return p.dirname(path);
+    }
+  }
+  return null;
+}
+
+/// Root directory containing all project workspaces.
+/// Resolved from CLAUDART_WORKSPACE env var, falls back to ~/.claudart/
+///
+/// A `get`, not a top-level `final` — re-reads the env var on every call
+/// instead of caching whatever it was at process start. The two differ in
+/// a real way: a top-level `final` silently locks in whichever value was
+/// live when this isolate booted, so any long-lived or GUI-launched
+/// process that doesn't inherit a shell's exported `CLAUDART_WORKSPACE`
+/// (launchd, a GUI-launched Zed) would be stuck pointed at the fallback
+/// for its whole lifetime even if the env var were set moments later.
+String get workspacesRoot => workspacesRootFor(processEnvironment);
+
+/// The workspaces root for [environment]: `CLAUDART_WORKSPACE` when set (a
+/// leading `~/` expands with `HOME`), else `.claudart` under `HOME`. A needed
+/// `HOME` that is not set is a typed [FailureType.homeDirectoryUnset], not a
+/// null-check error. Pure, so the rules are testable without the real
+/// environment.
+String workspacesRootFor(Map<String, String> environment) {
+  String home() {
+    final value = homeDirectoryFrom(environment);
+    if (value == null) {
+      throw ClaudartException(FailureType.homeDirectoryUnset);
+    }
+    return value;
+  }
+
+  final override = environment[claudartWorkspaceEnvVar];
+  if (override != null && override.isNotEmpty) {
+    return override.startsWith('~/')
+        ? p.join(home(), override.substring(2))
+        : override;
+  }
+  return p.join(home(), '.claudart');
+}
+
+/// Registry of all known project workspaces.
+String get registryPath => p.join(workspacesRoot, registryFileName);
+
+/// Returns the workspace directory for a named project.
+String workspaceFor(String projectName) => p.join(workspacesRoot, projectName);
+
+// ── Per-workspace path functions (new API) ─────────────────────────────────
+// All take a resolved workspace path. Use with workspaceFor(name).
+
+String handoffPathFor(String ws) => p.join(ws, handoffFileName);
+String skillsPathFor(String ws) => p.join(ws, skillsFileName);
+String pendingConfirmationPathFor(String ws) =>
+    p.join(ws, pendingConfirmationFileName);
+String archiveDirFor(String ws) => p.join(ws, archivesDirName);
+String configPathFor(String ws) => p.join(ws, configFileName);
+String workspaceConfigPathFor(String ws) => p.join(ws, workspaceConfigFileName);
+String knowledgeDirFor(String ws) => p.join(ws, knowledgeDirName);
+String genericKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'generic');
+String projectsKnowledgeDirFor(String ws) => p.join(ws, knowledgeDirName, 'projects');
+/// The project's Claude Code settings file (hooks, env). Not the workspace's:
+/// settings belong to the checkout Claude Code runs in.
+String claudeSettingsPathFor(String projectRoot) =>
+    p.join(
+      projectRoot,
+      IdeIntegration.claudeCode.dirName,
+      claudeSettingsFileName,
+    );
+String claudeCommandsDirFor(String ws) => p.join(ws, IdeIntegration.claudeCode.dirName, 'commands');
+String tokenMapPathFor(String ws) => p.join(ws, 'token_map.json');
+String logsDirFor(String ws) => p.join(ws, 'logs');
+String experimentsDirFor(String ws) => p.join(ws, 'experiments');
+
+// ── Per-project-root path functions ─────────────────────────────────────────
+// CLAUDE.md lives at the project root, not the workspace — it is a real,
+// hand-maintained file since v2 retired the CLAUDE.md symlink (see
+// unlink.dart, which correctly refuses to delete a non-symlink CLAUDE.md).
+
+/// [projectRoot]/CLAUDE.md — not to be confused with the deprecated,
+/// legacy-global-workspace `claudeMdPath` getter below.
+String claudeMdPathFor(String projectRoot) => p.join(projectRoot, claudeMdFileName);
+
+// ── Legacy single-workspace paths ──────────────────────────────────────────
+// Kept for backward compatibility while commands migrate to workspaceFor().
+// TODO: remove once all callers use the per-workspace functions above.
+
+/// @deprecated Use workspacesRoot directly.
+String get claudeDir => workspacesRoot;
+
+String get handoffPath           => handoffPathFor(workspacesRoot);
+String get skillsPath            => skillsPathFor(workspacesRoot);
+String get archiveDir            => archiveDirFor(workspacesRoot);
+String get knowledgeDir          => knowledgeDirFor(workspacesRoot);
+String get genericKnowledgeDir   => genericKnowledgeDirFor(workspacesRoot);
+String get projectsKnowledgeDir  => projectsKnowledgeDirFor(workspacesRoot);
+String get claudeCommandsDir     => claudeCommandsDirFor(workspacesRoot);
+String get claudeMdPath          => p.join(workspacesRoot, claudeMdFileName);

@@ -4,7 +4,7 @@
 // A separate process, not an isolate: Dart's file lock is per process, so
 // isolates in one process would not exercise what two claudart commands do.
 
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:claudart/logging/logger.dart';
 
 void main(List<String> args) {
@@ -12,8 +12,8 @@ void main(List<String> args) {
   final writer = args[1];
   final count = int.parse(args[2]);
   final logger =
-      SessionLogger(io: const RealFileIO(), workspacePath: workspace);
+      SessionLogger.plain(io: const RealFileIO(), workspacePath: workspace);
   for (var i = 0; i < count; i++) {
-    logger.logInteraction(command: 'w$writer-$i', outcome: 'ok');
+    logger.logInteraction(rowKind: InteractionRowKind.outcome, command: 'w$writer-$i', outcome: 'ok');
   }
 }

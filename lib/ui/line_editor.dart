@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'terminal_support.dart';
+import '../io/exit_reason.dart';
 
 const _prompt = '> ';
 
@@ -110,7 +111,7 @@ String? _editLine({required bool optional}) {
 
         case _KeyType.ctrlC:
           stdout.write('\n');
-          exit(0);
+          leaveFor(ExitReason.lineEditorInterrupted);
 
         case _KeyType.other:
           break;

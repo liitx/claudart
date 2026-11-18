@@ -14,6 +14,8 @@ Future<StepResult?> _call(
       systemPrompt: step.systemPrompt,
       message: message,
       workingDir: '/tmp/p',
+      allowedTools: step.role.allowedTools,
+      helperModel: step.role.helperModel,
     );
 
 void main() {

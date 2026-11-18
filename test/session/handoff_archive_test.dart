@@ -1,7 +1,7 @@
 // handoff_archive_test.dart — archiveCurrentHandoff: snapshot + index an
 // existing handoff before it's overwritten; no-op when there's nothing to save.
 
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/session_ops.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import 'package:test/test.dart';

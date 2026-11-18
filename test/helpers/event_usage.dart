@@ -15,7 +15,7 @@ const _libDir = 'lib';
 const _tableFiles = {
   'lib/session/handoff_event.dart',
   'lib/session/session_state.dart',
-  'lib/commands/claudart_command.dart',
+  'lib/commands/support/claudart_command.dart',
 };
 
 final _eventMention = RegExp(r'HandoffEvent\.(\w+)');

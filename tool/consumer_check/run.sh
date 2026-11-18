@@ -37,6 +37,8 @@ OVERRIDES
 mkdir -p tool/cc/conformance tool/cc/helpers
 cp "$CLAUDART/test/conformance/lifecycle_scenarios.dart" tool/cc/conformance/
 cp "$CLAUDART/test/helpers/mocks.dart" tool/cc/helpers/
+cp "$CLAUDART/test/helpers/project_fixture.dart" tool/cc/helpers/
+cp "$CLAUDART/test/helpers/unscripted.dart" tool/cc/helpers/
 cp "$CLAUDART/tool/consumer_check/consumer_check.dart.tmpl" tool/cc/consumer_check.dart
 
 dart pub get > /dev/null

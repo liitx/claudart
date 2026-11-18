@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'package:test/test.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/suggest.dart';
-import 'package:claudart/md_io.dart'
+import 'package:claudart/session/md_io.dart'
     show readHandoffStatus, readSection, withHandoffStatus;
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/invalid_handoff_transition_exception.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
-import 'package:claudart/paths.dart';
+import 'package:claudart/errors/claudart_exception.dart';
+import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/config/paths.dart';
+import 'package:claudart/workspace/workspace_config.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/usage.dart';
@@ -17,6 +20,7 @@ import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../helpers/unscripted.dart';
 import '../helpers/variant_topology.dart';
+import '../helpers/project_fixture.dart';
 
 // suggest_test.dart — validation-path coverage for runSuggest.
 //
@@ -26,8 +30,8 @@ import '../helpers/variant_topology.dart';
 // approve/refine loop — full coverage of that loop needs a fixture for
 // that, not an injection seam; this covers what's safely testable today.
 
-const _projectRoot = '/projects/my-app';
-const _workspace   = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace   = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;
@@ -98,9 +102,42 @@ MemoryFileIO _io({String? handoff = _handoffWithScope}) {
 /// producing nothing (e.g. claude CLI not installed/authenticated),
 /// without ever reaching the interactive review loop.
 PipelineExecutor _executorWithNoOutput() =>
-    PipelineExecutor(runner: ({required model, required systemPrompt, required message, required workingDir, StepMode mode = StepMode.project}) async => null);
+    PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        required allowedTools,
+        required helperModel,
+        StepMode mode = StepMode.project,
+      }) async =>
+          null,
+    );
 
 const _rootCause = 'Off-by-one in foo()';
+
+/// Executor whose runner answers every step with [text].
+PipelineExecutor _executorWithText(String text) => PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      runner: ({
+        required model,
+        required systemPrompt,
+        required message,
+        required workingDir,
+        required allowedTools,
+        required helperModel,
+        StepMode mode = StepMode.project,
+      }) async =>
+          StepResult(
+            text: text,
+            usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+          ),
+    );
 
 HandoffStatus _statusOf(MemoryFileIO io) =>
     readHandoffStatus(io.read(handoffPathFor(_workspace)));
@@ -110,22 +147,27 @@ HandoffStatus _statusOf(MemoryFileIO io) =>
 /// [onCall] counts model calls, so a test can prove none were spent.
 PipelineExecutor _executorWithAnalysis({void Function()? onCall}) =>
     PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      
       runner: ({
         required model,
         required systemPrompt,
         required message,
         required workingDir,
+        required allowedTools,
+        required helperModel,
         StepMode mode = StepMode.project,
       }) async {
         onCall?.call();
-        return const StepResult(
+        return StepResult(
           text: '<ROOT_CAUSE>$_rootCause</ROOT_CAUSE>'
               '<SCOPE_FILES>- `lib/foo.dart`</SCOPE_FILES>'
               '<SCOPE_ENTRIES>foo()</SCOPE_ENTRIES>'
               '<SCOPE_CLASSES>Foo</SCOPE_CLASSES>'
               '<MUST_NOT_TOUCH>lib/bar.dart</MUST_NOT_TOUCH>'
               '<CONSTRAINTS>keep API</CONSTRAINTS>',
-          usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+          usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
         );
       },
     );
@@ -147,6 +189,84 @@ void main() {
       );
     });
 
+    test('from debugComplete it is rejected and says what to run instead',
+        () async {
+      final io = _io(
+        handoff: _handoffWithScope.replaceFirst(
+          'suggest-investigating',
+          'debug-complete',
+        ),
+      );
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
+        ),
+        throwsA(
+          isA<InvalidHandoffTransitionException>().having(
+            (e) => e.toString(),
+            'message',
+            allOf(contains('claudart teardown'), contains('claudart rotate')),
+          ),
+        ),
+      );
+    });
+
+    test('an analysis with no root cause writes nothing and does not lock one',
+        () async {
+      final io = _io();
+      final before = io.read(handoffPathFor(_workspace));
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithText('the model said nothing useful'),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: (_) => 0,
+        ),
+        throwsA(
+          isA<ClaudartException>().having(
+            (e) => e.failureType,
+            'failureType',
+            FailureType.knowledgeTransferNotConverged,
+          ),
+        ),
+      );
+      expect(io.read(handoffPathFor(_workspace)), before);
+      expect(_statusOf(io), HandoffStatus.suggestInvestigating);
+    });
+
+    test('an analysis with a root cause but no files in play is not locked '
+        'either', () async {
+      final io = _io();
+      final before = io.read(handoffPathFor(_workspace));
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithText('<ROOT_CAUSE>$_rootCause</ROOT_CAUSE>'),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: (_) => 0,
+        ),
+        throwsA(
+          isA<ClaudartException>().having(
+            (e) => e.failureType,
+            'failureType',
+            FailureType.knowledgeTransferNotConverged,
+          ),
+        ),
+      );
+      expect(io.read(handoffPathFor(_workspace)), before);
+    });
+
     test('exits 1 when no handoff exists', () async {
       final io = _io(handoff: null);
       await expectLater(
@@ -159,6 +279,26 @@ void main() {
           pickFn: unscriptedPick,
         ),
         throwsA(isA<_ExitException>()),
+      );
+    });
+
+    test('an unreadable workspace.json stops with a typed failure, before any '
+        'model call', () async {
+      final io = _io();
+      io.write(workspaceConfigPathFor(_workspace), '{not valid json');
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithAnalysis(
+            onCall: () => fail('a model call was spent'),
+          ),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: unscriptedPick,
+        ),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
       );
     });
 
@@ -266,6 +406,8 @@ void main() {
         projectRootOverride: _projectRoot,
         exitFn: _throwExit,
         executor: _executorWithAnalysis(),
+        confirmFn: unscriptedConfirm,
+        promptFn: unscriptedPrompt,
         pickFn: (_) => 0,
       );
       expect(loggedMoves(io, _workspace), [
@@ -293,6 +435,93 @@ void main() {
         throwsA(isA<_ExitException>()),
       );
       expect(_statusOf(io), HandoffStatus.suggestInvestigating);
+    });
+  });
+
+  // Debug hands a blocked session back as needs-suggest. Picking it up moves it
+  // back to investigating (suggestResumed) before any model call, then the
+  // approval locks it as usual.
+  group('runSuggest — resuming from needs-suggest', () {
+    String blockedHandoff() =>
+        withHandoffStatus(_handoffWithScope, HandoffStatus.needsSuggest);
+
+    Map<String, String> move(
+      HandoffStatus from,
+      HandoffEvent event,
+      HandoffStatus to,
+    ) =>
+        {
+          'command': ClaudartCommand.suggest.name,
+          'from': from.name,
+          'event': event.name,
+          'to': to.name,
+        };
+
+    test('logs suggestResumed, then saveConfirmedReady on approval', () async {
+      final io = _io(handoff: blockedHandoff());
+      await runSuggest(
+        io: io,
+        projectRootOverride: _projectRoot,
+        exitFn: _throwExit,
+        executor: _executorWithAnalysis(),
+        confirmFn: unscriptedConfirm,
+        promptFn: unscriptedPrompt,
+        pickFn: (_) => 0,
+      );
+      expect(_statusOf(io), HandoffStatus.readyForDebug);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.needsSuggest,
+          HandoffEvent.suggestResumed,
+          HandoffStatus.suggestInvestigating,
+        ),
+        move(
+          HandoffStatus.suggestInvestigating,
+          HandoffEvent.saveConfirmedReady,
+          HandoffStatus.readyForDebug,
+        ),
+      ]);
+    });
+
+    test('the resume is kept when the run exits without approving', () async {
+      final io = _io(handoff: blockedHandoff());
+      await expectLater(
+        runSuggest(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          executor: _executorWithAnalysis(),
+          confirmFn: unscriptedConfirm,
+          promptFn: unscriptedPrompt,
+          pickFn: (_) => 2,
+        ),
+        throwsA(isA<_ExitException>()),
+      );
+      expect(_statusOf(io), HandoffStatus.suggestInvestigating);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.needsSuggest,
+          HandoffEvent.suggestResumed,
+          HandoffStatus.suggestInvestigating,
+        ),
+      ]);
+    });
+
+    test('a session that is not blocked logs no suggestResumed', () async {
+      final io = _io();
+      await runSuggest(
+        io: io,
+        projectRootOverride: _projectRoot,
+        exitFn: _throwExit,
+        executor: _executorWithAnalysis(),
+        confirmFn: unscriptedConfirm,
+        promptFn: unscriptedPrompt,
+        pickFn: (_) => 0,
+      );
+      expect(
+        loggedMoves(io, _workspace).map((m) => m['event']),
+        isNot(contains(HandoffEvent.suggestResumed.name)),
+      );
     });
   });
 

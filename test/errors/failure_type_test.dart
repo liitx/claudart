@@ -32,9 +32,66 @@ void main() {
     test('stepProducedNoResult rolls up to pipeline', () {
       expect(FailureType.stepProducedNoResult.errorType, ErrorType.pipeline);
     });
+    test('knowledgeTransferNotConverged tells the owner to re-run suggest', () {
+      expect(
+        FailureType.knowledgeTransferNotConverged.suggestedAction,
+        'The analysis did not name a root cause, so nothing was written and '
+        'the status is unchanged. Re-run `claudart suggest`, or add a root '
+        'cause to the handoff by hand.',
+      );
+    });
+    test('knowledgeTransferNotConverged rolls up to session', () {
+      expect(
+        FailureType.knowledgeTransferNotConverged.errorType,
+        ErrorType.session,
+      );
+    });
+    test('homeDirectoryUnset rolls up to workspace', () {
+      expect(FailureType.homeDirectoryUnset.errorType, ErrorType.workspace);
+    });
+    test('tokenMapUnreadable rolls up to workspace', () {
+      expect(FailureType.tokenMapUnreadable.errorType, ErrorType.workspace);
+    });
+    test('workspaceConfigUnreadable rolls up to workspace', () {
+      expect(
+        FailureType.workspaceConfigUnreadable.errorType,
+        ErrorType.workspace,
+      );
+    });
   });
 
   group('FailureType.effectiveFaultClass', () {
+    test('homeDirectoryUnset uses its subsystem default', () {
+      expect(
+        FailureType.homeDirectoryUnset.effectiveFaultClass,
+        FaultClass.environmentFault,
+      );
+    });
+    test('homeDirectoryUnset says what to set', () {
+      expect(
+        FailureType.homeDirectoryUnset.suggestedAction,
+        'Set HOME, or set CLAUDART_WORKSPACE to an absolute directory, then '
+        're-run.',
+      );
+    });
+    test('knowledgeTransferNotConverged uses its subsystem default', () {
+      expect(
+        FailureType.knowledgeTransferNotConverged.effectiveFaultClass,
+        FaultClass.environmentFault,
+      );
+    });
+    test('tokenMapUnreadable uses its subsystem default, unoverridden', () {
+      expect(
+        FailureType.tokenMapUnreadable.effectiveFaultClass,
+        FaultClass.environmentFault,
+      );
+    });
+    test('workspaceConfigUnreadable is a configFault, not workspace\'s default',
+        () {
+      const failure = FailureType.workspaceConfigUnreadable;
+      expect(failure.faultClass, FaultClass.environmentFault);
+      expect(failure.effectiveFaultClass, FaultClass.configFault);
+    });
     test('workspaceLocked overrides to transientFault, not workspace\'s default environmentFault', () {
       expect(FailureType.workspaceLocked.faultClass, FaultClass.environmentFault);
       expect(FailureType.workspaceLocked.effectiveFaultClass, FaultClass.transientFault);
@@ -139,6 +196,100 @@ void main() {
         FailureType.stepProducedNoResult.suggestedAction,
         'Re-run the step -- `claude` closed its stream without emitting a '
         'final result line.',
+      );
+    });
+  });
+
+  // The failures of the debug apply path and of a step wired to a model its
+  // role does not permit. One group per variant: where it rolls up, how it is
+  // classified, and the exact words a person sees.
+  group('$FailureType.editPlanMalformed', () {
+    test('rolls up to pipeline with its default fault class', () {
+      expect(FailureType.editPlanMalformed.errorType, ErrorType.pipeline);
+      expect(
+        FailureType.editPlanMalformed.effectiveFaultClass,
+        FaultClass.externalServiceFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(FailureType.editPlanMalformed.label, 'Edit plan malformed');
+      expect(
+        FailureType.editPlanMalformed.suggestedAction,
+        'Re-run `claudart debug` -- the implementer output could not be '
+        'split into complete file blocks. Nothing was written.',
+      );
+    });
+  });
+
+  group('$FailureType.editVerificationFailed', () {
+    test('rolls up to pipeline with its default fault class', () {
+      expect(FailureType.editVerificationFailed.errorType, ErrorType.pipeline);
+      expect(
+        FailureType.editVerificationFailed.effectiveFaultClass,
+        FaultClass.externalServiceFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(
+        FailureType.editVerificationFailed.label,
+        'Edit verification failed',
+      );
+      expect(
+        FailureType.editVerificationFailed.suggestedAction,
+        'The written files failed verification and were restored. Review '
+        'the reported file and re-run `claudart debug`; the handoff '
+        'status was not changed.',
+      );
+    });
+  });
+
+  group('$FailureType.stepModelNotPermittedForRole', () {
+    test('rolls up to pipeline and classifies as a config fault', () {
+      expect(
+        FailureType.stepModelNotPermittedForRole.errorType,
+        ErrorType.pipeline,
+      );
+      expect(
+        FailureType.stepModelNotPermittedForRole.effectiveFaultClass,
+        FaultClass.configFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(
+        FailureType.stepModelNotPermittedForRole.label,
+        'Step model not permitted for its role',
+      );
+      expect(
+        FailureType.stepModelNotPermittedForRole.suggestedAction,
+        'A step was wired to a model its role does not permit (haiku may '
+        'only classify and read). Fix the step or the routing so '
+        'reasoning and implementation run on sonnet or opus.',
+      );
+    });
+  });
+
+  // The boundary's name for a failure no FailureType claims. It is a marker for
+  // a gap in the taxonomy, so it is a programmer fault: every occurrence means
+  // a variant is missing and should be defined.
+  group('$FailureType.unexpectedFailure', () {
+    test('rolls up to unclassified and classifies as a programmer fault', () {
+      expect(FailureType.unexpectedFailure.errorType, ErrorType.unclassified);
+      expect(
+        FailureType.unexpectedFailure.effectiveFaultClass,
+        FaultClass.programmerFault,
+      );
+    });
+
+    test('label and suggestedAction are exact', () {
+      expect(FailureType.unexpectedFailure.label, 'Unexpected failure');
+      expect(
+        FailureType.unexpectedFailure.suggestedAction,
+        'No failure type describes this yet, so it is a gap in the failure '
+        'taxonomy: define a FailureType for it. The reason above is the '
+        'original error.',
       );
     });
   });

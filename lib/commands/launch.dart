@@ -1,8 +1,7 @@
-import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
+import '../config/paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart' show SessionState, HandoffStatus;
 import '../session/workspace_guard.dart';
@@ -13,20 +12,25 @@ import 'link.dart';
 import 'setup.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_link_state.dart';
+import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Interactive launcher — runs when `claudart` is invoked with no arguments.
 ///
 /// Phase 1: loads registry only — shows project list before any workspace is opened.
 /// Phase 2: loads workspace config and handoff only after the user selects a project.
 Future<void> runLauncher({
-  FileIO? io,
-  String? projectRootOverride,
-  int Function(List<String> items)? pickFn,
-  bool Function(String question)? confirmFn,
-  Never Function(int code)? exitFn,
+  CommandSeams seams = const CommandSeams(),
 }) async {
+  final io = seams.io;
+  final projectRootOverride = seams.projectRootOverride;
+  final pickFn = seams.pickFn;
+  final confirmFn = seams.confirmFn;
+  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final pick_ = pickFn ?? arrowMenu;
 
   print(render.header('CLAUDART'));
@@ -39,14 +43,14 @@ Future<void> runLauncher({
   final currentBranch = gitCtx?.branch;
 
   if (registry.isEmpty) {
-    print('\nNo projects registered yet.');
+    print(UserText.launchNoProjectsRegisteredYet.template);
     if (currentRoot != null) {
-      print('  Current directory: $currentRoot');
-      print('\nRun `claudart link` from your project to register it.\n');
+      print(UserText.launchCurrentDirectory.format({'currentRoot': currentRoot}));
+      print(UserText.launchRunClaudartLinkFromYourProject.template);
     } else {
-      print('\nNavigate to a project directory and run `claudart link`.\n');
+      print(UserText.launchNavigateToAProjectDirectoryAnd.template);
     }
-    exit_(0);
+    leaveFor(ExitReason.launchOutsideProject, exit_: exit_);
   }
 
   final currentEntry = currentRoot != null
@@ -98,41 +102,33 @@ Future<void> runLauncher({
     final isCurrentProject =
         currentEntry != null && selected.workspacePath == currentEntry.workspacePath;
     final branch = (isCurrentProject ? currentBranch : null) ?? state.branch;
-    print('  Branch : $branch');
+    print(UserText.killBranch.format({'branch': branch}));
     // A blank handoff is no-handoff, not its stale Status line.
     final shown = state.effectiveStatus;
     final statusColour = render.statusColour(shown);
-    print('  Status : ${ansi.c(statusColour, shown.value)}');
+    print(UserText.statusValueLine.format({'status': ansi.c(statusColour, shown.value)}));
     if (state.hasActiveContent) {
-      print('  Bug    : ${_truncate(state.bug)}');
+      print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
     }
   } else {
-    print('  No active session.');
+    print(UserText.launchNoActiveSession.template);
   }
 
   if (locked) {
     final op = interruptedOperation(workspace, io: fileIO) ?? 'unknown';
-    print('  ${ansi.c(ansi.yellow, '⚠  Interrupted during: $op')}');
+    final interrupted =
+        UserText.launchInterruptedDuring.format({'operation': op});
+    print(UserText.indentedLine.format({'line': ansi.c(ansi.yellow, interrupted)}));
   }
 
   print('');
 
   // ── Action menu ───────────────────────────────────────────────────────────
 
-  final int action;
-
   if (locked) {
-    action = pick_([
-      '${ansi.c(ansi.yellow, 'Kill')}   clear lock · archive · reset handoff',
-      'Back',
-    ]);
+    final action = chooseFrom(LockedMenu.values, (m) => m.label, pick_);
     if (action == LockedMenu.kill) {
-      await runKill(
-        io: fileIO,
-        projectRootOverride: selected.projectRoot,
-        confirmFn: confirmFn,
-        exitFn: exitFn,
-      );
+      await runKill(seams: seams.forProjectRoot(selected.projectRoot));
     }
     return;
   }
@@ -140,28 +136,17 @@ Future<void> runLauncher({
   final hasActive = state != null && state.hasActiveContent;
 
   if (hasActive) {
-    action = pick_([
-      '${ansi.c(ansi.green, 'Resume')}  open editor · run /suggest or /debug',
-      '${ansi.c(ansi.red, 'Kill')}    archive handoff · discard session',
-      'Back',
-    ]);
+    final action = chooseFrom(ActiveMenu.values, (m) => m.label, pick_);
     switch (action) {
       case ActiveMenu.resume:
         _printResumeInstructions(state.status);
       case ActiveMenu.kill:
-        await runKill(
-          io: fileIO,
-          projectRootOverride: selected.projectRoot,
-          confirmFn: confirmFn,
-          exitFn: exitFn,
-        );
-      default: // ActiveMenu.back — no-op
+        await runKill(seams: seams.forProjectRoot(selected.projectRoot));
+      case ActiveMenu.back:
+        break;
     }
   } else {
-    action = pick_([
-      (ansi.c(ansi.green, 'Start new session')),
-      'Back',
-    ]);
+    final action = chooseFrom(FreshMenu.values, (m) => m.label, pick_);
     if (action == FreshMenu.start) {
       await runSetup(projectRootOverride: selected.projectRoot);
     }
@@ -174,26 +159,47 @@ Future<void> runLauncher({
 /// rather than hard-coding a magic number.
 int registerChoice(int entryCount) => entryCount;
 
-// ── Menu choice namespaces ─────────────────────────────────────────────────────
-// 0-based. Exposed so tests reference named actions instead of magic numbers.
+// ── Menu choices ───────────────────────────────────────────────────────
+// Each menu is an enum that owns its labels, in the order they are shown; a
+// pick (an index) is turned back into the choice by [_choose], so no code
+// compares an index to a number.
 
 /// Locked-workspace menu choices.
-abstract final class LockedMenu {
-  static const kill = 0;
-  static const back = 1;
+enum LockedMenu {
+  kill,
+  back;
+
+  String get label => switch (this) {
+        kill => '${ansi.c(ansi.yellow, 'Kill')}   '
+            'clear lock · archive · reset handoff',
+        back => 'Back',
+      };
 }
 
 /// Active-session menu choices.
-abstract final class ActiveMenu {
-  static const resume = 0;
-  static const kill = 1;
-  static const back = 2;
+enum ActiveMenu {
+  resume,
+  kill,
+  back;
+
+  String get label => switch (this) {
+        resume => '${ansi.c(ansi.green, 'Resume')}  '
+            'open editor · run /suggest or /debug',
+        kill => '${ansi.c(ansi.red, 'Kill')}    '
+            'archive handoff · discard session',
+        back => 'Back',
+      };
 }
 
 /// Fresh-workspace menu choices.
-abstract final class FreshMenu {
-  static const start = 0;
-  static const back = 1;
+enum FreshMenu {
+  start,
+  back;
+
+  String get label => switch (this) {
+        start => ansi.c(ansi.green, 'Start new session'),
+        back => 'Back',
+      };
 }
 
 // ── Item builders ─────────────────────────────────────────────────────────────
@@ -239,19 +245,19 @@ void _printResumeInstructions(HandoffStatus status) {
   print('');
   switch (status) {
     case HandoffStatus.suggestInvestigating:
-      print('Open your editor and run /suggest to continue exploration.');
+      print(UserText.launchOpenYourEditorAndRunSuggest.template);
     case HandoffStatus.readyForSuggest:
-      print('Ready for a new suggest cycle. Run /suggest to begin.');
+      print(UserText.launchReadyForANewSuggestCycle.template);
     case HandoffStatus.readyForDebug:
-      print('Root cause identified. Run /debug to implement the fix.');
+      print(UserText.launchRootCauseIdentifiedRunDebugTo.template);
     case HandoffStatus.debugInProgress:
-      print('Fix in progress. Run /debug to continue.');
+      print(UserText.launchFixInProgressRunDebugTo.template);
     case HandoffStatus.debugComplete:
-      print('Debug complete. Run /save then verify with dart test.');
+      print(UserText.launchDebugCompleteRunSaveThenVerify.template);
     case HandoffStatus.needsSuggest:
-      print('Debug hit a blocker. Run /suggest for broader exploration.');
+      print(UserText.launchDebugHitABlockerRunSuggest.template);
     case HandoffStatus.unknown || HandoffStatus.noHandoff:
-      print('Run /suggest to begin or /debug if root cause is known.');
+      print(UserText.launchRunSuggestToBeginOrDebug.template);
   }
   print('');
 }

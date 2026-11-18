@@ -3,10 +3,11 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/scan.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/sensitivity/token_map.dart';
 import '../helpers/mocks.dart';
+import 'package:claudart/logging/log_file.dart';
 
 const _projectRoot = '/project';
 const _workspace = '/workspaces/project';
@@ -94,7 +95,8 @@ void main() {
 
       await _runScanForLinkedProject(testIo);
 
-      final logsPath = p.join(logsDirFor(_workspace), 'interactions.jsonl');
+      final logsPath =
+          logFilePath(logsDirFor(_workspace), LogFile.interactions);
       final raw = testIo.read(logsPath);
       expect(raw, isNotEmpty);
       final entry = jsonDecode(raw.trim().split('\n').last)
@@ -164,7 +166,8 @@ void main() {
       );
       await _runScanForLinkedProject(testIo);
 
-      final logsPath = p.join(logsDirFor(_workspace), 'interactions.jsonl');
+      final logsPath =
+          logFilePath(logsDirFor(_workspace), LogFile.interactions);
       final raw = testIo.read(logsPath);
       expect(raw, isNotEmpty);
       final entry = jsonDecode(raw.trim().split('\n').last)

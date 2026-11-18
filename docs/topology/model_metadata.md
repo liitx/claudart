@@ -62,3 +62,4 @@ lib files that mention `ModelObservation`, other than its own file.
 
 - lib/pipeline/pipeline_event.dart
 - lib/pipeline/step_result.dart
+- lib/pipeline/step_telemetry.dart

@@ -1,6 +1,7 @@
 import 'package:claudart/pipeline/agent_flow.dart';
 import 'package:claudart/templates/workspace_scope_note.dart';
 import 'package:test/test.dart';
+import '../helpers/project_fixture.dart';
 
 // Every slash command tells its agent which workspace it is for and how to see
 // the others, and the baked-path flows pass --project to the claudart CLI so the
@@ -33,7 +34,8 @@ void main() {
   group('every command-bearing flow carries the note', () {
     for (final flow in AgentFlow.values.where((f) => f.hasCommandFile)) {
       test(flow.name, () {
-        final template = flow.commandTemplate('/workspaces/my-app', project);
+        final template =
+            flow.commandTemplate(ProjectFixture.workspace, project);
         expect(template, contains(workspaceScopeNote(project)));
         expect(
           RegExp(RegExp.escape(workspaceScopeNote(project)))
@@ -57,7 +59,8 @@ void main() {
 
     for (final entry in cliCalls.entries) {
       test('${entry.key.name}: ${entry.value}', () {
-        final template = entry.key.commandTemplate('/workspaces/my-app', project);
+        final template =
+            entry.key.commandTemplate(ProjectFixture.workspace, project);
         expect(template, contains(entry.value));
       });
     }
@@ -65,7 +68,8 @@ void main() {
     test('the runtime-resolved flows (setup, flow) do not: they ask '
         '`claudart status` for the workspace of the current directory', () {
       for (final flow in [AgentFlow.setup, AgentFlow.flow]) {
-        final template = flow.commandTemplate('/workspaces/my-app', project);
+        final template =
+            flow.commandTemplate(ProjectFixture.workspace, project);
         expect(template, contains('claudart status'));
         expect(template, isNot(contains('--project my-app')));
       }

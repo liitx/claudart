@@ -7,29 +7,39 @@
 // Differs from suggest: the agent builds the handoff, not the user.
 // Experimental variant — treat as a preview feature.
 
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 import '../logging/logger.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../config.dart' show loadWorkspaceConfig;
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../config/config.dart' show loadWorkspaceConfig;
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
 import '../logging/planner_log.dart';
-import '../md_io.dart' show prompt;
-import '../paths.dart';
+import '../session/md_io.dart' show prompt;
+import '../config/paths.dart';
 import '../pipeline/agents/categorization.dart';
 import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/pipeline_context.dart';
 import '../pipeline/route_tag.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
-import '../registry.dart';
 import '../util/enum_util.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../ui/render.dart' as render;
 import '../workspace/workspace_config.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
+import '../io/process_exit.dart';
+import '../session/handoff_store.dart';
+import '../session/handoff_event.dart';
+import '../session/session_state.dart';
+import '../registry.dart';
+import 'support/live_handoff.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runFlow({
   FileIO? io,
@@ -41,26 +51,35 @@ Future<void> runFlow({
   int Function(List<String> items)? pickFn,
 }) async {
   final fileIO  = io       ?? const RealFileIO();
-  final exit_   = exitFn   ?? exit;
+  final exit_   = exitFn   ?? exitProcess;
   final planner = plannerLog ?? PlannerLog();
   final prompt_ = promptFn ?? prompt;
   final pick_   = pickFn   ?? arrowMenu;
 
   // ── Locate project ─────────────────────────────────────────────────────────
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+  );
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
+  printProjectLine(entry);
 
-  final registry = Registry.load(io: fileIO);
-  final entry    = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  // A session under way is not lost: ask first, and archive it before it is
+  // replaced, as `setup` does.
+  final startedFrom = settleLiveHandoff(
+    io: fileIO,
+    entry: entry,
+    gitBranch: project.gitContext?.branch,
+    pick: pick_,
+    exit_: exit_,
+    resumeText: UserText.flowContinueExisting,
+    cancelledText: UserText.flowCancelled,
+  );
 
   final workspace    = entry.workspacePath;
   final wsConfig     = WorkspaceConfig.load(workspace, io: fileIO);
@@ -72,23 +91,26 @@ Future<void> runFlow({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
-        onStepCompleted: (event) => SessionLogger(
-          io: fileIO,
-          workspacePath: workspace,
-        ).logStepModels(command: ClaudartCommand.flow.name, event: event),
       );
+
+  // Every pipeline event the executor publishes is logged for as long as the
+  // executor lives, so a failure, a timeout or a step that never finished
+  // leaves a record.
+  SessionLogger.forEntry(entry, io: fileIO).logPipelineEvents(
+    resolvedExec.events,
+    command: ClaudartCommand.flow.name,
+  );
 
   // ── Check for saved checkpoint ─────────────────────────────────────────────
 
   final checkpointPath = '$workspace/$flowCheckpointFileName';
-  final checkpointFile = File(checkpointPath);
 
-  if (checkpointFile.existsSync()) {
+  if (fileIO.fileExists(checkpointPath)) {
     print(render.header('CLAUDART FLOW  ${ansi.dim}[resume]${ansi.reset}'));
-    print('  A saved checkpoint was found from a previous session.\n');
+    print(UserText.flowASavedCheckpointWasFoundFrom.template);
 
     try {
-      final json    = jsonDecode(checkpointFile.readAsStringSync()) as Map<String, dynamic>;
+      final json    = jsonDecode(fileIO.read(checkpointPath)) as Map<String, dynamic>;
       final savedCtx = PipelineContext.fromCheckpointJson(json);
       final savedPlan = savedCtx['plan'] ?? '';
 
@@ -104,8 +126,8 @@ Future<void> runFlow({
       ]);
 
       if (resumeChoice == 2) {
-        print('\n  Checkpoint kept at:\n  ${ansi.dim}$checkpointPath${ansi.reset}\n');
-        exit_(0);
+        print(UserText.flowCheckpointKeptAt.styled({'checkpointPath': checkpointPath}));
+        leaveFor(ExitReason.flowCheckpointKept, exit_: exit_);
       }
 
       if (resumeChoice == 0) {
@@ -119,8 +141,8 @@ Future<void> runFlow({
           displayStep:  3,
           displayTotal: 3,
         );
-        await _writeHandoff(ctx, workspace, fileIO, exit_);
-        checkpointFile.deleteSync();
+        await _writeHandoff(ctx, entry, fileIO, exit_, startedFrom);
+        fileIO.delete(checkpointPath);
         return;
       }
 
@@ -130,37 +152,33 @@ Future<void> runFlow({
           ? savedCtx.appendClarification('Refinement: $feedback')
           : savedCtx;
 
-      ctx = await _runPhase2(resolvedExec, ctx, checkpointPath, exit_);
+      ctx = await _runPhase2(resolvedExec, ctx, checkpointPath, fileIO, exit_);
       ctx = await resolvedExec.runFuture(
         steps:        [FlowSteps.construct],
         ctx:          ctx,
         displayStep:  3,
         displayTotal: 3,
       );
-      await _writeHandoff(ctx, workspace, fileIO, exit_);
-      checkpointFile.deleteSync();
+      await _writeHandoff(ctx, entry, fileIO, exit_, startedFrom);
+      fileIO.delete(checkpointPath);
       return;
     } on FormatException {
-      print('  ${ansi.dim}Checkpoint unreadable — starting fresh.${ansi.reset}\n');
-      checkpointFile.deleteSync();
+      print(UserText.flowCheckpointUnreadableStartingFresh.styled({}));
+      fileIO.delete(checkpointPath);
     } on TypeError {
-      print('  ${ansi.dim}Checkpoint unreadable — starting fresh.${ansi.reset}\n');
-      checkpointFile.deleteSync();
+      print(UserText.flowCheckpointUnreadableStartingFresh.styled({}));
+      fileIO.delete(checkpointPath);
     }
   }
 
   // ── Collect prompt ─────────────────────────────────────────────────────────
 
   print(render.header('CLAUDART FLOW  ${ansi.dim}[experimental]${ansi.reset}'));
-  print(
-    '  Enter your prompt. An agent will classify intent, generate a\n'
-    '  dependency-ordered plan, and construct the handoff automatically.\n'
-    '  ${ansi.dim}Type your task description and press enter.${ansi.reset}\n',
-  );
+  print(UserText.flowPromptInvitation.styled());
   final taskPrompt = prompt_('  →', optional: true)?.trim() ?? '';
   if (taskPrompt.isEmpty) {
-    print('\n  No prompt entered. Aborted.\n');
-    exit_(0);
+    print(UserText.flowNoPromptEnteredAborted.template);
+    leaveFor(ExitReason.flowNoPrompt, exit_: exit_);
   }
 
   // ── Pipeline ───────────────────────────────────────────────────────────────
@@ -191,7 +209,7 @@ Future<void> runFlow({
   _recordClassification(ctx, planner);
 
   // Phase 2: plan (sonnet) — approval gate (approve / refine / exit)
-  ctx = await _runPhase2(resolvedExec, ctx, checkpointPath, exit_);
+  ctx = await _runPhase2(resolvedExec, ctx, checkpointPath, fileIO, exit_);
 
   // Phase 3: construct (sonnet)
   ctx = await resolvedExec.runFuture(
@@ -201,7 +219,7 @@ Future<void> runFlow({
     displayTotal: 3,
   );
 
-  await _writeHandoff(ctx, workspace, fileIO, exit_);
+  await _writeHandoff(ctx, entry, fileIO, exit_, startedFrom);
 }
 
 // ── Classification display ───────────────────────────────────────────────────
@@ -282,6 +300,7 @@ Future<PipelineContext> _runPhase2(
   PipelineExecutor exec,
   PipelineContext  ctx,
   String           checkpointPath,
+  FileIO           fileIO,
   Never Function(int) exit_,
 ) async {
   final result = await exec.runFuture(
@@ -292,18 +311,14 @@ Future<PipelineContext> _runPhase2(
   );
 
   if (result[PipelineSlot.flowExit] == 'true') {
-    _saveCheckpoint(result, checkpointPath);
-    print(
-      '\n  ${ansi.green}✓${ansi.reset}  Checkpoint saved  '
-      '${ansi.dim}→${ansi.reset}  $checkpointPath\n'
-      '  Resume with:  ${ansi.bold}claudart flow${ansi.reset}\n',
-    );
-    exit_(0);
+    _saveCheckpoint(result, checkpointPath, fileIO);
+    print(UserText.flowCheckpointSaved.styled({'checkpointPath': checkpointPath}));
+    leaveFor(ExitReason.flowCheckpointSaved, exit_: exit_);
   }
 
   if (result[PipelineSlot.approved] != 'true') {
-    print('\n  Flow aborted — handoff not written.\n');
-    exit_(0);
+    print(UserText.flowFlowAbortedHandoffNotWritten.template);
+    leaveFor(ExitReason.flowNotApproved, exit_: exit_);
   }
 
   return result;
@@ -313,18 +328,17 @@ Future<PipelineContext> _runPhase2(
 
 Future<void> _writeHandoff(
   PipelineContext       ctx,
-  String                workspace,
+  RegistryEntry         entry,
   FileIO                fileIO,
   Never Function(int)   exit_,
+  HandoffStatus         startedFrom,
 ) async {
+  final workspace = entry.workspacePath;
   final handoffContent =
       tagOrNull(ctx[PipelineSlot.construct] ?? '', RouteTag.handoff.wireTag);
   if (handoffContent == null || handoffContent.isEmpty) {
-    print(
-      '\n  ${ansi.red}✗${ansi.reset}  Construct step produced no handoff.\n'
-      '  Is claude CLI installed and authenticated?\n',
-    );
-    exit_(1);
+    print(UserText.flowConstructProducedNoHandoff.styled());
+    leaveFor(ExitReason.flowProducedNoHandoff, exit_: exit_);
   }
 
   final handoffPath  = handoffPathFor(workspace);
@@ -339,21 +353,34 @@ Future<void> _writeHandoff(
       '> Session started: $date | Branch: $branch\n\n---\n\n';
 
   stdout.write('\n  ${ansi.cyan}·${ansi.reset}  Writing handoff…');
-  fileIO.write(handoffPath, '$header${handoffContent.trim()}');
+  // Another way into a session, like setup: it enters through an event of its
+  // own and writes through the one writer. Over a live handoff it still writes
+  // (as it always has), and the move is logged as rejected, so the overwrite is
+  // on record.
+  HandoffStore(
+    io: fileIO,
+    handoffFile: handoffPath,
+    logger: SessionLogger.forEntry(entry, io: fileIO),
+    command: ClaudartCommand.flow.name,
+  ).replace(
+    '$header${handoffContent.trim()}',
+    from: startedFrom,
+    event: HandoffEvent.flowConstructed,
+  );
   stdout.write(
     '\x1B[2K\r  ${ansi.green}✓${ansi.reset}  Handoff written  '
     '${ansi.dim}→${ansi.reset}  $handoffPath\n\n',
   );
-  print('  Next:  ${ansi.bold}claudart save${ansi.reset}  ${ansi.dim}→${ansi.reset}  then /suggest in Zed\n');
+  print(UserText.flowNextClaudartSaveThenSuggestIn.styled({}));
 }
 
 // ── Checkpoint I/O ────────────────────────────────────────────────────────────
 
-void _saveCheckpoint(PipelineContext ctx, String path) {
+void _saveCheckpoint(PipelineContext ctx, String path, FileIO fileIO) {
   final json = jsonEncode({
     'createdAt': DateTime.now().toIso8601String(),
     ...ctx.toCheckpointJson(),
   });
-  File(path).writeAsStringSync(json);
+  fileIO.write(path, json);
 }
 

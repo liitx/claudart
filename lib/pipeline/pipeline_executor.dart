@@ -17,8 +17,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import '../config.dart' show defaultStepTimeout;
-import '../process_runner.dart' show killProcessTree;
+import '../config/config.dart' show defaultStepTimeout;
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
+import '../io/process_runner.dart' show RealProcessRunner, killProcessTree;
 import '../providers/agent_provider.dart' show AgentProvider;
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
@@ -36,6 +38,7 @@ import 'pipeline_step_exception.dart';
 import 'route_tag.dart';
 import 'step_mode.dart';
 import 'step_result.dart';
+import 'step_role.dart' show ClaudeHelperModelVariable, ClaudeTool;
 import 'step_route.dart';
 import 'usage.dart';
 import 'xml_tags.dart';
@@ -47,6 +50,8 @@ typedef ClaudeRunner = Future<StepResult?> Function({
   required String systemPrompt,
   required String message,
   required String workingDir,
+  required Set<ClaudeTool> allowedTools,
+  required AgentModel helperModel,
   StepMode mode,
 });
 
@@ -72,9 +77,15 @@ class PipelineExecutor {
   /// which [runFuture] reads to decide whether to print.
   final bool verbose;
 
-  /// Called by [runFuture] for each completed step, so a caller can persist
-  /// what the step ran on. Not called by [run], which does no IO of its own.
-  final void Function(AgentCompleted event)? onStepCompleted;
+  /// Every event of every run, published as it happens, by [run] and so by
+  /// [runFuture] too. A logger, a renderer or a dashboard subscribes once; the
+  /// executor takes no callback per consumer. Broadcast and synchronous, so
+  /// several listeners each receive every event and a listener sees an event
+  /// before the next step starts. A listener added after an event misses it.
+  Stream<PipelineEvent> get events => _events.stream;
+
+  final StreamController<PipelineEvent> _events =
+      StreamController<PipelineEvent>.broadcast(sync: true);
 
   PipelineExecutor({
     ClaudeRunner?     runner,
@@ -82,7 +93,6 @@ class PipelineExecutor {
     ApprovalSelector? approvalSelector,
     this.strict  = false,
     this.verbose = false,
-    this.onStepCompleted,
     Duration? stepTimeout = defaultStepTimeout,
   })  : _runner           = runner           ?? _runnerWithTimeout(stepTimeout),
         _prompter         = prompter         ?? _defaultPrompter,
@@ -96,7 +106,26 @@ class PipelineExecutor {
   ///
   /// [displayStep] / [displayTotal] are forwarded in [AgentStarted] so
   /// subscribers can render `[n/N]` labels without tracking call order.
+  /// Runs [steps] in order and yields each event. Every event is also
+  /// published on [events] before it is yielded.
   Stream<PipelineEvent> run({
+    required List<AgentStep> steps,
+    required PipelineContext ctx,
+    required int displayStep,
+    required int displayTotal,
+  }) async* {
+    await for (final event in _runSteps(
+      steps: steps,
+      ctx: ctx,
+      displayStep: displayStep,
+      displayTotal: displayTotal,
+    )) {
+      _events.add(event);
+      yield event;
+    }
+  }
+
+  Stream<PipelineEvent> _runSteps({
     required List<AgentStep> steps,
     required PipelineContext ctx,
     required int displayStep,
@@ -138,6 +167,8 @@ class PipelineExecutor {
       );
 
       String? failureReason;
+      // A runner that returns nothing and throws nothing produced no result.
+      var failureType = FailureType.stepProducedNoResult;
       StepResult? result;
       try {
         result = await _runner(
@@ -145,14 +176,23 @@ class PipelineExecutor {
           systemPrompt: current.systemPrompt,
           message:      current.buildPrompt(ctx),
           workingDir:   ctx.projectRoot,
+          allowedTools: current.role.allowedTools,
+          helperModel:  current.role.helperModel,
           mode:         current.mode,
         );
       } on Exception catch (e) {
         failureReason = e.toString();
+        failureType = e is ClaudartException
+            ? e.failureType
+            : FailureType.unexpectedFailure;
       }
 
       if (result == null) {
-        yield AgentFailed(stepId: current.id, reason: failureReason);
+        yield AgentFailed(
+          stepId: current.id,
+          reason: failureReason,
+          failureType: failureType,
+        );
         yield PipelineCompleted(ctx: ctx);
         return;
       }
@@ -374,7 +414,6 @@ class PipelineExecutor {
           // erasing that new line instead of the spinner's — an artifact
           // left behind in the output.
           clearSpinner();
-          onStepCompleted?.call(event);
           if (verbose && postProcessRewrote) {
             print('  ${ansi.dim}◦ postProcess fired on "$stepId" — output rewritten${ansi.reset}');
           }
@@ -592,6 +631,8 @@ ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
       required String systemPrompt,
       required String message,
       required String workingDir,
+      required Set<ClaudeTool> allowedTools,
+      required AgentModel helperModel,
       StepMode mode = StepMode.project,
     }) =>
         defaultClaudeRunner(
@@ -599,6 +640,8 @@ ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
           systemPrompt: systemPrompt,
           message: message,
           workingDir: workingDir,
+          allowedTools: allowedTools,
+          helperModel: helperModel,
           mode: mode,
           timeout: timeout,
         );
@@ -615,6 +658,11 @@ ClaudeRunner _runnerWithTimeout(Duration? timeout) => ({
 /// so there these now reach bin/claudart.dart's central handler. The step id is
 /// attached by the executor's `AgentFailed` event. [executable] and
 /// [traceOverride] are seams for tests.
+///
+/// [allowedTools] is the complete set of built-in tools the step may use,
+/// passed to the CLI as `--tools`. It defaults to [readOnlyTools], so no step
+/// can write a file or run a command; changes reach disk only through the
+/// owner-approved apply path.
 Future<StepResult?> defaultClaudeRunner({
   required AgentModel model,
   required String systemPrompt,
@@ -626,6 +674,8 @@ Future<StepResult?> defaultClaudeRunner({
   StepDebugTrace? traceOverride,
   FutureOr<AgentProvider?> Function() providerDetector =
       AgentProvider.resolveOnce,
+  required Set<ClaudeTool> allowedTools,
+  required AgentModel helperModel,
 }) async {
   // Fails fast with a clear message instead of letting an unconfigured
   // environment reach a mid-pipeline 401 from the `claude` subprocess
@@ -651,7 +701,7 @@ Future<StepResult?> defaultClaudeRunner({
     // conversation, distinct from the user's interactive Claude Code session, while
     // keeping the live shared ~/.claude auth (config-dir isolation 401s — the OAuth
     // token rotates and a copied credential goes stale).
-    final process = await Process.start(
+    final process = await const RealProcessRunner().start(
       executable,
       [
         '--print',
@@ -661,10 +711,17 @@ Future<StepResult?> defaultClaudeRunner({
         '--session-id',    newClaudeSessionId(),
         '--model',         model.alias,
         '--system-prompt', systemPrompt,
+        '--tools',         allowedTools.map((t) => t.wire).join(','),
         '--dangerously-skip-permissions',
         if (mode == StepMode.bare) '--bare',
       ],
       workingDirectory: workingDir,
+      // The CLI's own helper calls default to haiku; pin them to the step's
+      // helper model so a step that forbids haiku never shows it.
+      environment: {
+        for (final variable in ClaudeHelperModelVariable.values)
+          variable.wire: helperModel.slug,
+      },
     );
     process.stdin.writeln(message);
     await process.stdin.close();

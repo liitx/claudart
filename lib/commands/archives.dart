@@ -6,48 +6,41 @@
 // Resume: copies the archived handoff.md back to the active handoff path,
 // allowing the user to re-enter /suggest or /debug where they left off.
 
-import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../paths.dart';
-import '../registry.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../session/archive_entry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/menu.dart';
 import '../workspace/workspace_index.dart';
 import '../ui/render.dart' as render;
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runArchives({
-  FileIO? io,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
-  int Function(List<String> items)? pickFn,
+  CommandSeams seams = const CommandSeams(),
 }) async {
+  final io = seams.io;
+  final exitFn = seams.exitFn;
+  final pickFn = seams.pickFn;
   final fileIO = io    ?? const RealFileIO();
-  final exit_  = exitFn ?? exit;
+  final exit_  = exitFn ?? exitProcess;
   final pick_  = pickFn ?? arrowMenu;
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry    = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  final project = requireProject(seams);
+  final entry = project.entry;
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final entries   = loadIndex(workspace, io: fileIO);
 
   if (entries.isEmpty) {
-    print('\nNo archives found for this project.\n');
-    exit_(0);
+    print(UserText.archivesNoArchivesFoundForThisProject.template);
+    leaveFor(ExitReason.archivesNone, exit_: exit_);
   }
 
   // ── Display list ───────────────────────────────────────────────────────────
@@ -59,8 +52,8 @@ Future<void> runArchives({
 
   final chosen = pick_(labels);
   if (chosen >= entries.length) {
-    print('\nCancelled.\n');
-    exit_(0);
+    print(UserText.archivesCancelled.template);
+    leaveFor(ExitReason.archivesCancelled, exit_: exit_);
   }
 
   final selected = entries[chosen];
@@ -73,15 +66,12 @@ Future<void> runArchives({
   switch (action) {
     case 0:
       if (_resume(fileIO, workspace, selected)) {
-        print(
-          '\n${ansi.green}✓${ansi.reset}  Handoff restored from ${ansi.dim}${selected.handoffFile}${ansi.reset}\n'
-          '  Next: open /suggest or /debug to continue.\n',
-        );
+        print(UserText.archivesHandoffRestored.styled({'handoffFile': selected.handoffFile}));
       }
     case 1:
       _view(fileIO, workspace, selected);
     case _:
-      print('\nCancelled.\n');
+      print(UserText.archivesCancelled.template);
   }
 }
 
@@ -106,7 +96,7 @@ bool _resume(FileIO fileIO, String workspace, ArchiveEntry e) {
   final src  = p.join(archiveDirFor(workspace), e.handoffFile);
   final dest = handoffPathFor(workspace);
   if (!fileIO.fileExists(src)) {
-    print('${ansi.red}✗${ansi.reset}  Snapshot file not found: $src');
+    print(UserText.archivesSnapshotFileNotFound.styled({'src': src}));
     return false;
   }
   fileIO.write(dest, fileIO.read(src));
@@ -116,13 +106,13 @@ bool _resume(FileIO fileIO, String workspace, ArchiveEntry e) {
 void _view(FileIO fileIO, String workspace, ArchiveEntry e) {
   final src = p.join(archiveDirFor(workspace), e.handoffFile);
   if (!fileIO.fileExists(src)) {
-    print('${ansi.red}✗${ansi.reset}  Snapshot file not found: $src');
+    print(UserText.archivesSnapshotFileNotFound.styled({'src': src}));
     return;
   }
-  print('\n${ansi.dim}── ${e.handoffFile} ──${ansi.reset}\n');
+  print(UserText.archiveHeadingLine.styled({'handoffFile': e.handoffFile}));
   print(fileIO.read(src));
   if (e.skillsDelta != null) {
-    print('\n${ansi.dim}── Skills delta ──${ansi.reset}');
+    print(UserText.archivesSkillsDelta.styled({}));
     print(e.skillsDelta);
   }
   print('');

@@ -1,17 +1,17 @@
-import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 import '../templates/handoff_template.dart';
-import '../md_io.dart';
-import '../paths.dart';
+import '../session/md_io.dart';
+import '../config/paths.dart';
 import '../pipeline/flows/teardown_steps.dart';
 import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
-import '../registry.dart';
+import '../session/debug_disposition.dart';
+import '../session/handoff_placeholder.dart';
+import '../session/knowledge_transfer.dart';
 import '../session/archive_entry.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
@@ -22,7 +22,33 @@ import '../session/workspace_guard.dart';
 import '../ui/menu.dart';
 import '../util/prompt_with_default.dart';
 import '../ui/render.dart' as render;
-import '../ui/ansi.dart' as ansi;
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
+import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
+import '../session/closure_evidence.dart';
+import '../io/exit_reason.dart';
+
+/// The question `teardown` asks when a handoff is confirmed resolved but debug
+/// did not run: debug must be recorded as skipped on purpose, never assumed.
+const String kTeardownSkipDebugQuestion =
+    'Debug did not run for this handoff. Record it as skipped?';
+
+/// How a `teardown` that went as far as archiving or a reminder ended. The name
+/// is the outcome written to the interaction log, with the evidence the handoff
+/// rested on, so a reminder says why it was one.
+enum TeardownOutcome {
+  /// Archived, what was learned was kept, and the handoff was reset.
+  archived,
+
+  /// Saved as a reminder: the handoff was not archived as fixed.
+  reminderSaved,
+
+  /// The owner declined to save a reminder, so nothing was written.
+  reminderDeclined,
+}
 
 Future<void> runTeardown({
   FileIO? io,
@@ -32,9 +58,10 @@ Future<void> runTeardown({
   String? Function(String question, {bool optional})? promptFn,
   int Function(List<String> items, {int startIndex})? pickFn,
   Never Function(int code)? exitFn,
+  PipelineExecutor? executor,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final headless = mode == RunMode.headless;
   // In headless mode nothing calls these — every decision below resolves
   // itself instead — but they're still constructed so the interactive
@@ -45,34 +72,35 @@ Future<void> runTeardown({
 
   print(render.header('CLAUDART SESSION TEARDOWN'));
   if (headless) {
-    print('  ${ansi.dim}headless — every decision below resolves itself; verify the summary at the end${ansi.reset}\n');
+    print(UserText.teardownHeadlessEveryDecisionBelowResolvesItself.styled({}));
   }
 
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+    withGitContext: true,
+  );
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
   final handoff =
       fileIO.fileExists(handoffFile) ? fileIO.read(handoffFile) : '';
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: SessionLogger.forEntry(entry, io: fileIO),
+    command: ClaudartCommand.teardown.name,
+  );
 
   if (handoff.isEmpty) {
-    print('\nNo active handoff found. Nothing to tear down.\n');
-    exit_(0);
+    print(UserText.teardownNoActiveHandoffFoundNothingTo.template);
+    leaveFor(ExitReason.teardownNoHandoff, exit_: exit_);
   }
 
   // Extract session info upfront so we can pre-populate prompts.
@@ -84,22 +112,47 @@ Future<void> runTeardown({
 
   // Show session summary before confirming.
   print('\n${render.divider()}');
-  print('  Bug     : ${_truncate(bug)}');
-  print('  Cause   : ${_truncate(rootCause)}');
-  if (!_isBlank(changedFiles)) {
-    print('  Changed : ${_truncate(changedFiles)}');
+  print(UserText.teardownBug.format({'bug': _truncate(bug)}));
+  print(UserText.teardownCause.format({'rootCause': _truncate(rootCause)}));
+  if (!HandoffPlaceholder.isBlank(changedFiles)) {
+    print(UserText.teardownChanged.format({'changedFiles': _truncate(changedFiles)}));
   }
-  print('  Branch  : $branch');
+  print(UserText.teardownBranch.format({'branch': branch}));
   print('${render.divider()}\n');
 
-  // Headless resolves "confirmed resolved?" from the handoff's own typed
-  // status rather than asking — debugComplete is the one HandoffStatus
-  // variant that means "fix verified" per the FSA (docs/design.md). Any
-  // other status headless treats the same way a human declining the
-  // interactive confirm would: save as a reminder, don't archive as fixed.
-  final resolved = headless
-      ? SessionState.parse(handoff).status == HandoffStatus.debugComplete
+  // Headless resolves "confirmed resolved?" from the handoff's own recorded
+  // evidence rather than asking: only a fix a verification command passed
+  // (ClosureEvidence.verified) archives and updates what was learned. Anything
+  // less (a fix that was only analyzed, a handoff only suggest confirmed, an
+  // unconverged one) is treated as a human declining the interactive confirm
+  // would be: saved as a reminder, not archived as fixed.
+  final evidence = closureEvidenceOf(SessionState.parse(handoff));
+  void recordOutcome(TeardownOutcome outcome) => store.logger.logInteraction(
+        rowKind: InteractionRowKind.outcome,
+        command: ClaudartCommand.teardown.name,
+        outcome: outcome.name,
+        evidence: evidence.name,
+      );
+  var resolved = headless
+      ? evidence == ClosureEvidence.verified
       : confirm_('Is the bug confirmed resolved?');
+
+  // A complete transfer that debug never finished is resolved only if debug is
+  // recorded as skipped, so the decision is written into the archived handoff.
+  var archivedHandoff = handoff;
+  if (resolved && !headless) {
+    final state = SessionState.parse(handoff);
+    final debugNeverRan = state.effectiveStatus.knowledgeTransferExpectation ==
+            KnowledgeTransferExpectation.converged &&
+        state.debugDisposition == DebugDisposition.pending;
+    if (debugNeverRan) {
+      resolved = confirm_(kTeardownSkipDebugQuestion);
+      if (resolved) {
+        archivedHandoff =
+            withDebugDisposition(handoff, DebugDisposition.skipped);
+      }
+    }
+  }
 
   if (!resolved) {
     // Offer to save as a reminder so the session can be resumed later.
@@ -118,10 +171,10 @@ Future<void> runTeardown({
         // write happens with no human prompt too, so what's about to be
         // archived must be visible first, not just discoverable after.
         print('\n${render.divider()}');
-        print('Headless decision — verify before trusting the archive:');
+        print(UserText.teardownHeadlessDecisionVerifyBeforeTrustingThe.template);
         print(render.divider());
-        print('  Record type : reminder (not confirmed resolved)');
-        print('  Description : ${_truncate(resolvedDescription)}');
+        print(UserText.teardownRecordTypeReminderNotConfirmedResolved.template);
+        print(UserText.teardownDescription.format({'resolvedDescription': _truncate(resolvedDescription)}));
         print(render.divider());
       }
       writeArchiveEntry(
@@ -132,16 +185,24 @@ Future<void> runTeardown({
         description: resolvedDescription,
         io:          fileIO,
       );
-      print('\n✓ Reminder saved. Run `claudart archives` to resume.\n');
+      print(UserText.teardownReminderSavedRunClaudartArchivesTo.template);
+      recordOutcome(TeardownOutcome.reminderSaved);
+    } else {
+      recordOutcome(TeardownOutcome.reminderDeclined);
     }
-    print('\nCome back when the fix is confirmed. Continue with /debug or /suggest.\n');
-    exit_(0);
+    print(UserText.teardownComeBackWhenTheFixIs.template);
+    leaveFor(ExitReason.teardownDeferredUntilFixed, exit_: exit_);
   }
 
   // ── Run teardown analyzer (haiku) to pre-fill all metadata ─────────────────
 
   print('');
-  final analyzerCtx = await PipelineExecutor().runFuture(
+  final exec = executor ?? PipelineExecutor();
+  SessionLogger.forEntry(entry, io: fileIO).logPipelineEvents(
+    exec.events,
+    command: ClaudartCommand.teardown.name,
+  );
+  final analyzerCtx = await exec.runFuture(
     steps:        [TeardownSteps.analyzer],
     ctx:          PipelineContext(
       projectRoot: projectRoot,
@@ -172,7 +233,7 @@ Future<void> runTeardown({
     archiveKind = ArchiveKind.archive;
   } else {
     print('\n${render.divider()}');
-    print('Session record type:');
+    print(UserText.teardownSessionRecordType.template);
     print('${render.divider()}\n');
     final kindChoice = pick_(['archive (resolved — skills updated)', 'reminder (note for future reference)']);
     archiveKind = kindChoice == 1 ? ArchiveKind.reminder : ArchiveKind.archive;
@@ -201,7 +262,7 @@ Future<void> runTeardown({
     category = cat.value;
     area = cat.area;
   } else {
-    print('\nCategorize this session for skills.md:');
+    print(UserText.teardownCategorizeThisSessionForSkillsMd.template);
     final categoryChoice = pick_(_kCategories, startIndex: startIdx);
     final cat            = TeardownCategory.values[categoryChoice];
     if (cat == TeardownCategory.other) {
@@ -218,7 +279,9 @@ Future<void> runTeardown({
 
   final hotFilesDefault = agentHotFiles?.isNotEmpty == true
       ? agentHotFiles
-      : (_isBlank(changedFiles) ? null : changedFiles.replaceAll('\n', ', ').trim());
+      : (HandoffPlaceholder.isBlank(changedFiles)
+          ? null
+          : changedFiles.replaceAll('\n', ', ').trim());
   final hotFiles = headless
       ? hotFilesDefault
       : promptWithDefault(
@@ -241,7 +304,9 @@ Future<void> runTeardown({
 
   final patternDefault = agentRootPat.isNotEmpty
       ? agentRootPat
-      : (_isBlank(rootCause) ? null : rootCause.replaceAll('\n', ' ').trim());
+      : (HandoffPlaceholder.isBlank(rootCause)
+          ? null
+          : rootCause.replaceAll('\n', ' ').trim());
   final pattern = headless
       ? (patternDefault ?? 'unspecified')
       : promptWithDefault(
@@ -260,15 +325,24 @@ Future<void> runTeardown({
 
   if (headless) {
     print('\n${render.divider()}');
-    print('Headless decisions — verify before trusting the archive:');
+    print(UserText.teardownHeadlessDecisionsVerifyBeforeTrustingThe.template);
     print(render.divider());
-    print('  Record type : ${archiveKind == ArchiveKind.archive ? 'archive (resolved)' : 'reminder'}');
-    print('  Category    : $category');
-    print('  Fix summary : $fixSummary');
-    print('  Hot files   : ${hotFiles ?? 'unspecified'}');
-    print('  Cold files  : ${coldFiles ?? '(none)'}');
-    print('  Root cause  : $pattern');
-    print('  Fix pattern : $fixPattern');
+    print(UserText.teardownRecordTypeLine.format({
+      'recordType': (archiveKind == ArchiveKind.archive
+              ? UserText.teardownRecordTypeArchive
+              : UserText.teardownRecordTypeReminder)
+          .template,
+    }));
+    print(UserText.teardownCategory.format({'category': category}));
+    print(UserText.teardownFixSummary.format({'fixSummary': fixSummary}));
+    print(UserText.teardownHotFilesLine.format({
+      'hotFiles': hotFiles ?? UserText.teardownHotFilesUnspecified.template,
+    }));
+    print(UserText.teardownColdFilesLine.format({
+      'coldFiles': coldFiles ?? UserText.teardownColdFilesNone.template,
+    }));
+    print(UserText.teardownRootCause.format({'pattern': pattern}));
+    print(UserText.teardownFixPattern.format({'fixPattern': fixPattern}));
     print(render.divider());
   }
 
@@ -306,7 +380,7 @@ Future<void> runTeardown({
       final entry = writeArchiveEntry(
         workspace:   workspace,
         branch:      branch,
-        handoff:     handoff,
+        handoff:     archivedHandoff,
         kind:        archiveKind,
         description: fixSummary ?? bug,
         io:          fileIO,
@@ -316,42 +390,41 @@ Future<void> runTeardown({
       );
       archiveFile = p.join(archiveDirFor(workspace), entry.handoffFile);
 
-      // Reset handoff.
-      fileIO.write(handoffFile, blankHandoff);
+      // Reset handoff. Not enforced: teardown is deliberately permissive (a
+      // human may confirm "resolved" from any status), so a status the table
+      // lacks is logged, not thrown.
+      store.replace(
+        blankHandoff,
+        from: readHandoffStatus(handoff),
+        event: archiveKind == ArchiveKind.archive
+            ? HandoffEvent.tornDown
+            : HandoffEvent.reminderSaved,
+      );
     }, io: fileIO);
   } on WorkspaceLockedException catch (e) {
-    print('\n✗ ${e.toString()}\n');
-    exit_(1);
+    print(UserText.errorMessageLine.format({'toString': e.toString()}));
+    leaveFor(ExitReason.teardownWorkspaceLocked, exit_: exit_);
   }
 
-  // Record the move once the guarded close succeeded. Not enforced: teardown
-  // is deliberately permissive (a human may confirm "resolved" from any
-  // status), so a status the table lacks is logged, not thrown.
-  SessionLogger(
-    io: fileIO,
-    sensitivityMode: entry.sensitivityMode,
-    workspacePath: workspace,
-  ).logHandoffMove(
-    command: ClaudartCommand.teardown.name,
-    from: readHandoffStatus(handoff),
-    event: archiveKind == ArchiveKind.archive
-        ? HandoffEvent.tornDown
-        : HandoffEvent.reminderSaved,
+  recordOutcome(
+    archiveKind == ArchiveKind.archive
+        ? TeardownOutcome.archived
+        : TeardownOutcome.reminderSaved,
   );
 
   // Suggest commit message.
   final commitMsg = buildCommitMessage(area, bug, rootCause, fixSummary!);
 
   if (archiveKind != ArchiveKind.reminder) {
-    print('\n✓ Skills updated: ${skillsPathFor(workspace)}');
+    print(UserText.teardownSkillsUpdated.format({'workspace': skillsPathFor(workspace)}));
   }
-  print('✓ Handoff archived: $archiveFile');
-  print('✓ Handoff reset.\n');
+  print(UserText.teardownHandoffArchived.format({'archiveFile': archiveFile}));
+  print(UserText.teardownHandoffReset.template);
   print(render.divider());
-  print('Suggested commit message:\n');
+  print(UserText.teardownSuggestedCommitMessage.template);
   print(commitMsg);
   print(render.divider());
-  print('\nRemember: do not push to remote. Open a merge request from your branch.\n');
+  print(UserText.teardownRememberDoNotPushToRemote.template);
 }
 
 void _updateSkills({
@@ -399,37 +472,22 @@ void _updateSkills({
 }
 
 enum TeardownCategory {
-  apiIntegration,
-  concurrency,
-  configuration,
-  dataParsing,
-  ioFilesystem,
-  stateManagement,
-  general,
-  other;
+  apiIntegration(value: 'api-integration', area: 'api'),
+  concurrency(value: 'concurrency', area: 'async'),
+  configuration(value: 'configuration', area: 'config'),
+  dataParsing(value: 'data-parsing', area: 'data'),
+  ioFilesystem(value: 'io-filesystem', area: 'io'),
+  stateManagement(value: 'state-management', area: 'state'),
+  general(value: 'general', area: 'fix'),
+  other(value: 'other', area: 'fix');
+
+  const TeardownCategory({required this.value, required this.area});
 
   /// Canonical string written to skills.md.
-  String get value => switch (this) {
-        apiIntegration  => 'api-integration',
-        concurrency     => 'concurrency',
-        configuration   => 'configuration',
-        dataParsing     => 'data-parsing',
-        ioFilesystem    => 'io-filesystem',
-        stateManagement => 'state-management',
-        general         => 'general',
-        other           => 'other',
-      };
+  final String value;
 
   /// Commit area label for buildCommitMessage.
-  String get area => switch (this) {
-        apiIntegration  => 'api',
-        concurrency     => 'async',
-        configuration   => 'config',
-        ioFilesystem    => 'io',
-        stateManagement => 'state',
-        dataParsing     => 'data',
-        general || other => 'fix',
-      };
+  final String area;
 
   /// Display label shown in the interactive menu.
   String get label => this == other ? 'other (type manually)' : value;
@@ -442,8 +500,6 @@ String? _defaultPrompt(String question, {bool optional = false}) =>
     prompt(question, optional: optional);
 
 
-bool _isBlank(String s) =>
-    s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');
 
 String _truncate(String s, {int max = 72}) =>
     s.length > max ? '${s.substring(0, max)}…' : s;

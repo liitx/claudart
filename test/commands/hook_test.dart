@@ -1,7 +1,10 @@
 import 'dart:convert';
 
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/hook.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
@@ -9,9 +12,10 @@ import 'package:claudart/workspace/workspace_config.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _root = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _root = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 const _dartFile = '$_root/lib/a.dart';
 const _exploring = HandoffStatus.suggestInvestigating;
 
@@ -311,6 +315,21 @@ void main() {
       final io = _ioWithSession(status: HandoffStatus.readyForDebug);
       io.write(handoffPathFor(_workspace), blankHandoff);
       expect(_hookOutput(_stdin(_dartFile), io), contains('no-handoff'));
+    });
+
+    test('an unreadable workspace.json still advises, and the failure is '
+        'logged by its type, not dropped', () {
+      final io = _ioWithSession(status: _exploring, withConfig: false);
+      io.write(workspaceConfigPathFor(_workspace), '{not valid json');
+      expect(_hookOutput(_stdin(_dartFile), io), contains('suggest-investigating'));
+      final errors = io.read(
+        logFilePath(logsDirFor(_workspace), LogFile.errors),
+      );
+      expect(
+        errors,
+        contains('${ClaudartCommand.hook.name}.'
+            '${FailureType.workspaceConfigUnreadable.name}'),
+      );
     });
 
     test('a non-Dart file is never advised about', () {

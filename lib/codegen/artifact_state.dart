@@ -11,11 +11,11 @@
 
 import 'package:path/path.dart' as p;
 
-import '../dependency_config.dart';
+import '../config/dependency_config.dart';
 import 'claudart_artifact.dart';
 import 'dependency_config_codegen.dart';
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../templates/claude_settings_template.dart';
 import '../templates/claude_template.dart';

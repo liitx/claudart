@@ -21,3 +21,14 @@ String? unscriptedPrompt(String question, {bool optional = false}) =>
 
 int unscriptedPick(List<String> items) =>
     _unscripted('pick', items.join(' | '));
+
+/// The pipeline executor asks the user a question when a step escalates. A test
+/// that does not script an answer fails here, naming the question, instead of
+/// waiting on real input.
+Never unscriptedUserPrompter(String question) =>
+    _unscripted('user question', '"$question"');
+
+/// The pipeline executor asks which option to take at an approval gate. A test
+/// that does not script a choice fails here, naming the options.
+Never unscriptedApprovalSelector(List<String> options) =>
+    _unscripted('approval choice', options.join(' | '));

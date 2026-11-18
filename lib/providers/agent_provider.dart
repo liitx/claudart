@@ -33,10 +33,12 @@
 // neither function is wired into gating any real launch.
 
 import 'dart:convert' show jsonDecode;
-import 'dart:io' show Platform, Process, ProcessException;
+import 'dart:io' show ProcessException;
 
 import 'claude_settings_env.dart';
-import '../file_io.dart';
+import '../io/file_io.dart';
+import '../config/environment.dart';
+import '../io/process_runner.dart';
 
 enum AgentProvider {
   /// Direct Anthropic API — `ANTHROPIC_API_KEY` only.
@@ -131,7 +133,7 @@ enum AgentProvider {
     AgentProvider? explicit,
   }) {
     final settingsEnv = readClaudeSettingsEnv(io: io, path: settingsPath);
-    final merged = {...settingsEnv, ...(processEnv ?? Platform.environment)};
+    final merged = {...settingsEnv, ...(processEnv ?? processEnvironment)};
     return detect(merged, explicit: explicit);
   }
 
@@ -196,7 +198,7 @@ enum AgentProvider {
 
 Future<String> _realAuthStatusStdout() async {
   try {
-    final result = await Process.run(
+    final result = await const RealProcessRunner().run(
       ClaudeAuthWire.executable,
       ClaudeAuthWire.statusArgs,
     );

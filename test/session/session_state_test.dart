@@ -1,4 +1,8 @@
 import 'package:test/test.dart';
+import 'package:claudart/session/debug_disposition.dart';
+import 'package:claudart/session/handoff_finding.dart';
+import 'package:claudart/session/handoff_section.dart';
+import 'package:claudart/session/knowledge_transfer.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/templates/handoff_template.dart';
 
@@ -76,7 +80,228 @@ _Nothing yet._
 _Nothing yet._
 ''';
 
+/// Independent literals: what each status tells the owner to do next.
+const _nextStep = <HandoffStatus, String>{
+  HandoffStatus.suggestInvestigating: 'Run /suggest in your editor.',
+  HandoffStatus.readyForSuggest:
+      'Run /suggest in your editor to begin a new cycle.',
+  HandoffStatus.readyForDebug: 'Run /debug in your editor.',
+  HandoffStatus.debugInProgress:
+      'Continue with /debug, or run /suggest if you hit a wall.',
+  HandoffStatus.debugComplete: 'Verify with dart test, then claudart teardown '
+      'to keep what was learned, or claudart rotate for the next issue.',
+  HandoffStatus.needsSuggest:
+      'Run /suggest in your editor — debug has a question for you.',
+  HandoffStatus.noHandoff: 'Run: claudart setup',
+  HandoffStatus.unknown: 'Run: claudart setup',
+};
+
+/// Only a finished fix has something to lose by `kill`.
+const _killWarning = <HandoffStatus, String?>{
+  HandoffStatus.suggestInvestigating: null,
+  HandoffStatus.readyForSuggest: null,
+  HandoffStatus.readyForDebug: null,
+  HandoffStatus.debugInProgress: null,
+  HandoffStatus.debugComplete: 'The fix is applied. kill does not update '
+      'skills.md, so nothing from this session is learned; claudart teardown '
+      'keeps it.',
+  HandoffStatus.needsSuggest: null,
+  HandoffStatus.noHandoff: null,
+  HandoffStatus.unknown: null,
+};
+
+/// Independent literals: what knowledge transfer each status stands for.
+const _expectation = <HandoffStatus, KnowledgeTransferExpectation>{
+  HandoffStatus.suggestInvestigating: KnowledgeTransferExpectation.unconverged,
+  HandoffStatus.readyForSuggest: KnowledgeTransferExpectation.converged,
+  HandoffStatus.readyForDebug: KnowledgeTransferExpectation.converged,
+  HandoffStatus.debugInProgress: KnowledgeTransferExpectation.converged,
+  HandoffStatus.debugComplete: KnowledgeTransferExpectation.converged,
+  HandoffStatus.needsSuggest: KnowledgeTransferExpectation.none,
+  HandoffStatus.noHandoff: KnowledgeTransferExpectation.none,
+  HandoffStatus.unknown: KnowledgeTransferExpectation.none,
+};
+
 void main() {
+  group('$HandoffStatus.knowledgeTransferExpectation', () {
+    test('every status has a pinned expectation', () {
+      expect(_expectation.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: ${_expectation[status]!.name}', () {
+        expect(status.knowledgeTransferExpectation, _expectation[status]);
+      });
+    }
+  });
+
+  group('$SessionState.findings', () {
+    // Independent literals: a status that expects a transfer, against what the
+    // handoff actually holds.
+    const converged = KnowledgeTransfer.converged;
+    const unconverged = KnowledgeTransfer.unconverged;
+    HandoffFinding? expected(HandoffStatus status, KnowledgeTransfer held) =>
+        switch ((_expectation[status]!, held)) {
+          (KnowledgeTransferExpectation.converged, unconverged) =>
+            HandoffFinding.statusAheadOfContent,
+          (KnowledgeTransferExpectation.unconverged, converged) =>
+            HandoffFinding.contentAheadOfStatus,
+          (KnowledgeTransferExpectation.converged, converged) ||
+          (KnowledgeTransferExpectation.unconverged, unconverged) ||
+          (KnowledgeTransferExpectation.none, converged) ||
+          (KnowledgeTransferExpectation.none, unconverged) =>
+            null,
+        };
+
+    SessionState held(HandoffStatus status, KnowledgeTransfer transfer) =>
+        SessionState(
+          status: status,
+          branch: 'main',
+          bug: const HandoffSection('a real bug'),
+          rootCause: HandoffSection(
+            transfer == converged ? 'a cause' : '_Not yet determined._',
+          ),
+          scope: HandoffSection(
+            transfer == converged ? 'lib/a.dart' : '_Not yet determined._',
+          ),
+          attempted: const HandoffSection('_Nothing yet._'),
+          changed: const HandoffSection('_Nothing yet._'),
+          unresolved: const HandoffSection('_Nothing yet._'),
+        );
+
+    for (final status in HandoffStatus.values) {
+      for (final transfer in KnowledgeTransfer.values) {
+        test('${status.name} holding ${transfer.name}', () {
+          final finding = expected(status, transfer);
+          expect(
+            held(status, transfer).findings,
+            finding == null ? isEmpty : [finding],
+          );
+        });
+      }
+    }
+  });
+
+  group('$SessionState debug disposition', () {
+    String withDisposition(String handoff, String? value) => value == null
+        ? handoff
+        : '$handoff\n## Debug Disposition\n\n$value\n';
+
+    test('a recorded disposition is read from the handoff', () {
+      final state =
+          SessionState.parse(withDisposition(_activeHandoff, 'skipped'));
+      expect(state.recordedDebugDisposition, DebugDisposition.skipped);
+      expect(state.debugDisposition, DebugDisposition.skipped);
+    });
+
+    test('a section followed by the handoff\'s rule is still read', () {
+      final state = SessionState.parse(
+        '$_activeHandoff\n## Debug Disposition\n\ndone\n\n---\n',
+      );
+      expect(state.recordedDebugDisposition, DebugDisposition.done);
+    });
+
+    test('with none recorded, a finished fix is done', () {
+      final state = SessionState.parse(
+        _activeHandoff.replaceFirst('ready-for-debug', 'debug-complete'),
+      );
+      expect(state.recordedDebugDisposition, isNull);
+      expect(state.debugDisposition, DebugDisposition.done);
+    });
+
+    test('with none recorded, anything else is pending', () {
+      final state = SessionState.parse(_activeHandoff);
+      expect(state.recordedDebugDisposition, isNull);
+      expect(state.debugDisposition, DebugDisposition.pending);
+    });
+
+    test('an unrecognised value is not recorded, so it is not guessed', () {
+      final state =
+          SessionState.parse(withDisposition(_activeHandoff, 'maybe later'));
+      expect(state.recordedDebugDisposition, isNull);
+    });
+  });
+
+  group('$SessionState.findings for the debug disposition', () {
+    SessionState held(HandoffStatus status, DebugDisposition? recorded) =>
+        SessionState(
+          status: status,
+          branch: 'main',
+          bug: const HandoffSection('a real bug'),
+          rootCause: const HandoffSection('a cause'),
+          scope: const HandoffSection('lib/a.dart'),
+          attempted: const HandoffSection('_Nothing yet._'),
+          changed: const HandoffSection('_Nothing yet._'),
+          unresolved: const HandoffSection('_Nothing yet._'),
+          recordedDebugDisposition: recorded,
+        );
+
+    // Independent literals: only a finished fix is `done` or `verified`, and a
+    // finished fix is nothing else.
+    bool disagrees(HandoffStatus status, DebugDisposition recorded) =>
+        (status == HandoffStatus.debugComplete) !=
+        (recorded == DebugDisposition.done ||
+            recorded == DebugDisposition.verified);
+
+    for (final status in HandoffStatus.values.where((s) => s.isPersisted)) {
+      for (final recorded in DebugDisposition.values) {
+        test('${status.name} recorded ${recorded.name}', () {
+          final findings = held(status, recorded)
+              .findings
+              .where((f) => f == HandoffFinding.debugDispositionDisagrees);
+          expect(findings.isNotEmpty, disagrees(status, recorded));
+        });
+      }
+
+      test('${status.name} with none recorded never disagrees', () {
+        expect(
+          held(status, null).findings,
+          isNot(contains(HandoffFinding.debugDispositionDisagrees)),
+        );
+      });
+    }
+  });
+
+  group('$SessionState.knowledgeTransfer', () {
+    test('an active handoff with a root cause and a scope is converged', () {
+      expect(
+        SessionState.parse(_activeHandoff).knowledgeTransfer,
+        KnowledgeTransfer.converged,
+      );
+    });
+
+    test('a blank handoff is unconverged', () {
+      expect(
+        SessionState.parse(blankHandoff).knowledgeTransfer,
+        KnowledgeTransfer.unconverged,
+      );
+    });
+  });
+
+  group('$HandoffStatus.nextStep', () {
+    test('every status has a pinned next step', () {
+      expect(_nextStep.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: next step', () {
+        expect(status.nextStep, _nextStep[status]);
+      });
+    }
+  });
+
+  group('$HandoffStatus.killWarning', () {
+    test('every status has a pinned answer', () {
+      expect(_killWarning.keys.toSet(), HandoffStatus.values.toSet());
+    });
+
+    for (final status in HandoffStatus.values) {
+      test('${status.name}: kill warning', () {
+        expect(status.killWarning, _killWarning[status]);
+      });
+    }
+  });
+
   group('SessionState.parse — active handoff', () {
     late SessionState state;
 
@@ -91,19 +316,19 @@ void main() {
     });
 
     test('reads bug', () {
-      expect(state.bug, contains('Config not loaded'));
+      expect(state.bug.text, contains('Config not loaded'));
     });
 
     test('reads rootCause', () {
-      expect(state.rootCause, contains('ConfigLoader'));
+      expect(state.rootCause.text, contains('ConfigLoader'));
     });
 
     test('reads attempted', () {
-      expect(state.attempted, contains('Traced call'));
+      expect(state.attempted.text, contains('Traced call'));
     });
 
     test('reads changed', () {
-      expect(state.changed, contains('loader.dart'));
+      expect(state.changed.text, contains('loader.dart'));
     });
 
     test('hasActiveContent is true when real content present', () {
@@ -125,15 +350,15 @@ void main() {
     });
 
     test('bug is placeholder', () {
-      expect(state.bug, startsWith('_Not'));
+      expect(state.bug.isBlank, isTrue);
     });
 
     test('rootCause is placeholder', () {
-      expect(state.rootCause, startsWith('_Not'));
+      expect(state.rootCause.isBlank, isTrue);
     });
 
     test('attempted is placeholder', () {
-      expect(state.attempted, startsWith('_Nothing'));
+      expect(state.attempted.text, startsWith('_Nothing'));
     });
 
     test('hasActiveContent is false for blank handoff', () {
@@ -258,11 +483,12 @@ void main() {
         SessionState(
           status: HandoffStatus.suggestInvestigating,
           branch: 'main',
-          bug: bug,
-          rootCause: rootCause,
-          attempted: attempted,
-          changed: changed,
-          unresolved: unresolved,
+          bug: HandoffSection(bug),
+          rootCause: HandoffSection(rootCause),
+          scope: const HandoffSection('_Not yet determined._'),
+          attempted: HandoffSection(attempted),
+          changed: HandoffSection(changed),
+          unresolved: HandoffSection(unresolved),
         );
 
     test('a real bug alone is active', () {
@@ -298,11 +524,12 @@ void main() {
         SessionState(
           status: status,
           branch: 'main',
-          bug: active ? 'Crash on save' : blank,
-          rootCause: blank,
-          attempted: blank,
-          changed: blank,
-          unresolved: blank,
+          bug: HandoffSection(active ? 'Crash on save' : blank),
+          rootCause: const HandoffSection(blank),
+          scope: const HandoffSection(blank),
+          attempted: const HandoffSection(blank),
+          changed: const HandoffSection(blank),
+          unresolved: const HandoffSection(blank),
         );
 
     for (final status in HandoffStatus.values) {

@@ -1,4 +1,4 @@
-import 'package:claudart/dependency_config.dart';
+import 'package:claudart/config/dependency_config.dart';
 import 'package:test/test.dart';
 
 void main() {

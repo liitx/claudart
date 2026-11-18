@@ -1,10 +1,12 @@
 import 'package:test/test.dart';
 import 'package:claudart/commands/save.dart';
 import 'package:claudart/commands/teardown.dart' show runTeardown, TeardownCategory;
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:path/path.dart' as p;
+import 'helpers/fake_executors.dart';
 import 'helpers/mocks.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 const _root = '/e2e/claudart';
 const _ws   = '/e2e/ws/claudart';
@@ -42,7 +44,7 @@ stdin.readLineSync uses cooked mode which has no readline cursor support.
 ## Scope
 
 ### Files in play
-lib/md_io.dart, lib/ui/line_editor.dart
+lib/session/md_io.dart, lib/ui/line_editor.dart
 
 ### Key entry points in play
 _Not yet determined._
@@ -68,7 +70,7 @@ Replaced stdin.readLineSync with raw-mode line editor.
 
 ### What changed (files modified)
 lib/ui/line_editor.dart
-lib/md_io.dart
+lib/session/md_io.dart
 lib/commands/kill.dart
 lib/commands/link.dart
 
@@ -122,11 +124,7 @@ void main() {
   group('e2e — save → teardown full workflow', () {
     test('save writes checkpoint with branch name and root cause in skills', () async {
       final io = _makeIO();
-      final result = await runSave(
-        io: io,
-        projectRootOverride: _root,
-        exitFn: (c) => throw Exception('exit($c)'),
-      );
+      final result = await runSave(seams: CommandSeams(io: io, projectRootOverride: _root, exitFn: (c) => throw Exception('exit($c)')));
       expect(result, equals(SkillsUpdateResult.written));
 
       final cps = _checkpoints(io);
@@ -140,14 +138,11 @@ void main() {
     test('teardown after save: archives handoff, resets it, updates skills with pre-populated values', () async {
       final io = _makeIO();
       // First save to produce a checkpoint and seed skills.
-      await runSave(
-        io: io,
-        projectRootOverride: _root,
-        exitFn: (c) => throw Exception('exit($c)'),
-      );
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _root, exitFn: (c) => throw Exception('exit($c)')));
 
       // Teardown — hotFiles and pattern answers are null → accept pre-populated defaults.
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _root,
         confirmFn: (_) => true,
@@ -181,12 +176,9 @@ void main() {
 
     test('save checkpoint is preserved after teardown (audit trail)', () async {
       final io = _makeIO();
-      await runSave(
-        io: io,
-        projectRootOverride: _root,
-        exitFn: (c) => throw Exception('exit($c)'),
-      );
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _root, exitFn: (c) => throw Exception('exit($c)')));
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _root,
         confirmFn: (_) => true,

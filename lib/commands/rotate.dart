@@ -1,26 +1,29 @@
 import 'dart:convert';
-import 'dart:io';
+import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
-import '../config.dart';
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../config/config.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import 'claudart_command.dart';
+import 'support/claudart_command.dart';
 import '../templates/handoff_template.dart';
-import '../paths.dart';
-import '../registry.dart';
+import '../config/paths.dart';
 import '../session/archive_entry.dart';
 import '../session/handoff_event.dart';
 import '../session/run_mode.dart';
 import '../session/session_ops.dart';
 import '../session/session_state.dart';
 import '../session/teardown_utils.dart';
-import '../md_io.dart' show confirmOrEof;
-import '../process_runner.dart';
+import '../session/md_io.dart' show confirmOrEof;
+import '../io/process_runner.dart';
 import '../ui/render.dart' as render;
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
+import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
+import '../io/gate_runner.dart';
+import '../io/exit_reason.dart';
 
-const _shellExecutable = 'sh';
-const _shellCommandFlag = '-c';
 
 enum RotateResult {
   /// Current session archived, next issue seeded into fresh handoff.
@@ -52,18 +55,18 @@ enum RotateResult {
 /// archiving and seeding. If the build fails the rotation is aborted — the
 /// archive already written remains, but the live handoff is not overwritten.
 Future<RotateResult>  runRotate({
-  FileIO? io,
+  CommandSeams seams = const CommandSeams(),
   ProcessRunner? runner,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
-  bool Function(String question)? confirmFn,
-  bool? Function(String question)? askFn,
-  Future<bool> Function(String command)? buildFn,
+  Future<GateResult> Function(String command)? buildFn,
   RunMode mode = RunMode.interactive,
 }) async {
+  final io = seams.io;
+  final exitFn = seams.exitFn;
+  final confirmFn = seams.confirmFn;
+  final askFn = seams.askFn;
   final fileIO = io ?? const RealFileIO();
   final proc = runner ?? const RealProcessRunner();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   // A caller-supplied confirm always answers; the default reports null at end
   // of input. [askFn] lets a test simulate "nobody to answer".
   final bool? Function(String question) ask =
@@ -72,27 +75,17 @@ Future<RotateResult>  runRotate({
   print(render.header('CLAUDART ROTATE'));
 
   // 1 — Registry lookup.
-  final gitCtx = detectGitContext(workingDirectory: projectRootOverride);
-  final projectRoot = projectRootOverride ?? gitCtx?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository. Cannot detect project.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` to register it.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  final project = requireProject(seams, withGitContext: true);
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
+  final gitCtx = project.gitContext;
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final handoffFile = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
-    print('\n⚠  No handoff found in workspace. Nothing to rotate.\n');
+    print(UserText.rotateNoHandoffFoundInWorkspaceNothing.template);
     return RotateResult.noHandoff;
   }
 
@@ -100,15 +93,15 @@ Future<RotateResult>  runRotate({
   final state = SessionState.parse(handoff);
 
   if (!state.hasActiveContent) {
-    print('\n⚠  Handoff is blank. Start a session with /suggest first.\n');
+    print(UserText.rotateHandoffIsBlankStartASession.template);
     return RotateResult.noHandoff;
   }
 
   // 2 — Show current session summary.
-  print('\n───────────────────────────────────────');
-  print('  Bug    : ${_truncate(state.bug)}');
-  print('  Branch : ${gitCtx?.branch ?? state.branch}');
-  print('───────────────────────────────────────\n');
+  print(UserText.ruleLeadingBlank.template);
+  print(UserText.killBug.format({'text': _truncate(state.bug.text)}));
+  print(UserText.killBranch.format({'branch': gitCtx?.branch ?? state.branch}));
+  print(UserText.ruleTrailingBlank.template);
 
   // 3 — Confirm before any destructive action.
   //
@@ -119,16 +112,16 @@ Future<RotateResult>  runRotate({
   // `--headless` is the explicit way to say "don't ask", and plain end of
   // input stops here. A piped answer still counts as an answer.
   if (mode == RunMode.headless) {
-    print('(headless — proceeding without confirmation)\n');
+    print(UserText.rotateHeadlessProceedingWithoutConfirmation.template);
   } else {
     final answer = ask('Archive this session and rotate to the next issue?');
     if (answer == null) {
-      print('\n✗ No input available to confirm the rotation, so nothing was changed.');
-      print('  Re-run in a terminal, or pass --headless to proceed without asking.\n');
-      exit_(1);
+      print(UserText.rotateNoInputAvailableToConfirmThe.template);
+      print(UserText.rotateReRunInATerminalOr.template);
+      leaveFor(ExitReason.rotateNoInputToConfirm, exit_: exit_);
     }
     if (!answer) {
-      print('\nRotate cancelled.\n');
+      print(UserText.rotateRotateCancelled.template);
       return RotateResult.cancelled;
     }
   }
@@ -136,51 +129,63 @@ Future<RotateResult>  runRotate({
   // 4 — Extract pending issues before overwriting anything.
   final pending = extractPendingIssues(handoff);
 
-  // 5 — Archive current handoff + index entry, so a rotated session is
-  // visible to `claudart archives` like a killed or torn-down one is.
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+
+  // 5 — Build gate: must pass before the next session can start, and runs
+  // before anything is written, so a failed gate leaves no archive behind and
+  // a retry does not archive the same handoff again.
+  // afterFixCommand has no registry-entry field yet, so it stays sourced
+  // from the workspace config.json, defaulting to 'make rebuild'.
+  final config = _loadConfig(fileIO, workspace);
+  final build_ = buildFn ??
+      (command) => runGate(proc, command, projectRoot, clock: seams.clock);
+  print(UserText.rotateRunningBuildGate.format({'afterFixCommand': config.afterFixCommand}));
+  final gate = await build_(config.afterFixCommand);
+  logger.logGate(
+    command: ClaudartCommand.rotate.name,
+    gate: GateKind.rotateBuild,
+    shellCommand: config.afterFixCommand,
+    result: gate,
+  );
+  if (!gate.passed) {
+    print(UserText.rotateBuildFailedFixTheBuildBefore.template);
+    print(UserText.rotateGateChangeItWithAfterfixcommandIn.format({'afterFixCommand': config.afterFixCommand, 'workspace': configPathFor(workspace)}));
+    return RotateResult.buildFailed;
+  }
+  print(UserText.rotateBuildPassed.template);
+
+  // 6 — Archive current handoff + index entry, so a rotated session is
+  // visible to `claudart archives` like a killed or torn-down one is. Only now
+  // that the gate has passed.
   final archiveEntry = writeArchiveEntry(
     workspace:   workspace,
     branch:      state.branch,
     handoff:     handoff,
     kind:        ArchiveKind.reminder,
-    description: state.bug,
+    description: state.bug.text,
     io:          fileIO,
   );
   final archiveFile = p.join(archiveDirFor(workspace), archiveEntry.handoffFile);
 
-  // 6 — Build gate: must pass before the next session can start.
-  // afterFixCommand has no registry-entry field yet, so it stays sourced
-  // from the workspace config.json, defaulting to 'make rebuild'.
-  final config = _loadConfig(fileIO, workspace);
-  final build_ = buildFn ?? (command) => _defaultBuild(command, projectRoot, proc);
-  print('\nRunning build gate: ${config.afterFixCommand}');
-  final buildOk = await build_(config.afterFixCommand);
-  if (!buildOk) {
-    print('✗ Build failed. Fix the build before rotating.');
-    print('  (gate: `${config.afterFixCommand}` — change it with "afterFixCommand" in ${configPathFor(workspace)})\n');
-    return RotateResult.buildFailed;
-  }
-  print('✓ Build passed.\n');
-
   // Records the move once the build gate has passed and the handoff is about
   // to change. Not enforced: rotate is deliberately permissive, so a status
   // the table lacks is logged, not thrown.
-  void recordMove(HandoffEvent event) => SessionLogger(
-        io: fileIO,
-        sensitivityMode: entry.sensitivityMode,
-        workspacePath: workspace,
-      ).logHandoffMove(
-        command: ClaudartCommand.rotate.name,
-        from: state.status,
-        event: event,
-      );
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.rotate.name,
+  );
 
   // 7 — Seed next handoff or reset to blank.
   if (pending.isEmpty) {
-    recordMove(HandoffEvent.rotatedEmpty);
-    fileIO.write(handoffFile, blankHandoff);
-    print('✓ Archived  : ${p.basename(archiveFile)}');
-    print('✓ All pending issues cleared. Handoff reset.\n');
+    store.replace(
+      blankHandoff,
+      from: state.status,
+      event: HandoffEvent.rotatedEmpty,
+    );
+    print(UserText.rotateArchived.format({'archiveFile': p.basename(archiveFile)}));
+    print(UserText.rotateAllPendingIssuesClearedHandoffReset.template);
     return RotateResult.noNextIssue;
   }
 
@@ -192,19 +197,22 @@ Future<RotateResult>  runRotate({
     branch: state.branch,
     date: date,
     bug: nextBug,
-    expected: '_Not yet determined._',
+    expected: notYetDeterminedText,
     projectName: entry.name,
     pendingIssues: remaining,
   );
-  recordMove(HandoffEvent.rotated);
-  fileIO.write(handoffFile, newHandoff);
+  store.replace(
+    newHandoff,
+    from: state.status,
+    event: HandoffEvent.rotated,
+  );
 
-  print('✓ Archived  : ${p.basename(archiveFile)}');
-  print('✓ Next issue: ${_truncate(nextBug)}');
+  print(UserText.rotateArchived.format({'archiveFile': p.basename(archiveFile)}));
+  print(UserText.rotateNextIssue.format({'nextBug': _truncate(nextBug)}));
   if (remaining.isNotEmpty) {
-    print('  Queued    : ${remaining.length} more issue(s) in Pending Issues.');
+    print(UserText.rotateQueuedMoreIssueSInPending.format({'length': remaining.length}));
   }
-  print('\nRun /suggest to continue.\n');
+  print(UserText.rotateRunSuggestToContinue.template);
 
   return RotateResult.rotated;
 }
@@ -218,31 +226,6 @@ ProjectConfig _loadConfig(FileIO fileIO, String workspace) {
   } on FormatException {
     return const ProjectConfig();
   }
-}
-
-/// afterFixCommand is free-form user config, not untrusted input — shell
-/// operators (&&, ||, |, >, globs) are expected to work, same as typing the
-/// command directly in a terminal.
-///
-/// `runInShell: true` on a pre-split argument list does NOT do this —
-/// confirmed by direct testing: Dart quotes each split argument
-/// individually before handing them to the shell, so `&&`/`||` inside the
-/// (already-split) argument list arrive as inert literal text, not
-/// operators. Passing the whole, unsplit [command] string as `sh`'s `-c`
-/// argument is what actually works — the shell parses operators, quoting,
-/// and globs itself, the same as this project's own `.githooks/pre-push`
-/// already relies on.
-Future<bool> _defaultBuild(
-  String command,
-  String workingDirectory,
-  ProcessRunner proc,
-) async {
-  final result = await proc.run(
-    _shellExecutable,
-    [_shellCommandFlag, command],
-    workingDirectory: workingDirectory,
-  );
-  return result.exitCode == 0;
 }
 
 String _truncate(String s, {int max = 72}) =>

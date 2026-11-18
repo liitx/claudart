@@ -2,15 +2,17 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/resume.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/archive_entry.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;
@@ -96,6 +98,8 @@ void main() {
       final io = _io(withArchive: false);
       await expectLater(
         runResume(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,
@@ -108,6 +112,8 @@ void main() {
       final io = MemoryFileIO();
       await expectLater(
         runResume(
+          confirmFn: unscriptedConfirm,
+          
           io: io,
           projectRootOverride: _projectRoot,
           exitFn: _throwExit,

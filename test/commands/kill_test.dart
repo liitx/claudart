@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/kill.dart';
-import 'package:claudart/file_io.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/io/file_io.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/logging/logger.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
@@ -15,9 +18,11 @@ import 'package:claudart/session/workspace_guard.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 const _claudeLink = '/projects/my-app/.claude';
 
 const _activeHandoff = '''# Agent Handoff — my-app
@@ -123,12 +128,7 @@ void main() {
   group('kill — transition log', () {
     test('logs killed from the status the handoff was in', () async {
       final io = _io();
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true,
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       expect(loggedMoves(io, _workspace), [
         {
           'command': ClaudartCommand.kill.name,
@@ -142,12 +142,7 @@ void main() {
     test('logs nothing when the user declines', () async {
       final io = _io();
       await expectLater(
-        runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => false,
-          exitFn: (code) => throw _ExitException(code),
-        ),
+        runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => false, exitFn: (code) => throw _ExitException(code))),
         throwsA(isA<_ExitException>()),
       );
       expect(loggedMoves(io, _workspace), isEmpty);
@@ -155,12 +150,7 @@ void main() {
 
     test('a blank handoff is logged as a move the table lacks', () async {
       final io = _io(withHandoff: false);
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true,
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       expect(loggedMoves(io, _workspace), [
         {
           'command': ClaudartCommand.kill.name,
@@ -179,12 +169,7 @@ void main() {
       io.write(handoffPathFor(_workspace), blankHandoff);
       final output = <String>[];
       await runZoned(
-        () => runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => true,
-          exitFn: (code) => throw _ExitException(code),
-        ),
+        () => runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code))),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -192,16 +177,46 @@ void main() {
       expect(output.join('\n'), contains('Status : no-handoff'));
     });
 
+    Future<String> summaryFor(String handoff) async {
+      final io = _io();
+      io.write(handoffPathFor(_workspace), handoff);
+      final output = <String>[];
+      await runZoned(
+        () => runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code))),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      return output.join('\n');
+    }
+
+    test('recorded attempted and changed work is shown', () async {
+      final summary = await summaryFor(
+        _activeHandoff
+            .replaceFirst(
+              '### What was attempted\n_Nothing yet._',
+              '### What was attempted\nTried the first fix',
+            )
+            .replaceFirst(
+              '### What changed (files modified)\n_Nothing yet._',
+              '### What changed (files modified)\nlib/a.dart',
+            ),
+      );
+      expect(summary, contains('Attempted : Tried the first fix'));
+      expect(summary, contains('Changed   : lib/a.dart'));
+    });
+
+    test('placeholder progress is not shown as work', () async {
+      final summary = await summaryFor(_activeHandoff);
+      expect(summary, isNot(contains('Attempted :')));
+      expect(summary, isNot(contains('Changed   :')));
+    });
+
     test('a live handoff shows its own status', () async {
       final io = _io();
       final output = <String>[];
       await runZoned(
-        () => runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => true,
-          exitFn: (code) => throw _ExitException(code),
-        ),
+        () => runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code))),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -210,15 +225,84 @@ void main() {
     });
   });
 
+  group('kill — the outcome is recorded', () {
+    List<String> outcomesIn(MemoryFileIO io, String logsDir) => [
+          for (final line in io
+              .read(logFilePath(logsDir, LogFile.interactions))
+              .split('\n')
+              .where((l) => l.isNotEmpty))
+            (jsonDecode(line)
+                as Map<String, dynamic>)[LogEntryField.outcome.name] as String,
+        ];
+
+    Future<List<String>> outcomeOf(
+      MemoryFileIO io, {
+      bool confirm = true,
+    }) async {
+      await runZoned(
+        () async {
+          try {
+            await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => confirm, exitFn: (code) => throw _ExitException(code)));
+          } on _ExitException {
+            // A refused kill ends with an exit; the log is the point.
+          }
+        },
+        zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+      );
+      return outcomesIn(io, logsDirFor(_workspace));
+    }
+
+    test('a kill from a status with nothing to lose is killed', () async {
+      expect(await outcomeOf(_io()), [KillOutcome.killed.name]);
+    });
+
+    test('a kill from debugComplete is killedWithWarning', () async {
+      final io = _io();
+      io.write(
+        handoffPathFor(_workspace),
+        _activeHandoff.replaceFirst('ready-for-debug', 'debug-complete'),
+      );
+      expect(await outcomeOf(io), [KillOutcome.killedWithWarning.name]);
+    });
+
+    test('the warning is printed for debugComplete and for nothing else',
+        () async {
+      for (final entry in {
+        'debug-complete': isTrue,
+        'ready-for-debug': isFalse,
+      }.entries) {
+        final io = _io();
+        io.write(
+          handoffPathFor(_workspace),
+          _activeHandoff.replaceFirst('ready-for-debug', entry.key),
+        );
+        final output = <String>[];
+        await runZoned(
+          () => runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code))),
+          zoneSpecification: ZoneSpecification(
+            print: (_, __, ___, line) => output.add(line),
+          ),
+        );
+        expect(
+          output.join('\n').contains(HandoffStatus.debugComplete.killWarning!),
+          entry.value,
+          reason: entry.key,
+        );
+      }
+    });
+
+    test('a declined kill is cancelled', () async {
+      expect(
+        await outcomeOf(_io(), confirm: false),
+        [KillOutcome.cancelled.name],
+      );
+    });
+  });
+
   group('kill — success path', () {
     test('archives handoff', () async {
       final io = _io();
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true,
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       final archived = io.files.keys
           .where((k) => k.startsWith(p.join(_workspace, 'archive')) && k.endsWith('.md'))
           .toList();
@@ -229,12 +313,7 @@ void main() {
       final io = _io();
       final output = <String>[];
       await runZoned(
-        () => runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => true,
-          exitFn: (code) => throw _ExitException(code),
-        ),
+        () => runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code))),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -244,12 +323,7 @@ void main() {
 
     test('archived session is visible to `claudart archives` (index entry appended)', () async {
       final io = _io();
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true,
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       final entries = loadIndex(_workspace, io: io);
       expect(entries, hasLength(1));
       expect(entries.first.branch, equals('feat/fix'));
@@ -257,12 +331,7 @@ void main() {
 
     test('resets handoff to blank', () async {
       final io = _io();
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true,
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       final handoff = io.read(handoffPathFor(_workspace));
       expect(handoff, isNot(contains('Something is broken')));
     });
@@ -271,23 +340,13 @@ void main() {
         'it does not deregister the project; unlink removes the link',
         () async {
       final io = _io();
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true,
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       expect(io.linkExists(_claudeLink), isTrue);
     });
 
     test('updates registry lastSession', () async {
       final io = _io();
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true,
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       final registry = Registry.load(io: io);
       final entry = registry.findByName('my-app')!;
       final today = DateTime.now().toIso8601String().substring(0, 10);
@@ -298,15 +357,10 @@ void main() {
         'reported as "no active session"', () async {
       final io = _io(withLink: false, withRealDir: true);
       final confirmQuestions = <String>[];
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (q) {
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (q) {
           confirmQuestions.add(q);
           return true;
-        },
-        exitFn: (code) => throw _ExitException(code),
-      );
+        }, exitFn: (code) => throw _ExitException(code)));
       // "Kill anyway and archive the handoff?" is only asked when Step 4's
       // "no active session" branch is taken — it must not be, since a real
       // directory at .claude counts as an active session.
@@ -328,12 +382,8 @@ void main() {
     test('leaves handoff intact when user declines', () async {
       final io = _io();
       await expectLater(
-        runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => false, // decline on first confirmation
-          exitFn: (code) => throw _ExitException(code),
-        ),
+        runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => false, exitFn: (code) => throw _ExitException(code))) // decline on first confirmation
+          ,
         throwsA(isA<_ExitException>()),
       );
       // Handoff should still contain the active content.
@@ -349,12 +399,8 @@ void main() {
       io.write(p.join(_workspace, 'workspace.lock'), 'setup');
 
       await expectLater(
-        runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => false, // decline clear lock
-          exitFn: (code) => throw _ExitException(code),
-        ),
+        runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => false, exitFn: (code) => throw _ExitException(code))) // decline clear lock
+          ,
         throwsA(isA<_ExitException>()),
       );
 
@@ -366,12 +412,8 @@ void main() {
       final io = _io();
       io.write(p.join(_workspace, 'workspace.lock'), 'setup');
 
-      await runKill(
-        io: io,
-        projectRootOverride: _projectRoot,
-        confirmFn: (_) => true, // accept all prompts including lock clear
-        exitFn: (code) => throw _ExitException(code),
-      );
+      await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code))) // accept all prompts including lock clear
+        ;
 
       expect(isLocked(_workspace, io: io), isFalse);
     });
@@ -398,12 +440,7 @@ void main() {
 
       final output = <String>[];
       await runZoned(
-        () => runKill(
-          io: io,
-          projectRootOverride: null,
-          confirmFn: (_) => true,
-          exitFn: (code) => throw _ExitException(code),
-        ),
+        () => runKill(seams: CommandSeams(io: io, projectRootOverride: null, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code))),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -424,12 +461,7 @@ void main() {
       final io = _FailOnResetIO(delegate: _io());
       _ExitException? caught;
       try {
-        await runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => true,
-          exitFn: (code) => throw _ExitException(code),
-        );
+        await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       } on _ExitException catch (e) {
         caught = e;
       }
@@ -440,12 +472,7 @@ void main() {
     test('clears the lock after a successful rollback — nothing is actually interrupted', () async {
       final io = _FailOnResetIO(delegate: _io());
       try {
-        await runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          confirmFn: (_) => true,
-          exitFn: (code) => throw _ExitException(code),
-        );
+        await runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, confirmFn: (_) => true, exitFn: (code) => throw _ExitException(code)));
       } on _ExitException catch (_) {}
       expect(isLocked(_workspace, io: io.delegate), isFalse);
     });
@@ -454,14 +481,7 @@ void main() {
   group('kill — consent is never inferred from missing input', () {
     Future<void> kill(MemoryFileIO io,
             {bool? Function(String)? askFn, bool Function(String)? confirmFn, RunMode mode = RunMode.interactive}) =>
-        runKill(
-          io: io,
-          projectRootOverride: _projectRoot,
-          askFn: askFn,
-          confirmFn: confirmFn,
-          mode: mode,
-          exitFn: (code) => throw _ExitException(code),
-        );
+        runKill(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, askFn: askFn, confirmFn: confirmFn, exitFn: (code) => throw _ExitException(code)), mode: mode);
 
     bool? neverAsked(String q) => throw StateError('should not have been asked: $q');
     Matcher exitsWith(int code) => throwsA(isA<_ExitException>().having((e) => e.code, 'code', code));

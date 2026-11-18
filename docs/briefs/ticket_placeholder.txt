@@ -1,0 +1,15 @@
+Session brief for claudart (parallel design session; NO code until the owner has vetted the ticket flow).
+Read docs/methodical_refactor.md: gaps K1 to K6, the "Placeholders (H1-H4)" table, step Q10.
+Owner's direction: type of work arrives as metadata on a sprint-board ticket (zedup owns the board)
+via an event-driven ticket flow; for now work is allocated into a handoff as a SprintTicket (class or
+factory constructor); template(type, handoff) => HandoffTemplate.variant(metadata); Scope is a variant
+object per type; a handoff's data updates the Workspace Feature it is allocated to; suggest reads only
+that feature's knowledge.
+Task: propose, as typed designs only, (1) SprintTicket and the metadata fields it needs, (2) a sealed
+HandoffTemplate with one variant per type and what Scope holds in each, (3) how the Workspace Feature is
+identified (derived from the project's enums vs declared) and where its knowledge lives, (4) how the
+ticket event reaches claudart (stream/async; compatible with the Phase 3 asynchronous transition stream).
+For each, name the family it belongs to (docs/topology/families.md) or the new variant it needs.
+Open owner decisions you must not settle: the single list of handoff types, and where the type is chosen.
+The work so far was written by hand by the assistant, not produced by claudart; check the
+implementation of test/topology/* and tool/refactor_audit/* first.

@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
+import 'package:claudart/errors/failure_type.dart';
+import 'package:claudart/io/gate_runner.dart';
 import 'package:claudart/logging/logger.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/model_observation.dart';
+import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:claudart/session/handoff_event.dart';
@@ -12,14 +16,50 @@ import 'package:claudart/session/session_state.dart';
 import 'package:claudart/sensitivity/token_map.dart';
 import 'package:path/path.dart' as p;
 import '../helpers/mocks.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
+import 'package:claudart/registry.dart';
+import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/logging/log_protection.dart';
+import '../helpers/project_fixture.dart';
 
 String get _logsDir => p.join(claudeDir, 'logs');
-String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
-String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-String get _transitionsPath => p.join(_logsDir, 'transitions.jsonl');
-String get _performancePath => p.join(_logsDir, 'performance.md');
-String get _modelsPath => p.join(_logsDir, 'models.jsonl');
+String get _interactionsPath => logFilePath(_logsDir, LogFile.interactions);
+String get _errorsPath => logFilePath(_logsDir, LogFile.errors);
+String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
+String get _modelsPath => logFilePath(_logsDir, LogFile.models);
+String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
+
+/// The key a seeded row carries so a test can tell which rows survived.
+const _seededIndexKey = 'seededIndex';
+
+/// The fingerprint of an error no log holds yet.
+const _freshFingerprint = 'new';
+
+/// The slack a jsonl log may run past its cap before it is trimmed back.
+const _slackLines = 50;
+
+typedef _Volume = ({int lines, int writes, int kept});
+
+/// How many lines a log holds after `writes` writes onto `lines` seeded lines,
+/// written out by hand from the rule (trim to the cap once the file runs past
+/// cap plus [_slackLines]), not computed by the code under test. The writes
+/// cases walk the trim cycle: from the cap, the file grows to cap + 50, the
+/// next write trims it back, and 160 = 3 * 51 + 7 is three whole cycles and 7.
+List<_Volume> _volumesFor(int cap) => [
+      (lines: 1, writes: 1, kept: 2),
+      (lines: cap - 1, writes: 1, kept: cap),
+      (lines: cap, writes: 1, kept: cap + 1),
+      (lines: cap + _slackLines - 2, writes: 1, kept: cap + _slackLines - 1),
+      (lines: cap + _slackLines - 1, writes: 1, kept: cap + _slackLines),
+      (lines: cap + _slackLines, writes: 1, kept: cap),
+      (lines: cap + _slackLines + 1, writes: 1, kept: cap),
+      (lines: 2 * cap, writes: 1, kept: cap),
+      (lines: 10 * cap, writes: 1, kept: cap),
+      (lines: cap, writes: _slackLines, kept: cap + _slackLines),
+      (lines: cap, writes: _slackLines + 1, kept: cap),
+      (lines: cap, writes: _slackLines + 2, kept: cap + 1),
+      (lines: cap, writes: 160, kept: cap + 7),
+    ];
 
 void main() {
   group('SessionLogger', () {
@@ -28,7 +68,7 @@ void main() {
 
     setUp(() {
       io = MemoryFileIO();
-      logger = SessionLogger(io: io);
+      logger = SessionLogger.plain(io: io);
     });
 
     List<Map<String, dynamic>> readJsonl(String path) {
@@ -42,15 +82,23 @@ void main() {
     }
 
     test('logInteraction appends one jsonl line', () {
-      logger.logInteraction(command: 'setup', outcome: 'ok');
+      logger.logInteraction(rowKind: InteractionRowKind.outcome, command: 'setup', outcome: 'ok');
       final entries = readJsonl(_interactionsPath);
       expect(entries, hasLength(1));
       expect(entries.first['command'], equals('setup'));
       expect(entries.first['outcome'], equals('ok'));
     });
 
+    for (final kind in InteractionRowKind.values) {
+      test('logInteraction marks a ${kind.name} row as ${kind.name}', () {
+        logger.logInteraction(rowKind: kind, command: 'setup', outcome: 'ok');
+        expect(readJsonl(_interactionsPath).single['rowKind'], kind.name);
+      });
+    }
+
     test('logInteraction stores all optional fields', () {
       logger.logInteraction(
+        rowKind: InteractionRowKind.outcome,
         command: 'scan',
         outcome: 'ok',
         scanScope: 'lib',
@@ -79,7 +127,7 @@ void main() {
       final entries = readJsonl(_transitionsPath);
       expect(entries, hasLength(1));
       expect(entries.first['ts'], isA<String>());
-      expect({...entries.first}..remove('ts'), {
+      expect({...entries.first}..remove('ts')..remove('schema'), {
         'command': 'suggest',
         'from': 'suggestInvestigating',
         'event': 'saveConfirmedReady',
@@ -93,7 +141,7 @@ void main() {
         from: HandoffStatus.readyForDebug,
         event: HandoffEvent.killed,
       );
-      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')), [
+      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')..remove('schema')), [
         {
           'command': 'kill',
           'from': 'readyForDebug',
@@ -109,7 +157,7 @@ void main() {
         from: HandoffStatus.debugComplete,
         event: HandoffEvent.rotated,
       );
-      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')), [
+      expect(readJsonl(_transitionsPath).map((e) => {...e}..remove('ts')..remove('schema')), [
         {
           'command': 'rotate',
           'from': 'debugComplete',
@@ -155,46 +203,177 @@ void main() {
       expect(entries.first['count'], equals(2));
     });
 
-    // The log may run 50 lines past its 500-line cap before it is trimmed back
-    // to 500, so the rewrite happens once per 50 appends, not on every one.
-    test('rotation: past cap plus slack, the newest 500 remain', () {
-      final manyEntries = '${List.generate(
-        551,
-        (i) => jsonEncode({'ts': 'x', 'command': 'setup', 'n': i, 'outcome': 'ok'}),
-      ).join('\n')}\n';
-      io.write(_interactionsPath, manyEntries);
-
-      // Simulate new log — recreate logger and log one more
-      final l2 = SessionLogger(io: io);
-      l2.logInteraction(command: 'new_cmd', outcome: 'ok');
-
-      final entries = readJsonl(_interactionsPath);
-      expect(entries.length, 500);
-      expect(entries.last['command'], equals('new_cmd'));
-      expect(entries.first['n'], 52);
-    });
-
-    test('rotation: within the slack nothing is trimmed', () {
-      final within = '${List.generate(
-        549,
-        (i) => jsonEncode(
-          {'ts': 'x', 'command': 'setup', 'n': i, 'outcome': 'ok'},
+    // What each log keeps, as the README's log table documents it (and 50 lines
+    // of slack past it): written out here, not read from the logger, so a changed
+    // cap fails. The logs that share the append-and-trim path.
+    final writers = <LogFile, ({int cap, void Function(SessionLogger) write})>{
+      LogFile.interactions: (
+        cap: 500,
+        write: (logger) => logger.logInteraction(
+            rowKind: InteractionRowKind.outcome, command: 'x', outcome: 'ok'),
+      ),
+      LogFile.transitions: (
+        cap: 500,
+        write: (logger) => logger.logTransition(
+          command: 'x',
+          transition: const HandoffTransition(
+            from: HandoffStatus.noHandoff,
+            event: HandoffEvent.setup,
+            to: HandoffStatus.suggestInvestigating,
+          ),
         ),
-      ).join('\n')}\n';
-      io.write(_interactionsPath, within);
-      SessionLogger(io: io).logInteraction(command: 'new_cmd', outcome: 'ok');
-      final entries = readJsonl(_interactionsPath);
-      expect(entries.length, 550);
-      expect(entries.first['n'], 0);
+      ),
+      LogFile.models: (
+        cap: 500,
+        write: (logger) => logger.logStepModels(
+          command: 'x',
+          event: AgentCompleted(
+            stepId: 'reader',
+            usage: const Usage(),
+            intendedModel: AgentModel.haiku,
+            models: const [
+              ModelObservation(observedModelId: 'claude-haiku-4-5-20251001'),
+            ],
+          ),
+        ),
+      ),
+      LogFile.steps: (
+        cap: 2000,
+        write: (logger) => logger.logPipelineEvent(
+          command: 'x',
+          event: const AgentStarted(
+            stepId: 'reader',
+            label: 'Reading',
+            model: AgentModel.haiku,
+            displayStep: 1,
+            displayTotal: 1,
+          ),
+        ),
+      ),
+      LogFile.gates: (
+        cap: 500,
+        write: (logger) => logger.logGate(
+          command: 'debug',
+          gate: GateKind.debugVerification,
+          shellCommand: 'dart test',
+          result: const GateResult.passed(),
+        ),
+      ),
+      LogFile.proofs: (
+        cap: 5000,
+        write: (logger) => logger.logProofFault(
+          proof: 'p',
+          fault: 'f',
+          sourceFile: 'lib/a.dart',
+          sourceLine: 1,
+          verdict: ProofVerdict.caught,
+          tier: 1,
+          attempts: 1,
+          caughtBy: const [],
+          durationMs: 1,
+        ),
+      ),
+    };
+
+    for (final entry in writers.entries) {
+      final path = p.join(logsDirFor('/workspaces/app'), entry.key.fileName);
+      final cap = entry.value.cap;
+
+      group('rotation: ${entry.key.name} keeps its newest $cap lines', () {
+        for (final volume in _volumesFor(cap)) {
+          test(
+              '${volume.lines} lines then ${volume.writes} '
+              '${volume.writes == 1 ? 'write' : 'writes'} holds ${volume.kept}',
+              () {
+            io.write(
+              path,
+              '${[
+                for (var i = 0; i < volume.lines; i++)
+                  jsonEncode({'ts': 'x', _seededIndexKey: i}),
+              ].join('\n')}\n',
+            );
+            final writer =
+                SessionLogger.plain(io: io, workspacePath: '/workspaces/app');
+            for (var i = 0; i < volume.writes; i++) {
+              entry.value.write(writer);
+            }
+            final rows = [
+              for (final line in io.read(path).trim().split('\n'))
+                jsonDecode(line) as Map<String, dynamic>,
+            ];
+            expect(rows, hasLength(volume.kept));
+            // The oldest rows go and the order stays: what survives of the
+            // seeded rows is one unbroken run ending where the seed ended, and
+            // every row after it is one a write made (it carries no index).
+            final dropped = volume.lines + volume.writes - volume.kept;
+            final survivingSeeded =
+                dropped < volume.lines ? volume.lines - dropped : 0;
+            expect(
+              [for (final row in rows) row[_seededIndexKey]],
+              [
+                for (var i = 0; i < survivingSeeded; i++) dropped + i,
+                for (var i = survivingSeeded; i < volume.kept; i++) null,
+              ],
+            );
+          },
+          );
+        }
+      });
+    }
+
+    // errors.jsonl is not on the append-and-trim path: each error rewrites the
+    // file, deduplicated by fingerprint, and keeps the newest 200 with no slack.
+    group('rotation: errors keeps its newest 200 distinct errors', () {
+      const cap = 200;
+      final volumes = <({int lines, String fingerprint, int kept})>[
+        (lines: cap - 1, fingerprint: _freshFingerprint, kept: cap),
+        (lines: cap, fingerprint: _freshFingerprint, kept: cap),
+        (lines: cap + 1, fingerprint: _freshFingerprint, kept: cap),
+        (lines: 5 * cap, fingerprint: _freshFingerprint, kept: cap),
+        // A repeat of one already held is counted, not added: nothing is dropped.
+        (lines: cap, fingerprint: 'fp-${cap - 1}', kept: cap),
+      ];
+      for (final volume in volumes) {
+        test(
+            '${volume.lines} errors then ${volume.fingerprint} holds ${volume.kept}',
+            () {
+          io.write(
+            _errorsPath,
+            '${[
+              for (var i = 0; i < volume.lines; i++)
+                jsonEncode({
+                  LogEntryField.fingerprint.name: 'fp-$i',
+                  LogEntryField.count.name: 1,
+                  _seededIndexKey: i,
+                }),
+            ].join('\n')}\n',
+          );
+          logger.logError(
+            command: 'x',
+            errorType: 'e',
+            fingerprint: volume.fingerprint,
+            reason: 'r',
+          );
+          final rows = readJsonl(_errorsPath);
+          expect(rows, hasLength(volume.kept));
+          final isRepeat = volume.fingerprint != _freshFingerprint;
+          final dropped = isRepeat ? 0 : volume.lines + 1 - volume.kept;
+          final survivingSeeded = volume.lines - dropped;
+          expect(
+            [for (final row in rows) row[_seededIndexKey]],
+            [
+              for (var i = 0; i < survivingSeeded; i++) dropped + i,
+              if (!isRepeat) null,
+            ],
+          );
+          expect(rows.last[LogEntryField.count.name], isRepeat ? 2 : 1);
+        });
+      }
     });
 
     test('sensitive mode abstracts stack trace before write', () {
       final tm = TokenMap();
-      final sensitiveLogger = SessionLogger(
-        io: io,
-        sensitivityMode: true,
-        tokenMap: tm,
-      );
+      final sensitiveLogger = SessionLogger.abstracted(tokenMap: tm, io: io);
       sensitiveLogger.logError(
         command: 'scan',
         errorType: 'error',
@@ -213,11 +392,7 @@ void main() {
       // caller actually populates -- so a sensitive-mode project's error
       // log still leaked raw identifiers through `reason`.
       final tm = TokenMap();
-      final sensitiveLogger = SessionLogger(
-        io: io,
-        sensitivityMode: true,
-        tokenMap: tm,
-      );
+      final sensitiveLogger = SessionLogger.abstracted(tokenMap: tm, io: io);
       sensitiveLogger.logError(
         command: 'scan',
         errorType: 'error',
@@ -228,49 +403,6 @@ void main() {
       final reason = entries.first['reason'] as String;
       expect(reason, isNot(contains('VolumeBloc')));
     });
-
-    const performanceHeader = '| timestamp | command | filesScanned | duration '
-        '| tokensNew | outcome |';
-    const performanceDivider =
-        '|-----------|---------|-------------|----------|-----------|--------|';
-
-    List<String> performanceTable() => io
-        .read(_performancePath)
-        .split('\n')
-        .where((l) => l.isNotEmpty)
-        .toList();
-
-    test('logPerformance starts the table with a header and a divider row',
-        () {
-      logger.logPerformance(command: 'scan', outcome: 'ok', filesScanned: 10);
-      final table = performanceTable();
-      expect(table[0], performanceHeader);
-      expect(table[1], performanceDivider);
-      expect(table.length, 3);
-      expect(table[2], contains('| scan | 10 |'));
-    });
-
-    test('logPerformance keeps every row, in order, under the header', () {
-      for (final command in ['one', 'two', 'three']) {
-        logger.logPerformance(command: command, outcome: 'ok');
-      }
-      final table = performanceTable();
-      expect(table.length, 5);
-      expect(table.sublist(2).map((row) => row.split('|')[2].trim()),
-          ['one', 'two', 'three']);
-    });
-
-    test('logPerformance rotation keeps the header and the newest 50 rows', () {
-      for (var i = 0; i < 52; i++) {
-        logger.logPerformance(command: 'cmd_$i', outcome: 'ok');
-      }
-      final table = performanceTable();
-      expect(table.length, 52);
-      expect(table[0], performanceHeader);
-      expect(table[1], performanceDivider);
-      expect(table[2], contains('| cmd_2 |'));
-      expect(table.last, contains('| cmd_51 |'));
-    });
   });
 
   group('SessionLogger.logStepModels', () {
@@ -280,7 +412,7 @@ void main() {
 
     setUp(() {
       io = MemoryFileIO();
-      logger = SessionLogger(io: io);
+      logger = SessionLogger.plain(io: io);
     });
 
     AgentCompleted completed({
@@ -324,7 +456,7 @@ void main() {
       expect(written.last[ModelRecordField.drift.name], ['unknownModel']);
     });
 
-    test('the record holds exactly the ModelRecordField keys plus ts, command',
+    test('the record holds exactly the ModelRecordField keys plus schema, ts, command',
         () {
       logger.logStepModels(
         command: 'debug',
@@ -332,7 +464,74 @@ void main() {
       );
       expect(
         records().single.keys.toSet(),
-        {'ts', 'command', for (final f in ModelRecordField.values) f.name},
+        {'schema', 'ts', 'command', for (final f in ModelRecordField.values) f.name},
+      );
+    });
+
+    test('a helper call beside the intended model is logged as incidental, '
+        'not drift', () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [
+            ModelObservation(observedModelId: AgentModel.haiku.slug),
+            ModelObservation(observedModelId: AgentModel.sonnet.slug),
+          ],
+        ),
+      );
+      final byRole = {
+        for (final record in records())
+          record[ModelRecordField.role.name]: record,
+      };
+      expect(
+        byRole.keys.toSet(),
+        {
+          ObservedModelRole.stepModel.name,
+          ObservedModelRole.incidentalHelper.name,
+        },
+      );
+      final helper = byRole[ObservedModelRole.incidentalHelper.name]!;
+      expect(
+        helper[ModelRecordField.drift.name] as List,
+        isNot(contains(ModelDriftKind.differsFromIntended.name)),
+      );
+    });
+
+    test('every record of a run carries the same accounting', () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [
+            const ModelObservation(observedModelId: 'not-a-declared-model'),
+            ModelObservation(observedModelId: AgentModel.sonnet.slug),
+          ],
+        ),
+      );
+      expect(
+        records().map((record) => record[ModelRecordField.accounting.name]),
+        everyElement([ModelAccountingFinding.unknownModelObserved.name]),
+      );
+    });
+
+    test('a run that adds up is logged with an empty accounting', () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [ModelObservation(observedModelId: AgentModel.sonnet.slug)],
+        ),
+      );
+      expect(
+        records().single[ModelRecordField.accounting.name],
+        isEmpty,
       );
     });
 
@@ -350,6 +549,34 @@ void main() {
         ),
       );
       expect(io.fileExists(_modelsPath), isFalse);
+    });
+
+    // The row `claudart status` shows for a step is the model the step ran on.
+    // A helper call is never that row, whichever order the CLI listed them in.
+    test('readStepModelRecords never lets a helper call replace the step model',
+        () {
+      logger.logStepModels(
+        command: 'suggest',
+        event: AgentCompleted(
+          stepId: 'reasoner',
+          usage: const Usage(),
+          intendedModel: AgentModel.sonnet,
+          models: [
+            ModelObservation(observedModelId: AgentModel.sonnet.slug),
+            ModelObservation(observedModelId: AgentModel.haiku.slug),
+          ],
+        ),
+      );
+      final shown = logger.readStepModelRecords().single;
+      final observation = shown[ModelRecordField.observation.name] as Map;
+      expect(
+        observation[ModelObservationField.observedModelId.jsonKey],
+        AgentModel.sonnet.slug,
+      );
+      expect(
+        shown[ModelRecordField.role.name],
+        ObservedModelRole.stepModel.name,
+      );
     });
 
     test('readStepModelRecords returns the newest record per step, oldest '
@@ -374,22 +601,6 @@ void main() {
 
     test('readStepModelRecords is empty when nothing was logged', () {
       expect(logger.readStepModelRecords(), isEmpty);
-    });
-
-    test('appends across steps; past the cap plus slack, the newest 500 remain',
-        () {
-      for (var step = 0; step < 551; step++) {
-        logger.logStepModels(
-          command: 'debug',
-          event: completed(
-            models: [ModelObservation(observedModelId: haikuId, inputTokens: step)],
-          ),
-        );
-      }
-      final written = records();
-      expect(written.length, 500);
-      final first = written.first[ModelRecordField.observation.name] as Map;
-      expect(first[ModelObservationField.inputTokens.jsonKey], 51);
     });
   });
 
@@ -416,7 +627,9 @@ void main() {
         expect(result.exitCode, 0, reason: '${result.stderr}');
       }
 
-      final lines = File(p.join(logsDirFor(dir.path), 'interactions.jsonl'))
+      final lines = File(
+        logFilePath(logsDirFor(dir.path), LogFile.interactions),
+      )
           .readAsLinesSync()
           .where((l) => l.isNotEmpty);
       expect(lines.length, writers * entriesPerWriter);
@@ -449,7 +662,9 @@ void main() {
         expect(result.exitCode, 0, reason: '${result.stderr}');
       }
       return [
-        for (final line in File(p.join(logsDirFor(dir.path), 'errors.jsonl'))
+        for (final line in File(
+          logFilePath(logsDirFor(dir.path), LogFile.errors),
+        )
             .readAsLinesSync())
           if (line.isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
       ];
@@ -460,27 +675,6 @@ void main() {
       final entries = await runErrorWriters('shared');
       expect(entries.length, 1);
       expect(entries.single['count'], 4 * 25);
-    }, timeout: const Timeout(Duration(seconds: 90)));
-
-    test('timing rows from several processes all survive', () async {
-      final dir = Directory.systemTemp.createTempSync('claudart_perf_race_');
-      addTearDown(() => dir.deleteSync(recursive: true));
-      final results = await Future.wait([
-        for (var writer = 0; writer < 4; writer++)
-          Process.run(Platform.resolvedExecutable, [
-            'test/helpers/log_performance_rows.dart',
-            dir.path,
-            '$writer',
-            '10',
-          ]),
-      ]);
-      for (final result in results) {
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-      }
-      final rows = File(p.join(logsDirFor(dir.path), 'performance.md'))
-          .readAsLinesSync()
-          .where((l) => l.startsWith('| ') && !l.contains('timestamp'));
-      expect(rows.length, 4 * 10);
     }, timeout: const Timeout(Duration(seconds: 90)));
 
     test('distinct fingerprints from several processes all survive',
@@ -494,6 +688,12 @@ void main() {
   // what is written: each key is pinned here as a literal.
   group('LogEntryField keys', () {
     const keys = <LogEntryField, String>{
+      LogEntryField.schema: 'schema',
+      LogEntryField.gate: 'gate',
+      LogEntryField.evidence: 'evidence',
+      LogEntryField.shellCommand: 'shellCommand',
+      LogEntryField.exitCode: 'exitCode',
+      LogEntryField.outputTail: 'outputTail',
       LogEntryField.ts: 'ts',
       LogEntryField.command: 'command',
       LogEntryField.outcome: 'outcome',
@@ -516,6 +716,19 @@ void main() {
       LogEntryField.filed: 'filed',
       LogEntryField.issueId: 'issueId',
       LogEntryField.rejected: 'rejected',
+      LogEntryField.kind: 'kind',
+      LogEntryField.rowKind: 'rowKind',
+      LogEntryField.proof: 'proof',
+      LogEntryField.fault: 'fault',
+      LogEntryField.sourceFile: 'sourceFile',
+      LogEntryField.sourceLine: 'sourceLine',
+      LogEntryField.verdict: 'verdict',
+      LogEntryField.tier: 'tier',
+      LogEntryField.attempts: 'attempts',
+      LogEntryField.caughtBy: 'caughtBy',
+      LogEntryField.stepId: 'stepId',
+      LogEntryField.detail: 'detail',
+      LogEntryField.failureType: 'failureType',
     };
 
     for (final field in LogEntryField.values) {
@@ -535,7 +748,7 @@ void main() {
 
     setUp(() {
       io = MemoryFileIO();
-      logger = SessionLogger(io: io);
+      logger = SessionLogger.plain(io: io);
     });
 
     Map<String, dynamic> lastLine(String path) =>
@@ -555,6 +768,7 @@ void main() {
       String? claudartVersion,
     }) =>
         l.logInteraction(
+          rowKind: InteractionRowKind.outcome,
           command: 'c',
           outcome: 'o',
           scanScope: scanScope,
@@ -612,7 +826,7 @@ void main() {
       });
 
       test('${field.name} is absent when not passed', () {
-        logger.logInteraction(command: 'c', outcome: 'o');
+        logger.logInteraction(rowKind: InteractionRowKind.outcome, command: 'c', outcome: 'o');
         expect(lastLine(_interactionsPath).containsKey(field.name), isFalse);
       });
     });
@@ -682,6 +896,301 @@ void main() {
       expect(entry[LogEntryField.count.name], 1);
       expect(entry[LogEntryField.filed.name], isFalse);
       expect(entry[LogEntryField.issueId.name], isNull);
+    });
+  });
+
+  // Every pipeline event is logged, whatever its kind, so a failure, a timeout
+  // or a step that never finished leaves a record. A failed step is also
+  // written to the error log with its type, so errors.jsonl names it.
+  group('$SessionLogger.forEntry', () {
+    const reason = 'VolumeBloc timed out';
+    const failed = AgentFailed(
+      stepId: 'reader',
+      reason: reason,
+      failureType: FailureType.stepTimedOut,
+    );
+
+    RegistryEntry entryFor({required bool sensitive}) => RegistryEntry(
+          name: 'my-app',
+          projectRoot: ProjectFixture.root,
+          workspacePath: ProjectFixture.workspace,
+          createdAt: '2026-01-01',
+          lastSession: '2026-03-15',
+          sensitivityMode: sensitive,
+        );
+
+    /// The step log and the error log of the project, after [failed] is logged.
+    String logged(MemoryFileIO io, {required bool sensitive}) {
+      SessionLogger.forEntry(entryFor(sensitive: sensitive), io: io)
+          .logPipelineEvent(command: 'debug', event: failed);
+      final logs = logsDirFor(ProjectFixture.workspace);
+      return io.read(logFilePath(logs, LogFile.steps)) +
+          io.read(logFilePath(logs, LogFile.errors));
+    }
+
+    test('a project that is not sensitive is logged as is', () {
+      expect(logged(MemoryFileIO(), sensitive: false), contains('VolumeBloc'));
+    });
+
+    test('a sensitive project with a readable token map is abstracted', () {
+      final io = MemoryFileIO(
+        files: {tokenMapPathFor(ProjectFixture.workspace): '{}'},
+      );
+      expect(logged(io, sensitive: true), isNot(contains('VolumeBloc')));
+    });
+
+    test('a sensitive project with no token map yet is still abstracted', () {
+      expect(
+        logged(MemoryFileIO(), sensitive: true),
+        isNot(contains('VolumeBloc')),
+      );
+    });
+
+    test('a sensitive project with an unreadable token map logs no text', () {
+      final io = MemoryFileIO(
+        files: {tokenMapPathFor(ProjectFixture.workspace): '{not valid json'},
+      );
+      final text = logged(io, sensitive: true);
+      expect(text, isNot(contains('VolumeBloc')));
+      expect(text, contains(redactedLogText));
+    });
+
+    test('the failure itself is still named by its type when redacted', () {
+      final io = MemoryFileIO(
+        files: {tokenMapPathFor(ProjectFixture.workspace): '{not valid json'},
+      );
+      expect(
+        logged(io, sensitive: true),
+        contains(FailureType.stepTimedOut.name),
+      );
+    });
+  });
+
+  group('$SessionLogger.labelOnly', () {
+    test('writes the redaction marker for a reason and drops the stack', () {
+      final io = MemoryFileIO();
+      SessionLogger.labelOnly(io: io).logError(
+        command: 'scan',
+        errorType: 'error',
+        fingerprint: 'scan.fp',
+        reason: 'VolumeBloc.process failed',
+        stackTrace: 'at VolumeBloc.process',
+      );
+      final entry = jsonDecode(io.read(_errorsPath).trim())
+          as Map<String, dynamic>;
+      expect(entry[LogEntryField.reason.name], redactedLogText);
+      expect(entry.containsKey(LogEntryField.stack.name), isFalse);
+    });
+  });
+
+  group('$SessionLogger.logPipelineEvent', () {
+    late MemoryFileIO io;
+    late SessionLogger logger;
+
+    setUp(() {
+      io = MemoryFileIO();
+      logger = SessionLogger.plain(io: io);
+    });
+
+    final eventsByKind = <PipelineEventKind, PipelineEvent>{
+      PipelineEventKind.agentStarted: const AgentStarted(
+        stepId: 'reader',
+        label: 'Reading',
+        model: AgentModel.haiku,
+        displayStep: 2,
+        displayTotal: 4,
+      ),
+      PipelineEventKind.agentCompleted: AgentCompleted(
+        stepId: 'reader',
+        usage: const Usage(),
+        durationMs: 1234,
+      ),
+      PipelineEventKind.agentFailed: const AgentFailed(
+        stepId: 'reader',
+        reason: 'timed out',
+        failureType: FailureType.stepTimedOut,
+      ),
+      PipelineEventKind.agentEscalating:
+          const AgentEscalating(stepId: 'lookup', question: 'which file?'),
+      PipelineEventKind.agentResumed: const AgentResumed(stepId: 'lookup'),
+      PipelineEventKind.planDraft: const PlanDraft(plan: 'the plan'),
+      PipelineEventKind.awaitingApproval: const AwaitingApproval(),
+      PipelineEventKind.pipelineCompleted: const PipelineCompleted(
+        ctx: PipelineContext(
+          projectRoot: ProjectFixture.root,
+          bug: '',
+          expected: '',
+          files: [],
+        ),
+      ),
+    };
+
+    List<Map<String, dynamic>> records(String path) => [
+          for (final line in io.read(path).split('\n'))
+            if (line.isNotEmpty) jsonDecode(line) as Map<String, dynamic>,
+        ];
+
+    test('every PipelineEventKind has an event in this spec', () {
+      expect(eventsByKind.keys.toSet(), PipelineEventKind.values.toSet());
+    });
+
+    eventsByKind.forEach((kind, event) {
+      test('${kind.name} is logged with its kind and command', () {
+        logger.logPipelineEvent(command: 'debug', event: event);
+        final record = records(_stepsPath).single;
+        expect(record[LogEntryField.kind.name], kind.name);
+        expect(record[LogEntryField.command.name], 'debug');
+        expect(record[LogEntryField.ts.name], isNotEmpty);
+      });
+    });
+
+    test('a completed step logs its duration as the detail', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentCompleted]!,
+      );
+      final record = records(_stepsPath).single;
+      expect(record[LogEntryField.stepId.name], 'reader');
+      expect(record[LogEntryField.detail.name], 1234);
+    });
+
+    test('an event that belongs to no step logs no step id', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.planDraft]!,
+      );
+      expect(records(_stepsPath).single.containsKey(
+        LogEntryField.stepId.name,
+      ), isFalse);
+    });
+
+    test('a failed step logs its failure type', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentFailed]!,
+      );
+      expect(
+        records(_stepsPath).single[LogEntryField.failureType.name],
+        FailureType.stepTimedOut.name,
+      );
+    });
+
+    test('a failed step is also written to the error log, by type', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentFailed]!,
+      );
+      final error = records(_errorsPath).single;
+      expect(
+        error[LogEntryField.outcome.name],
+        FailureType.stepTimedOut.errorType.name,
+      );
+      expect(
+        error[LogEntryField.fingerprint.name],
+        '${FailureType.stepTimedOut.errorType.name}.reader.'
+        '${FailureType.stepTimedOut.name}',
+      );
+      expect(error[LogEntryField.reason.name], 'timed out');
+      expect(
+        error[LogEntryField.suggestion.name],
+        FailureType.stepTimedOut.suggestedAction,
+      );
+    });
+
+    test('a failed step with no reason logs the failure type label', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: const AgentFailed(
+          stepId: 'reader',
+          failureType: FailureType.stepProducedNoResult,
+        ),
+      );
+      expect(
+        records(_errorsPath).single[LogEntryField.reason.name],
+        FailureType.stepProducedNoResult.label,
+      );
+    });
+
+    for (final kind in PipelineEventKind.values) {
+      if (kind == PipelineEventKind.agentFailed) continue;
+      test('${kind.name} writes no error', () {
+        logger.logPipelineEvent(command: 'debug', event: eventsByKind[kind]!);
+        expect(io.fileExists(_errorsPath), isFalse);
+      });
+    }
+
+    test('events are appended in the order they happened', () {
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentStarted]!,
+      );
+      logger.logPipelineEvent(
+        command: 'debug',
+        event: eventsByKind[PipelineEventKind.agentCompleted]!,
+      );
+      expect(
+        records(_stepsPath).map((r) => r[LogEntryField.kind.name]),
+        [
+          PipelineEventKind.agentStarted.name,
+          PipelineEventKind.agentCompleted.name,
+        ],
+      );
+    });
+
+    test('logPipelineEvents logs every event of a stream', () async {
+      final controller = StreamController<PipelineEvent>();
+      final subscription =
+          logger.logPipelineEvents(controller.stream, command: 'debug');
+      final done = subscription.asFuture<void>();
+      eventsByKind.values.forEach(controller.add);
+      await controller.close();
+      await done;
+      await subscription.cancel();
+      expect(records(_stepsPath), hasLength(PipelineEventKind.values.length));
+    });
+
+    test('logPipelineEvents also logs the models of a completed step',
+        () async {
+      final controller = StreamController<PipelineEvent>();
+      final subscription =
+          logger.logPipelineEvents(controller.stream, command: 'debug');
+      final done = subscription.asFuture<void>();
+      controller.add(AgentCompleted(
+        stepId: 'reader',
+        usage: const Usage(),
+        intendedModel: AgentModel.haiku,
+        models: [const ModelObservation(observedModelId: 'claude-future-9')],
+      ));
+      await controller.close();
+      await done;
+      await subscription.cancel();
+      expect(records(_modelsPath), isNotEmpty);
+    });
+
+    group('detail of a failure that names a workspace identifier', () {
+      const failed = AgentFailed(
+        stepId: 'reader',
+        reason: 'VolumeBloc.process failed',
+        failureType: FailureType.stepTimedOut,
+      );
+
+      String loggedDetail(SessionLogger sessionLogger) {
+        sessionLogger.logPipelineEvent(command: 'debug', event: failed);
+        return records(_stepsPath).single[LogEntryField.detail.name] as String;
+      }
+
+      test('is abstracted in sensitive mode', () {
+        final sensitiveLogger = SessionLogger.abstracted(
+          tokenMap: TokenMap(),
+          io: io,
+        );
+        expect(loggedDetail(sensitiveLogger), isNot(contains('VolumeBloc')));
+      });
+
+      test('is written as is when sensitive mode is off', () {
+        final plainLogger = SessionLogger.plain(io: io);
+        expect(loggedDetail(plainLogger), contains('VolumeBloc'));
+      });
     });
   });
 }

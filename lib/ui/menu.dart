@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'ansi.dart' as ansi;
 import 'terminal_support.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Shows an arrow-key navigable menu and returns the **0-based** index of the
 /// selected item.
@@ -8,6 +10,17 @@ import 'terminal_support.dart';
 /// Items may contain ANSI codes — the menu renderer applies selection styling
 /// on top of them. When stdin is not a usable TTY (CI, pipe, `/dev/null`)
 /// falls back to a numbered prompt so behaviour is always well-defined.
+/// The choice the owner made from [choices], shown as their [label]s, via
+/// [pick] (a menu that returns an index). One place turns a pick back into the
+/// choice, so no menu compares an index to a number; an index that names no
+/// choice is a range error.
+T chooseFrom<T>(
+  List<T> choices,
+  String Function(T choice) label,
+  int Function(List<String> items) pick,
+) =>
+    choices[pick([for (final choice in choices) label(choice)])];
+
 int arrowMenu(List<String> items, {int startIndex = 0}) {
   assert(items.isNotEmpty, 'arrowMenu requires at least one item');
   assert(startIndex >= 0 && startIndex < items.length);
@@ -46,7 +59,7 @@ int _arrowSelect(List<String> items, {int startIndex = 0}) {
         case _Key.ctrlC:
           _clearMenu(items.length);
           stdout.write(ansi.showCursor);
-          exit(0);
+          leaveFor(ExitReason.menuInterrupted);
         case _Key.other:
           break;
       }
@@ -140,7 +153,7 @@ int selectNumbered(
   final String? Function() read = readLine ?? () => stdin.readLineSync();
   final void Function(String) out = write ?? (String s) => stdout.write(s);
   final void Function(String) err = writeError ?? (String s) => stderr.writeln(s);
-  final Never Function(int) quit = exitFn ?? (int code) => exit(code);
+  final Never Function(int) quit = exitFn ?? exitProcess;
   for (var i = 0; i < items.length; i++) {
     out('  ${i + 1}. ${items[i]}\n');
   }
@@ -151,7 +164,7 @@ int selectNumbered(
     if (raw == null) {
       err('\n✗ No input available (stdin closed). Nothing was selected; '
           'aborting without making changes. Re-run in a terminal.');
-      quit(1);
+      leaveFor(ExitReason.menuHasNoInput, exit_: quit);
     }
     final n = int.tryParse(raw.trim());
     if (n != null && n >= 1 && n <= items.length) return n - 1;

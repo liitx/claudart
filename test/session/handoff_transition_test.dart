@@ -16,6 +16,12 @@ const _legal = <_Move>{
     HandoffEvent.setup,
     HandoffStatus.suggestInvestigating,
   ),
+  // `flow` is another way into a session: from no handoff, a converged one.
+  (
+    HandoffStatus.noHandoff,
+    HandoffEvent.flowConstructed,
+    HandoffStatus.readyForSuggest,
+  ),
   (
     HandoffStatus.suggestInvestigating,
     HandoffEvent.saveUnconfirmed,
@@ -116,6 +122,23 @@ const _legal = <_Move>{
   ),
   (
     HandoffStatus.debugComplete,
+    HandoffEvent.tornDown,
+    HandoffStatus.noHandoff,
+  ),
+  // extension: a handoff whose knowledge transfer is complete may be torn down
+  // before debug has run, once debug is recorded as skipped (teardown asks)
+  (
+    HandoffStatus.readyForSuggest,
+    HandoffEvent.tornDown,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.readyForDebug,
+    HandoffEvent.tornDown,
+    HandoffStatus.noHandoff,
+  ),
+  (
+    HandoffStatus.debugInProgress,
     HandoffEvent.tornDown,
     HandoffStatus.noHandoff,
   ),

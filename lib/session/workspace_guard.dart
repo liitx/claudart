@@ -1,7 +1,7 @@
 import 'package:path/path.dart' as p;
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
-import '../file_io.dart';
+import '../io/file_io.dart';
 
 const _lockFileName = 'workspace.lock';
 

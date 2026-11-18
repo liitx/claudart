@@ -521,8 +521,8 @@ void main() {
   });
 
   // ── ClaudartOperation.fromString — V × G matrix ───────────────────────────
-  // V = {debug, save, test}  G = {fromString}  →  3 required assertions
-  // Known variants round-trip through .name; catch-all uses a named sentinel.
+  // V = {debug, save, test}  G = {fromString}  →  4 required assertions
+  // Known variants round-trip through .name; unknown input is null.
 
   const _unknownOp = 'not-an-operation';
 
@@ -541,11 +541,15 @@ void main() {
       );
     });
 
-    test('unknown input → catch-all maps to test', () {
+    test('test variant round-trips', () {
       expect(
-        ClaudartOperation.fromString(_unknownOp),
+        ClaudartOperation.fromString(ClaudartOperation.test.name),
         ClaudartOperation.test,
       );
+    });
+
+    test('unknown input is not an operation, and is not guessed', () {
+      expect(ClaudartOperation.fromString(_unknownOp), isNull);
     });
   });
 

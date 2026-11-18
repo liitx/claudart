@@ -1,0 +1,5 @@
+# Test files that fail on a change that alters no behavior: they read
+# source text, so a wider run leaves them out. Learned by the controls.
+test/git_utils_test.dart
+test/topology/candidacy_evidence_test.dart
+test/topology/candidacy_ledger_test.dart

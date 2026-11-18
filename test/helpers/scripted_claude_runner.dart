@@ -11,6 +11,7 @@
 // scripted step that is never called shows up in [unusedSteps].
 
 import 'package:claudart/claudart.dart';
+import 'package:claudart/pipeline/step_role.dart';
 
 /// One call the fake received, as typed data.
 class ClaudeRunnerCall {
@@ -52,6 +53,8 @@ class ScriptedClaudeRunner {
         required String systemPrompt,
         required String message,
         required String workingDir,
+        required Set<ClaudeTool> allowedTools,
+        required AgentModel helperModel,
         StepMode mode = StepMode.project,
       }) async {
         calls.add(

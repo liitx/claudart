@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/sensitivity/token_map.dart';
 import '../helpers/mocks.dart';
 
@@ -99,6 +100,50 @@ void main() {
       final loaded = TokenMap.load(path, io: io);
       final next = loaded.tokenFor('ApexBloc', 'Bloc');
       expect(next, equals('Bloc:C'));
+    });
+
+    test('load throws TokenMapUnreadableException for malformed json', () {
+      final io = MemoryFileIO(files: {'/workspace/token_map.json': '{nope'});
+      expect(
+        () => TokenMap.load('/workspace/token_map.json', io: io),
+        throwsA(isA<TokenMapUnreadableException>()),
+      );
+    });
+
+    test('load throws TokenMapUnreadableException for an entry of the wrong '
+        'shape', () {
+      final io = MemoryFileIO(
+        files: {'/workspace/token_map.json': '{"Bloc:A": 3}'},
+      );
+      expect(
+        () => TokenMap.load('/workspace/token_map.json', io: io),
+        throwsA(isA<TokenMapUnreadableException>()),
+      );
+    });
+
+    test('the exception names the file and why, in that order', () {
+      final io = MemoryFileIO(files: {'/workspace/token_map.json': '{nope'});
+      try {
+        TokenMap.load('/workspace/token_map.json', io: io);
+        fail('load should have thrown');
+      } on TokenMapUnreadableException catch (e) {
+        expect(e.path, '/workspace/token_map.json');
+        expect(e.cause, isNot(contains('/workspace')));
+        expect(
+          e.toString(),
+          startsWith('Token map is unreadable (/workspace/token_map.json): '),
+        );
+      }
+    });
+
+    test('the exception carries the tokenMapUnreadable failure', () {
+      final io = MemoryFileIO(files: {'/workspace/token_map.json': '[1]'});
+      try {
+        TokenMap.load('/workspace/token_map.json', io: io);
+        fail('load should have thrown');
+      } on TokenMapUnreadableException catch (e) {
+        expect(e.failureType, FailureType.tokenMapUnreadable);
+      }
     });
 
     test('load handles empty file gracefully', () {

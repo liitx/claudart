@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../paths.dart';
-import '../registry.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
+import '../io/process_runner.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Runs an experiment: executes [command] with [args], tees stdout/stderr to a
 /// dated `.ansi` log in the project's `experiments/` directory, and prints the
@@ -22,29 +26,23 @@ Future<void> runExperiment(
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
   // ── Parse arguments: <name> -- <command> [args...] ────────────────────────
   final sepIdx = args.indexOf('--');
   if (sepIdx < 1 || sepIdx == args.length - 1) {
-    print('Usage: claudart experiment <name> -- <command> [args...]');
-    exit_(1);
+    print(UserText.experimentUsageClaudartExperimentNameCommandArgs.template);
+    leaveFor(ExitReason.experimentUsageShown, exit_: exit_);
   }
   final name = args.first;
   final cmdArgs = args.sublist(sepIdx + 1);
 
   // ── Resolve workspace ──────────────────────────────────────────────────────
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  String experimentsDir;
-  if (projectRoot != null) {
-    final registry = Registry.load(io: fileIO);
-    final entry = registry.findByProjectRoot(projectRoot);
-    experimentsDir = entry != null
-        ? experimentsDirFor(entry.workspacePath)
-        : experimentsDirFor(workspacesRoot);
-  } else {
-    experimentsDir = experimentsDirFor(workspacesRoot);
-  }
+  final entry = lookupProject(
+    CommandSeams(io: fileIO, projectRootOverride: projectRootOverride),
+  )?.entry;
+  final experimentsDir =
+      experimentsDirFor(entry?.workspacePath ?? workspacesRoot);
 
   // ── Build log file path ────────────────────────────────────────────────────
   final ts = DateTime.now()
@@ -67,7 +65,7 @@ Future<void> runExperiment(
   // inheritStdio: child shares the terminal directly — no piping through the
   // parent IOSink. Required for interactive commands (raw stdin, arrow keys)
   // and ensures header/footer print in correct order.
-  final process = await Process.start(
+  final process = await const RealProcessRunner().start(
     cmdArgs.first,
     cmdArgs.sublist(1),
     mode: ProcessStartMode.inheritStdio,
@@ -90,5 +88,11 @@ Future<void> runExperiment(
   stdout.writeln('  Log: $logFile\n');
   await stdout.flush();
 
-  if (exitCode != 0) exit_(exitCode);
+  if (exitCode != 0) {
+    leaveFor(
+      ExitReason.experimentCommandFailed,
+      exit_: exit_,
+      childCode: exitCode,
+    );
+  }
 }

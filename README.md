@@ -68,7 +68,7 @@ Everything below is typed. A fact lives on one enum or one function, and the doc
 
 | Layer | Source of truth | What it owns |
 |---|---|---|
-| Entry point | [`ClaudartCommand`](lib/commands/claudart_command.dart) | every command and how it is reached: `reachedFrom`, `supportsHeadless`, `supportsProjectSelector`, `handoffEvents` |
+| Entry point | [`ClaudartCommand`](lib/commands/support/claudart_command.dart) | every command and how it is reached: `reachedFrom`, `supportsHeadless`, `supportsProjectSelector`, `handoffEvents` |
 | Session state | [`HandoffStatus`](lib/session/session_state.dart) + [`HandoffEvent`](lib/session/handoff_event.dart) | which move is legal from which status (`after`), and what a reader should show (`effectiveStatus`) |
 | Workspace | [`Registry`](lib/registry.dart) + [`WorkspaceSummary`](lib/commands/workspaces.dart) | project root to workspace, link state, lock, last session |
 | Targeting | `--project <name>` + `selectProject` | which linked workspace a command acts on |
@@ -81,12 +81,16 @@ What each `lib/` directory is for:
 | Directory | Role |
 |---|---|
 | `lib/commands/` | one file per subcommand; the only layer that touches the terminal flow |
+| `lib/commands/support/` | what the commands share: the seams bundle, the project lookup, the failure boundary, the command enum |
 | `lib/session/` | the state machine, handoff operations, workspace lock |
 | `lib/pipeline/` | the agent engine: steps, executor, model routing, flows |
 | `lib/templates/` | pure functions that render a string; no I/O |
 | `lib/workspace/` | workspace config, index and link state |
 | `lib/logging/` | per-workspace logs and the global planner log |
 | `lib/ui/` | terminal rendering |
+| `lib/config/` | the environment, the home directory, paths, and config files, each read from one place |
+| `lib/io/` | the file system, spawned processes and git, behind one seam each |
+| `lib/project/` | facts read from a project's own files: ignore rules, pubspec, knowledge templates, portability gaps |
 | `lib/errors/` | the layered error taxonomy: exception, error type, failure type |
 | `lib/providers/` | which auth backend the `claude` subprocess uses |
 | `lib/sensitivity/`, `lib/scanner/`, `lib/similarity/`, `lib/assets/` | token abstraction, scanning, retrieval, the bundled corpus |
@@ -169,27 +173,28 @@ stateDiagram-v2
   suggestInvestigating --> readyForDebug: saveConfirmedReady
   suggestInvestigating --> noHandoff: rotatedEmpty, reminderSaved, killed
   readyForSuggest --> readyForDebug: saveConfirmedReady
-  readyForSuggest --> noHandoff: reminderSaved, killed
+  readyForSuggest --> noHandoff: tornDown, reminderSaved, killed
   readyForDebug --> readyForDebug: saveConfirmedReady
   readyForDebug --> debugInProgress: debugStarted
   readyForDebug --> debugComplete: fixApplied
   readyForDebug --> suggestInvestigating: rotated
-  readyForDebug --> noHandoff: rotatedEmpty, reminderSaved, killed
+  readyForDebug --> noHandoff: rotatedEmpty, tornDown, reminderSaved, killed
   debugInProgress --> debugInProgress: saveUnconfirmed
   debugInProgress --> readyForDebug: saveConfirmedReady
   debugInProgress --> needsSuggest: debugBlocked
   debugInProgress --> debugComplete: fixApplied
   debugInProgress --> suggestInvestigating: rotated
-  debugInProgress --> noHandoff: rotatedEmpty, reminderSaved, killed
+  debugInProgress --> noHandoff: rotatedEmpty, tornDown, reminderSaved, killed
   debugComplete --> noHandoff: tornDown, reminderSaved, killed
   needsSuggest --> readyForDebug: saveConfirmedReady
   needsSuggest --> suggestInvestigating: suggestResumed
   needsSuggest --> noHandoff: reminderSaved, killed
   noHandoff --> suggestInvestigating: setup
+  noHandoff --> readyForSuggest: flowConstructed
 ```
 <!-- /claudart:topology:handoff-diagram -->
 
-The diagram above is generated from `HandoffStatus.after` (`make topology`), so it cannot drift from the code; a test compares it with this page. Each arrow is labelled with a [`HandoffEvent`](lib/session/handoff_event.dart): `setup`, `saveUnconfirmed`, `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`, `rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. The generated [topology doc](docs/topology/handoff_status.md) also lists which file passes each event. `claudart flow` writes `readyForSuggest` straight into the handoff and is outside the table.
+The diagram above is generated from `HandoffStatus.after` (`make topology`), so it cannot drift from the code; a test compares it with this page. Each arrow is labelled with a [`HandoffEvent`](lib/session/handoff_event.dart): `setup`, `flowConstructed`, `saveUnconfirmed`, `saveConfirmedExploring`, `saveConfirmedReady`, `debugStarted`, `debugBlocked`, `suggestResumed`, `fixApplied`, `rotated`, `rotatedEmpty`, `tornDown`, `reminderSaved`, `killed`. The generated [topology doc](docs/topology/handoff_status.md) also lists which file passes each event. `claudart flow` is another way into a session: it enters through `flowConstructed` and writes through the same writer as `setup`.
 
 `HandoffStatus` has eight variants. Six are persisted to disk; two never are:
 
@@ -214,7 +219,7 @@ Preconditions are hard gates. `claudart debug` checks that `fixApplied` is legal
 
 ## The handoff
 
-`handoff.md` is the single artifact both sides read and write. [`lib/templates/handoff_template.dart`](lib/templates/handoff_template.dart) renders nine top-level sections in a fixed order, and both writers address them by name through `readSection`/`updateSection` in [`lib/md_io.dart`](lib/md_io.dart) — never by offset.
+`handoff.md` is the single artifact both sides read and write. [`lib/templates/handoff_template.dart`](lib/templates/handoff_template.dart) renders nine top-level sections in a fixed order, and both writers address them by name through `readSection`/`updateSection` in [`lib/session/md_io.dart`](lib/session/md_io.dart) — never by offset.
 
 | Section | Written by | Read by |
 |---|---|---|
@@ -472,7 +477,7 @@ claudart workspaces     # every linked workspace and where its session stands (-
 claudart --project <name> status   # aim a session command at another linked workspace
 ```
 
-[`ClaudartCommand`](lib/commands/claudart_command.dart) is the single source of truth for dispatch, and carries each command's facts as getters: how it is reached, whether it runs headless, whether `--project` can target it, and which handoff events it passes. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable.
+[`ClaudartCommand`](lib/commands/support/claudart_command.dart) is the single source of truth for dispatch, and carries each command's facts as getters: how it is reached, whether it runs headless, whether `--project` can target it, and which handoff events it passes. `version` is deliberately not a variant — it is handled and exits before dispatch runs, so a variant would be permanently unreachable.
 
 <details>
 <summary><strong>Full command table, one row per dispatch arm</strong></summary>
@@ -533,7 +538,7 @@ Commands:
   status [--prompt]      Show current session state; --prompt outputs a compact colored string for shell RPROMPT/PS1
   teardown [--headless]  Close session: update knowledge, archive handoff, suggest commit; --headless resolves every decision itself and prints a summary instead of prompting
   suggest                Run suggest pipeline: haiku classifies the bug and reads scope files, routed model writes handoff KT
-  debug                  Run debug pipeline: haiku reads scope files, routed model emits EDIT_FILE edits written to disk
+  debug [--headless]     Run debug pipeline: haiku reads scope files, routed model emits EDIT_FILE edits written to disk; --headless applies the plan without review only when a verificationCommand can check it
   flow                   [experimental] Agent-constructed session: classify intent, plan, approve, build handoff
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
   rotate [--headless]    Archive current session, run build gate, seed next handoff from Pending Issues; --headless skips the confirmation (needed when there is no terminal to ask on)
@@ -690,7 +695,8 @@ $ find <workspace> -maxdepth 2
 ./logs/transitions.jsonl   # every handoff move: command, from, event, to
 ./logs/errors.jsonl        # deduplicated errors with fingerprint and count
 ./logs/models.jsonl        # per step: intended model, observed model, drift
-./logs/performance.md      # per-command timing table
+./logs/steps.jsonl         # every pipeline event: step start, end, failure
+./logs/gates.jsonl         # every gate command run: which gate, exit code, duration, output tail
 ./experiments/          # claudart experiment output
 ./.claude/              # slash commands symlinked into the project
 ```
@@ -699,17 +705,21 @@ Each workspace keeps its own logs under `logs/`, all written by [`SessionLogger`
 
 | Log | One line per | Cap |
 |---|---|---|
-| `interactions.jsonl` | command run: `command`, `outcome`, timing, scan metadata | 500 |
+| `interactions.jsonl` | command run: `command`, `outcome`, timing, scan metadata; `rowKind` says whether the row is the run itself (`run`, written once around every command, with `durationMs`) or a command's own account of what it did (`outcome`) | 500 |
 | `transitions.jsonl` | handoff move: `command`, `from`, `event`, `to` (enum names); `rejected: true` for a move the table lacks | 500 |
 | `errors.jsonl` | distinct error, deduplicated by fingerprint with a count | 200 |
 | `models.jsonl` | model a step ran on: intended alias, the id the `claude` stream reported, context used, drift from the declared `AgentModel` (shown by `claudart status`) | 500 |
-| `performance.md` | timed command, as a markdown table row | 50 |
+| `steps.jsonl` | pipeline event: `kind`, `stepId`, `detail` (a failure's reason, a completed step's duration), `failureType` for a failed step; a failed step is also written to `errors.jsonl` by its type | 2000 |
+| `gates.jsonl` | a gate command a command ran (`debug`'s `verificationCommand`, `rotate`'s `afterFixCommand`): `gate`, `shellCommand`, `exitCode`, `durationMs` and the last lines of its output (`outputTail`) | 500 |
+| `proofs.jsonl` | a fault the proof audit seeded (`make proof-audit`): `proof`, `fault`, `sourceFile`, `sourceLine`, `verdict` (`caught`, `missed` or `invalid`), `tier` (1 the named proofs, 2 the wider suite), `caughtBy` (the failing tests) and `durationMs` | 5000 | 5000 |
+
+Timing has no log of its own: each command run's `durationMs` is on its `run` row in `interactions.jsonl`, and gates, completed steps and proof faults carry theirs. [`TimedSource`](lib/logging/timed_source.dart) reads them back, `claudart status` shows each command's runs, latest and slowest, and [the template](docs/templates/timed_source.md) says how to add a source.
 
 `--project` and `claudart workspaces` write to `interactions.jsonl` too: the first records `targeted-by-project` in the workspace it aimed at, the second records `listed N workspaces` in the workspace that asked.
 
-Routing decisions are a separate, global log. [`PlannerLog`](lib/logging/planner_log.dart#L132) appends one JSON line per categorize step — the three-axis classification (`category`, `intent`, `complexity`), the routed model, and design-surface counts — to `~/.claudart/planner.jsonl`, sibling to `registry.json` rather than per-workspace. It's wired into `claudart flow` only ([`lib/commands/flow.dart`](lib/commands/flow.dart#L42)); `suggest` and `debug`'s own Phase 0 categorize steps don't call it yet.
+Routing decisions are a separate, global log. [`PlannerLog`](lib/logging/planner_log.dart#L132) appends one JSON line per categorize step — the three-axis classification (`category`, `intent`, `complexity`), the routed model, and design-surface counts — to `planner.jsonl` (`LogFile.planner`) in `~/.claudart/`, sibling to `registry.json` rather than per-workspace. It's wired into `claudart flow` only ([`lib/commands/flow.dart`](lib/commands/flow.dart#L42)); `suggest` and `debug`'s own Phase 0 categorize steps don't call it yet.
 
-Path construction is centralized in [`lib/paths.dart`](lib/paths.dart) — one function per artifact, no string concatenation at call sites. [`lib/registry.dart`](lib/registry.dart) resolves a git project root to its workspace; [`lib/workspace/workspace_config.dart`](lib/workspace/workspace_config.dart) parses `workspace.json` once at session entry, and agents read the parsed value rather than the file.
+Path construction is centralized in [`lib/config/paths.dart`](lib/config/paths.dart) — one function per artifact, no string concatenation at call sites. [`lib/registry.dart`](lib/registry.dart) resolves a git project root to its workspace; [`lib/workspace/workspace_config.dart`](lib/workspace/workspace_config.dart) parses `workspace.json` once at session entry, and agents read the parsed value rather than the file.
 
 ```json
 {

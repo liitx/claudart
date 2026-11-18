@@ -1,5 +1,21 @@
 import 'dart:convert';
-import '../file_io.dart';
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
+import '../io/file_io.dart';
+
+/// token_map.json exists but cannot be read: malformed JSON, or an entry of
+/// the wrong shape. Loading it as an empty map would let the next save erase
+/// every token already assigned.
+class TokenMapUnreadableException extends ClaudartException {
+  TokenMapUnreadableException(this.path, this.cause)
+      : super(FailureType.tokenMapUnreadable);
+
+  final String path;
+  final String cause;
+
+  @override
+  String toString() => 'Token map is unreadable ($path): $cause';
+}
 
 /// A relational, append-only token map that assigns stable short tokens
 /// to real identifier names.
@@ -61,7 +77,8 @@ class TokenMap {
     meta['deprecated'] = true;
   }
 
-  /// Loads the token map from [path].
+  /// Loads the token map from [path]. A missing or empty file is an empty map;
+  /// one that cannot be read throws [TokenMapUnreadableException].
   static TokenMap load(String path, {FileIO? io}) {
     final fileIO = io ?? const RealFileIO();
     final tm = TokenMap();
@@ -88,7 +105,11 @@ class TokenMap {
           if (idx >= current) tm._counters[prefix] = idx + 1;
         }
       }
-    } on FormatException catch (_) {}
+    } on FormatException catch (e) {
+      throw TokenMapUnreadableException(path, e.message);
+    } on TypeError catch (e) {
+      throw TokenMapUnreadableException(path, e.toString());
+    }
     return tm;
   }
 

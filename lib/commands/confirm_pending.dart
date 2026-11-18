@@ -1,9 +1,11 @@
-import 'dart:io';
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../registry.dart';
+import '../io/file_io.dart';
 import '../session/pending_confirmation.dart';
 import '../ui/render.dart' as render;
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// Sets or clears the pending confirmation for the current project's
 /// workspace. A skill's confirmation-gate step (see
@@ -21,28 +23,25 @@ Future<void> runConfirmPending(
   Never Function(int code)? exitFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ No claudart session found for this project.');
-    print('  Run `claudart link` first.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+  );
+  final entry = project.entry;
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
 
   if (args.contains('--clear')) {
     PendingConfirmationStore.clear(workspace, io: fileIO);
-    print('${render.header('CONFIRM PENDING')}\n\n✓ Cleared.');
+    print(render.header(UserText.confirmPendingTitle.template));
+    print('');
+    print(UserText.confirmPendingCleared.template);
     return;
   }
 
@@ -50,8 +49,8 @@ Future<void> runConfirmPending(
   final onConfirm = _valueOf(args, '--on-confirm');
 
   if (question == null || onConfirm == null) {
-    print('✗ Both --question and --on-confirm are required (or pass --clear).');
-    exit_(1);
+    print(UserText.confirmPendingBothQuestionAndOnConfirmAre.template);
+    leaveFor(ExitReason.confirmPendingMissingArguments, exit_: exit_);
   }
 
   PendingConfirmationStore.write(
@@ -64,8 +63,9 @@ Future<void> runConfirmPending(
     io: fileIO,
   );
 
-  print('${render.header('CONFIRM PENDING')}\n\n'
-      '✓ Set — will run `$onConfirm` when the user confirms.');
+  print(render.header(UserText.confirmPendingTitle.template));
+  print('');
+  print(UserText.confirmPendingSet.format({'onConfirm': onConfirm}));
 }
 
 String? _valueOf(List<String> args, String flag) {

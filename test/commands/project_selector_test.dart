@@ -1,18 +1,19 @@
 import 'dart:convert';
 
-import 'package:claudart/commands/project_selector.dart';
+import 'package:claudart/commands/support/project_selector.dart';
 import 'package:claudart/commands/workspaces.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
 Registry _registry() => Registry.empty()
     .add(const RegistryEntry(
       name: 'my-app',
-      projectRoot: '/projects/my-app',
-      workspacePath: '/workspaces/my-app',
+      projectRoot: ProjectFixture.root,
+      workspacePath: ProjectFixture.workspace,
       createdAt: '2026-01-01',
       lastSession: '2026-03-15',
     ))

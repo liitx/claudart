@@ -9,14 +9,16 @@ import 'dart:io';
 
 import 'package:claudart/commands/doctor.dart';
 import 'package:claudart/commands/link.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/harness/harness_check.dart';
-import 'package:claudart/paths.dart';
-import 'package:claudart/process_runner.dart';
+import 'package:claudart/config/paths.dart';
+import 'package:claudart/io/process_runner.dart';
 import 'package:path/path.dart' as p;
+import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
 /// Thrown by the injected exitFn so tests can assert exit-code behaviour
 /// without terminating the process.
@@ -61,6 +63,16 @@ class _FakeProcessRunner implements ProcessRunner {
     return responses['$executable ${arguments.join(' ')}'] ??
         ProcessResult(0, 127, '', 'command not found');
   }
+
+  @override
+  Future<Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) =>
+      throw UnsupportedError('doctor never starts a streaming process');
 
   @override
   Future<ProcessResult> run(
@@ -138,6 +150,16 @@ Map<String, ProcessResult> _responses({
 class _HangingProcessRunner implements ProcessRunner {
   const _HangingProcessRunner(this._fallback);
   final ProcessRunner _fallback;
+
+  @override
+  Future<Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) =>
+      throw UnsupportedError('doctor never starts a streaming process');
 
   @override
   Future<ProcessResult> run(
@@ -438,7 +460,7 @@ void main() {
 
     test('ok when every registered projectRoot still exists on disk', () async {
       // Registry.load() always resolves via the real registryPath getter
-      // (lib/paths.dart) — unaffected by the `env` map passed to
+      // (lib/config/paths.dart) — unaffected by the `env` map passed to
       // runDoctorChecks — so the fixture has to live at that real,
       // machine-dependent path, not an arbitrary fake one.
       final io = MemoryFileIO(
@@ -655,17 +677,23 @@ void main() {
       expect(preflight.result, equals(HarnessCheckResult.fail));
     });
 
-    test('fails — does not hang the suite — when the call exceeds the bounded timeout', () async {
-      final outcomes = await runDoctorChecks(
-        runner: _HangingProcessRunner(_FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus))),
-        env: _cleanEnv,
-        projectRoot: '/fake/repo',
-        io: MemoryFileIO(),
-        bedrockPreflightTimeout: const Duration(milliseconds: 20),
-      );
-      final preflight = outcomes.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
-      expect(preflight.result, equals(HarnessCheckResult.fail));
-      expect(preflight.detail, contains('did not respond within'));
+    test('fails — does not hang the suite — when the call exceeds the bounded timeout', () {
+      fakeAsync((async) {
+        List<HarnessCheckOutcome>? outcomes;
+        runDoctorChecks(
+          runner: _HangingProcessRunner(_FakeProcessRunner(_responses(authStatusStdout: _bedrockAuthStatus))),
+          env: _cleanEnv,
+          projectRoot: '/fake/repo',
+          io: MemoryFileIO(),
+          bedrockPreflightTimeout: const Duration(milliseconds: 20),
+        ).then((found) => outcomes = found);
+        async.elapse(const Duration(milliseconds: 19));
+        expect(outcomes, isNull);
+        async.elapse(const Duration(milliseconds: 1));
+        final preflight = outcomes!.firstWhere((o) => o.id == HarnessCheckId.bedrockCredentialsPreflight);
+        expect(preflight.result, equals(HarnessCheckResult.fail));
+        expect(preflight.detail, contains('did not respond within'));
+      });
     });
   });
 
@@ -802,13 +830,7 @@ void main() {
     test('exits 0 when every check is ok or skip', () async {
       _ExitException? caught;
       try {
-        await runDoctor(
-          runner: _FakeProcessRunner(_responses()),
-          env: _cleanEnv,
-          projectRootOverride: '/fake/repo',
-          io: MemoryFileIO(),
-          exitFn: _throwExit,
-        );
+        await runDoctor(seams: CommandSeams(projectRootOverride: '/fake/repo', io: MemoryFileIO(), exitFn: _throwExit), runner: _FakeProcessRunner(_responses()), env: _cleanEnv);
       } on _ExitException catch (e) {
         caught = e;
       }
@@ -819,13 +841,7 @@ void main() {
     test('exits 1 when any check fails', () async {
       _ExitException? caught;
       try {
-        await runDoctor(
-          runner: _FakeProcessRunner(_responses(ghAuthed: false)),
-          env: _cleanEnv,
-          projectRootOverride: '/fake/repo',
-          io: MemoryFileIO(),
-          exitFn: _throwExit,
-        );
+        await runDoctor(seams: CommandSeams(projectRootOverride: '/fake/repo', io: MemoryFileIO(), exitFn: _throwExit), runner: _FakeProcessRunner(_responses(ghAuthed: false)), env: _cleanEnv);
       } on _ExitException catch (e) {
         caught = e;
       }

@@ -2,22 +2,30 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
-import 'package:claudart/commands/claudart_command.dart';
-import 'package:claudart/commands/teardown.dart' show runTeardown, TeardownCategory;
-import 'package:claudart/md_io.dart' show readSection;
-import 'package:claudart/paths.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
+import 'package:claudart/logging/logger.dart' show InteractionRowKind;
+import 'package:claudart/commands/teardown.dart'
+    show kTeardownSkipDebugQuestion, runTeardown, TeardownCategory, TeardownOutcome;
+import 'package:claudart/session/closure_evidence.dart';
+import 'package:claudart/session/debug_disposition.dart';
+import 'package:claudart/session/md_io.dart'
+    show readHandoffStatus, readSection, updateSection, withDebugDisposition;
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:claudart/session/workspace_guard.dart';
 import '../helpers/logged_moves.dart';
+import '../helpers/fake_executors.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 // Handoff with root cause and changed files populated — exercises pre-population.
 const _richHandoff = '''# Agent Handoff — my-app
@@ -285,6 +293,7 @@ void main() {
       final io = _io(); // no handoff seeded
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -300,6 +309,7 @@ void main() {
       final io = _io(handoff: '');
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -317,6 +327,7 @@ void main() {
 
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -334,6 +345,7 @@ void main() {
       await expectLater(
         runZoned(
           () => runTeardown(
+            executor: noModelExecutor(),
             io: io,
             projectRootOverride: _projectRoot,
             confirmFn: (_) => true,
@@ -359,6 +371,7 @@ void main() {
       final io = _io(handoff: _richHandoff);
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false, // decline
@@ -374,6 +387,7 @@ void main() {
       final io = _io(handoff: _richHandoff);
       try {
         await runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false,
@@ -392,6 +406,7 @@ void main() {
 
   group('teardown — transition log', () {
     Future<void> teardown(MemoryFileIO io, {int? kind}) => runTeardown(
+      executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
@@ -405,10 +420,15 @@ void main() {
     test('a headless debugComplete teardown logs tornDown into noHandoff',
         () async {
       final io = _io(
-        handoff:
-            _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+        handoff: withDebugDisposition(
+          _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+          DebugDisposition.verified,
+        ),
       );
       await runTeardown(
+        executor: noModelExecutor(),
+        confirmFn: unscriptedConfirm,
+        
         io: io,
         projectRootOverride: _projectRoot,
         mode: RunMode.headless,
@@ -424,8 +444,8 @@ void main() {
       ]);
     });
 
-    test('confirming resolved from debugInProgress logs tornDown as a move '
-        'the table lacks', () async {
+    test('confirming resolved and recording debug as skipped, from '
+        'debugInProgress, logs tornDown as a legal move', () async {
       final io = _io(handoff: _richHandoff); // status: debug-in-progress
       await teardown(io);
       expect(loggedMoves(io, _workspace), [
@@ -433,9 +453,97 @@ void main() {
           'command': ClaudartCommand.teardown.name,
           'from': HandoffStatus.debugInProgress.name,
           'event': HandoffEvent.tornDown.name,
-          'rejected': true,
+          'to': HandoffStatus.noHandoff.name,
         },
       ]);
+    });
+
+    test('the archived handoff records debug as skipped', () async {
+      final io = _io(handoff: _richHandoff);
+      await teardown(io);
+      final archived = io.files.entries
+          .where((e) => e.key.startsWith(p.join(_workspace, 'archive')) &&
+              e.key.endsWith('.md') &&
+              !e.key.contains('index'))
+          .map((e) => e.value)
+          .join('\n');
+      expect(
+        archived,
+        contains('## Debug Disposition\n\n${DebugDisposition.skipped.wire}'),
+      );
+    });
+
+    group('the question about debug', () {
+      /// Runs teardown, answering each confirmation by [answers] in order (then
+      /// yes), and returns the questions that were asked.
+      Future<List<String>> questionsFor(
+        String handoff,
+        List<bool> answers,
+      ) async {
+        final io = _io(handoff: handoff);
+        final asked = <String>[];
+        final queue = [...answers];
+        await runTeardown(
+          executor: noModelExecutor(),
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (question) {
+            asked.add(question);
+            return queue.isEmpty ? true : queue.removeAt(0);
+          },
+          promptFn: _prompts(_richAnswers),
+          pickFn: _pick(TeardownCategory.stateManagement),
+          exitFn: _throwExit,
+        ).catchError((Object _) {});
+        return asked;
+      }
+
+      test('is asked when debug did not run for a complete transfer', () async {
+        final asked = await questionsFor(_richHandoff, [true]);
+        expect(asked, contains(kTeardownSkipDebugQuestion));
+      });
+
+      test('is not asked after a finished fix', () async {
+        final asked = await questionsFor(
+          _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+          [true],
+        );
+        expect(asked, isNot(contains(kTeardownSkipDebugQuestion)));
+      });
+
+      test('is not asked while the transfer is incomplete', () async {
+        final asked = await questionsFor(
+          _richHandoff
+              .replaceFirst('debug-in-progress', 'suggest-investigating')
+              .replaceFirst(
+                'ConfigLoader splits path on spaces before resolving.',
+                '_Not yet determined._',
+              ),
+          [true],
+        );
+        expect(asked, isNot(contains(kTeardownSkipDebugQuestion)));
+      });
+
+      test('declining it is not resolved: nothing is torn down and the '
+          'session stays live', () async {
+        final io = _io(handoff: _richHandoff);
+        // resolved? yes, record as skipped? no, save as a reminder? yes
+        final answers = [true, false, true];
+        await runTeardown(
+          executor: noModelExecutor(),
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (_) => answers.removeAt(0),
+          promptFn: _prompts(['still pending']),
+          pickFn: _pick(TeardownCategory.stateManagement),
+          exitFn: _throwExit,
+        ).catchError((Object _) {});
+        expect(loggedMoves(io, _workspace), isEmpty);
+        expect(
+          readHandoffStatus(io.read(handoffPathFor(_workspace))),
+          HandoffStatus.debugInProgress,
+        );
+      });
     });
 
     test('saving a reminder logs reminderSaved into noHandoff', () async {
@@ -456,6 +564,7 @@ void main() {
       final io = _io(handoff: _richHandoff);
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false,
@@ -473,6 +582,7 @@ void main() {
     test('writes one archive file', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -486,6 +596,7 @@ void main() {
     test('archive filename contains sanitised branch name', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -499,6 +610,7 @@ void main() {
     test('archive content matches original handoff', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -513,6 +625,7 @@ void main() {
     test('handoff is reset to blank after teardown', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -539,6 +652,7 @@ void main() {
 _None recorded yet._
 ''');
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -556,6 +670,7 @@ _None recorded yet._
       final io = _io(handoff: _richHandoff);
       expect(io.fileExists(skillsPathFor(_workspace)), isFalse);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -569,6 +684,7 @@ _None recorded yet._
     test('appends root cause pattern entry', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -585,6 +701,7 @@ _None recorded yet._
     test('appends hot path entry for changed file', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -599,6 +716,7 @@ _None recorded yet._
     test('appends session index entry', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -621,6 +739,7 @@ _None recorded yet._
         'Validate path before loading.', // fixPattern
       ];
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -637,6 +756,7 @@ _None recorded yet._
         () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -647,6 +767,7 @@ _None recorded yet._
       // Plant a new session and run teardown again.
       io.write(handoffPathFor(_workspace), _bareHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -666,6 +787,7 @@ _None recorded yet._
     test('accepts pre-populated hotFiles when user returns null', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -688,6 +810,7 @@ _None recorded yet._
         'Always resolve before load.',
       ];
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -702,6 +825,7 @@ _None recorded yet._
     test('accepts pre-populated pattern when user returns null', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -723,6 +847,7 @@ _None recorded yet._
         'Re-attach listener.',
       ];
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -740,6 +865,7 @@ _None recorded yet._
       // hotFiles prompt gets no default so user must provide one explicitly.
       final io = _io(handoff: _bareHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -755,6 +881,7 @@ _None recorded yet._
     test('no pattern default when root cause is blank', () async {
       final io = _io(handoff: _bareHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -770,19 +897,159 @@ _None recorded yet._
 
   // ── Headless mode ────────────────────────────────────────────────────────────
 
+  // A headless teardown archives, and updates what was learned, only when the
+  // handoff's evidence is verified (Q11, owner agreed): a fix that was applied
+  // and analyzed but never verified, and a handoff only suggest confirmed, are
+  // saved as reminders.
+  group('teardown — headless closes only on verified evidence', () {
+    const cases = <({
+      String name,
+      String status,
+      DebugDisposition? disposition,
+      bool archives,
+      ClosureEvidence evidence,
+    })>[
+      (
+        name: 'a verified fix',
+        status: 'debug-complete',
+        disposition: DebugDisposition.verified,
+        archives: true,
+        evidence: ClosureEvidence.verified,
+      ),
+      (
+        name: 'a fix applied and analyzed, never verified',
+        status: 'debug-complete',
+        disposition: DebugDisposition.done,
+        archives: false,
+        evidence: ClosureEvidence.debugUnrecorded,
+      ),
+      (
+        name: 'a finished fix with no disposition recorded',
+        status: 'debug-complete',
+        disposition: null,
+        archives: false,
+        evidence: ClosureEvidence.debugUnrecorded,
+      ),
+      (
+        name: 'a handoff suggest confirmed, debug skipped',
+        status: 'ready-for-debug',
+        disposition: DebugDisposition.skipped,
+        archives: false,
+        evidence: ClosureEvidence.confirmedBySuggest,
+      ),
+      (
+        name: 'a handoff suggest is still investigating',
+        status: 'suggest-investigating',
+        disposition: null,
+        archives: false,
+        evidence: ClosureEvidence.none,
+      ),
+    ];
+
+    for (final scenario in cases) {
+      test('${scenario.name}: '
+          '${scenario.archives ? 'archives and resets' : 'saves a reminder'}',
+          () async {
+        var handoff =
+            _richHandoff.replaceFirst('debug-in-progress', scenario.status);
+        if (scenario.disposition != null) {
+          handoff = withDebugDisposition(handoff, scenario.disposition!);
+        }
+        final io = _io(handoff: handoff);
+        try {
+          await runTeardown(
+            executor: noModelExecutor(),
+            io: io,
+            projectRootOverride: _projectRoot,
+            mode: RunMode.headless,
+            exitFn: _throwExit,
+          );
+        } on _ExitException {
+          // The reminder path leaves through exit 0.
+        }
+        final events = [
+          for (final move in loggedMoves(io, _workspace)) move['event'],
+        ];
+        // A reminder leaves the handoff where it is and logs no move (gap
+        // R16): only the resolved path records one.
+        expect(events, scenario.archives ? [HandoffEvent.tornDown.name] : isEmpty);
+        expect(io.read(handoffPathFor(_workspace)) == blankHandoff,
+            scenario.archives);
+        if (!scenario.archives) {
+          expect(io.read(handoffPathFor(_workspace)), handoff,
+              reason: 'a reminder leaves the handoff untouched');
+        }
+        // The run records how it ended and what it rested on (gap R16), so a
+        // reminder says why it was one.
+        expect(loggedInteractions(io, _workspace), [
+          {
+            'rowKind': InteractionRowKind.outcome.name,
+            'command': ClaudartCommand.teardown.name,
+            'sensitivityMode': false,
+            'outcome': (scenario.archives
+                    ? TeardownOutcome.archived
+                    : TeardownOutcome.reminderSaved)
+                .name,
+            'evidence': scenario.evidence.name,
+          },
+        ]);
+        expect(_archives(io), hasLength(1));
+        expect(io.read(skillsPathFor(_workspace)).contains('resolved'),
+            scenario.archives);
+      });
+    }
+  });
+
+  // An interactive teardown that does not resolve the handoff records which way
+  // the owner went and what the handoff rested on (gap R16).
+  group('teardown — the outcome of an unresolved interactive run', () {
+    Future<List<Map<String, dynamic>>> runWith({required bool saveReminder}) async {
+      final io = _io(handoff: _richHandoff);
+      try {
+        await runTeardown(
+          executor: noModelExecutor(),
+          io: io,
+          projectRootOverride: _projectRoot,
+          confirmFn: (question) =>
+              question == 'Save as a reminder to resume later?' && saveReminder,
+          promptFn: (q, {optional = false}) => '',
+          pickFn: (items, {startIndex = 0}) => 0,
+          exitFn: _throwExit,
+        );
+      } on _ExitException {
+        // Both unresolved paths leave through exit 0.
+      }
+      return loggedInteractions(io, _workspace);
+    }
+
+    test('a reminder the owner accepts is recorded as saved, with its evidence',
+        () async {
+      final rows = await runWith(saveReminder: true);
+      expect(rows.single['outcome'], TeardownOutcome.reminderSaved.name);
+      expect(rows.single['evidence'], ClosureEvidence.debugUnrecorded.name);
+    });
+
+    test('a reminder the owner declines is its own outcome', () async {
+      final rows = await runWith(saveReminder: false);
+      expect(rows.single['outcome'], TeardownOutcome.reminderDeclined.name);
+      expect(rows.single['evidence'], ClosureEvidence.debugUnrecorded.name);
+    });
+  });
+
   group('teardown — headless', () {
     Never Function(String) throwOnCall(String label) =>
         (_) => throw StateError('headless must never call $label');
 
-    test('debugComplete status archives without asking anything — every '
+    test('a verified debugComplete archives without asking anything — every '
         'human touchpoint would throw if called', () async {
-      final completeHandoff = _richHandoff.replaceFirst(
-        'debug-in-progress',
-        'debug-complete',
+      final completeHandoff = withDebugDisposition(
+        _richHandoff.replaceFirst('debug-in-progress', 'debug-complete'),
+        DebugDisposition.verified,
       );
       final io = _io(handoff: completeHandoff);
 
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         mode: RunMode.headless,
@@ -808,6 +1075,7 @@ _None recorded yet._
 
       await expectLater(
         runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           mode: RunMode.headless,
@@ -838,6 +1106,7 @@ _None recorded yet._
       await expectLater(
         runZoned(
           () => runTeardown(
+            executor: noModelExecutor(),
             io: io,
             projectRootOverride: _projectRoot,
             mode: RunMode.headless,
@@ -862,13 +1131,24 @@ _None recorded yet._
 
     test('never records the unspecified sentinel as a real hot-path file '
         'when no hot files are known', () async {
-      final completeHandoff = _bareHandoff.replaceFirst(
-        'suggest-investigating',
-        'debug-complete',
+      // Converged (a real root cause and scope) and verified, but with no
+      // changed files recorded, so no hot files are known.
+      final completeHandoff = withDebugDisposition(
+        updateSection(
+          updateSection(
+            _bareHandoff.replaceFirst('suggest-investigating', 'debug-complete'),
+            'Root Cause',
+            'The splitter stops early.',
+          ),
+          'Scope',
+          '### Files in play\n- lib/parser.dart',
+        ),
+        DebugDisposition.verified,
       );
       final io = _io(handoff: completeHandoff);
 
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         mode: RunMode.headless,
@@ -893,6 +1173,7 @@ _None recorded yet._
     test('does not update skills.md ("no skills update" per ArchiveKind.reminder)', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -906,6 +1187,7 @@ _None recorded yet._
     test('still archives the handoff', () async {
       final io = _io(handoff: _richHandoff);
       await runTeardown(
+        executor: noModelExecutor(),
         io: io,
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
@@ -925,6 +1207,7 @@ _None recorded yet._
       Object? caught;
       try {
         await runTeardown(
+          executor: noModelExecutor(),
           io: io,
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,

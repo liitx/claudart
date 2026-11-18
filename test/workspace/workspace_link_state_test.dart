@@ -1,11 +1,12 @@
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
+const _projectRoot = ProjectFixture.root;
 
 void main() {
   final claude = p.join(_projectRoot, IdeIntegration.claudeCode.dirName);

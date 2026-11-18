@@ -239,6 +239,22 @@ void main() {
     });
   });
 
+  // One test per event: an event no command passes is a move the machine
+  // allows that nothing ever makes. The doc records it as "$_noCaller"; this
+  // fails on it.
+  group('every HandoffEvent has a code caller', () {
+    final usage = usageByEvent(readLibSources());
+    for (final event in HandoffEvent.values) {
+      test(event.name, () {
+        expect(
+          usage[event],
+          isNotEmpty,
+          reason: '${event.name} is $_noCaller: give it a caller or remove it.',
+        );
+      });
+    }
+  });
+
   group('the checked-in doc', () {
     test('docs/topology/handoff_status.md matches the code', () {
       final rendered = renderHandoffTopology(readLibSources());

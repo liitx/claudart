@@ -27,6 +27,9 @@ dev_dependencies:
   test: ^1.31.0
   # Runtime mocks/fakes for ProcessRunner, FileIO, etc. in tests.
   mocktail: ^1.0.5
+  # A fake clock for tests of timing: a listener that is slow on purpose is
+  # advanced with `elapse`, not waited for.
+  fake_async: ^1.3.1
   # Dev-only (not `dependencies`): the matrix/coverage testing framework
   # and paradigm law — available to test/ and custom_lint's own rule
   # definitions, deliberately NOT to lib/, so claudart's production
@@ -36,6 +39,8 @@ dev_dependencies:
   dartrix:
     git:
       url: https://github.com/liitx/dartrix.git
+      # Pinned: bump deliberately, with the full suite, so claudart and dartrix stay 1:1.
+      ref: cf54b363bbc34c8b95d92a724ab650797c13b079
   custom_lint: ^0.8.1
   # This repo's own hand-ported custom_lint rules (bare_string_for_enum,
   # enum_values_loop_in_single_test, ungrouped_identical_switch_cases).
@@ -51,3 +56,8 @@ dev_dependencies:
   # we actually exercise: fold just that subset into dartrix natively and
   # drop this dependency -- not decided or started yet.
   mutation_test: ^1.8.0
+  # Dev-only: parses Dart source (no resolution) for the construct-choice
+  # detectors in test/helpers (shared-shape analysis). Already in the tree via
+  # custom_lint_builder, so it adds no new package; named so the test import is
+  # a declared dependency, not a transitive one.
+  analyzer: ^8.1.1

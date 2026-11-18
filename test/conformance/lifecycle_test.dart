@@ -6,12 +6,14 @@
 // command logged to transitions.jsonl: file, log and consumer view agree. The
 // same scenarios run against zedup's real reader by `make consumer-check`.
 
-import 'package:claudart/dependency_config.dart';
+import 'package:claudart/config/dependency_config.dart';
+import 'package:claudart/session/debug_disposition.dart';
 import 'package:claudart/session/session_state.dart';
 import 'package:claudart/workspace/workspace_link_state.dart';
 import 'package:test/test.dart';
 
 import 'lifecycle_scenarios.dart';
+import '../helpers/project_fixture.dart';
 
 void main() {
   // The lifecycle must not depend on how the project is linked or whether it
@@ -38,6 +40,14 @@ void main() {
             reason: '${step.name}: the consumer view',
           );
           if (step.logged) {
+            // A step that is not a command (an agent or the owner editing the
+            // handoff by hand) may leave the status behind until the next
+            // command; only a command must leave status and content agreeing.
+            expect(
+              SessionState.parse(handoffContentOf(io)).findings,
+              isEmpty,
+              reason: '${step.name}: the status must follow the content',
+            );
             expect(
               loggedTo(io),
               step.effective.name,
@@ -50,11 +60,37 @@ void main() {
     }
   }
 
+  group('the debug disposition follows the session', () {
+    test('setup and suggest record pending; debug records verified when a '
+        'verification command passes, done when none is set', () async {
+      final io = freshLifecycleIo();
+      DebugDisposition recorded() =>
+          SessionState.parse(handoffContentOf(io)).debugDisposition;
+      SessionState state() => SessionState.parse(handoffContentOf(io));
+
+      await quietly(() => setupDefault(io));
+      expect(state().recordedDebugDisposition, DebugDisposition.pending);
+      await quietly(() => suggest(io));
+      expect(recorded(), DebugDisposition.pending);
+      await quietly(() => debug(io));
+      expect(state().recordedDebugDisposition, DebugDisposition.verified);
+    });
+
+    test('a debug with no verification command records done', () async {
+      final io = freshLifecycleIo();
+      await quietly(() => setupDefault(io));
+      await quietly(() => suggest(io));
+      await quietly(() => debugUnverified(io));
+      expect(SessionState.parse(handoffContentOf(io)).recordedDebugDisposition,
+          DebugDisposition.done);
+    });
+  });
+
   group('the environment fixture', () {
     for (final environment in lifecycleEnvironments()) {
       test('${describeEnvironment(environment)}: builds what it names', () {
         final io = freshLifecycleIo(environment);
-        expect(linkStateOf(io, '/projects/my-app'), environment.link);
+        expect(linkStateOf(io, ProjectFixture.root), environment.link);
         expect(
           io.fileExists('/projects/my-app/pubspec.yaml'),
           environment.usesDartrix,

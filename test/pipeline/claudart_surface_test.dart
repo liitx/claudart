@@ -20,6 +20,7 @@
 
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/agent_step.dart';
+import 'package:claudart/pipeline/step_role.dart';
 import 'package:claudart/pipeline/claudart_surface.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
@@ -59,6 +60,7 @@ PipelineContext _ctx() => const PipelineContext(
 AgentStep _echoStep({required String id}) => AgentStep(
       id: id,
       label: 'Step $id',
+      role: StepRole.classification,
       model: AgentModel.haiku,
       systemPrompt: 'sys',
       buildPrompt: (_) => 'msg',
@@ -87,12 +89,14 @@ void main() {
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           calls++;
-          return const StepResult(
+          return StepResult(
             text: 'from injected runner',
-            usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
           );
         },
       );
@@ -144,12 +148,14 @@ void main() {
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           calls++;
-          return const StepResult(
+          return StepResult(
             text: 'from injected runner',
-            usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
           );
         },
       );

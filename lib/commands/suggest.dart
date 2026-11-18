@@ -1,26 +1,35 @@
+
 import 'dart:io';
-import '../config.dart' show loadWorkspaceConfig;
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../config/config.dart' show loadWorkspaceConfig;
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import 'claudart_command.dart';
-import '../md_io.dart';
-import 'scope_files.dart';
-import '../paths.dart';
+import 'support/claudart_command.dart';
+import '../session/md_io.dart';
+import 'support/scope_files.dart';
+import '../config/paths.dart';
 import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/flows/suggest_steps.dart';
 import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
-import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../session/session_ops.dart';
 import '../session/handoff_event.dart';
+import '../session/handoff_placeholder.dart';
 import '../session/invalid_handoff_transition_exception.dart';
 import '../session/session_state.dart' show HandoffStatus;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
+import '../session/handoff_store.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runSuggest({
   FileIO? io,
@@ -32,26 +41,23 @@ Future<void> runSuggest({
   int Function(List<String> items)? pickFn,
 }) async {
   final fileIO   = io       ?? const RealFileIO();
-  final exit_    = exitFn   ?? exit;
+  final exit_    = exitFn   ?? exitProcess;
   final confirm_ = confirmFn ?? confirm;
   final prompt_  = promptFn ?? prompt;
   final pick_    = pickFn   ?? arrowMenu;
 
   // ── Locate project ─────────────────────────────────────────────────────────
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry    = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+  );
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
+  printProjectLine(entry);
 
   final workspace    = entry.workspacePath;
   final wsConfig     = WorkspaceConfig.load(workspace, io: fileIO);
@@ -60,19 +66,27 @@ Future<void> runSuggest({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
-        onStepCompleted: (event) => SessionLogger(
-          io: fileIO,
-          workspacePath: workspace,
-        ).logStepModels(command: ClaudartCommand.suggest.name, event: event),
       );
+
+  // Every pipeline event the executor publishes is logged for as long as the
+  // executor lives, so a failure, a timeout or a step that never finished
+  // leaves a record.
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  logger.logPipelineEvents(exec.events, command: ClaudartCommand.suggest.name);
   final handoffFile  = handoffPathFor(workspace);
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.suggest.name,
+  );
 
   if (!fileIO.fileExists(handoffFile)) {
-    print('✗ No handoff found. Run `claudart setup` first.');
-    exit_(1);
+    print(UserText.suggestNoHandoffFoundRunClaudartSetup.template);
+    leaveFor(ExitReason.suggestNoHandoff, exit_: exit_);
   }
 
-  final handoff = fileIO.read(handoffFile);
+  var handoff = fileIO.read(handoffFile);
   final status  = readHandoffStatus(handoff);
 
   // Fail before spending any model call when the state machine would reject
@@ -86,13 +100,10 @@ Future<void> runSuggest({
 
   if (status == HandoffStatus.readyForDebug ||
       status == HandoffStatus.debugInProgress) {
-    print(
-      '\n  ${ansi.bold}⚠${ansi.reset}  Handoff status is '
-      '${ansi.bold}${status.value}${ansi.reset} — suggest already ran.',
-    );
+    print(UserText.suggestAlreadyRan.styled({'status': status.value}));
     if (!confirm_('Re-run suggest and overwrite?')) {
       print('Aborted.');
-      exit_(0);
+      leaveFor(ExitReason.suggestOverwriteDeclined, exit_: exit_);
     }
     // Overwriting a completed handoff — preserve it first.
     archiveCurrentHandoff(workspace: workspace, io: fileIO);
@@ -106,25 +117,20 @@ Future<void> runSuggest({
   final files    = readScopeFiles(scope: scope, projectRoot: projectRoot, workspace: workspace, io: fileIO);
 
   if (files.isEmpty) {
-    print(
-      '\n✗ No files listed in ## Scope / Files in play.\n'
-      '  Add file paths to the handoff via `claudart setup`, then re-run.\n',
-    );
-    exit_(1);
+    print(UserText.noScopeFilesAddViaSetup.template);
+    leaveFor(ExitReason.suggestNoScopeFiles, exit_: exit_);
+  }
+
+  // Picking up a blocked handoff (needs-suggest) moves it back to
+  // investigating before any model call.
+  if (status.after(HandoffEvent.suggestResumed) != null) {
+    handoff = store.apply(handoff, HandoffEvent.suggestResumed);
   }
 
   // ── Header ─────────────────────────────────────────────────────────────────
 
   print(render.header('CLAUDART SUGGEST'));
-  print(
-    '  ${ansi.dim}[1] Classify${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[2] Read files${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[3] Reason${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[4] Write handoff${ansi.reset}\n',
-  );
+  print(UserText.suggestStageBar.styled());
 
   // ── Phase 0: categorize ──────────────────────────────────────────────────────
   //
@@ -159,8 +165,8 @@ Future<void> runSuggest({
   );
 
   if (ctx.readerOut.isEmpty) {
-    print('     Is claude CLI installed and authenticated?');
-    exit_(1);
+    print(UserText.debugIsClaudeCliInstalledAndAuthenticated.template);
+    leaveFor(ExitReason.suggestReaderProducedNothing, exit_: exit_);
   }
 
   // ── Phase 2: reasoner ──────────────────────────────────────────────────────
@@ -173,7 +179,7 @@ Future<void> runSuggest({
   );
 
   if (ctx.reasonerOut.isEmpty) {
-    exit_(1);
+    leaveFor(ExitReason.suggestReasonerProducedNothing, exit_: exit_);
   }
 
   // ── Review + refinement loop ───────────────────────────────────────────────
@@ -184,8 +190,8 @@ Future<void> runSuggest({
     // Always use the most recent analysis: applier output if it exists, else reasoner.
     final analysisOut = ctx.applierOut.isNotEmpty ? ctx.applierOut : ctx.reasonerOut;
 
-    print('\n  ${ansi.dim}──────────────────────────────────────${ansi.reset}');
-    print('  ${ansi.dim}  Total  ${ctx.usage.format()}${ansi.reset}\n');
+    print(UserText.usageRule.styled({}));
+    print(UserText.debugTotal.styled({'format': ctx.usage.format()}));
 
     print(render.header('SUGGEST FINDINGS — REVIEW BEFORE SAVE'));
     _printSection('ROOT CAUSE',     tagOr(analysisOut, 'ROOT_CAUSE'));
@@ -203,8 +209,8 @@ Future<void> runSuggest({
     if (choice == 0) break;
 
     if (choice == 2) {
-      print('\n  Exit — handoff not written.\n');
-      exit_(0);
+      print(UserText.suggestExitHandoffNotWritten.template);
+      leaveFor(ExitReason.suggestHandoffNotWritten, exit_: exit_);
     }
 
     // ── Refine ────────────────────────────────────────────────────────────────
@@ -251,6 +257,14 @@ Future<void> runSuggest({
   final mustNotTouch = tagOr(analysisOut, 'MUST_NOT_TOUCH');
   final constraints  = tagOr(analysisOut, 'CONSTRAINTS');
 
+  // The write below moves the status to readyForDebug, which says the
+  // knowledge transfer is complete. An analysis with no root cause or no
+  // files in play is not one, so nothing is written and the status stays.
+  if (HandoffPlaceholder.isBlank(rootCause.trim()) ||
+      HandoffPlaceholder.isBlank(scopeFiles.trim())) {
+    throw ClaudartException(FailureType.knowledgeTransferNotConverged);
+  }
+
   final newScope = '''### Files in play
 $scopeFiles
 
@@ -267,38 +281,26 @@ $mustNotTouch''';
   updated = updateSection(updated, 'Root Cause',  rootCause.trim());
   updated = updateSection(updated, 'Scope',        newScope.trim());
   updated = updateSection(updated, 'Constraints',  constraints.trim());
-  updated = applyHandoffEvent(
-    updated,
-    HandoffEvent.saveConfirmedReady,
-    onTransition: (transition) => SessionLogger(
-      io: fileIO,
-      sensitivityMode: entry.sensitivityMode,
-      workspacePath: workspace,
-    ).logTransition(
-      command: ClaudartCommand.suggest.name,
-      transition: transition,
-    ),
-  );
+  updated = store.apply(updated, HandoffEvent.saveConfirmedReady);
   updated = updated.replaceFirst(
     RegExp(r'> Updated: [^\n]+'),
     '> Updated: ${DateTime.now().toIso8601String().split('.').first}',
   );
 
-  fileIO.write(handoffFile, updated);
+  store.rewrite(updated);
 
   stdout.write('\x1B[2K\r  ${ansi.green}✓${ansi.reset}  ${ansi.dim}[4/4]${ansi.reset}  Handoff written  ${ansi.dim}→${ansi.reset}  status: ready-for-debug\n\n');
-  print('  Next:  ${ansi.bold}claudart save${ansi.reset}  ${ansi.dim}→${ansi.reset}  then /debug in Zed\n');
+  print(UserText.suggestNextClaudartSaveThenDebugIn.styled({}));
 }
 
 // ── Display helpers ───────────────────────────────────────────────────────────
 
 void _printSection(String title, String body) {
   final under = '─' * title.length;
-  print('  ${ansi.bold}$title${ansi.reset}');
-  print('  ${ansi.dim}$under${ansi.reset}');
+  print(UserText.styledTitle.styled({'title': title}));
+  print(UserText.styledUnderline.styled({'under': under}));
   for (final line in body.trim().split('\n')) {
     print(line.isEmpty ? '' : '    $line');
   }
   print('');
 }
-

@@ -1,7 +1,7 @@
 import 'package:test/test.dart';
 import 'dart:convert';
-import 'package:claudart/config.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/config.dart';
+import 'package:claudart/config/paths.dart';
 import 'helpers/mocks.dart';
 
 void main() {
@@ -36,6 +36,42 @@ void main() {
       final updated = cfg.copyWith(afterFixCommand: 'dart test');
       expect(updated.afterFixCommand, equals('dart test'));
       expect(updated.allowedScopeRoots, isEmpty);
+    });
+  });
+
+  group('$ProjectConfig — verificationCommand (absent means nothing verifies)', () {
+    test('is null by default: a fix is not verified unless a command is set', () {
+      expect(const ProjectConfig().verificationCommand, isNull);
+    });
+
+    test('is read from config.json', () {
+      final cfg = ProjectConfig.fromJson({'verificationCommand': 'dart test'});
+      expect(cfg.verificationCommand, 'dart test');
+    });
+
+    test('a blank value is the same as absent, never a command to run', () {
+      expect(ProjectConfig.fromJson({'verificationCommand': '  '}).verificationCommand,
+          isNull);
+    });
+
+    test('a value that is not text is absent', () {
+      expect(ProjectConfig.fromJson({'verificationCommand': 7}).verificationCommand,
+          isNull);
+    });
+
+    test('is written only when set', () {
+      expect(const ProjectConfig().toJson().containsKey('verificationCommand'),
+          isFalse);
+      expect(
+        const ProjectConfig(verificationCommand: 'dart test').toJson(),
+        containsPair('verificationCommand', 'dart test'),
+      );
+    });
+
+    test('survives copyWith and a round trip', () {
+      final cfg = const ProjectConfig().copyWith(verificationCommand: 'dart test');
+      expect(cfg.verificationCommand, 'dart test');
+      expect(ProjectConfig.fromJson(cfg.toJson()).verificationCommand, 'dart test');
     });
   });
 

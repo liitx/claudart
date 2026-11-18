@@ -10,11 +10,14 @@ enum ClaudartOperation {
   save,
   test;
 
-  static ClaudartOperation fromString(String s) => switch (s) {
-        'debug' => debug,
-        'save' => save,
-        _ => test,
-      };
+  /// The operation named [s], or null when [s] names none: an unknown name is
+  /// never taken for `test`.
+  static ClaudartOperation? fromString(String s) {
+    for (final operation in values) {
+      if (operation.name == s) return operation;
+    }
+    return null;
+  }
 }
 
 /// A single issue found during a preflight sync check.
@@ -70,7 +73,7 @@ SyncCheckResult checkSkillsSync(
 
   if (!state.hasActiveContent) return SyncCheckResult.clean();
 
-  final rootCauseConfirmed = !_isBlank(state.rootCause);
+  final rootCauseConfirmed = !state.rootCause.isBlank;
   if (!rootCauseConfirmed) return SyncCheckResult.clean();
 
   final pendingHasEntry = pendingHasBranch(skillsContent, state.branch);
@@ -136,7 +139,10 @@ SyncCheckResult checkHandoffStatus(
           suggestion: 'Run `claudart setup` to start a session first.',
         ),
       ]),
-    _ => SyncCheckResult.clean(),
+    ClaudartOperation.debug ||
+    ClaudartOperation.save ||
+    ClaudartOperation.test =>
+      SyncCheckResult.clean(),
   };
 }
 
@@ -199,5 +205,3 @@ SyncCheckResult runPreflight({
   return result;
 }
 
-bool _isBlank(String s) =>
-    s.isEmpty || s.startsWith('_Not') || s.startsWith('_Nothing');

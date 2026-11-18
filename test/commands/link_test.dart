@@ -5,12 +5,13 @@ import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/link.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/codegen/dependency_config_codegen.dart';
 import 'package:claudart/workspace/workspace_config.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
+const _projectRoot = ProjectFixture.root;
 const _projectName = 'my-app';
 
 /// Substring every sensitivity-mode `ask()` question contains ("Change
@@ -881,12 +882,28 @@ dependencies:
     test('does nothing when workspace.json already exists', () async {
       final io = _emptyIO();
       final path = workspaceJsonPath();
-      io.write(path, '{"hand": "written"}');
+      const handWritten = '{"owner": {"name": "n", "email": "e", '
+          '"handle": "h"}, "project": {"name": "p", "stack": ["dart"], '
+          '"role": "maintainer"}, "session": {"agents": [], "knowledge": [], '
+          '"proofNotation": "generic", "sensitivityMode": false}}';
+      io.write(path, handWritten);
       await link(
         io,
         askFn: (q) => _asksAbout(q, _sensitivityModeQuestion)
             ? false
             : throw StateError('should not have asked: $q'),
+      );
+      expect(io.read(path), equals(handWritten));
+    });
+
+    test('an unreadable workspace.json stops the link and is left as found',
+        () async {
+      final io = _emptyIO();
+      final path = workspaceJsonPath();
+      io.write(path, '{"hand": "written"}');
+      await expectLater(
+        link(io, askFn: (_) => false),
+        throwsA(isA<WorkspaceConfigUnreadableException>()),
       );
       expect(io.read(path), equals('{"hand": "written"}'));
     });
@@ -946,6 +963,37 @@ dependencies:
       expect(cfg.project.org, equals('vgv'));
       expect(cfg.project.repo, equals('claudart'));
       expect(cfg.session.sensitivityMode, isFalse);
+    });
+
+    test('a role that is not one is said so and seeds contributor', () async {
+      final io = _emptyIO();
+      final output = <String>[];
+      await runZoned(
+        () => link(
+          io,
+          askFn: (q) => _asksAbout(q, _sensitivityModeQuestion)
+              ? false
+              : !q.contains('strict'),
+          promptFn: _prompts([
+            'Aksana',
+            'a@vgv.dev',
+            'aksana',
+            'owner',
+            'dart',
+            null,
+            null,
+          ]),
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (_, __, ___, line) => output.add(line),
+        ),
+      );
+      final cfg = WorkspaceConfig.load(workspaceFor(_projectName), io: io)!;
+      expect(cfg.project.role, WorkspaceRole.contributor);
+      expect(
+        output.join('\n'),
+        contains('"owner" is not a role; using contributor.'),
+      );
     });
 
     test('accepting the strict question sets owner.strict true', () async {

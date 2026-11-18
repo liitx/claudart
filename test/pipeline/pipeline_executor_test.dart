@@ -8,19 +8,23 @@
 
 import 'dart:async';
 
+import 'package:claudart/errors/failure_type.dart';
 import 'package:claudart/pipeline/agent_model.dart';
 import 'package:claudart/pipeline/agent_step.dart';
+import 'package:claudart/pipeline/step_role.dart';
 import 'package:claudart/pipeline/debug_mode.dart' show StepDebugTrace;
 import 'package:claudart/pipeline/model_observation.dart';
 import 'package:claudart/pipeline/pipeline_context.dart';
 import 'package:claudart/pipeline/pipeline_event.dart';
 import 'package:claudart/pipeline/pipeline_executor.dart';
+import 'package:claudart/pipeline/pipeline_step_exception.dart';
 import 'package:claudart/pipeline/route_tag.dart';
 import 'package:claudart/pipeline/step_mode.dart';
 import 'package:claudart/pipeline/step_result.dart';
 import 'package:claudart/pipeline/step_route.dart';
 import 'package:claudart/pipeline/usage.dart';
 import 'package:test/test.dart';
+import '../helpers/unscripted.dart';
 
 const _projectRoot = '/tmp/test-project';
 
@@ -43,11 +47,130 @@ PipelineContext _ctx() => const PipelineContext(
     );
 
 void main() {
+  // A failed step says which FailureType it was, so the log can name it. A
+  // typed failure keeps its type; anything else is the boundary's
+  // unexpectedFailure, a marker that a type is missing, never silently dropped.
+  group('$PipelineExecutor — a failed step names its failure type', () {
+    Future<AgentFailed> failureOf(
+      Future<StepResult?> Function() runner,
+    ) async {
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: ({
+          required model,
+          required systemPrompt,
+          required message,
+          required workingDir,
+          required allowedTools,
+          required helperModel,
+          StepMode mode = StepMode.project,
+        }) =>
+            runner(),
+      );
+      final events = await exec
+          .run(
+            steps: [
+              AgentStep(
+                id: 'a',
+                label: 'Step A',
+                role: StepRole.classification,
+                model: AgentModel.haiku,
+                systemPrompt: 'sys',
+                buildPrompt: (_) => 'msg',
+              ),
+            ],
+            ctx: _ctx(),
+            displayStep: 1,
+            displayTotal: 1,
+          )
+          .toList();
+      return events.whereType<AgentFailed>().single;
+    }
+
+    test('a typed exception keeps its FailureType: stepTimedOut', () async {
+      final failed = await failureOf(
+        () async => throw StepTimedOutException(const Duration(minutes: 1)),
+      );
+      expect(failed.failureType, FailureType.stepTimedOut);
+    });
+
+    test('a typed exception keeps its FailureType: providerNotConfigured',
+        () async {
+      final failed = await failureOf(
+        () async => throw ProviderNotConfiguredException(),
+      );
+      expect(failed.failureType, FailureType.providerNotConfigured);
+    });
+
+    test('an untyped exception is unexpectedFailure, with its message',
+        () async {
+      final failed = await failureOf(() async => throw Exception('boom'));
+      expect(failed.failureType, FailureType.unexpectedFailure);
+      expect(failed.reason, contains('boom'));
+    });
+
+    test('a runner that returns nothing is stepProducedNoResult', () async {
+      final failed = await failureOf(() async => null);
+      expect(failed.failureType, FailureType.stepProducedNoResult);
+    });
+  });
+
+  // A step's role decides its tools and the CLI's helper model, so the executor
+  // must hand the runner exactly what the role says, for every role.
+  group('$PipelineExecutor — the step role reaches the runner', () {
+    for (final role in StepRole.values) {
+      test(role.name, () async {
+        Set<ClaudeTool>? receivedTools;
+        AgentModel? receivedHelperModel;
+        final exec = PipelineExecutor(
+          prompter: unscriptedUserPrompter,
+          approvalSelector: unscriptedApprovalSelector,
+          
+          runner: ({
+            required model,
+            required systemPrompt,
+            required message,
+            required workingDir,
+            required allowedTools,
+            required helperModel,
+            StepMode mode = StepMode.project,
+          }) async {
+            receivedTools = allowedTools;
+            receivedHelperModel = helperModel;
+            return StepResult(
+              text: 'ok',
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+            );
+          },
+        );
+        await exec.runFuture(
+          steps: [
+            AgentStep(
+              id: 'a',
+              label: 'Step A',
+              role: role,
+              model: AgentModel.sonnet,
+              systemPrompt: 'sys',
+              buildPrompt: (_) => 'msg',
+            ),
+          ],
+          ctx: _ctx(),
+          displayStep: 1,
+          displayTotal: 1,
+        );
+        expect(receivedTools, role.allowedTools);
+        expect(receivedHelperModel, role.helperModel);
+      });
+    }
+  });
+
   group('PipelineExecutor — postProcess', () {
     test('stores the postProcess result, not the raw runner output', () async {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -55,11 +178,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: 'raw output', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
@@ -80,6 +208,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -93,17 +222,23 @@ void main() {
       final decoy = AgentStep(
         id: 'decoy',
         label: 'Decoy',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: 'no tags here', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
@@ -128,17 +263,23 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: 'unchanged', usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0)),
@@ -163,6 +304,7 @@ void main() {
     final step = AgentStep(
       id: 'a',
       label: 'Step A',
+      role: StepRole.classification,
       model: AgentModel.haiku,
       systemPrompt: 'sys',
       buildPrompt: (_) => 'msg',
@@ -173,11 +315,16 @@ void main() {
     ) async {
       final calls = <String>[];
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           calls.add('${model.alias}|$systemPrompt|$message|$mode');
@@ -210,40 +357,105 @@ void main() {
       expect(completed.models, isEmpty);
     });
 
-    test('runFuture hands each completed step to onStepCompleted; run does not',
-        () async {
-      final seen = <AgentCompleted>[];
-      PipelineExecutor build() => PipelineExecutor(
+    // One stream carries every event of every run, so a logger or a dashboard
+    // subscribes once instead of the executor taking a callback per consumer.
+    group('events — one stream of every event', () {
+      PipelineExecutor build({StepResult? result}) => PipelineExecutor(
+            prompter: unscriptedUserPrompter,
+            approvalSelector: unscriptedApprovalSelector,
             runner: ({
               required model,
               required systemPrompt,
               required message,
               required workingDir,
+              required allowedTools,
+              required helperModel,
               StepMode mode = StepMode.project,
             }) async =>
-                const StepResult(
-                  text: 'answer',
-                  usage: Usage(input: 1, output: 1),
-                  models: [observed],
-                ),
-            onStepCompleted: seen.add,
+                result,
           );
 
-      await build()
-          .run(steps: [step], ctx: _ctx(), displayStep: 1, displayTotal: 1)
-          .toList();
-      expect(seen, isEmpty);
+      final answer = StepResult(
+        text: 'answer',
+        usage: const Usage(input: 1, output: 1),
+        models: [observed],
+      );
 
-      await _capturePrinted(() async {
-        await build().runFuture(
-          steps: [step],
-          ctx: _ctx(),
-          displayStep: 1,
-          displayTotal: 1,
-        );
+      Future<List<PipelineEvent>> seenFrom(
+        PipelineExecutor exec,
+        Future<void> Function() drive,
+      ) async {
+        final seen = <PipelineEvent>[];
+        exec.events.listen(seen.add);
+        await drive();
+        return seen;
+      }
+
+      Future<void> Function() viaRun(PipelineExecutor exec) => () async {
+            await exec
+                .run(
+                  steps: [step],
+                  ctx: _ctx(),
+                  displayStep: 1,
+                  displayTotal: 1,
+                )
+                .toList();
+          };
+
+      test('run publishes every event, in order', () async {
+        final exec = build(result: answer);
+        final seen = await seenFrom(exec, viaRun(exec));
+        expect(seen.map((event) => event.kind), [
+          PipelineEventKind.agentStarted,
+          PipelineEventKind.agentCompleted,
+          PipelineEventKind.pipelineCompleted,
+        ]);
       });
-      expect(seen.single.models, [observed]);
-      expect(seen.single.intendedModel, AgentModel.haiku);
+
+      test('runFuture publishes the same events', () async {
+        final exec = build(result: answer);
+        final seen = await seenFrom(exec, () async {
+          await _capturePrinted(() async {
+            await exec.runFuture(
+              steps: [step],
+              ctx: _ctx(),
+              displayStep: 1,
+              displayTotal: 1,
+            );
+          });
+        });
+        expect(seen.map((event) => event.kind), [
+          PipelineEventKind.agentStarted,
+          PipelineEventKind.agentCompleted,
+          PipelineEventKind.pipelineCompleted,
+        ]);
+      });
+
+      test('a completed step carries the models it ran on', () async {
+        final exec = build(result: answer);
+        final seen = await seenFrom(exec, viaRun(exec));
+        final completed = seen.whereType<AgentCompleted>().single;
+        expect(completed.models, [observed]);
+        expect(completed.intendedModel, AgentModel.haiku);
+      });
+
+      test('a failed step is published too', () async {
+        final exec = build();
+        final seen = await seenFrom(exec, viaRun(exec));
+        expect(seen.map((event) => event.kind), [
+          PipelineEventKind.agentStarted,
+          PipelineEventKind.agentFailed,
+          PipelineEventKind.pipelineCompleted,
+        ]);
+      });
+
+      test('every listener receives every event', () async {
+        final exec = build(result: answer);
+        final second = <PipelineEvent>[];
+        exec.events.listen(second.add);
+        final first = await seenFrom(exec, viaRun(exec));
+        expect(second.length, first.length);
+      });
     });
 
     // Token conservation: observing is read-only on a line already received.
@@ -261,22 +473,28 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
-            const StepResult(
+            StepResult(
               text: 'answer',
-              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
               thinking: 'reasoning text',
               stopReason: 'end_turn',
               durationMs: 4321,
@@ -300,22 +518,28 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
-            const StepResult(
+            StepResult(
               text: 'answer',
-              usage: Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
+              usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0),
             ),
       );
 
@@ -335,6 +559,7 @@ void main() {
     final step = AgentStep(
       id: 'a',
       label: 'Step A',
+      role: StepRole.classification,
       model: AgentModel.haiku,
       systemPrompt: 'sys',
       buildPrompt: (_) => 'msg',
@@ -343,11 +568,16 @@ void main() {
     test('a thrown Exception from the runner surfaces as AgentFailed.reason',
         () async {
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             throw Exception('claude exited 1: boom'),
@@ -364,11 +594,16 @@ void main() {
     test('a runner returning null with no thrown exception leaves reason '
         'null, not a synthesized message', () async {
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             null,
@@ -399,6 +634,7 @@ void main() {
       final plan = AgentStep(
         id:    'plan',
         label: 'Plan',
+        role: StepRole.classification,
         model: AgentModel.sonnet,
         systemPrompt: 'sys',
         buildPrompt:  (_) => 'msg',
@@ -410,6 +646,7 @@ void main() {
       final clarify = AgentStep(
         id:    'clarify',
         label: 'Clarify',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt:  (_) => 'msg',
@@ -419,11 +656,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           if (model == plan.model) {
@@ -464,6 +706,7 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
@@ -471,11 +714,16 @@ void main() {
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           capturedMode = mode;
@@ -493,17 +741,23 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
       );
 
       final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner: ({
           required model,
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async {
           capturedMode = mode;
@@ -521,6 +775,7 @@ void main() {
     AgentStep rewritingStep() => AgentStep(
           id: 'a',
           label: 'Step A',
+          role: StepRole.classification,
           model: AgentModel.haiku,
           systemPrompt: 'sys',
           buildPrompt: (_) => 'msg',
@@ -532,12 +787,17 @@ void main() {
           required systemPrompt,
           required message,
           required workingDir,
+          required allowedTools,
+          required helperModel,
           StepMode mode = StepMode.project,
         }) async =>
             StepResult(text: text, usage: const Usage(input: 1, output: 1, cacheRead: 0, cost: 0));
 
     test('verbose: true prints the trace line when postProcess rewrites output', () async {
-      final exec = PipelineExecutor(runner: staticRunner('raw'), verbose: true);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: staticRunner('raw'), verbose: true);
 
       final printed = await _capturePrinted(() => exec.runFuture(
             steps: [rewritingStep()],
@@ -550,7 +810,10 @@ void main() {
     });
 
     test('verbose: false never prints the trace line, even when postProcess rewrites', () async {
-      final exec = PipelineExecutor(runner: staticRunner('raw'));
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: staticRunner('raw'));
 
       final printed = await _capturePrinted(() => exec.runFuture(
             steps: [rewritingStep()],
@@ -566,12 +829,16 @@ void main() {
       final step = AgentStep(
         id: 'a',
         label: 'Step A',
+        role: StepRole.classification,
         model: AgentModel.haiku,
         systemPrompt: 'sys',
         buildPrompt: (_) => 'msg',
         postProcess: (raw, ctx) => raw, // identity — never "rewrites"
       );
-      final exec = PipelineExecutor(runner: staticRunner('raw'), verbose: true);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: staticRunner('raw'), verbose: true);
 
       final printed = await _capturePrinted(() => exec.runFuture(
             steps: [step],

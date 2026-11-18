@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 

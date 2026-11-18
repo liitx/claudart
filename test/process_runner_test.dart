@@ -6,7 +6,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:claudart/process_runner.dart';
+import 'package:claudart/io/process_runner.dart';
 import 'package:test/test.dart';
 
 /// True while a process with [pid] is still alive. `kill -0` sends no

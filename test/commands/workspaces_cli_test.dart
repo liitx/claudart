@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:claudart/commands/workspaces.dart';
+import 'package:claudart/logging/logger.dart' show InteractionRowKind, LogEntryField;
 import 'package:claudart/pipeline/debug_mode.dart'
     show kAmbientDebugSuppressedNotice;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../helpers/cli_session.dart';
+import 'package:claudart/logging/log_file.dart';
+import 'package:claudart/config/paths.dart';
 
 // The real binary, two linked projects in one registry. `proj` has a live
 // session; `other` is linked with none. Everything is run from proj's
@@ -24,14 +27,34 @@ String _handoffOf(CliSession session, String name) =>
 
 /// The interactions.jsonl entries a workspace has logged, oldest first.
 List<Map<String, dynamic>> _interactionsOf(CliSession session, String name) {
-  final file =
-      File(p.join(session.ws.path, name, 'logs', 'interactions.jsonl'));
+  final file = File(
+    logFilePath(
+      logsDirFor(p.join(session.ws.path, name)),
+      LogFile.interactions,
+    ),
+  );
   if (!file.existsSync()) return [];
   return [
     for (final line in file.readAsLinesSync())
       if (line.isNotEmpty) (jsonDecode(line) as Map).cast<String, dynamic>(),
   ];
 }
+
+/// A command leaves two rows in the workspace it ran in: its own account of what
+/// it did, then the boundary's record of the run.
+final _outcomeThenRun = [
+  InteractionRowKind.outcome.name,
+  InteractionRowKind.run.name,
+];
+
+List<Object?> _rowKinds(Iterable<Map<String, dynamic>> rows) =>
+    [for (final row in rows) row[LogEntryField.rowKind.name]];
+
+/// The outcome the command wrote itself, not the boundary's.
+Object? _ownOutcome(Iterable<Map<String, dynamic>> rows) => rows
+    .singleWhere((row) =>
+        row[LogEntryField.rowKind.name] == InteractionRowKind.outcome.name)[
+        LogEntryField.outcome.name];
 
 void main() {
   group('logs', () {
@@ -43,8 +66,9 @@ void main() {
       final before = _interactionsOf(s.proj, 'proj');
       await s.proj.run(['workspaces']);
       final added = _interactionsOf(s.proj, 'proj').skip(before.length);
-      expect(added.map((e) => e['command']), ['workspaces']);
-      expect(added.single['outcome'], WorkspaceInteraction.workspacesListed
+      expect(added.map((e) => e['command']), ['workspaces', 'workspaces']);
+      expect(_rowKinds(added), _outcomeThenRun);
+      expect(_ownOutcome(added), WorkspaceInteraction.workspacesListed
           .outcomeFor(workspaceCount: 2));
       expect(_interactionsOf(s.proj, 'other'), isEmpty);
     });
@@ -55,9 +79,10 @@ void main() {
       final before = _interactionsOf(s.proj, 'proj');
       await s.proj.run(['--project', 'other', 'status']);
       final targeted = _interactionsOf(s.proj, 'other');
-      expect(targeted.map((e) => e['command']), ['status']);
+      expect(targeted.map((e) => e['command']), ['status', 'status']);
+      expect(_rowKinds(targeted), _outcomeThenRun);
       expect(
-        targeted.single['outcome'],
+        _ownOutcome(targeted),
         WorkspaceInteraction.projectTargeted.outcomeFor(),
       );
       expect(_interactionsOf(s.proj, 'proj'), before);
@@ -239,9 +264,19 @@ void main() {
       expect(r.out, contains('Archive index is corrupt'));
 
       final otherLog =
-          File(p.join(s.proj.ws.path, 'other', 'logs', 'errors.jsonl'));
+          File(
+            logFilePath(
+              logsDirFor(p.join(s.proj.ws.path, 'other')),
+              LogFile.errors,
+            ),
+          );
       final projLog =
-          File(p.join(s.proj.ws.path, 'proj', 'logs', 'errors.jsonl'));
+          File(
+            logFilePath(
+              logsDirFor(p.join(s.proj.ws.path, 'proj')),
+              LogFile.errors,
+            ),
+          );
       expect(otherLog.readAsStringSync(),
           contains('archives.archiveIndexCorrupt'));
       expect(projLog.existsSync(), isFalse);

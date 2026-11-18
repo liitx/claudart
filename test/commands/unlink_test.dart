@@ -2,8 +2,9 @@ import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/unlink.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
 
-const _projectRoot = '/projects/my-app';
+const _projectRoot = ProjectFixture.root;
 
 void main() {
   group('unlink — resolves project root like link does', () {

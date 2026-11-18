@@ -1,8 +1,9 @@
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../io/git_utils.dart';
+import '../config/paths.dart';
 import '../ui/render.dart' as render;
+import '../generated/user_text.g.dart';
 
 /// Removes the symlinks `link` creates — `.claude` and `.cursor/commands` —
 /// plus a legacy `CLAUDE.md` symlink from older claudart versions. Anything
@@ -18,7 +19,7 @@ void runUnlink({FileIO? io, String? projectRootOverride}) {
 
   final projectRoot = resolveProjectRoot(override: projectRootOverride);
   if (projectRoot == null) {
-    print('\n✗ Not inside a git repository. Cannot detect project root.\n');
+    print(UserText.notInGitRepositoryRoot.template);
     return;
   }
 
@@ -33,17 +34,16 @@ void runUnlink({FileIO? io, String? projectRootOverride}) {
 
     if (fileIO.linkExists(path)) {
       fileIO.deleteLink(path);
-      print('✓ Removed symlink: $rel');
+      print(UserText.unlinkRemovedSymlink.format({'rel': rel}));
       removed++;
     } else if (fileIO.fileExists(path) || fileIO.dirExists(path)) {
-      print(
-          '⚠  $rel exists but is not a symlink — skipped (not safe to delete)');
+      print(UserText.unlinkExistsButIsNotASymlink.format({'rel': rel}));
     }
   }
 
   if (removed == 0) {
-    print('\nNo claudart symlinks found in $projectRoot');
+    print(UserText.unlinkNoClaudartSymlinksFoundIn.format({'projectRoot': projectRoot}));
   } else {
-    print('\nProject directory is clean.\n');
+    print(UserText.unlinkProjectDirectoryIsClean.template);
   }
 }

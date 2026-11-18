@@ -6,8 +6,8 @@
 
 | repo | lib files | public components | test files |
 |---|---|---|---|
-| claudart | 127 | 135 | 141 |
-| dartrix | 14 | 22 | 7 |
+| claudart | 165 | 211 | 227 |
+| dartrix | 21 | 34 | 15 |
 | zedup | 192 | 230 | 119 |
 
 ## Names declared in more than one repo
@@ -21,12 +21,27 @@
 
 ## Tests that read another repo's components
 
+### claudart
+
+| test file | component | reads | asserts its behavior | first assertion |
+|---|---|---|---|---|
+| `test/topology/candidacy_evidence_test.dart` | `CandidateLedger` | 1 | 0 | — |
+| `test/topology/candidacy_evidence_test.dart` | `ProofAuditCheck` | 1 | 0 | — |
+| `test/topology/candidacy_evidence_test.dart` | `ProofAuditOutcome` | 12 | 0 | — |
+| `test/topology/candidacy_index_test.dart` | `CandidateLedger` | 2 | 0 | — |
+| `test/topology/candidacy_index_test.dart` | `CandidateStatus` | 1 | 0 | — |
+| `test/topology/candidacy_index_test.dart` | `LedgerField` | 1 | 0 | — |
+| `test/topology/candidacy_ledger_test.dart` | `CandidateLedger` | 3 | 0 | — |
+| `test/topology/candidacy_ledger_test.dart` | `CandidateStatus` | 8 | 0 | — |
+| `test/topology/candidacy_ledger_test.dart` | `LedgerRefusal` | 1 | 0 | — |
+
 ### dartrix
 
 | test file | component | reads | asserts its behavior | first assertion |
 |---|---|---|---|---|
 | `test/shoelace/gap_cross_reference_test.dart` | `BranchType` | 2 | 0 | — |
 | `test/shoelace/shoelace_snapshot_test.dart` | `BranchType` | 6 | 0 | — |
+| `test/shoelace/shoelace_snapshot_test.dart` | `WorkStatus` | 2 | 0 | — |
 
 ### zedup
 

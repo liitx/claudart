@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:claudart/ignore_rules.dart';
+import 'package:claudart/project/ignore_rules.dart';
 import 'helpers/mocks.dart';
 
 void main() {

@@ -26,8 +26,9 @@
 //     double-quoted export would be silently treated as a whole-file
 //     export (or missed entirely), which could under- or over-count public
 //     API. Not present in this repo's actual barrel today (checked).
-// Advisory only, always exits 0 — a hard gate would fail immediately on
-// this repo's own pre-existing hits, which are tracked, not fixed here.
+// The printout is advisory and always exits 0; the gate is the ratchet in
+// test/topology/test_only_symbols_test.dart, which allows today's hits and no
+// more (a hard gate would fail immediately on the pre-existing ones).
 //
 // Scope: top-level declarations only (class/enum/mixin/extension/typedef/
 // function/getter/const/final/var). Class and enum MEMBERS are
@@ -52,7 +53,7 @@ final _topLevelFunctionDecl = RegExp(
 // Top-level only (column-anchored, so a class/enum member getter — already
 // out of scope, see this file's own header — never matches: it's always
 // indented). Missed in the first version: `String get workspacesRoot { ... }`
-// in lib/paths.dart was invisible to the census entirely.
+// in lib/config/paths.dart was invisible to the census entirely.
 final _topLevelGetterDecl = RegExp(r'^(?:[\w<>,.? ]+\s+)?get\s+(\w+)\s*(?:=>|\{)');
 
 List<RegExp> get _declPatterns => [
@@ -69,13 +70,16 @@ List<RegExp> get _declPatterns => [
 /// One top-level declaration: its name and which file declared it.
 typedef Declaration = ({String name, String file});
 
-void main(List<String> args) {
-  final libFiles = _dartFilesUnder('lib');
-  final binFiles = _dartFilesUnder('bin');
-  final testFiles = _dartFilesUnder('test');
-  final contents = <String, String>{
-    for (final f in [...libFiles, ...binFiles, ...testFiles]) f: File(f).readAsStringSync(),
-  };
+/// The top-level `lib/` symbols that only `test/` reads, as `name (file)`, from
+/// [contents] (path to text, with `lib/`, `bin/` and `test/` prefixes). Pure, so
+/// the census and its ratchet test (`test_only_symbols_test.dart`) share it.
+List<String> testOnlySymbols(Map<String, String> contents) {
+  List<String> under(String prefix) =>
+      [for (final path in contents.keys) if (path.startsWith(prefix)) path];
+  final libFiles = under('lib/');
+  // bin/ and tool/ are real consumers: the binary, and scripts `make` runs.
+  final binFiles = [...under('bin/'), ...under('tool/')];
+  final testFiles = under('test/');
 
   const barrelPath = 'lib/claudart.dart';
   final publicApi = _publicApiSymbols(barrelPath, contents);
@@ -102,6 +106,20 @@ void main(List<String> args) {
     final usedInTest = testFiles.any((f) => pattern.hasMatch(contents[f]!));
     if (usedInTest) hits.add('${decl.name} (${decl.file})');
   }
+  return hits;
+}
+
+void main(List<String> args) {
+  final contents = <String, String>{
+    for (final f in [
+      ..._dartFilesUnder('lib'),
+      ..._dartFilesUnder('bin'),
+      ..._dartFilesUnder('tool'),
+      ..._dartFilesUnder('test'),
+    ])
+      f: File(f).readAsStringSync(),
+  };
+  final hits = testOnlySymbols(contents);
 
   if (hits.isEmpty) {
     stdout.writeln('✓ No test-only lib/ symbols found.');
@@ -115,7 +133,7 @@ void main(List<String> args) {
   for (final hit in hits) {
     stdout.writeln('   - $hit');
   }
-  stdout.writeln('   Advisory only — verify before deleting anything this flags.');
+  stdout.writeln('   A ratchet in test/topology/test_only_symbols_test.dart fails when this grows.');
 }
 
 List<String> _dartFilesUnder(String dir) {

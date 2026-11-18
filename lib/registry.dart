@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'errors/claudart_exception.dart';
 import 'errors/failure_type.dart';
-import 'file_io.dart';
-import 'paths.dart';
+import 'io/file_io.dart';
+import 'config/paths.dart';
 
 const _warning =
     'Managed by claudart. Do not edit manually — use claudart commands.';
@@ -100,10 +100,10 @@ class Registry {
     if (raw.isEmpty) return Registry.empty();
     try {
       return _parse(raw);
-    } on FormatException catch (_) {
-      return Registry.empty();
-    } on TypeError catch (_) {
-      return Registry.empty();
+    } on FormatException catch (e) {
+      throw CorruptRegistryException(e.message);
+    } on TypeError catch (e) {
+      throw CorruptRegistryException(e.toString());
     }
   }
 

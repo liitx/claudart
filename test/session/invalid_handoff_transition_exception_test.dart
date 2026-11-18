@@ -25,7 +25,16 @@ void main() {
     test('toString names the status by its handoff.md value and the event', () {
       expect(
         e.toString(),
-        'Handoff status "debug-complete" does not allow "debugStarted".',
+        startsWith(
+          'Handoff status "debug-complete" does not allow "debugStarted".',
+        ),
+      );
+    });
+
+    test('toString ends with what to do next from that status', () {
+      expect(
+        e.toString(),
+        endsWith('Next step: ${HandoffStatus.debugComplete.nextStep}'),
       );
     });
   });

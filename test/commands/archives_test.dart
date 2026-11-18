@@ -3,14 +3,17 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/archives.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/session/archive_entry.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/mocks.dart';
+import '../helpers/unscripted.dart';
+import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace   = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace   = ProjectFixture.workspace;
 
 class _ExitException implements Exception {
   final int code;
@@ -66,11 +69,7 @@ void main() {
     test('exits 1 when project is not registered', () async {
       final io = MemoryFileIO();
       await expectLater(
-        runArchives(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-        ),
+        runArchives(seams: CommandSeams(pickFn: unscriptedPick, io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         throwsA(isA<_ExitException>()),
       );
     });
@@ -78,11 +77,7 @@ void main() {
     test('exits 0 with no entries', () async {
       final io = _io();
       await expectLater(
-        runArchives(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-        ),
+        runArchives(seams: CommandSeams(pickFn: unscriptedPick, io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', equals(0))),
       );
     });
@@ -92,11 +87,7 @@ void main() {
       final output = <String>[];
       await expectLater(
         runZoned(
-          () => runArchives(
-            io: io,
-            projectRootOverride: _projectRoot,
-            exitFn: _throwExit,
-          ),
+          () => runArchives(seams: CommandSeams(pickFn: unscriptedPick, io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
           zoneSpecification: ZoneSpecification(
             print: (_, __, ___, line) => output.add(line),
           ),
@@ -112,15 +103,10 @@ void main() {
       final io = _io(entries: [_entryOne, _entryTwo]);
       List<String>? capturedLabels;
       await expectLater(
-        runArchives(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: (items) {
+        runArchives(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (items) {
             capturedLabels = items;
             return items.length - 1; // cancel
-          },
-        ),
+          })),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', equals(0))),
       );
       // Newest first: e2 (Jan 2) before e1 (Jan 1).
@@ -134,15 +120,10 @@ void main() {
     test('restores the archived handoff to the active handoff path', () async {
       final io = _io(entries: [_entryOne]);
       var pickCall = 0;
-      await runArchives(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _throwExit,
-        pickFn: (items) {
+      await runArchives(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (items) {
           pickCall++;
           return 0; // select the entry, then "Resume"
-        },
-      );
+        }));
       expect(pickCall, equals(2));
       expect(io.read(handoffPathFor(_workspace)), equals('# snapshot for e1'));
     });
@@ -151,12 +132,7 @@ void main() {
       final io = _io(entries: [_entryOne], withSnapshots: false);
       final output = <String>[];
       await runZoned(
-        () => runArchives(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-          pickFn: (_) => 0,
-        ),
+        () => runArchives(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) => 0)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -171,15 +147,10 @@ void main() {
     test('does not modify the active handoff', () async {
       final io = _io(entries: [_entryOne]);
       var pickCall = 0;
-      await runArchives(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _throwExit,
-        pickFn: (_) {
+      await runArchives(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit, pickFn: (_) {
           pickCall++;
           return pickCall == 1 ? 0 : 1; // select entry, then "View snapshot"
-        },
-      );
+        }));
       expect(io.fileExists(handoffPathFor(_workspace)), isFalse);
     });
   });

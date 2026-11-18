@@ -4,8 +4,8 @@
 // Commands read it to list or resume sessions.
 
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../session/archive_entry.dart';
 
 String _indexPath(String workspace) =>

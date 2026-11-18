@@ -1,31 +1,93 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
+import '../errors/failure_type.dart';
+import '../io/file_io.dart';
 import '../session/handoff_event.dart';
 import '../session/handoff_transition.dart';
 import '../session/session_state.dart' show HandoffStatus;
-import '../paths.dart';
+import '../config/paths.dart';
 import '../pipeline/model_observation.dart';
-import '../pipeline/pipeline_event.dart' show AgentCompleted;
+import '../pipeline/pipeline_event.dart'
+    show AgentCompleted, AgentFailed, PipelineEvent;
+import '../registry.dart';
 import '../sensitivity/token_map.dart';
-import '../sensitivity/abstractor.dart';
-import '../sensitivity/detector.dart';
+import 'log_file.dart';
+import 'log_protection.dart';
+import '../session/transition_bus.dart';
+import '../io/gate_runner.dart';
+
+/// The version of the shape every log row follows. Raise it when a row's
+/// fields change meaning, so a reader can tell old rows from current ones.
+const int logSchemaVersion = 1;
 
 const int _maxInteractions = 500;
 const int _maxErrors = 200;
 const int _maxTransitions = 500;
-const int _maxPerformance = 50;
 
 /// A jsonl log may run this many lines past its cap before it is trimmed back
 /// to the cap, so the rewrite (the only step concurrent writers can race on)
 /// happens once per this many appends, not on every one.
 const int _trimSlackLines = 50;
 const int _maxModelRecords = 500;
+const int _maxGateRecords = 500;
+const int _maxProofRecords = 5000;
+const int _maxStepRecords = 2000;
 
 /// The keys of a session log entry; the names are the keys. (The keys of a
 /// transition are [HandoffTransitionField]'s, of a model record
 /// [ModelRecordField]'s.)
+/// Which of the two kinds of row an interaction row is. A run is written once
+/// by the boundary around every command (`runRecorded`), with how long it took;
+/// an outcome is a command's own account of what it did. Marked on the row so a
+/// reader never infers the kind from which fields happen to be present.
+enum InteractionRowKind {
+  /// The boundary's row: the run ended, ok or failed, after `durationMs`.
+  run,
+
+  /// A row a command wrote itself: its domain outcome, scan figures, evidence.
+  outcome,
+}
+
+/// How a seeded fault ended in the proof audit.
+enum ProofVerdict {
+  /// At least one test of the proof's checking set failed: the proof sees it.
+  caught,
+
+  /// Every test passed with the fault in place: the proof cannot see it.
+  missed,
+
+  /// The faulty source did not compile or the tests did not load, so nothing
+  /// was shown either way; the fault itself is wrong.
+  invalid,
+}
+
 enum LogEntryField {
+  /// The schema version the row follows; a row without it predates it.
+  schema,
+  /// Which [InteractionRowKind] an interaction row is; a row without it
+  /// predates the marking.
+  rowKind,
+
+  /// The audit rows: which proof was checked, the fault seeded, the source
+  /// location it stands for, how it ended, the checking tier that ended it and
+  /// the tests that failed.
+  proof,
+  fault,
+  sourceFile,
+  sourceLine,
+  verdict,
+  tier,
+  caughtBy,
+
+  /// How many times the deciding tier's tests were run for a proof row: 2 when
+  /// the first run showed nothing and was repeated.
+  attempts,
+  gate,
+  evidence,
+  shellCommand,
+  exitCode,
+  outputTail,
   ts,
   command,
   outcome,
@@ -47,33 +109,83 @@ enum LogEntryField {
   lastSeen,
   filed,
   issueId,
-  rejected;
+  rejected,
+  kind,
+  stepId,
+  detail,
+  failureType;
 }
 
 /// Appends structured log entries to workspace log files.
+///
+/// Built only through its factories, each of which says how free text is
+/// protected ([LogProtection]); [forEntry] chooses for a registered project.
 class SessionLogger {
-  final FileIO _io;
-  final bool sensitivityMode;
-  final TokenMap? tokenMap;
-  final String _logsDir;
-
-  SessionLogger({
-    FileIO? io,
-    this.sensitivityMode = false,
-    this.tokenMap,
-    String? workspacePath,
-  })  : _io = io ?? const RealFileIO(),
+  SessionLogger._(FileIO? io, this._protection, String? workspacePath)
+      : _io = io ?? const RealFileIO(),
         _logsDir = workspacePath != null
             ? logsDirFor(workspacePath)
             : p.join(claudeDir, 'logs');
 
-  String get _interactionsPath => p.join(_logsDir, 'interactions.jsonl');
-  String get _errorsPath => p.join(_logsDir, 'errors.jsonl');
-  String get _transitionsPath => p.join(_logsDir, 'transitions.jsonl');
-  String get _modelsPath => p.join(_logsDir, 'models.jsonl');
-  String get _performancePath => p.join(_logsDir, 'performance.md');
+  /// Text is written as it is: a project that is not sensitive, or a log that
+  /// holds nothing from a project.
+  factory SessionLogger.plain({FileIO? io, String? workspacePath}) =>
+      SessionLogger._(io, const PlainLogging(), workspacePath);
+
+  /// Identifiers in text are replaced using [tokenMap] before they are written.
+  factory SessionLogger.abstracted({
+    required TokenMap tokenMap,
+    FileIO? io,
+    String? workspacePath,
+  }) =>
+      SessionLogger._(io, AbstractedLogging(tokenMap), workspacePath);
+
+  /// No free text is written, only what is recorded by type.
+  factory SessionLogger.labelOnly({FileIO? io, String? workspacePath}) =>
+      SessionLogger._(io, const LabelOnlyLogging(), workspacePath);
+
+  /// The logger for a registered project: plain when it is not sensitive,
+  /// abstracted with its token map when it is, and label only when that map
+  /// cannot be read, so a sensitive project never has raw text logged.
+  factory SessionLogger.forEntry(RegistryEntry entry, {FileIO? io}) {
+    final fileIO = io ?? const RealFileIO();
+    if (!entry.sensitivityMode) {
+      return SessionLogger.plain(
+        io: fileIO,
+        workspacePath: entry.workspacePath,
+      );
+    }
+    try {
+      return SessionLogger.abstracted(
+        tokenMap: TokenMap.load(
+          tokenMapPathFor(entry.workspacePath),
+          io: fileIO,
+        ),
+        io: fileIO,
+        workspacePath: entry.workspacePath,
+      );
+    } on TokenMapUnreadableException {
+      return SessionLogger.labelOnly(
+        io: fileIO,
+        workspacePath: entry.workspacePath,
+      );
+    }
+  }
+
+  final FileIO _io;
+  final LogProtection _protection;
+  final String _logsDir;
+
+  String get _interactionsPath => logFilePath(_logsDir, LogFile.interactions);
+  String get _errorsPath => logFilePath(_logsDir, LogFile.errors);
+  String get _transitionsPath => logFilePath(_logsDir, LogFile.transitions);
+  String get _modelsPath => logFilePath(_logsDir, LogFile.models);
+  String get _stepsPath => logFilePath(_logsDir, LogFile.steps);
+  String get _gatesPath => logFilePath(_logsDir, LogFile.gates);
+  String get _proofsPath => logFilePath(_logsDir, LogFile.proofs);
 
   void logInteraction({
+    required InteractionRowKind rowKind,
     required String command,
     required String outcome,
     bool? sensitivityModeOverride,
@@ -85,11 +197,15 @@ class SessionLogger {
     int? durationMs,
     String? platform,
     String? claudartVersion,
+    String? evidence,
+    String? reason,
   }) {
     final entry = <String, dynamic>{
       LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+      LogEntryField.rowKind.name: rowKind.name,
       LogEntryField.command.name: command,
-      LogEntryField.sensitivityMode.name: sensitivityModeOverride ?? sensitivityMode,
+      LogEntryField.sensitivityMode.name:
+          sensitivityModeOverride ?? _protection.isSensitive,
       if (scanScope != null) LogEntryField.scanScope.name: scanScope,
       if (filesScanned != null) LogEntryField.filesScanned.name: filesScanned,
       if (tokensTotal != null) LogEntryField.tokensTotal.name: tokensTotal,
@@ -97,6 +213,8 @@ class SessionLogger {
       if (scanDuration != null) LogEntryField.scanDuration.name: scanDuration,
       if (durationMs != null) LogEntryField.durationMs.name: durationMs,
       if (platform != null) LogEntryField.platform.name: platform,
+      if (evidence != null) LogEntryField.evidence.name: evidence,
+      if (reason != null) LogEntryField.reason.name: reason,
       if (claudartVersion != null) LogEntryField.claudartVersion.name: claudartVersion,
       LogEntryField.outcome.name: outcome,
     };
@@ -117,6 +235,80 @@ class SessionLogger {
         ...transition.toJson(),
       },
       _maxTransitions,
+    );
+  }
+
+  /// A gate command a command ran: which gate, the command, its exit code, how
+  /// long it took and the tail of its output. Free text (the command and its
+  /// output) is protected in a sensitive project.
+  void logGate({
+    required String command,
+    required GateKind gate,
+    required String shellCommand,
+    required GateResult result,
+  }) {
+    _appendJsonl(
+      _gatesPath,
+      {
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.command.name: command,
+        LogEntryField.gate.name: gate.name,
+        LogEntryField.shellCommand.name: _safe(shellCommand),
+        LogEntryField.exitCode.name: result.exitCode,
+        LogEntryField.durationMs.name: result.durationMs,
+        LogEntryField.outputTail.name: _safe(result.outputTail),
+      },
+      _maxGateRecords,
+    );
+  }
+
+  /// A fault the proof audit seeded and what became of it: the proof it was
+  /// seeded against, the fault, the source file and line it stands for, the
+  /// verdict, the checking tier that decided it and the tests that failed.
+  /// Enum names and test titles only, so nothing here needs masking.
+  void logProofFault({
+    required String proof,
+    required String fault,
+    required String sourceFile,
+    required int sourceLine,
+    required ProofVerdict verdict,
+    required int tier,
+    required int attempts,
+    required List<String> caughtBy,
+    required int durationMs,
+  }) {
+    _appendJsonl(
+      _proofsPath,
+      {
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.proof.name: proof,
+        LogEntryField.fault.name: fault,
+        LogEntryField.sourceFile.name: sourceFile,
+        LogEntryField.sourceLine.name: sourceLine,
+        LogEntryField.verdict.name: verdict.name,
+        LogEntryField.tier.name: tier,
+        LogEntryField.attempts.name: attempts,
+        LogEntryField.caughtBy.name: caughtBy,
+        LogEntryField.durationMs.name: durationMs,
+      },
+      _maxProofRecords,
+    );
+  }
+
+  /// A subscriber to status changes that threw: written to the error log under
+  /// [FailureType.handoffListenerFailed], naming the subscriber and the move.
+  void logListenerFailure({
+    required String command,
+    required HandoffListenerFailure failure,
+  }) {
+    const type = FailureType.handoffListenerFailed;
+    logError(
+      command: command,
+      errorType: type.errorType.name,
+      fingerprint: '${type.errorType.name}.${failure.listener}.${type.name}',
+      reason: '${failure.listener} failed on ${failure.transition.event.name}: '
+          '${failure.error}',
+      suggestion: type.suggestedAction,
     );
   }
 
@@ -151,6 +343,61 @@ class SessionLogger {
     );
   }
 
+  /// One line for a pipeline event: its kind, the step it belongs to, and a
+  /// detail (a failure's reason, a completed step's duration). A failed step is
+  /// also written to the error log, by its [FailureType], so the error log
+  /// names what failed. Whichever kind the event is, it leaves a record.
+  void logPipelineEvent({
+    required String command,
+    required PipelineEvent event,
+  }) {
+    final record = event.logRecord;
+    final detail = record.detail;
+    _appendJsonl(
+      _stepsPath,
+      {
+        LogEntryField.ts.name: DateTime.now().toUtc().toIso8601String(),
+        LogEntryField.command.name: command,
+        LogEntryField.kind.name: record.kind.name,
+        if (record.stepId != null) LogEntryField.stepId.name: record.stepId,
+        if (detail != null) LogEntryField.detail.name: _safe(detail),
+        if (record.failureType != null)
+          LogEntryField.failureType.name: record.failureType!.name,
+      },
+      _maxStepRecords,
+    );
+    if (event is AgentFailed) {
+      final failure = event.failureType;
+      logError(
+        command: command,
+        errorType: failure.errorType.name,
+        fingerprint:
+            '${failure.errorType.name}.${event.stepId}.${failure.name}',
+        reason: event.reason ?? failure.label,
+        suggestion: failure.suggestedAction,
+      );
+    }
+  }
+
+  /// Logs every event of [events]: each through [logPipelineEvent], and each
+  /// completed step's models through [logStepModels]. Returns the subscription
+  /// so a caller can cancel it; a stream that closes ends it.
+  StreamSubscription<PipelineEvent> logPipelineEvents(
+    Stream<PipelineEvent> events, {
+    required String command,
+  }) =>
+      events.listen((event) {
+        logPipelineEvent(command: command, event: event);
+        if (event is AgentCompleted) {
+          logStepModels(command: command, event: event);
+        }
+      });
+
+  /// A detail value with its text abstracted in sensitive mode, so a reason
+  /// that names a workspace path does not reach the log.
+  Object _safe(Object detail) =>
+      detail is String ? _protection.protect(detail) : detail;
+
   /// One line per model a step ran on: the intended model, what the stream
   /// reported, and how they differ. Read from the completion event, so it
   /// costs no model call; nothing is written when the stream named no model.
@@ -160,9 +407,10 @@ class SessionLogger {
   }) {
     final intended = event.intendedModel;
     if (intended == null) return;
-    for (final observation in event.models) {
-      final reconciliation =
-          reconcileModel(intended: intended, observation: observation);
+    for (final reconciliation in reconcileStepModels(
+      intended: intended,
+      observations: event.models,
+    )) {
       _appendJsonl(
         _modelsPath,
         {
@@ -180,6 +428,12 @@ class SessionLogger {
   List<Map<String, dynamic>> readStepModelRecords() {
     final latest = <Object?, Map<String, dynamic>>{};
     for (final record in _readJsonlEntries(_modelsPath)) {
+      // A helper call is not what the step ran on, so it never takes the
+      // step's row, whatever order the CLI listed the models in.
+      if (record[ModelRecordField.role.name] ==
+          ObservedModelRole.incidentalHelper.name) {
+        continue;
+      }
       final stepId = record[ModelRecordField.stepId.name];
       latest.remove(stepId);
       latest[stepId] = record;
@@ -210,16 +464,9 @@ class SessionLogger {
       // workspace paths/exception causes through `reason` -- the field
       // every caller actually populates. scan.dart had the identical gap
       // before this fix; both callers get it fixed here, not patched twice.
-      String safeReason = reason;
-      String? safeStack = stackTrace;
-      if (sensitivityMode && tokenMap != null) {
-        safeReason =
-            abstractor.abstract(safeReason, tokenMap!, defaultDetector);
-        if (safeStack != null) {
-          safeStack =
-              abstractor.abstract(safeStack, tokenMap!, defaultDetector);
-        }
-      }
+      final safeReason = _protection.protect(reason);
+      final safeStack =
+          stackTrace == null ? null : _protection.protectStack(stackTrace);
 
       if (matchIdx >= 0) {
         final old = Map<String, dynamic>.from(existing[matchIdx]);
@@ -228,6 +475,7 @@ class SessionLogger {
         existing[matchIdx] = old;
       } else {
         final entry = <String, dynamic>{
+          LogEntryField.schema.name: logSchemaVersion,
           LogEntryField.ts.name: now,
           LogEntryField.command.name: command,
           LogEntryField.outcome.name: errorType,
@@ -246,47 +494,6 @@ class SessionLogger {
       }
 
       _writeJsonl(_errorsPath, existing, _maxErrors);
-    });
-  }
-
-  void logPerformance({
-    required String command,
-    required String outcome,
-    int? filesScanned,
-    Duration? duration,
-    int? tokensNew,
-  }) {
-    final entry = StringBuffer();
-    entry.write('| ${DateTime.now().toUtc().toIso8601String()} '
-        '| $command '
-        '| ${filesScanned ?? '-'} '
-        '| ${duration?.inMilliseconds ?? '-'}ms '
-        '| ${tokensNew ?? '-'} '
-        '| $outcome |');
-
-    // Read, change, rewrite the table: under a lock, so no row is lost.
-    _io.withExclusiveLock(_performancePath, () {
-      final current = _io.read(_performancePath);
-      final lines = current.isEmpty
-          ? <String>[]
-          : current.split('\n').where((l) => l.isNotEmpty).toList();
-
-      if (lines.isEmpty) {
-        lines.add(
-            '| timestamp | command | filesScanned | duration | tokensNew | outcome |');
-        lines.add('|-----------|---------|-------------|----------|-----------|--------|');
-      }
-
-      // Data lines start after the 2-line header
-      final header = lines.take(2).toList();
-      var data = lines.skip(2).toList();
-      data.add(entry.toString());
-
-      if (data.length > _maxPerformance) {
-        data = data.sublist(data.length - _maxPerformance);
-      }
-
-      _io.write(_performancePath, '${[...header, ...data].join('\n')}\n');
     });
   }
 
@@ -318,7 +525,10 @@ class SessionLogger {
     // run under one lock: a trim's rename would otherwise orphan an append
     // another process was making to the file it replaced.
     _io.withExclusiveLock(path, () {
-      _io.append(path, '${jsonEncode(entry)}\n');
+      _io.append(
+        path,
+        '${jsonEncode({LogEntryField.schema.name: logSchemaVersion, ...entry})}\n',
+      );
       _trimIfOver(path, maxLines);
     });
   }

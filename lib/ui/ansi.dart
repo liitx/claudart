@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../config/environment.dart';
 
 /// ANSI escape sequences for terminal styling and cursor control.
 ///
@@ -42,7 +43,7 @@ bool? colorEnabledOverride;
 /// ANSI but aren't a TTY); otherwise follow the terminal.
 bool get colorEnabled {
   if (colorEnabledOverride != null) return colorEnabledOverride!;
-  final env = Platform.environment;
+  final env = processEnvironment;
   if (env.containsKey('NO_COLOR')) return false;
   if (env.containsKey('FORCE_COLOR') ||
       env.containsKey('CLAUDART_FORCE_COLOR')) {

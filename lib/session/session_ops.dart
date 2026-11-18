@@ -2,13 +2,13 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../errors/claudart_exception.dart';
 import '../errors/failure_type.dart';
-import '../file_io.dart';
-import '../templates/handoff_template.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import 'teardown_utils.dart';
 import '../workspace/workspace_index.dart';
 import 'archive_entry.dart';
 import 'session_state.dart';
+import 'handoff_store.dart';
 
 /// Archives the handoff content into the workspace archive directory.
 /// Returns the filename written. Pass [archiveFileName] so a caller that
@@ -80,9 +80,9 @@ String? archiveCurrentHandoff({
     branch:      state.branch,
     handoff:     content,
     kind:        kind,
-    description: state.bug.trim().isEmpty
+    description: state.bug.text.trim().isEmpty
         ? (description ?? 'session snapshot')
-        : state.bug,
+        : state.bug.text,
     io: fileIO,
   );
   return entry.handoffFile;
@@ -90,7 +90,7 @@ String? archiveCurrentHandoff({
 
 /// Resets handoff.md to the blank template.
 void resetHandoff(String workspace, {FileIO? io}) =>
-    (io ?? const RealFileIO()).write(handoffPathFor(workspace), blankHandoff);
+    HandoffStore.writeBlank(io ?? const RealFileIO(), handoffPathFor(workspace));
 
 /// Closes a session transactionally — archive → reset.
 ///
@@ -136,7 +136,7 @@ Future<void> closeSession(
       handoff:         originalHandoff,
       kind:            kind,
       description:     description ??
-          (state.bug.trim().isEmpty ? 'session closed' : state.bug),
+          (state.bug.text.trim().isEmpty ? 'session closed' : state.bug.text),
       io:              fileIO,
       archiveFileName: fileName,
       now:             now,

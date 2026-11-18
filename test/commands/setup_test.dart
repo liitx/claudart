@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/setup.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/commands/support/live_handoff.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/session_state.dart'
     show HandoffStatus, SessionState;
@@ -16,6 +17,8 @@ import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
+import 'package:claudart/logging/log_file.dart';
+import '../helpers/project_fixture.dart';
 
 // ── File finder fakes ─────────────────────────────────────────────────────────
 
@@ -37,8 +40,8 @@ FileFinderFn _ambiguousFinder(String projectRoot) =>
           p.join(root, 'lib', 'b', basename),
         ];
 
-const _projectRoot = '/projects/my-app';
-const _workspace   = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace   = ProjectFixture.workspace;
 const _projectName = 'my-app';
 
 // ── Exit helper ───────────────────────────────────────────────────────────────
@@ -49,13 +52,6 @@ class _ExitException implements Exception {
 }
 
 Never _throwExit(int code) => throw _ExitException(code);
-
-// ── Menu constants ────────────────────────────────────────────────────────────
-// _SetupMenu is private in setup.dart — reproduced here so tests use named
-// values, not magic numbers.
-const _menuResume     = 0;
-const _menuStartFresh = 1;
-const _menuBack       = 2;
 
 // ── Active handoff fixture ────────────────────────────────────────────────────
 
@@ -271,7 +267,7 @@ void main() {
             projectRootOverride: null,
             confirmFn: (_) => true,
             promptFn: _prompts([]),
-            pickFn: (_) => _menuBack,
+            pickFn: (_) => LiveHandoffMenu.back.index,
             exitFn: _throwExit,
           ),
           zoneSpecification: ZoneSpecification(
@@ -298,7 +294,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuResume,
+          pickFn: (_) => LiveHandoffMenu.resume.index,
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 0)),
@@ -314,7 +310,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuResume,
+          pickFn: (_) => LiveHandoffMenu.resume.index,
           exitFn: _throwExit,
         );
       } on _ExitException {/*expected*/}
@@ -331,7 +327,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuBack,
+          pickFn: (_) => LiveHandoffMenu.back.index,
           exitFn: _throwExit,
         ),
         throwsA(isA<_ExitException>().having((e) => e.code, 'code', 0)),
@@ -346,7 +342,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => true,
           promptFn: _prompts([]),
-          pickFn: (_) => _menuBack,
+          pickFn: (_) => LiveHandoffMenu.back.index,
           exitFn: _throwExit,
         );
       } on _ExitException {/*expected*/}
@@ -363,7 +359,7 @@ void main() {
             projectRootOverride: _projectRoot,
             confirmFn: (_) => true,
             promptFn: _prompts([]),
-            pickFn: (_) => _menuBack,
+            pickFn: (_) => LiveHandoffMenu.back.index,
             exitFn: _throwExit,
           ),
           zoneSpecification: ZoneSpecification(
@@ -383,7 +379,7 @@ void main() {
         projectRootOverride: _projectRoot,
         confirmFn: (_) => true,
         promptFn: _prompts(_freshPrompts),
-        pickFn: (_) => _menuStartFresh,
+        pickFn: (_) => LiveHandoffMenu.startFresh.index,
         exitFn: _throwExit,
       );
       final handoff = io.read(handoffPathFor(_workspace));
@@ -498,7 +494,8 @@ void main() {
         pickFn: (_) => 0,
         exitFn: _throwExit,
       );
-      final logsPath = p.join(logsDirFor(_workspace), 'interactions.jsonl');
+      final logsPath =
+          logFilePath(logsDirFor(_workspace), LogFile.interactions);
       final raw = io.read(logsPath);
       expect(raw, isNotEmpty);
       final entry = jsonDecode(raw.trim().split('\n').last) as Map<String, dynamic>;
@@ -527,7 +524,7 @@ void main() {
     test('a first setup logs setup from noHandoff into suggestInvestigating',
         () async {
       final io = _io();
-      await setup(io, menuChoice: _menuStartFresh);
+      await setup(io, menuChoice: LiveHandoffMenu.startFresh.index);
       expect(loggedMoves(io, _workspace), [
         {
           'command': ClaudartCommand.setup.name,
@@ -542,7 +539,7 @@ void main() {
         'lacks, from the status it overwrote', () async {
       final io = _io(handoff: _activeHandoff);
       final overwritten = SessionState.parse(_activeHandoff).status;
-      await setup(io, menuChoice: _menuStartFresh);
+      await setup(io, menuChoice: LiveHandoffMenu.startFresh.index);
       expect(loggedMoves(io, _workspace), [
         {
           'command': ClaudartCommand.setup.name,
@@ -561,7 +558,7 @@ void main() {
       final output = <String>[];
       await expectLater(
         runZoned(
-          () => setup(io, menuChoice: _menuBack),
+          () => setup(io, menuChoice: LiveHandoffMenu.back.index),
           zoneSpecification: ZoneSpecification(
             print: (_, __, ___, line) => output.add(line),
           ),
@@ -577,7 +574,7 @@ void main() {
     test('backing out of the menu logs nothing', () async {
       final io = _io(handoff: _activeHandoff);
       await expectLater(
-        setup(io, menuChoice: _menuBack),
+        setup(io, menuChoice: LiveHandoffMenu.back.index),
         throwsA(isA<_ExitException>()),
       );
       expect(loggedMoves(io, _workspace), isEmpty);
@@ -679,7 +676,7 @@ void main() {
           projectRootOverride: _projectRoot,
           confirmFn: (_) => false,
           promptFn: _prompts(_freshPrompts),
-          pickFn: (_) => _menuStartFresh,
+          pickFn: (_) => LiveHandoffMenu.startFresh.index,
           exitFn: _throwExit,
         );
       } on _ExitException {/*expected*/}
@@ -689,6 +686,38 @@ void main() {
   });
 
   // ── sensitivityMode = false ───────────────────────────────────────────────────
+
+  group('setup — sensitivityMode true', () {
+    Future<MemoryFileIO> setupWithBug(String bug) async {
+      final io = _io(sensitivityMode: true);
+      await runSetup(
+        io: io,
+        projectRootOverride: _projectRoot,
+        confirmFn: (_) => true,
+        promptFn:
+            _prompts(['fix/null-ref', bug, 'It should work.', null, null]),
+        pickFn: (_) => 0,
+        exitFn: _throwExit,
+      );
+      return io;
+    }
+
+    test('the handoff holds tokens, not the project\'s names', () async {
+      final io =
+          await setupWithBug('VolumeBloc crashes in VolumeRepository.load');
+      expect(
+        io.read(handoffPathFor(_workspace)),
+        isNot(contains('VolumeBloc')),
+      );
+    });
+
+    test('the tokens it assigned are saved, so the next run reuses them',
+        () async {
+      final io =
+          await setupWithBug('VolumeBloc crashes in VolumeRepository.load');
+      expect(io.read(tokenMapPathFor(_workspace)), contains('VolumeBloc'));
+    });
+  });
 
   group('setup — sensitivityMode false', () {
     test('handoff written as plain text without abstraction', () async {

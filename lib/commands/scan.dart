@@ -1,12 +1,13 @@
-import '../config.dart' show ScanScope;
-import '../file_io.dart';
-import '../ignore_rules.dart';
-import '../paths.dart';
+import '../config/config.dart' show ScanScope;
+import '../io/file_io.dart';
+import '../project/ignore_rules.dart';
+import '../config/paths.dart';
 import '../scanner/scanner.dart';
 import '../scanner/scan_threshold_exception.dart';
 import '../sensitivity/token_map.dart';
 import '../logging/logger.dart';
 import '../ui/render.dart' as render;
+import '../generated/user_text.g.dart';
 
 /// Runs an explicit on-demand scan of the project.
 /// [scope] overrides the default scan scope (`ScanScope.lib`, `ScanScope.full`,
@@ -27,7 +28,7 @@ Future<void> runScan({
   final fileIO = io ?? const RealFileIO();
 
   if (projectRootOverride == null) {
-    print('\n✗ No project linked. Run `claudart link` first.\n');
+    print(UserText.scanNoProjectLinkedRunClaudartLink.template);
     return;
   }
 
@@ -36,7 +37,7 @@ Future<void> runScan({
   final sensitivityMode = sensitivityModeOverride ?? false;
 
   print(render.header('SENSITIVITY SCAN'));
-  print('Scanning $projectRoot/$effectiveScope...');
+  print(UserText.scanScanning.format({'projectRoot': projectRoot, 'effectiveScope': effectiveScope}));
 
   final tokenMapPath = workspacePath != null
       ? tokenMapPathFor(workspacePath)
@@ -46,12 +47,13 @@ Future<void> runScan({
   final tokenMap = TokenMap.load(tokenMapPath, io: fileIO);
   final previousSize = tokenMap.size;
 
-  final logger = SessionLogger(
-    io: fileIO,
-    sensitivityMode: sensitivityMode,
-    tokenMap: tokenMap,
-    workspacePath: workspacePath,
-  );
+  final logger = sensitivityMode
+      ? SessionLogger.abstracted(
+          tokenMap: tokenMap,
+          io: fileIO,
+          workspacePath: workspacePath,
+        )
+      : SessionLogger.plain(io: fileIO, workspacePath: workspacePath);
 
   ScanResult result;
   try {
@@ -62,10 +64,9 @@ Future<void> runScan({
       io: fileIO,
     );
   } on ScanThresholdException catch (e) {
-    print('\n⚠  Threshold exceeded: ${e.filesFound} files found '
-        '(threshold: ${e.threshold})');
-    print('   Reason: ${e.reason}');
-    print('\nSuggestions:');
+    print(UserText.scanThresholdExceeded.format({'filesFound': e.filesFound, 'threshold': e.threshold}));
+    print(UserText.scanReason.format({'reason': e.reason}));
+    print(UserText.scanSuggestions.template);
     for (final s in e.suggestions) {
       print('  • $s');
     }
@@ -100,16 +101,24 @@ Future<void> runScan({
     final range = tokens.isNotEmpty
         ? '${tokens.first}–${tokens.last}'
         : '';
-    print('  ✓ $count ${entry.key}${count == 1 ? '' : 's'}'
-        '${range.isNotEmpty ? '       → $range' : ''}');
+    print(UserText.scanTokenCountRange.format({
+      'count': count,
+      'kind': entry.key,
+      'plural': count == 1 ? '' : UserText.pluralSuffix.template,
+      'range': range.isNotEmpty ? UserText.scanTokenRange.format({'range': range}) : '',
+    }));
   }
 
   if (newTokens > 0) {
-    print('  + $newTokens new token${newTokens == 1 ? '' : 's'} since last scan');
+    print(UserText.scanNewTokens.format({
+      'newTokens': newTokens,
+      'plural': newTokens == 1 ? '' : UserText.pluralSuffix.template,
+    }));
   }
-  print('Token map updated: $tokenMapPath');
+  print(UserText.scanTokenMapUpdated.format({'tokenMapPath': tokenMapPath}));
 
   logger.logInteraction(
+    rowKind: InteractionRowKind.outcome,
     command: 'scan',
     outcome: 'ok',
     scanScope: effectiveScope,

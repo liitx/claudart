@@ -11,23 +11,24 @@ stateDiagram-v2
   suggestInvestigating --> readyForDebug: saveConfirmedReady
   suggestInvestigating --> noHandoff: rotatedEmpty, reminderSaved, killed
   readyForSuggest --> readyForDebug: saveConfirmedReady
-  readyForSuggest --> noHandoff: reminderSaved, killed
+  readyForSuggest --> noHandoff: tornDown, reminderSaved, killed
   readyForDebug --> readyForDebug: saveConfirmedReady
   readyForDebug --> debugInProgress: debugStarted
   readyForDebug --> debugComplete: fixApplied
   readyForDebug --> suggestInvestigating: rotated
-  readyForDebug --> noHandoff: rotatedEmpty, reminderSaved, killed
+  readyForDebug --> noHandoff: rotatedEmpty, tornDown, reminderSaved, killed
   debugInProgress --> debugInProgress: saveUnconfirmed
   debugInProgress --> readyForDebug: saveConfirmedReady
   debugInProgress --> needsSuggest: debugBlocked
   debugInProgress --> debugComplete: fixApplied
   debugInProgress --> suggestInvestigating: rotated
-  debugInProgress --> noHandoff: rotatedEmpty, reminderSaved, killed
+  debugInProgress --> noHandoff: rotatedEmpty, tornDown, reminderSaved, killed
   debugComplete --> noHandoff: tornDown, reminderSaved, killed
   needsSuggest --> readyForDebug: saveConfirmedReady
   needsSuggest --> suggestInvestigating: suggestResumed
   needsSuggest --> noHandoff: reminderSaved, killed
   noHandoff --> suggestInvestigating: setup
+  noHandoff --> readyForSuggest: flowConstructed
 ```
 
 ## What each status answers
@@ -49,19 +50,20 @@ Files in `lib/` that mention the event, other than the table itself. "— no cod
 
 | event | passed by |
 |---|---|
-| setup | lib/commands/setup.dart |
-| saveUnconfirmed | — no code caller |
-| saveConfirmedExploring | — no code caller |
-| saveConfirmedReady | lib/commands/suggest.dart |
-| debugStarted | — no code caller |
-| debugBlocked | — no code caller |
-| suggestResumed | — no code caller |
-| fixApplied | lib/commands/debug.dart |
-| rotated | lib/commands/rotate.dart |
-| rotatedEmpty | lib/commands/rotate.dart |
-| tornDown | lib/commands/teardown.dart |
-| reminderSaved | lib/commands/teardown.dart |
-| killed | lib/commands/kill.dart |
+| setup | lib/commands/setup.dart, lib/session/handoff_listeners.dart |
+| flowConstructed | lib/commands/flow.dart, lib/session/handoff_listeners.dart |
+| saveUnconfirmed | lib/commands/save.dart, lib/session/handoff_listeners.dart |
+| saveConfirmedExploring | lib/commands/save.dart, lib/session/handoff_listeners.dart |
+| saveConfirmedReady | lib/commands/suggest.dart, lib/session/handoff_listeners.dart |
+| debugStarted | lib/commands/debug.dart, lib/session/handoff_listeners.dart |
+| debugBlocked | lib/commands/debug.dart, lib/session/handoff_listeners.dart |
+| suggestResumed | lib/commands/suggest.dart, lib/session/handoff_listeners.dart |
+| fixApplied | lib/commands/debug.dart, lib/session/handoff_listeners.dart |
+| rotated | lib/commands/rotate.dart, lib/session/handoff_listeners.dart |
+| rotatedEmpty | lib/commands/rotate.dart, lib/session/handoff_listeners.dart |
+| tornDown | lib/commands/teardown.dart, lib/session/handoff_listeners.dart |
+| reminderSaved | lib/commands/teardown.dart, lib/session/handoff_listeners.dart |
+| killed | lib/commands/kill.dart, lib/session/handoff_listeners.dart |
 
 ## Statuses named in agent prompts
 

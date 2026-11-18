@@ -12,17 +12,22 @@
 
 import 'dart:io';
 
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../md_io.dart' show readSection;
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../session/md_io.dart' show readSection;
+import '../config/paths.dart';
 import '../pipeline/agent_model.dart';
+import '../pipeline/step_result.dart' show StepResult;
+import '../pipeline/step_role.dart';
 import '../pipeline/pipeline_executor.dart' show ClaudeRunner, defaultClaudeRunner;
-import '../registry.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import 'flow.dart';
 import 'suggest.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 /// What the user typed. Conversation is the default: only slash commands invoke
 /// structured work; everything else is a [message] to the agent.
@@ -80,33 +85,51 @@ Future<void> runChatLoop({
   }
 }
 
+/// Answers the latest chat message through [run], with the whole [history] as
+/// the message. Answering a person is reasoning, so it runs on sonnet, never
+/// haiku, and may only use the reasoning role's read-only tools.
+Future<StepResult?> answerChatMessage({
+  required ClaudeRunner run,
+  required String systemPrompt,
+  required List<String> history,
+  required String workingDir,
+}) {
+  const role = StepRole.reasoning;
+  return run(
+    model:        AgentModel.sonnet,
+    systemPrompt: systemPrompt,
+    message:      history.join('\n\n'),
+    workingDir:   workingDir,
+    allowedTools: role.allowedTools,
+    helperModel:  role.helperModel,
+  );
+}
+
 /// Opens the chat shell: greet, resolve the current workspace, then converse.
 /// Plain messages are answered by [runner] (defaults to the real `claude` call)
 /// using the session's handoff + skills as context.
 Future<void> runChatShell({
-  FileIO? io,
-  String? projectRootOverride,
+  CommandSeams seams = const CommandSeams(),
   ClaudeRunner? runner,
-  Never Function(int code)? exitFn,
 }) async {
+  final io = seams.io;
+  final exitFn = seams.exitFn;
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
   final run = runner ?? defaultClaudeRunner;
 
-  final root = projectRootOverride ?? detectGitContext()?.root;
-  final entry =
-      root != null ? Registry.load(io: fileIO).findByProjectRoot(root) : null;
+  final entry = lookupProject(seams)?.entry;
 
   print(render.header('CLAUDART'));
   if (entry == null) {
-    print('\n  Not in a registered project — run `claudart link` here first.\n');
-    exit_(0);
+    print(UserText.chatShellNotInARegisteredProjectRun.template);
+    leaveFor(ExitReason.chatShellNotInRegisteredProject, exit_: exit_);
   }
 
   final systemPrompt = _chatSystemPrompt(fileIO, entry.workspacePath);
   final history = <String>[]; // alternating "you: …" / "claudart: …" turns
 
-  print('  workspace: ${ansi.c(ansi.bold, entry.name)}');
+  print(UserText.chatWorkspaceLine.format({'name': ansi.c(ansi.bold, entry.name)}));
   print(ansi.c(ansi.dim, '  $_commandHint\n'));
 
   await runChatLoop(
@@ -116,10 +139,10 @@ Future<void> runChatShell({
     onSuggest: () => runSuggest(),
     onMessage: (text) async {
       history.add('you: $text');
-      final reply = await run(
-        model:        AgentModel.haiku,
+      final reply = await answerChatMessage(
+        run:          run,
         systemPrompt: systemPrompt,
-        message:      history.join('\n\n'),
+        history:      history,
         workingDir:   entry.projectRoot,
       );
       if (reply == null) {
@@ -127,7 +150,10 @@ Future<void> runChatShell({
         return;
       }
       history.add('claudart: ${reply.text}');
-      print('\n${ansi.c(ansi.cyan, 'claudart')}  ${reply.text}\n');
+      print(UserText.chatReply.format({
+        'speaker': ansi.c(ansi.cyan, UserText.chatSpeakerName.template),
+        'reply': reply.text,
+      }));
     },
   );
 }

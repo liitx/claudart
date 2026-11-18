@@ -26,32 +26,24 @@ import 'pipeline_event.dart';
 import 'state_hue.dart';
 
 enum StepStatus {
-  pending,
-  running,
-  waiting,
-  done,
-  failed;
+  pending(hue: StateHue.inactive, glyph: '○'),
+  running(hue: StateHue.active, glyph: '◉'),
 
-  /// Shared state-semantic colour category — see [StateHue] and zedup's
-  /// `StateHueRendering` extension for the concrete rendered colour.
   /// `waiting` maps to [StateHue.paused] deliberately: that hue's own
   /// definition ("paused intentionally — waiting on user input") is an
   /// exact match for what this status means.
-  StateHue get hue => switch (this) {
-        StepStatus.pending => StateHue.inactive,
-        StepStatus.running => StateHue.active,
-        StepStatus.waiting => StateHue.paused,
-        StepStatus.done => StateHue.success,
-        StepStatus.failed => StateHue.error,
-      };
+  waiting(hue: StateHue.paused, glyph: '◉'),
+  done(hue: StateHue.success, glyph: '✓'),
+  failed(hue: StateHue.error, glyph: '✗');
+
+  const StepStatus({required this.hue, required this.glyph});
+
+  /// Shared state-semantic colour category — see [StateHue] and zedup's
+  /// `StateHueRendering` extension for the concrete rendered colour.
+  final StateHue hue;
 
   /// The single-character glyph rendered alongside this status.
-  String get glyph => switch (this) {
-        StepStatus.pending => '○',
-        StepStatus.running || StepStatus.waiting => '◉',
-        StepStatus.done => '✓',
-        StepStatus.failed => '✗',
-      };
+  final String glyph;
 }
 
 extension StepStatusFromEvent on StepStatus {

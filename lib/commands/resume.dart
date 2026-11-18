@@ -5,16 +5,19 @@
 // pre-filled as defaults — the operator can accept them (press enter) or
 // override, same as any other promptWithDefault-backed question.
 
-import 'dart:io';
+import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../git_utils.dart';
-import '../md_io.dart';
-import '../paths.dart';
-import '../registry.dart';
+import '../io/file_io.dart';
+import '../session/md_io.dart';
+import '../config/paths.dart';
 import '../session/teardown_utils.dart' show readSubSection;
 import '../workspace/workspace_index.dart';
 import 'setup.dart';
+import 'support/project_resolution.dart';
+import 'support/command_seams.dart';
+import '../generated/user_text.g.dart';
+import '../io/process_exit.dart';
+import '../io/exit_reason.dart';
 
 Future<void> runResume({
   FileIO? io,
@@ -26,34 +29,30 @@ Future<void> runResume({
   FileFinderFn? fileFinderFn,
 }) async {
   final fileIO = io ?? const RealFileIO();
-  final exit_ = exitFn ?? exit;
+  final exit_ = exitFn ?? exitProcess;
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
-  }
-
-  final registry = Registry.load(io: fileIO);
-  final entry = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  final project = requireProject(
+    CommandSeams(
+      io: fileIO,
+      exitFn: exit_,
+      projectRootOverride: projectRootOverride,
+    ),
+  );
+  final entry = project.entry;
+  printProjectLine(entry);
 
   final workspace = entry.workspacePath;
   final archives = loadIndex(workspace, io: fileIO);
   if (archives.isEmpty) {
-    print('\nNo archives found for this project. Run `claudart setup` instead.\n');
-    exit_(0);
+    print(UserText.resumeNoArchivesFoundForThisProject.template);
+    leaveFor(ExitReason.resumeNoArchives, exit_: exit_);
   }
 
   final newest = archives.first;
   final snapshotPath = p.join(archiveDirFor(workspace), newest.handoffFile);
   final snapshot = fileIO.fileExists(snapshotPath) ? fileIO.read(snapshotPath) : '';
 
-  print('Resuming from: ${newest.handoffFile} (${newest.branch})\n');
+  print(UserText.resumeResumingFrom.format({'handoffFile': newest.handoffFile, 'branch': newest.branch}));
 
   await runSetup(
     io: fileIO,
@@ -81,4 +80,4 @@ Future<void> runResume({
 /// (`_Not yet determined._`, `_Nothing yet._`) when the section is empty —
 /// never useful as a pre-filled default.
 String? _cleanOrNull(String raw) =>
-    (raw.isEmpty || raw.startsWith('_Not') || raw.startsWith('_Nothing')) ? null : raw;
+    HandoffPlaceholder.isBlank(raw) ? null : raw;

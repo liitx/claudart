@@ -1,9 +1,9 @@
 import 'dart:io' show FileSystemException;
 
 import 'package:test/test.dart';
-import 'package:claudart/file_io.dart';
+import 'package:claudart/io/file_io.dart';
 import 'package:claudart/session/pending_confirmation.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import '../helpers/mocks.dart';
 
 const _workspace = '/workspace/my-app';

@@ -1,9 +1,10 @@
 // agent_flow.dart — enhanced enum of all agent pipeline variants
 //
 // AgentFlow is the single source of truth for:
-//   - which model is preferred for a given workflow
-//   - which steps constitute that workflow
+//   - which steps constitute a given workflow (and so which roles and
+//     models each flow uses, through each step's StepRole)
 //   - the slash command .md template installed by `claudart link`
+//   - which slash commands map to which flow
 //
 // Adding a new flow forces all exhaustive switches to update — the compiler
 // enforces coverage across the codebase.
@@ -20,113 +21,132 @@ import '../templates/setup_template.dart';
 import '../templates/suggest_template.dart';
 import '../templates/teardown_template.dart';
 import '../util/enum_util.dart';
-import 'agent_model.dart';
 import 'agent_step.dart';
 import 'flows/debug_steps.dart';
+import 'flows/flow_steps.dart';
 import 'flows/save_steps.dart';
 import 'flows/setup_steps.dart';
+import 'flows/suggest_steps.dart';
+import 'flows/teardown_steps.dart';
+
+/// File count and refinement pass used to build the representative step
+/// list for flows whose steps are built dynamically (their labels depend
+/// on the run's file count or pass number; role and model do not).
+const int _representativeCount = 1;
+
+/// Prefix every slash command carries before its flow name.
+const String _slashPrefix = '/';
 
 enum AgentFlow {
   /// Deep exploration + knowledge transfer — root cause, scope, constraints.
-  /// preferredModel: opus — deepest reasoning for root-cause exploration.
-  /// Pipeline steps use their own model choices (haiku reader, sonnet reasoner).
-  /// Steps are built dynamically via SuggestSteps.phases(fileCount) in suggest.dart.
+  /// Steps are built dynamically in suggest.dart; [steps] lists them all.
   suggest(
-    preferredModel:  AgentModel.opus,
-    steps:           [],
-    hasCommandFile:  true,
+    hasCommandFile: true,
+    hasSlashCommand: true,
   ),
 
   /// Deterministic scoped implementation — minimal diff, no exploration.
   debug(
-    preferredModel:  AgentModel.sonnet,
-    steps:           DebugSteps.all,
-    hasCommandFile:  true,
+    hasCommandFile: true,
+    hasSlashCommand: true,
   ),
 
   /// Session setup — workspace init, handoff scaffold.
   setup(
-    preferredModel:  AgentModel.haiku,
-    steps:           SetupSteps.all,
-    hasCommandFile:  true,
+    hasCommandFile: true,
+    hasSlashCommand: true,
   ),
 
   /// Checkpoint session — snapshot handoff, deposit facts to skills.
   save(
-    preferredModel:  AgentModel.haiku,
-    steps:           SaveSteps.all,
-    hasCommandFile:  true,
+    hasCommandFile: true,
+    hasSlashCommand: true,
   ),
 
   /// Session teardown — close workspace, update project README.
   teardown(
-    preferredModel:  AgentModel.haiku,
-    steps:           [],
-    hasCommandFile:  true,
+    hasCommandFile: true,
+    hasSlashCommand: true,
   ),
 
   /// Agent-constructed session — user provides freeform prompt; agents
   /// classify, plan, get approval, and construct the handoff automatically.
   /// Experimental variant of suggest.
   flow(
-    preferredModel:  AgentModel.sonnet,
-    steps:           [],   // steps accessed via FlowSteps.* directly in flow.dart
-    hasCommandFile:  true,
+    hasCommandFile: true,
+    hasSlashCommand: true,
   ),
 
   /// Constrained single-doc lookup — fast, targeted reference answer.
   research(
-    preferredModel:  AgentModel.haiku,
-    steps:           [],
-    hasCommandFile:  false,
+    hasCommandFile: false,
+    hasSlashCommand: true,
   ),
 
   /// Conversational — no context injection, balanced default.
   free(
-    preferredModel:  AgentModel.sonnet,
-    steps:           [],
-    hasCommandFile:  false,
+    hasCommandFile: false,
+    hasSlashCommand: false,
   ),
 
   /// CLI shell-out — no API call, no pipeline steps.
   /// Used by zedup for slash commands that delegate to claudart CLI directly
-  /// (e.g. /save, /status, /teardown). preferredModel is null.
+  /// (e.g. /save, /status, /teardown).
   cli(
-    preferredModel:  null,
-    steps:           [],
-    hasCommandFile:  false,
+    hasCommandFile: false,
+    hasSlashCommand: false,
   ),
 
   /// Visual design review + spec generation. Routed by the planner when
   /// the scoped paths classify as design surfaces (widgets/painters/theme).
-  ///
-  /// Update (2026-09-27): preferredModel changed from sonnet to opus, to
-  /// match categorization.dart's routeModel — design work routes to opus
-  /// there too, after comparing output quality directly.
   guiDesign(
-    preferredModel:  AgentModel.opus,
-    steps:           [],
-    hasCommandFile:  false,
+    hasCommandFile: false,
+    hasSlashCommand: false,
   );
 
   const AgentFlow({
-    required this.preferredModel,
-    required List<AgentStep> steps,
     required this.hasCommandFile,
-  }) : _steps = steps;
-
-  /// The model best suited for this flow's primary task.
-  /// Null for [cli] — no API call is made.
-  final AgentModel? preferredModel;
-
-  final List<AgentStep> _steps;
+    required this.hasSlashCommand,
+  });
 
   /// Whether this flow installs a slash command .md file via `claudart link`.
   final bool hasCommandFile;
 
-  /// The default step list for this flow.
-  /// For suggest, prefer [SuggestSteps.phases(fileCount)] to get the dynamic label.
-  List<AgentStep> get steps => _steps;
+  /// Whether `/<name>` is a recognized slash command for this flow.
+  final bool hasSlashCommand;
+
+  /// Every step this flow runs, in order, dynamic steps included. Steps
+  /// whose label depends on a file count or pass number are built with a
+  /// representative value; their role and model are the same for any value.
+  /// Empty for flows that run no pipeline steps.
+  ///
+  /// Enforced by the exhaustive switch — adding a variant without an arm is
+  /// a compile error.
+  List<AgentStep> get steps => switch (this) {
+        AgentFlow.suggest  => [
+            FlowSteps.categorize,
+            ...SuggestSteps.phases(_representativeCount),
+            ...SuggestSteps.refinement(_representativeCount),
+          ],
+        AgentFlow.debug    => [
+            FlowSteps.categorize,
+            ...DebugSteps.forScope(_representativeCount),
+          ],
+        AgentFlow.setup    => SetupSteps.all,
+        AgentFlow.save     => SaveSteps.all,
+        AgentFlow.teardown => [TeardownSteps.analyzer],
+        AgentFlow.flow     => [
+            FlowSteps.categorize,
+            FlowSteps.plan,
+            FlowSteps.clarify,
+            FlowSteps.construct,
+          ],
+        AgentFlow.research ||
+        AgentFlow.free ||
+        AgentFlow.cli ||
+        AgentFlow.guiDesign =>
+          const [],
+      };
 
   /// The claudart CLI args for this flow: `['claudart', name]`.
   /// Consumers (e.g. zedup) use this to shell out for session-lifecycle flows
@@ -172,16 +192,15 @@ enum AgentFlow {
 
   // ── Slash command → AgentFlow mapping ────────────────────────────────────────
 
-  /// Maps a slash command string (e.g. '/suggest') to an [AgentFlow].
+  /// Maps a slash command string (e.g. '/suggest') to an [AgentFlow] by
+  /// deriving `/<name>` from each flow whose [hasSlashCommand] is true.
   /// Returns null for unrecognised commands.
-  static AgentFlow? fromSlashCommand(String cmd) => switch (cmd) {
-        '/suggest'  => AgentFlow.suggest,
-        '/debug'    => AgentFlow.debug,
-        '/setup'    => AgentFlow.setup,
-        '/save'     => AgentFlow.save,
-        '/teardown' => AgentFlow.teardown,
-        '/flow'     => AgentFlow.flow,
-        '/research' => AgentFlow.research,
-        _           => null,
-      };
+  static AgentFlow? fromSlashCommand(String cmd) {
+    for (final flow in AgentFlow.values) {
+      if (flow.hasSlashCommand && cmd == '$_slashPrefix${flow.name}') {
+        return flow;
+      }
+    }
+    return null;
+  }
 }

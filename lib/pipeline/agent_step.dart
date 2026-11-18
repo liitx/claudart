@@ -26,10 +26,13 @@
 // All prompt building is deferred to buildPrompt(ctx) so steps are pure
 // data — no I/O at declaration time. Tests can inject any PipelineContext.
 
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
 import 'agent_model.dart';
 import 'pipeline_context.dart';
 import 'route_tag.dart';
 import 'step_mode.dart';
+import 'step_role.dart';
 import 'step_route.dart';
 
 /// Resolves a step's model from the current [PipelineContext]. Total
@@ -43,6 +46,11 @@ class AgentStep {
   final String id;
   final String label;
 
+  /// The job this step does. It decides which models the step may run on:
+  /// haiku only classifies and reads, so a reasoning or implementation step
+  /// can never resolve to it. See [StepRole.permittedModels].
+  final StepRole role;
+
   /// Static model used when [modelSelector] is unset. Steps that
   /// don't need dynamic routing leave [modelSelector] null and read
   /// this directly. Selectors, when present, are total — they own
@@ -55,8 +63,8 @@ class AgentStep {
 
   /// Dynamic model resolver. Lets downstream steps pick a model based
   /// on what an earlier step produced (e.g. plan step reads the
-  /// categorize step's `<COMPLEXITY>` tag to route atomic tasks to
-  /// haiku). Null means "use [model] always."
+  /// categorize step's `<COMPLEXITY>` tag to route a task). Null means
+  /// "use [model] always."
   final ModelSelector? modelSelector;
 
   /// Tag-to-route map. Keys are typed [RouteTag] variants (not raw
@@ -94,6 +102,7 @@ class AgentStep {
   const AgentStep({
     required this.id,
     required this.label,
+    required this.role,
     required this.model,
     required this.systemPrompt,
     required this.buildPrompt,
@@ -107,6 +116,22 @@ class AgentStep {
   /// [ctx]. Honors [modelSelector] when present; otherwise returns
   /// [model]. The `??` here only fires for "no selector wired" — the
   /// selector itself is total and cannot return null (see typedef).
-  AgentModel effectiveModel(PipelineContext ctx) =>
-      modelSelector?.call(ctx) ?? model;
+  ///
+  /// The resolved model must be one [role] permits. A step wired to a
+  /// forbidden model (for example a selector that returns haiku for a
+  /// reasoning step) fails here with a typed [ClaudartException], in every
+  /// build, instead of running on a model that is not sufficient for the job.
+  AgentModel effectiveModel(PipelineContext ctx) {
+    final resolved = modelSelector?.call(ctx) ?? model;
+    if (!role.permits(resolved)) {
+      throw ClaudartException(
+        FailureType.stepModelNotPermittedForRole,
+        context: {
+          StepRoleViolationField.role.name: role.name,
+          StepRoleViolationField.model.name: resolved.name,
+        },
+      );
+    }
+    return resolved;
+  }
 }

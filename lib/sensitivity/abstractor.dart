@@ -1,3 +1,4 @@
+import '../io/file_io.dart';
 import 'token_map.dart';
 import 'detector.dart';
 
@@ -69,3 +70,22 @@ class Abstractor {
 
 /// Shared singleton instance.
 final abstractor = Abstractor();
+
+/// Abstracts each of [texts] with one token map loaded from [tokenMapPath],
+/// then saves the map when it gained a token. One map for the whole call is
+/// what keeps two names of the same kind from both becoming `Bloc:A`; saving it
+/// is what makes the next run reuse the tokens instead of assigning them again.
+/// Throws [TokenMapUnreadableException] when the map exists but cannot be read.
+List<String> abstractTexts(
+  List<String> texts, {
+  required String tokenMapPath,
+  FileIO? io,
+}) {
+  final map = TokenMap.load(tokenMapPath, io: io);
+  final before = map.size;
+  final abstracted = [
+    for (final text in texts) abstractor.abstract(text, map, defaultDetector),
+  ];
+  if (map.size != before) map.save(tokenMapPath, io: io);
+  return abstracted;
+}

@@ -23,13 +23,121 @@
 //   CLI (runFuture) — renders spinners and prompts based on events.
 //   zedup UI       — renders Agents Workflow side pane from the same stream.
 
+import '../errors/failure_type.dart';
 import 'agent_model.dart';
 import 'model_observation.dart';
 import 'pipeline_context.dart';
+import 'step_telemetry.dart';
 import 'usage.dart';
+
+/// One value per [PipelineEvent] variant — the closed set a matrix over the
+/// events enumerates. Adding a variant to [PipelineEvent] without adding its
+/// value here fails to compile, because [PipelineEvent.kind] switches
+/// exhaustively with no default arm.
+enum PipelineEventKind {
+  /// Maps to [AgentStarted].
+  agentStarted,
+
+  /// Maps to [AgentCompleted].
+  agentCompleted,
+
+  /// Maps to [AgentFailed].
+  agentFailed,
+
+  /// Maps to [AgentEscalating].
+  agentEscalating,
+
+  /// Maps to [AgentResumed].
+  agentResumed,
+
+  /// Maps to [PlanDraft].
+  planDraft,
+
+  /// Maps to [AwaitingApproval].
+  awaitingApproval,
+
+  /// Maps to [PipelineCompleted].
+  pipelineCompleted,
+}
+
+/// The logged projection of one [PipelineEvent]: its [kind], the step it
+/// belongs to (null for events that belong to no single step), a detail value
+/// (the failure reason, the duration in milliseconds, or null), and the
+/// [FailureType] (set only for a failed step).
+typedef PipelineEventLogRecord = ({
+  PipelineEventKind kind,
+  String? stepId,
+  Object? detail,
+  FailureType? failureType,
+});
 
 sealed class PipelineEvent {
   const PipelineEvent();
+
+  /// The [PipelineEventKind] of this event. Exhaustive: no wildcard arm.
+  PipelineEventKind get kind => switch (this) {
+        AgentStarted() => PipelineEventKind.agentStarted,
+        AgentCompleted() => PipelineEventKind.agentCompleted,
+        AgentFailed() => PipelineEventKind.agentFailed,
+        AgentEscalating() => PipelineEventKind.agentEscalating,
+        AgentResumed() => PipelineEventKind.agentResumed,
+        PlanDraft() => PipelineEventKind.planDraft,
+        AwaitingApproval() => PipelineEventKind.awaitingApproval,
+        PipelineCompleted() => PipelineEventKind.pipelineCompleted,
+      };
+
+  /// The logged projection of this event. Exhaustive: every variant has one,
+  /// and a new variant fails to compile until it declares its projection.
+  PipelineEventLogRecord get logRecord => switch (this) {
+        final AgentStarted event => (
+            kind: PipelineEventKind.agentStarted,
+            stepId: event.stepId,
+            detail: null,
+            failureType: null,
+          ),
+        final AgentCompleted event => (
+            kind: PipelineEventKind.agentCompleted,
+            stepId: event.stepId,
+            detail: event.durationMs,
+            failureType: null,
+          ),
+        final AgentFailed event => (
+            kind: PipelineEventKind.agentFailed,
+            stepId: event.stepId,
+            detail: event.reason,
+            failureType: event.failureType,
+          ),
+        final AgentEscalating event => (
+            kind: PipelineEventKind.agentEscalating,
+            stepId: event.stepId,
+            detail: event.question,
+            failureType: null,
+          ),
+        final AgentResumed event => (
+            kind: PipelineEventKind.agentResumed,
+            stepId: event.stepId,
+            detail: null,
+            failureType: null,
+          ),
+        PlanDraft() => (
+            kind: PipelineEventKind.planDraft,
+            stepId: null,
+            detail: null,
+            failureType: null,
+          ),
+        AwaitingApproval() => (
+            kind: PipelineEventKind.awaitingApproval,
+            stepId: null,
+            detail: null,
+            failureType: null,
+          ),
+        PipelineCompleted() => (
+            kind: PipelineEventKind.pipelineCompleted,
+            stepId: null,
+            detail: null,
+            failureType: null,
+          ),
+      };
 }
 
 // ── Agent lifecycle ───────────────────────────────────────────────────────────
@@ -62,7 +170,9 @@ final class AgentStarted extends PipelineEvent {
 /// A pipeline step completed successfully.
 final class AgentCompleted extends PipelineEvent {
   final String stepId;
-  final Usage usage;
+  final StepTelemetry telemetry;
+
+  Usage get usage => telemetry.usage;
 
   /// True when the step's `postProcess` changed its output. `run()` never
   /// writes to stdout itself (see this file's own header contract) — this
@@ -71,37 +181,37 @@ final class AgentCompleted extends PipelineEvent {
   /// directly inside the generator.
   final bool postProcessRewrote;
 
-  /// Extended-thinking content the model produced before answering, if any.
-  /// Per-step only — never accumulated onto [PipelineContext.usage], unlike
-  /// [Usage.thinkingTokens] which is a real additive count.
-  final String? thinking;
-
-  /// Why the model stopped: `end_turn`, `tool_use`, `max_tokens`, etc.
-  final String? stopReason;
-
-  /// Wall-clock duration of this step's call, in milliseconds.
-  final int? durationMs;
-
-  /// Number of agentic turns (tool-call round trips) this step's call took.
-  final int? numTurns;
-
+  /// Thinking content is per-step only — never accumulated onto
+  /// [PipelineContext.usage], unlike [Usage.thinkingTokens] which is a real
+  /// additive count.
+  String? get thinking => telemetry.thinking;
+  String? get stopReason => telemetry.stopReason;
+  int? get durationMs => telemetry.durationMs;
+  int? get numTurns => telemetry.numTurns;
   /// The model the step intended, and the models it actually ran on (from the
   /// stream). Together they are the per-step model record.
   /// Null only for events built by a consumer that does not know it.
   final AgentModel? intendedModel;
-  final List<ModelObservation> models;
+  List<ModelObservation> get models => telemetry.models;
 
-  const AgentCompleted({
+  AgentCompleted({
     required this.stepId,
-    required this.usage,
+    required Usage usage,
     this.intendedModel,
-    this.models = const [],
+    List<ModelObservation> models = const [],
     this.postProcessRewrote = false,
-    this.thinking,
-    this.stopReason,
-    this.durationMs,
-    this.numTurns,
-  });
+    String? thinking,
+    String? stopReason,
+    int? durationMs,
+    int? numTurns,
+  }) : telemetry = StepTelemetry(
+          usage: usage,
+          thinking: thinking,
+          stopReason: stopReason,
+          durationMs: durationMs,
+          numTurns: numTurns,
+          models: models,
+        );
 }
 
 /// A pipeline step failed (runner returned null).
@@ -113,7 +223,15 @@ final class AgentFailed extends PipelineEvent {
   final String stepId;
   final String? reason;
 
-  const AgentFailed({required this.stepId, this.reason});
+  /// Which failure this was. A typed exception keeps its own type; anything
+  /// else is [FailureType.unexpectedFailure], a marker that a type is missing.
+  final FailureType failureType;
+
+  const AgentFailed({
+    required this.stepId,
+    required this.failureType,
+    this.reason,
+  });
 }
 
 // ── Escalation ────────────────────────────────────────────────────────────────

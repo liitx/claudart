@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:path/path.dart' as p;
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/rotate.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/generated/user_text.g.dart';
+import 'package:claudart/io/gate_runner.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/templates/handoff_template.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
+import 'package:claudart/logging/log_file.dart';
 import 'package:claudart/session/handoff_event.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/session/session_state.dart' show HandoffStatus;
@@ -14,9 +18,11 @@ import 'package:claudart/session/teardown_utils.dart';
 import 'package:claudart/workspace/workspace_index.dart';
 import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
+import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 // Handoff with two pending issues.
 const _handoffWithPending = '''# Agent Handoff — my-app
@@ -207,8 +213,9 @@ MemoryFileIO _io({String handoff = _handoffWithPending}) {
   });
 }
 
-Future<bool> _buildOk(String _) async => true;
-Future<bool> _buildFail(String _) async => false;
+Future<GateResult> _buildOk(String _) async => const GateResult.passed();
+Future<GateResult> _buildFail(String _) async =>
+    const GateResult.failed(exitCode: 2, outputTail: 'make: *** [build] Error 2');
 bool _confirmYes(String _) => true;
 bool _confirmNo(String _) => false;
 
@@ -244,13 +251,7 @@ void main() {
 
       final output = <String>[];
       await runZoned(
-        () => runRotate(
-          io: io,
-          projectRootOverride: null,
-          exitFn: _noExit,
-          confirmFn: _confirmNo,
-          buildFn: _buildOk,
-        ),
+        () => runRotate(seams: CommandSeams(io: io, projectRootOverride: null, exitFn: _noExit, confirmFn: _confirmNo), buildFn: _buildOk),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -266,13 +267,7 @@ void main() {
       final io = _io();
       final output = <String>[];
       await runZoned(
-        () => runRotate(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _noExit,
-          confirmFn: _confirmYes,
-          buildFn: _buildOk,
-        ),
+        () => runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -291,13 +286,7 @@ void main() {
             workingDirectory: any(named: 'workingDirectory'),
           )).thenAnswer((_) async => fakeResult(''));
 
-      final result = await runRotate(
-        io: io,
-        runner: runner,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-      );
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), runner: runner);
 
       expect(result, RotateResult.rotated);
       final captured = verify(() => runner.run(
@@ -311,6 +300,55 @@ void main() {
       expect(captured[0], 'sh');
       expect(captured[1], ['-c', 'make rebuild']);
       expect(captured[2], _projectRoot);
+    });
+  });
+
+  group('runRotate — the default gate and what it says', () {
+    test('the default gate is timed by the clock the command is given',
+        () async {
+      final io = _io();
+      final runner = MockProcessRunner();
+      when(() => runner.run(any(), any(),
+              workingDirectory: any(named: 'workingDirectory')))
+          .thenAnswer((_) async => fakeResult(''));
+      final times = [
+        DateTime.utc(2026, 1, 1, 12),
+        DateTime.utc(2026, 1, 1, 12, 0, 0, 250),
+      ];
+      await runRotate(
+        seams: CommandSeams(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _noExit,
+          confirmFn: _confirmYes,
+          clock: () => times.removeAt(0),
+        ),
+        runner: runner,
+      );
+      final row = jsonDecode(io
+          .read(logFilePath(logsDirFor(_workspace), LogFile.gates))
+          .trim()) as Map<String, dynamic>;
+      expect(row['durationMs'], 250);
+    });
+
+    test('a passing gate says it passed and never says it failed', () async {
+      final printed = <String>[];
+      await Zone.current
+          .fork(specification: ZoneSpecification(print: (self, parent, zone, line) => printed.add(line)))
+          .run(() => runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk));
+      final text = printed.join('\n');
+      expect(text, contains(UserText.rotateBuildPassed.template));
+      expect(text, isNot(contains(UserText.rotateBuildFailedFixTheBuildBefore.template)));
+    });
+
+    test('a failing gate says it failed and never says it passed', () async {
+      final printed = <String>[];
+      await Zone.current
+          .fork(specification: ZoneSpecification(print: (self, parent, zone, line) => printed.add(line)))
+          .run(() => runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildFail));
+      final text = printed.join('\n');
+      expect(text, contains(UserText.rotateBuildFailedFixTheBuildBefore.template));
+      expect(text, isNot(contains(UserText.rotateBuildPassed.template)));
     });
   });
 
@@ -333,13 +371,7 @@ void main() {
 }
 ''',
       });
-      final result = await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
       expect(result, RotateResult.noHandoff);
     });
   });
@@ -350,13 +382,7 @@ void main() {
       final handoffFile = handoffPathFor(_workspace);
       final originalContent = io.files[handoffFile];
 
-      final result = await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmNo,
-        buildFn: _buildOk,
-      );
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmNo), buildFn: _buildOk);
 
       expect(result, RotateResult.cancelled);
       // Handoff untouched.
@@ -376,13 +402,10 @@ void main() {
       var built = false;
 
       await expectLater(
-        runRotate(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _noExit,
-          askFn: (_) => null,
-          buildFn: (_) async => built = true,
-        ),
+        runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, askFn: (_) => null), buildFn: (_) async {
+          built = true;
+          return const GateResult.passed();
+        }),
         throwsA(isA<StateError>().having((e) => e.message, 'message', 'exit(1) called')),
       );
 
@@ -395,17 +418,10 @@ void main() {
       final io = _io();
       var asked = false;
 
-      final result = await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        askFn: (_) {
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, askFn: (_) {
           asked = true;
           return null;
-        },
-        buildFn: _buildOk,
-        mode: RunMode.headless,
-      );
+        }), buildFn: _buildOk, mode: RunMode.headless);
 
       expect(asked, isFalse);
       expect(result, isNot(RotateResult.cancelled));
@@ -414,45 +430,20 @@ void main() {
 
     test('--headless ignores an injected confirm that would say no (headless never prompts)', () async {
       final io = _io();
-      final result = await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmNo,
-        buildFn: _buildOk,
-        mode: RunMode.headless,
-      );
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmNo), buildFn: _buildOk, mode: RunMode.headless);
       expect(result, isNot(RotateResult.cancelled));
     });
 
     test('an explicit answer still decides, including a piped one', () async {
-      final yes = await runRotate(
-        io: _io(),
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        askFn: (_) => true,
-        buildFn: _buildOk,
-      );
+      final yes = await runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, askFn: (_) => true), buildFn: _buildOk);
       expect(yes, isNot(RotateResult.cancelled));
 
-      final no = await runRotate(
-        io: _io(),
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        askFn: (_) => false,
-        buildFn: _buildOk,
-      );
+      final no = await runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, askFn: (_) => false), buildFn: _buildOk);
       expect(no, RotateResult.cancelled);
     });
 
     test('an injected confirmFn is asked, as before', () async {
-      final result = await runRotate(
-        io: _io(),
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        buildFn: _buildOk,
-        confirmFn: _confirmNo,
-      );
+      final result = await runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmNo), buildFn: _buildOk);
       expect(result, RotateResult.cancelled);
     });
   });
@@ -464,13 +455,7 @@ void main() {
       await Zone.current
           .fork(specification: ZoneSpecification(print: (self, parent, zone, line) => printed.add(line)))
           .run(() async {
-        result = await runRotate(
-          io: _io(),
-          projectRootOverride: _projectRoot,
-          exitFn: _noExit,
-          confirmFn: _confirmYes,
-          buildFn: _buildFail,
-        );
+        result = await runRotate(seams: CommandSeams(io: _io(), projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildFail);
       });
       expect(result, RotateResult.buildFailed);
       final text = printed.join('\n');
@@ -481,24 +466,44 @@ void main() {
   });
 
   group('runRotate — build gate fails', () {
-    test('returns buildFailed, archives handoff, does not seed new one', () async {
+    test('returns buildFailed, writes no archive, does not seed new one', () async {
       final io = _io();
       final handoffFile = handoffPathFor(_workspace);
       final originalContent = io.files[handoffFile];
 
-      final result = await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildFail,
-      );
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildFail);
 
       expect(result, RotateResult.buildFailed);
-      // Archive was written before the build gate.
-      expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
+      // The gate runs before anything is written: a failed gate leaves no
+      // archive behind (gap R14).
+      expect(io.files.keys.any((k) => k.contains('/archive/')), isFalse);
       // Live handoff NOT overwritten — still original content.
       expect(io.files[handoffFile], originalContent);
+    });
+
+    test('a retry after a failed gate does not archive a second time', () async {
+      final io = _io();
+      Future<RotateResult> failing() => runRotate(
+            seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes),
+            buildFn: _buildFail,
+          );
+      await failing();
+      await failing();
+      expect(io.files.keys.any((k) => k.contains('/archive/')), isFalse);
+    });
+
+    test('the archive is written once the gate has passed', () async {
+      final io = _io();
+      var archivedAtGate = true;
+      await runRotate(
+        seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes),
+        buildFn: (_) async {
+          archivedAtGate = io.files.keys.any((k) => k.contains('/archive/'));
+          return const GateResult.passed();
+        },
+      );
+      expect(archivedAtGate, isFalse, reason: 'nothing is archived when the gate runs');
+      expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
     });
   });
 
@@ -506,15 +511,9 @@ void main() {
     Future<RotateResult> rotate(
       MemoryFileIO io, {
       bool Function(String)? confirm,
-      Future<bool> Function(String)? build,
+      Future<GateResult> Function(String)? build,
     }) =>
-        runRotate(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _noExit,
-          confirmFn: confirm ?? _confirmYes,
-          buildFn: build ?? _buildOk,
-        );
+        runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: confirm ?? _confirmYes), buildFn: build ?? _buildOk);
 
     test('seeding the next issue logs rotated into suggestInvestigating',
         () async {
@@ -549,6 +548,34 @@ void main() {
       expect(loggedMoves(io, _workspace), isEmpty);
     });
 
+    List<Map<String, dynamic>> gateRows(MemoryFileIO io) => [
+          for (final line in io
+              .read(logFilePath(logsDirFor(_workspace), LogFile.gates))
+              .split('\n')
+              .where((line) => line.trim().isNotEmpty))
+            jsonDecode(line) as Map<String, dynamic>,
+        ];
+
+    test('a passing build gate is logged with its command and exit code',
+        () async {
+      final io = _io();
+      await rotate(io);
+      final row = gateRows(io).single;
+      expect(row['gate'], GateKind.rotateBuild.name);
+      expect(row['command'], 'rotate');
+      expect(row['shellCommand'], 'make rebuild');
+      expect(row['exitCode'], 0);
+    });
+
+    test('a failing build gate is logged with its exit code and output',
+        () async {
+      final io = _io();
+      await rotate(io, build: _buildFail);
+      final row = gateRows(io).single;
+      expect(row['exitCode'], 2);
+      expect(row['outputTail'], 'make: *** [build] Error 2');
+    });
+
     test('a failed build gate logs nothing', () async {
       final io = _io();
       await rotate(io, build: _buildFail);
@@ -559,37 +586,19 @@ void main() {
   group('runRotate — with pending issues', () {
     test('returns rotated', () async {
       final io = _io();
-      final result = await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
       expect(result, RotateResult.rotated);
     });
 
     test('archives current handoff', () async {
       final io = _io();
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
       expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
     });
 
     test('archived session is visible to `claudart archives` (index entry appended)', () async {
       final io = _io();
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
       final entries = loadIndex(_workspace, io: io);
       expect(entries, hasLength(1));
       expect(entries.first.branch, equals('fix/pr-bugs'));
@@ -599,13 +608,7 @@ void main() {
       final io = _io();
       final handoffFile = handoffPathFor(_workspace);
 
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
 
       final newHandoff = io.files[handoffFile]!;
       expect(newHandoff, contains('Stream fires before connection established'));
@@ -615,13 +618,7 @@ void main() {
       final io = _io();
       final handoffFile = handoffPathFor(_workspace);
 
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
 
       final newHandoff = io.files[handoffFile]!;
       expect(newHandoff, contains('Missing await on async initialiser'));
@@ -633,13 +630,7 @@ void main() {
       final io = _io();
       final handoffFile = handoffPathFor(_workspace);
 
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
 
       final pending = extractPendingIssues(io.files[handoffFile]!);
       expect(pending, ['Missing await on async initialiser']);
@@ -649,13 +640,7 @@ void main() {
       final io = _io();
       final handoffFile = handoffPathFor(_workspace);
 
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
 
       final newHandoff = io.files[handoffFile]!;
       expect(newHandoff, contains('suggest-investigating'));
@@ -665,13 +650,7 @@ void main() {
       final io = _io();
       final handoffFile = handoffPathFor(_workspace);
 
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
 
       expect(io.files[handoffFile], contains('fix/pr-bugs'));
     });
@@ -680,13 +659,7 @@ void main() {
   group('runRotate — no pending issues', () {
     test('returns noNextIssue', () async {
       final io = _io(handoff: _handoffNoPending);
-      final result = await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      final result = await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
       expect(result, RotateResult.noNextIssue);
     });
 
@@ -694,26 +667,14 @@ void main() {
       final io = _io(handoff: _handoffNoPending);
       final handoffFile = handoffPathFor(_workspace);
 
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
 
       expect(io.files[handoffFile], blankHandoff);
     });
 
     test('archives original handoff', () async {
       final io = _io(handoff: _handoffNoPending);
-      await runRotate(
-        io: io,
-        projectRootOverride: _projectRoot,
-        exitFn: _noExit,
-        confirmFn: _confirmYes,
-        buildFn: _buildOk,
-      );
+      await runRotate(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _noExit, confirmFn: _confirmYes), buildFn: _buildOk);
       expect(io.files.keys.any((k) => k.contains('/archive/')), isTrue);
     });
   });

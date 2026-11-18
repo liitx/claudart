@@ -2,7 +2,7 @@
 // actually wires the categorize output to the τ matrix.
 //
 // Two paths:
-//   well-formed atomic-explore categorize → haiku
+//   well-formed atomic-explore categorize → sonnet (haiku never reasons)
 //   missing / empty categorize             → fallback sonnet
 
 import 'package:claudart/pipeline/agent_model.dart';
@@ -35,13 +35,13 @@ String _categorize({
     '<${CategorizeTag.complexity.wireTag}>${complexity.name}</${CategorizeTag.complexity.wireTag}>\n';
 
 void main() {
-  test('plan step routes atomic-explore to haiku (the cost win)', () {
+  test('plan step routes atomic-explore to sonnet, never haiku', () {
     final ctx = _ctxWithCategorize(_categorize(
       category: AgentCategory.feature,
       intent: IntentClass.explore,
       complexity: ComplexityTier.atomic,
     ));
-    expect(FlowSteps.plan.effectiveModel(ctx), equals(AgentModel.haiku));
+    expect(FlowSteps.plan.effectiveModel(ctx), equals(AgentModel.sonnet));
   });
 
   test('plan step routes systemic-explore to opus', () {

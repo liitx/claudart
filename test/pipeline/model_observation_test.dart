@@ -201,32 +201,64 @@ void main() {
     });
   });
 
+  // The line a person reads in `claudart status` must say what each model was
+  // doing in its step: a helper call next to a reasoning step is not that step
+  // running on the helper's model.
   group('describeModelRecord', () {
     Map<String, dynamic> record({
       Object? fraction = 0.256,
       List<String> drift = const [],
+      String? role,
     }) =>
         {
           ModelRecordField.stepId.name: 'reader',
           ModelRecordField.intended.name: 'haiku',
           ModelRecordField.contextUsedFraction.name: fraction,
           ModelRecordField.drift.name: drift,
+          if (role != null) ModelRecordField.role.name: role,
           ModelRecordField.observation.name: {
             ModelObservationField.observedModelId.jsonKey: _haikuId,
           },
         };
 
-    test('reads step, intended -> observed, rounded context, no drift', () {
+    test('reads step, intended -> observed, role, rounded context, no drift',
+        () {
+      expect(
+        describeModelRecord(
+          record(role: ObservedModelRole.stepModel.name),
+        ),
+        'reader  haiku -> $_haikuId  (step)  context 26%  drift: none  '
+        'accounting not recorded',
+      );
+    });
+
+    for (final role in ObservedModelRole.values) {
+      test('names the role: ${role.name}', () {
+        expect(
+          describeModelRecord(record(role: role.name)),
+          contains('(${role.label})'),
+        );
+      });
+    }
+
+    test('a record written before roles existed says so, not "step"', () {
       expect(
         describeModelRecord(record()),
-        'reader  haiku -> $_haikuId  context 26%  drift: none',
+        contains('(no role recorded)'),
+      );
+    });
+
+    test('a role that is not a known variant says it was not recorded', () {
+      expect(
+        describeModelRecord(record(role: 'not-a-role')),
+        contains('(no role recorded)'),
       );
     });
 
     test('lists every drift kind', () {
       expect(
         describeModelRecord(record(drift: ['contextWindow', 'maxOutputTokens'])),
-        endsWith('drift: contextWindow, maxOutputTokens'),
+        contains('drift: contextWindow, maxOutputTokens'),
       );
     });
 
@@ -245,6 +277,261 @@ void main() {
       expect(json[ModelRecordField.intended.name], 'sonnet');
       expect(json[ModelRecordField.resolved.name], 'haiku');
       expect(json[ModelRecordField.drift.name], ['differsFromIntended']);
+    });
+  });
+
+  // A step's usage can name more than one model: the CLI makes its own small
+  // helper calls (on haiku) inside a step. When the model the step was meant to
+  // run on is among them, the others are incidental, not drift; they only count
+  // as drift when the intended model did not run at all.
+  group('reconcileStepModels — the CLI helper call is incidental', () {
+    ModelObservation observedModel(AgentModel model) =>
+        ModelObservation(observedModelId: model.slug);
+
+    test('the intended model ran: the model is the step model', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.haiku),
+          observedModel(AgentModel.sonnet),
+        ],
+      );
+      final step = reconciliations
+          .singleWhere((r) => r.resolved == AgentModel.sonnet);
+      expect(step.role, ObservedModelRole.stepModel);
+      expect(step.drift, isNot(contains(ModelDriftKind.differsFromIntended)));
+    });
+
+    test('the intended model ran: the other model is incidental, not drift',
+        () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.haiku),
+          observedModel(AgentModel.sonnet),
+        ],
+      );
+      final helper = reconciliations
+          .singleWhere((r) => r.resolved == AgentModel.haiku);
+      expect(helper.role, ObservedModelRole.incidentalHelper);
+      expect(helper.drift, isNot(contains(ModelDriftKind.differsFromIntended)));
+    });
+
+    test('the intended model did not run: what ran is the step model and '
+        'differs', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [observedModel(AgentModel.haiku)],
+      );
+      final only = reconciliations.single;
+      expect(only.role, ObservedModelRole.stepModel);
+      expect(only.drift, contains(ModelDriftKind.differsFromIntended));
+    });
+
+    test('an unknown id beside the intended model is incidental but still '
+        'unknownModel', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          const ModelObservation(observedModelId: 'not-a-declared-model'),
+          observedModel(AgentModel.sonnet),
+        ],
+      );
+      final unknown = reconciliations.singleWhere((r) => r.resolved == null);
+      expect(unknown.role, ObservedModelRole.incidentalHelper);
+      expect(unknown.drift, contains(ModelDriftKind.unknownModel));
+    });
+
+    test('no observations gives no reconciliations', () {
+      expect(
+        reconcileStepModels(
+          intended: AgentModel.sonnet,
+          observations: const [],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('the order of the observations is kept', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.sonnet),
+          observedModel(AgentModel.haiku),
+        ],
+      );
+      expect(
+        reconciliations.map((r) => r.resolved),
+        [AgentModel.sonnet, AgentModel.haiku],
+      );
+    });
+
+    test('the persisted record carries the role', () {
+      final record = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observedModel(AgentModel.haiku),
+          observedModel(AgentModel.sonnet),
+        ],
+      ).first.toRecordJson(stepId: 'reasoner');
+      expect(
+        record[ModelRecordField.role.name],
+        ObservedModelRole.incidentalHelper.name,
+      );
+    });
+  });
+
+  // A step run is accounted for when the model it was meant to run on is among
+  // the observed ones and every observed id is a declared model. Anything else
+  // is a finding, and an empty set means it adds up.
+  group('accountForStepModels', () {
+    ModelObservation observed(String id) =>
+        ModelObservation(observedModelId: id);
+
+    test('the intended model alone is accounted for', () {
+      expect(
+        accountForStepModels(
+          intended: AgentModel.sonnet,
+          observations: [observed(AgentModel.sonnet.slug)],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('the intended model with a helper call is accounted for', () {
+      expect(
+        accountForStepModels(
+          intended: AgentModel.sonnet,
+          observations: [
+            observed(AgentModel.haiku.slug),
+            observed(AgentModel.sonnet.slug),
+          ],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('an id that is no declared model is unknownModelObserved', () {
+      expect(
+        accountForStepModels(
+          intended: AgentModel.sonnet,
+          observations: [
+            observed('not-a-declared-model'),
+            observed(AgentModel.sonnet.slug),
+          ],
+        ),
+        {ModelAccountingFinding.unknownModelObserved},
+      );
+    });
+
+    test('the intended model missing is intendedModelNotObserved', () {
+      expect(
+        accountForStepModels(
+          intended: AgentModel.sonnet,
+          observations: [observed(AgentModel.haiku.slug)],
+        ),
+        {ModelAccountingFinding.intendedModelNotObserved},
+      );
+    });
+
+    test('both findings can hold at once', () {
+      expect(
+        accountForStepModels(
+          intended: AgentModel.sonnet,
+          observations: [observed('not-a-declared-model')],
+        ),
+        {
+          ModelAccountingFinding.unknownModelObserved,
+          ModelAccountingFinding.intendedModelNotObserved,
+        },
+      );
+    });
+
+    test('no observed models means the intended model was not observed', () {
+      expect(
+        accountForStepModels(
+          intended: AgentModel.sonnet,
+          observations: const [],
+        ),
+        {ModelAccountingFinding.intendedModelNotObserved},
+      );
+    });
+
+    for (final finding in ModelAccountingFinding.values) {
+      test('${finding.name} has a label for a person', () {
+        expect(finding.label, isNotEmpty);
+      });
+    }
+
+    test('every record of a run carries the same accounting', () {
+      final reconciliations = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [
+          observed('not-a-declared-model'),
+          observed(AgentModel.sonnet.slug),
+        ],
+      );
+      expect(
+        reconciliations.map((r) => r.accounting),
+        everyElement({ModelAccountingFinding.unknownModelObserved}),
+      );
+    });
+
+    test('the persisted record lists the finding names', () {
+      final record = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [observed(AgentModel.haiku.slug)],
+      ).single.toRecordJson(stepId: 'reasoner');
+      expect(
+        record[ModelRecordField.accounting.name],
+        [ModelAccountingFinding.intendedModelNotObserved.name],
+      );
+    });
+
+    test('an accounted run persists an empty list', () {
+      final record = reconcileStepModels(
+        intended: AgentModel.sonnet,
+        observations: [observed(AgentModel.sonnet.slug)],
+      ).single.toRecordJson(stepId: 'reasoner');
+      expect(record[ModelRecordField.accounting.name], isEmpty);
+    });
+  });
+
+  group('describeModelRecord — accounting', () {
+    Map<String, dynamic> record({Object? accounting}) => {
+          ModelRecordField.stepId.name: 'reasoner',
+          ModelRecordField.intended.name: 'sonnet',
+          ModelRecordField.contextUsedFraction.name: 0.03,
+          ModelRecordField.drift.name: <String>[],
+          ModelRecordField.role.name: ObservedModelRole.stepModel.name,
+          if (accounting != null) ModelRecordField.accounting.name: accounting,
+          ModelRecordField.observation.name: {
+            ModelObservationField.observedModelId.jsonKey: _haikuId,
+          },
+        };
+
+    test('an empty list reads as accounted', () {
+      expect(describeModelRecord(record(accounting: <String>[])),
+          endsWith('accounted'));
+    });
+
+    test('a finding reads as NOT accounted, with its label', () {
+      final text = describeModelRecord(
+        record(accounting: [ModelAccountingFinding.unknownModelObserved.name]),
+      );
+      expect(
+        text,
+        endsWith(
+          'NOT accounted: ${ModelAccountingFinding.unknownModelObserved.label}',
+        ),
+      );
+    });
+
+    test('a record without accounting says it was not recorded', () {
+      expect(
+        describeModelRecord(record()),
+        endsWith('accounting not recorded'),
+      );
     });
   });
 

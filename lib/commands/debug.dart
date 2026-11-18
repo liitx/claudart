@@ -1,52 +1,133 @@
+
 import 'dart:io';
+import '../session/handoff_placeholder.dart';
 import 'package:path/path.dart' as p;
-import '../config.dart' show loadWorkspaceConfig;
-import '../file_io.dart';
-import '../git_utils.dart';
+import '../config/config.dart' show loadWorkspaceConfig;
+import '../io/file_io.dart';
 import '../logging/logger.dart';
-import 'claudart_command.dart';
-import '../md_io.dart';
-import 'scope_files.dart';
-import '../paths.dart';
+import 'support/claudart_command.dart';
+import '../session/md_io.dart';
+import 'support/scope_files.dart';
+import '../config/paths.dart';
+import '../pipeline/edit_files.dart';
 import '../pipeline/flows/debug_steps.dart';
 import '../pipeline/flows/flow_steps.dart';
 import '../pipeline/pipeline_context.dart';
 import '../pipeline/pipeline_executor.dart';
 import '../pipeline/xml_tags.dart';
-import '../registry.dart';
+import '../session/debug_disposition.dart';
 import '../session/handoff_event.dart';
+import '../session/run_mode.dart';
 import '../session/invalid_handoff_transition_exception.dart';
 import '../ui/ansi.dart' as ansi;
 import '../ui/render.dart' as render;
 import '../ui/menu.dart';
 import '../workspace/workspace_config.dart';
+import 'support/command_seams.dart';
+import 'support/project_resolution.dart';
+import '../generated/user_text.g.dart';
+import '../ui/styled_text.dart';
+import '../session/handoff_store.dart';
+import '../session/handoff_listeners.dart';
+import 'teardown.dart';
+import '../io/process_exit.dart';
+import '../io/gate_runner.dart';
+import '../io/process_runner.dart';
+
+/// Every way a `claudart debug` run can end before it applies a fix. Each is
+/// logged as the run's outcome, so a run that stopped leaves a record of why.
+enum DebugExitKind {
+  /// The command ran outside a git repository, so no project could be found.
+  notInGitRepository,
+
+  /// The project is not linked, so it has no workspace.
+  projectNotRegistered,
+
+  /// The workspace has no handoff to debug from.
+  noHandoff,
+
+  /// The handoff lists no files in play, so there is nothing to read.
+  emptyScope,
+
+  /// The reader step gave no output, usually because the `claude` CLI is not
+  /// installed or not signed in.
+  readerProducedNothing,
+
+  /// The implementer step gave no output.
+  implementerProducedNothing,
+
+  /// The owner reviewed the plan and chose not to write the files.
+  ownerDeclinedWrite,
+
+  /// A headless run reached the review with no verification command to check
+  /// the plan, so it wrote nothing: nobody reviewed it and nothing could.
+  headlessWithoutVerification;
+
+  /// The process exit code for this ending. Declining the write is a normal
+  /// ending; every other kind is a failure.
+  int get exitCode => switch (this) {
+        DebugExitKind.ownerDeclinedWrite => 0,
+        DebugExitKind.notInGitRepository ||
+        DebugExitKind.projectNotRegistered ||
+        DebugExitKind.noHandoff ||
+        DebugExitKind.emptyScope ||
+        DebugExitKind.readerProducedNothing ||
+        DebugExitKind.implementerProducedNothing ||
+        DebugExitKind.headlessWithoutVerification =>
+          1,
+      };
+}
 
 Future<void> runDebug({
-  FileIO? io,
-  String? projectRootOverride,
-  Never Function(int code)? exitFn,
+  CommandSeams seams = const CommandSeams(),
   PipelineExecutor? executor,
-  int Function(List<String> items)? pickFn,
+  DartFileAnalyzer? dartFileAnalyzer,
+  GateResult Function(String command, String projectRoot)? runVerification,
+  RunMode mode = RunMode.interactive,
+  Future<void> Function()? closeSession,
 }) async {
+  final io = seams.io;
+  final exitFn = seams.exitFn;
+  final pickFn = seams.pickFn;
   final fileIO   = io       ?? const RealFileIO();
-  final exit_    = exitFn   ?? exit;
+  final exit_    = exitFn   ?? exitProcess;
   final pick_    = pickFn   ?? arrowMenu;
+
+  // Logs the kind as the run's outcome, then exits with the kind's code. Until
+  // the project is known there is no workspace, so it is the global log.
+  var exitLogger = SessionLogger.plain(io: fileIO);
+  Never leave(DebugExitKind kind) {
+    exitLogger.logInteraction(
+      rowKind: InteractionRowKind.outcome,
+      command: ClaudartCommand.debug.name,
+      outcome: kind.name,
+    );
+    exit_(kind.exitCode);
+  }
 
   // ── Locate project ──────────────────────────────────────────────────────────
 
-  final projectRoot = projectRootOverride ?? detectGitContext()?.root;
-  if (projectRoot == null) {
-    print('✗ Not inside a git repository.');
-    exit_(1);
+  ProjectLookupFailure? lookupFailure;
+  final project = lookupProject(
+    seams,
+    onFailure: (failure) => lookupFailure = failure,
+  );
+  if (project == null) {
+    final failure = lookupFailure!;
+    for (final line in failure.lines) {
+      print(line);
+    }
+    leave(switch (failure) {
+      ProjectLookupFailure.notInGitRepository =>
+        DebugExitKind.notInGitRepository,
+      ProjectLookupFailure.notRegistered => DebugExitKind.projectNotRegistered,
+    });
   }
-
-  final registry = Registry.load(io: fileIO);
-  final entry    = registry.findByProjectRoot(projectRoot);
-  if (entry == null) {
-    print('✗ Project not registered. Run `claudart link` first.');
-    exit_(1);
-  }
-  print('Project  : ${entry.name}');
+  final projectRoot = project.projectRoot;
+  final entry = project.entry;
+  printProjectLine(entry);
+  final logger = SessionLogger.forEntry(entry, io: fileIO);
+  exitLogger = logger;
 
   final workspace   = entry.workspacePath;
   final wsConfig    = WorkspaceConfig.load(workspace, io: fileIO);
@@ -55,16 +136,17 @@ Future<void> runDebug({
       PipelineExecutor(
         strict: strictMode,
         stepTimeout: loadWorkspaceConfig(workspace, io: fileIO).stepTimeout,
-        onStepCompleted: (event) => SessionLogger(
-          io: fileIO,
-          workspacePath: workspace,
-        ).logStepModels(command: ClaudartCommand.debug.name, event: event),
       );
+
+  // Every pipeline event the executor publishes is logged for as long as the
+  // executor lives, so a failure, a timeout or a step that never finished
+  // leaves a record.
+  logger.logPipelineEvents(exec.events, command: ClaudartCommand.debug.name);
   final handoffFile = handoffPathFor(workspace);
 
   if (!fileIO.fileExists(handoffFile)) {
-    print('✗ No handoff found. Run `claudart suggest` first.');
-    exit_(1);
+    print(UserText.debugNoHandoffFoundRunClaudartSuggest.template);
+    leave(DebugExitKind.noHandoff);
   }
 
   final handoff = fileIO.read(handoffFile);
@@ -86,31 +168,67 @@ Future<void> runDebug({
   final files     = readScopeFiles(scope: scope, projectRoot: projectRoot, workspace: workspace, io: fileIO);
 
   if (files.isEmpty) {
-    print(
-      '\n✗ No files listed in ## Scope / Files in play.\n'
-      '  Run `claudart suggest` first to populate the scope.\n',
-    );
-    exit_(1);
+    print(UserText.noScopeFilesRunSuggest.template);
+    leave(DebugExitKind.emptyScope);
+  }
+
+  // ── Session state moves ─────────────────────────────────────────────────────
+  //
+  // Debug begins (debugStarted) before any model call; a step that fails
+  // after that blocks the session (debugBlocked) and rethrows, so the failure
+  // is never silent and the handoff never stays at ready-for-debug.
+
+  final store = HandoffStore(
+    io: fileIO,
+    handoffFile: handoffFile,
+    logger: logger,
+    command: ClaudartCommand.debug.name,
+  );
+
+  // A headless run has no one to run `teardown` afterwards, so a fix recorded
+  // as done closes the session itself; `teardown` decides from the evidence
+  // whether that archives it or saves a reminder.
+  if (mode == RunMode.headless) {
+    final close = closeSession ??
+        () => runTeardown(
+              io: fileIO,
+              projectRootOverride: projectRoot,
+              mode: RunMode.headless,
+              exitFn: exit_,
+            );
+    store.react(HandoffListenerKind.teardownWhenConverged, (move) async {
+      await close();
+      return null;
+    });
+  }
+
+  void blockDebug() =>
+      store.apply(fileIO.read(handoffFile), HandoffEvent.debugBlocked);
+
+  Future<T> blockOnFailure<T>(Future<T> Function() step) async {
+    try {
+      return await step();
+    } catch (_) {
+      blockDebug();
+      rethrow;
+    }
+  }
+
+  // A run resuming from debugInProgress has no debugStarted move to make.
+  if (status.after(HandoffEvent.debugStarted) != null) {
+    store.apply(handoff, HandoffEvent.debugStarted);
   }
 
   // ── Header ──────────────────────────────────────────────────────────────────
 
   print(render.header('CLAUDART DEBUG'));
-  print(
-    '  ${ansi.dim}[1] Classify${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[2] Read files${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[3] Implement${ansi.reset}'
-    '  ${ansi.dim}›${ansi.reset}'
-    '  ${ansi.dim}[4] Write files${ansi.reset}\n',
-  );
+  print(UserText.stageBar.styled());
 
   // ── Build context: prepend root cause + expected to bug ─────────────────────
 
   final fullBug = [
     if (bug.isNotEmpty) '## Bug\n$bug',
-    if (rootCause.isNotEmpty && rootCause != '_Not yet determined._')
+    if (!HandoffPlaceholder.isBlank(rootCause))
       '## Root Cause\n$rootCause',
     if (expected.isNotEmpty) '## Expected Behavior\n$expected',
   ].join('\n\n');
@@ -129,129 +247,172 @@ Future<void> runDebug({
     files:       files,
   );
 
-  ctx = await exec.runFuture(
-    steps:        [FlowSteps.categorize],
-    ctx:          ctx,
-    displayStep:  1,
-    displayTotal: 4,
+  ctx = await blockOnFailure(
+    () => exec.runFuture(
+      steps:        [FlowSteps.categorize],
+      ctx:          ctx,
+      displayStep:  1,
+      displayTotal: 4,
+    ),
   );
 
   // ── Phase 1: reader ─────────────────────────────────────────────────────────
 
-  ctx = await exec.runFuture(
-    steps:        [DebugSteps.reader(files.length)],
-    ctx:          ctx,
-    displayStep:  2,
-    displayTotal: 4,
+  ctx = await blockOnFailure(
+    () => exec.runFuture(
+      steps:        [DebugSteps.reader(files.length)],
+      ctx:          ctx,
+      displayStep:  2,
+      displayTotal: 4,
+    ),
   );
 
   if (ctx.readerOut.isEmpty) {
-    print('     Is claude CLI installed and authenticated?');
-    exit_(1);
+    blockDebug();
+    print(UserText.debugIsClaudeCliInstalledAndAuthenticated.template);
+    leave(DebugExitKind.readerProducedNothing);
   }
 
   // ── Phase 2: implementer ─────────────────────────────────────────────────────
 
-  ctx = await exec.runFuture(
-    steps:        [DebugSteps.implementer],
-    ctx:          ctx,
-    displayStep:  3,
-    displayTotal: 4,
+  ctx = await blockOnFailure(
+    () => exec.runFuture(
+      steps:        [DebugSteps.implementer],
+      ctx:          ctx,
+      displayStep:  3,
+      displayTotal: 4,
+    ),
   );
 
   if (ctx.implementerOut.isEmpty) {
-    exit_(1);
+    blockDebug();
+    leave(DebugExitKind.implementerProducedNothing);
   }
 
   // ── Review ───────────────────────────────────────────────────────────────────
 
-  final changes  = tagOr(ctx.implementerOut, 'CHANGES');
-  final editTags = _parseEditFiles(ctx.implementerOut);
+  final changes  = tagOr(ctx.implementerOut, WireTag.changes.tagName);
+  // Throws EditPlanException on a malformed plan, before any fix is applied;
+  // the failure blocks the session.
+  final editTags = await blockOnFailure(
+    () async => parseEditFiles(ctx.implementerOut),
+  );
 
-  print('\n  ${ansi.dim}──────────────────────────────────────${ansi.reset}');
-  print('  ${ansi.dim}  Total  ${ctx.usage.format()}${ansi.reset}\n');
+  print(UserText.usageRule.styled({}));
+  print(UserText.debugTotal.styled({'format': ctx.usage.format()}));
 
   print(render.header('DEBUG PLAN — REVIEW BEFORE WRITE'));
   _printSection('CHANGES', changes);
 
-  print('  ${ansi.bold}FILES TO WRITE${ansi.reset}');
-  print('  ${ansi.dim}─────────────${ansi.reset}');
+  print(UserText.debugFilesToWrite.styled({}));
+  print(UserText.filesToWriteRule.styled({}));
   for (final f in editTags) {
     final abs    = p.join(projectRoot, f.path);
     final exists = File(abs).existsSync();
     final tag    = exists ? ansi.c(ansi.yellow, 'MOD') : ansi.c(ansi.green, 'NEW');
-    print('    [$tag]  ${f.path}');
+    print(UserText.debugFileTagLine.format({'tag': tag, 'path': f.path}));
   }
   print('');
 
   print('${ansi.dim}${'─' * 44}${ansi.reset}\n');
 
-  final choice = pick_([
-    'apply  ${ansi.dim}(write all files to disk)${ansi.reset}',
-    'exit  ${ansi.dim}(quit without writing)${ansi.reset}',
-  ]);
+  // The workspace's verification command, when it names one, decides whether
+  // the fix is verified; none configured means nothing verifies it.
+  final verificationCommand =
+      loadWorkspaceConfig(workspace, io: fileIO).verificationCommand;
+
+  // Headless asks nobody, so the plan is applied only when a command can check
+  // it (a failing check restores the files); with none it writes nothing.
+  final int choice;
+  if (mode == RunMode.headless) {
+    if (verificationCommand == null) {
+      print(UserText.debugHeadlessNeedsVerificationCommand
+          .format({'configPath': configPathFor(workspace)}));
+      leave(DebugExitKind.headlessWithoutVerification);
+    }
+    print(UserText.debugHeadlessApplyingPlan.template);
+    choice = 0;
+  } else {
+    choice = pick_([
+      'apply  ${ansi.dim}(write all files to disk)${ansi.reset}',
+      'exit  ${ansi.dim}(quit without writing)${ansi.reset}',
+    ]);
+  }
 
   if (choice == 1) {
-    print('\n  Exit — no files written.\n');
-    exit_(0);
+    print(UserText.debugExitNoFilesWritten.template);
+    leave(DebugExitKind.ownerDeclinedWrite);
   }
 
   // ── Phase 3: write files ─────────────────────────────────────────────────────
 
   stdout.write('\n  ${ansi.cyan}·${ansi.reset}  ${ansi.dim}[4/4]${ansi.reset}  Writing files…');
 
-  var written = 0;
-  for (final f in editTags) {
-    final abs = p.join(projectRoot, f.path);
-    writeFile(abs, f.content);
-    written++;
-  }
+  // Write, then verify every file; a failure restores the files, blocks the
+  // session and throws before fixApplied is applied.
+  final runVerification_ = runVerification ??
+      (command, root) => _runVerificationCommand(command, root, seams.clock);
+  final verified = await blockOnFailure(() async {
+    return applyEditFiles(
+      projectRoot:      projectRoot,
+      planned:          editTags,
+      write:            writeFile,
+      dartFileAnalyzer: dartFileAnalyzer ?? dartAnalyzeClean,
+      verifyFix: verificationCommand == null
+          ? null
+          : (root) {
+              final gate = runVerification_(verificationCommand, root);
+              logger.logGate(
+                command: ClaudartCommand.debug.name,
+                gate: GateKind.debugVerification,
+                shellCommand: verificationCommand,
+                result: gate,
+              );
+              return gate.passed;
+            },
+    );
+  });
+  final written = editTags.length;
 
-  var updated = handoff;
-  updated = applyHandoffEvent(
-    updated,
-    HandoffEvent.fixApplied,
-    onTransition: (transition) => SessionLogger(
-      io: fileIO,
-      sensitivityMode: entry.sensitivityMode,
-      workspacePath: workspace,
-    ).logTransition(
-      command: ClaudartCommand.debug.name,
-      transition: transition,
+  store.rewrite(
+    withDebugDisposition(
+      store.apply(fileIO.read(handoffFile), HandoffEvent.fixApplied),
+      verified ? DebugDisposition.verified : DebugDisposition.done,
     ),
   );
-  fileIO.write(handoffFile, updated);
 
   stdout.write(
     '\x1B[2K\r  ${ansi.green}✓${ansi.reset}  ${ansi.dim}[4/4]${ansi.reset}'
     '  $written file${written == 1 ? '' : 's'} written'
     '  ${ansi.dim}→${ansi.reset}  status: debug-complete\n\n',
   );
-  print('  Next:  ${ansi.bold}claudart save${ansi.reset}  ${ansi.dim}→${ansi.reset}  then run tests\n');
-}
-
-// ── Edit file parsing ──────────────────────────────────────────────────────────
-
-typedef _EditFile = ({String path, String content});
-
-List<_EditFile> _parseEditFiles(String text) {
-  final result  = <_EditFile>[];
-  final pattern = RegExp(
-    r'<EDIT_FILE\s+path="([^"]+)">([\s\S]*?)</EDIT_FILE>',
-    caseSensitive: false,
-  );
-  for (final m in pattern.allMatches(text)) {
-    result.add((path: m.group(1)!.trim(), content: m.group(2)!.trimRight()));
+  // Only a run with no verification command can end unverified (a failing
+  // command throws above): say how to set one where the owner sees it (R17).
+  if (verificationCommand == null) {
+    print(UserText.statusVerificationHint
+        .format({'configPath': configPathFor(workspace)}));
   }
-  return result;
+  // Awaited so the close it started has finished before the process can exit.
+  await store.drain();
+  if (mode == RunMode.interactive) {
+    print(UserText.debugNextClaudartSaveThenRunTests.styled({}));
+  }
 }
+
+/// Runs [command] through the shell in [projectRoot].
+GateResult _runVerificationCommand(
+  String command,
+  String projectRoot,
+  DateTime Function()? clock,
+) =>
+    runGateSync(const RealProcessRunner(), command, projectRoot, clock: clock);
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 
 void _printSection(String title, String body) {
   final under = '─' * title.length;
-  print('  ${ansi.bold}$title${ansi.reset}');
-  print('  ${ansi.dim}$under${ansi.reset}');
+  print(UserText.styledTitle.styled({'title': title}));
+  print(UserText.styledUnderline.styled({'under': under}));
   for (final line in body.trim().split('\n')) {
     print(line.isEmpty ? '' : '    $line');
   }

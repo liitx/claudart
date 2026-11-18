@@ -7,6 +7,7 @@
 import 'dart:io';
 
 import 'package:claudart/claudart.dart';
+import 'package:claudart/pipeline/step_role.dart';
 import 'package:claudart/pipeline/flows/flow_steps.dart';
 import 'package:dartrix/dartrix.dart';
 import 'package:test/test.dart';
@@ -15,6 +16,7 @@ import '../matrix/claudart_matrix.dart';
 import '../matrix/pipeline_feature.dart';
 import '../matrix/pipeline_flow_type.dart';
 import '../helpers/scripted_claude_runner.dart';
+import '../helpers/unscripted.dart';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ final _applierXml  = _fixture('applier_output.xml');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-PipelineContext _baseCtx() => PipelineContext(
+PipelineContext _baseCtx() => const PipelineContext(
       projectRoot: '/tmp/test_project',
       bug:         'Label is null when not provided',
       expected:    'Widget shows default label',
@@ -51,7 +53,10 @@ void main() {
     PipelineFlowType.suggest.getSelector(PipelineFeature.reader),
     (sel) async {
       final fake = ScriptedClaudeRunner({SuggestSteps.reader(1): _readerXml});
-      final exec = PipelineExecutor(runner: fake.runner);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps:        [SuggestSteps.reader(1)],
         ctx:          _baseCtx(),
@@ -73,7 +78,10 @@ void main() {
     PipelineFlowType.suggest.getSelector(PipelineFeature.reasoner),
     (sel) async {
       final fake = ScriptedClaudeRunner({SuggestSteps.reasoner: _reasonerXml});
-      final exec = PipelineExecutor(runner: fake.runner);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps:        [SuggestSteps.reasoner],
         ctx:          _baseCtx().withSlot('reader', _readerXml),
@@ -101,7 +109,10 @@ void main() {
         steps[0]: _plannerXml,
         steps[2]: _applierXml,
       });
-      final exec = PipelineExecutor(runner: fake.runner);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps: SuggestSteps.refinement(1),
         ctx: _baseCtx()
@@ -140,24 +151,33 @@ void main() {
       const questionXml = '<QUESTION>What is the type of the label field?</QUESTION>';
       const answerXml   = '<ANSWER>label is String? — nullable optional field</ANSWER>';
 
-      // Second planner call produces CHANGES after receiving the answer
-      var plannerCallCount = 0;
+      // Every reasoning and implementation step runs on sonnet now, so the
+      // runner cannot tell the steps apart by model. The responses are
+      // scripted in the order the flow calls its steps: planner (QUESTION),
+      // lookup (ANSWER), planner (CHANGES), applier.
+      final scriptedResponses = <String>[
+        questionXml,
+        answerXml,
+        _plannerXml,
+        answerXml,
+      ];
+      var callCount = 0;
       ClaudeRunner countingRunner = ({
         required AgentModel model,
         required String systemPrompt,
         required String message,
         required String workingDir,
+        required Set<ClaudeTool> allowedTools,
+        required AgentModel helperModel,
         StepMode mode = StepMode.project,
       }) async {
-        if (model == AgentModel.haiku) {
-          return StepResult(text: answerXml, usage: const Usage(input: 50, output: 20, cost: 0.0005, cacheRead: 0));
-        }
-        plannerCallCount++;
-        final text = plannerCallCount == 1 ? questionXml : _plannerXml;
+        final text = scriptedResponses[callCount++];
         return StepResult(text: text, usage: const Usage(input: 200, output: 80, cost: 0.002, cacheRead: 0));
       };
 
       final exec = PipelineExecutor(
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner:   countingRunner,
         prompter: (_) async => '', // no user escalation expected
       );
@@ -171,7 +191,7 @@ void main() {
         displayTotal: 3,
       );
 
-      expect(plannerCallCount, equals(2), reason: 'planner should run twice: QUESTION then CHANGES');
+      expect(callCount, equals(4), reason: 'planner, lookup, planner, applier');
       expect(ctx.usage.input, greaterThan(0));
     },
   );
@@ -189,7 +209,10 @@ void main() {
         steps[2]: _applierXml,
       });
 
-      final exec = PipelineExecutor(runner: fake.runner);
+      final exec = PipelineExecutor(
+        prompter: unscriptedUserPrompter,
+        approvalSelector: unscriptedApprovalSelector,
+        runner: fake.runner);
       final ctx  = await exec.runFuture(
         steps: SuggestSteps.refinement(1),
         ctx: _baseCtx()
@@ -214,7 +237,10 @@ void main() {
       SuggestSteps.reader(1): _readerXml,
       SuggestSteps.reasoner:  _reasonerXml,
     });
-    final exec = PipelineExecutor(runner: fake.runner);
+    final exec = PipelineExecutor(
+      prompter: unscriptedUserPrompter,
+      approvalSelector: unscriptedApprovalSelector,
+      runner: fake.runner);
 
     var ctx = _baseCtx();
     ctx = await exec.runFuture(steps: [SuggestSteps.reader(1)], ctx: ctx, displayStep: 1, displayTotal: 3);
@@ -238,6 +264,8 @@ void main() {
           '<MODEL>sonnet</MODEL>';
       final fake = ScriptedClaudeRunner({FlowSteps.categorize: categorizeXml});
       final exec = PipelineExecutor(
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner:   fake.runner,
         prompter: (_) async => 'y',
       );
@@ -301,6 +329,8 @@ void main() {
           '<HANDOFF>## Status\nready-for-debug\n## Bug/Goal\nFix null label</HANDOFF>';
       final fake = ScriptedClaudeRunner({FlowSteps.construct: handoffXml});
       final exec = PipelineExecutor(
+        approvalSelector: unscriptedApprovalSelector,
+        
         runner:   fake.runner,
         prompter: (_) async => '',
       );

@@ -7,9 +7,9 @@
 // Consolidates zedup's ClaudartModel — when zedup imports claudart's library,
 // ClaudartModel is retired and replaced by AgentModel.
 //
-// Delegation profile — this is AgentFlow.preferredModel's flow-level
-// choice (one model per whole flow, e.g. zedup's single-shot chat
-// dispatch), not a rule for routing within a flow's own batched pipeline:
+// Delegation profile — a flow-level choice (one model per whole flow, e.g.
+// zedup's single-shot chat dispatch), not a rule for routing within a flow's
+// own batched pipeline:
 //   capable  → suggest        (deep reasoning, root cause analysis)
 //   balanced → debug / flow   (precise instruction following, minimal diff)
 //   fast     → research       (constrained lookup, single reference doc)
@@ -18,7 +18,7 @@
 // reader/reasoner/planner/lookup/applier, etc.) pick their own model per
 // step to control cost across the whole pipeline — they are not bound by
 // this table, and mostly stay at fast/balanced even where the flow-level
-// preferredModel above is capable. See AgentModel.bestForLookup /
+// a flow-level choice would be capable. See AgentModel.bestForLookup /
 // bestForAnalysis / bestForExplore for the canonical model each of those
 // three task types resolves to. Identity-based, not tier-derived: fable
 // shares ModelTier.capable with opus (same general capability class) but

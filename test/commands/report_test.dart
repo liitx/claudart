@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:claudart/commands/report.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/config/paths.dart';
 import '../helpers/mocks.dart';
+import 'package:claudart/logging/log_file.dart';
 
 void main() {
   group('runReport', () {
@@ -17,8 +18,8 @@ void main() {
       io = MemoryFileIO();
       workspace = p.join(workspacesRoot, 'test-project');
       logsDir = logsDirFor(workspace);
-      interactionsPath = p.join(logsDir, 'interactions.jsonl');
-      errorsPath = p.join(logsDir, 'errors.jsonl');
+      interactionsPath = logFilePath(logsDir, LogFile.interactions);
+      errorsPath = logFilePath(logsDir, LogFile.errors);
     });
 
     test('report with no errors prints clean summary', () async {

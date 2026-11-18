@@ -17,11 +17,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../registry.dart';
 import '../session/session_state.dart';
 import '../workspace/workspace_config.dart';
+import 'support/claudart_command.dart';
+import 'support/failure_boundary.dart';
 
 /// What the pre-edit hook decides.
 enum HookOutcome {
@@ -135,6 +137,27 @@ RegistryEntry? entryContaining(Registry registry, String filePath) {
   return best;
 }
 
+/// Whether [entry]'s workspace is strict. An unreadable workspace.json means
+/// strict mode cannot be checked: the edit is still advised on (a failing hook
+/// must not block the edit it was asked about), and the failure is logged by its
+/// type so it is not dropped.
+bool _strictOf(RegistryEntry entry, FileIO fileIO) {
+  try {
+    return WorkspaceConfig.load(entry.workspacePath, io: fileIO)
+            ?.owner
+            .strict ??
+        false;
+  } on WorkspaceConfigUnreadableException catch (error) {
+    reportFailure(
+      command: ClaudartCommand.hook.name,
+      error: error,
+      projectRoot: entry.projectRoot,
+      io: fileIO,
+    );
+    return false;
+  }
+}
+
 /// Runs the pre-edit hook for one Claude Code call. Prints the response (if
 /// any) to [out] and never throws.
 void runHook({
@@ -153,9 +176,7 @@ void runHook({
     final status = SessionState.parse(
       fileIO.fileExists(handoff) ? fileIO.read(handoff) : '',
     ).effectiveStatus;
-    final strict =
-        WorkspaceConfig.load(entry.workspacePath, io: fileIO)?.owner.strict ??
-            false;
+    final strict = _strictOf(entry, fileIO);
 
     final outcome = decidePreEdit(
       isDartSource: filePath.endsWith(HookWire.dartSourceSuffix),

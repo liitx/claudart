@@ -1,17 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:claudart/errors/claudart_exception.dart';
-import 'package:claudart/git_utils.dart';
-import 'package:claudart/logging/logger.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/commands/support/failure_boundary.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/pipeline/debug_mode.dart';
-import 'package:claudart/sensitivity/token_map.dart';
 import 'package:claudart/version.dart';
 import 'package:claudart/registry.dart';
 import 'package:claudart/commands/add.dart';
 import 'package:claudart/commands/archives.dart';
 import 'package:claudart/commands/chat_shell.dart';
-import 'package:claudart/commands/claudart_command.dart';
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/confirm_pending.dart';
 import 'package:claudart/commands/doctor.dart';
 import 'package:claudart/commands/hook.dart';
@@ -30,13 +27,19 @@ import 'package:claudart/commands/debug.dart';
 import 'package:claudart/commands/flow.dart';
 import 'package:claudart/commands/suggest.dart';
 import 'package:claudart/commands/status.dart';
-import 'package:claudart/commands/project_selector.dart';
+import 'package:claudart/commands/support/project_selector.dart';
 import 'package:claudart/commands/workspaces.dart';
 import 'package:claudart/commands/resume.dart';
 import 'package:claudart/commands/rotate.dart';
 import 'package:claudart/session/run_mode.dart';
 import 'package:claudart/commands/teardown.dart';
 import 'package:claudart/commands/unlink.dart';
+import 'package:claudart/commands/support/command_seams.dart';
+import 'package:claudart/config/environment.dart';
+import 'package:claudart/io/process_runner.dart';
+import 'package:claudart/commands/support/interaction_boundary.dart';
+import 'package:claudart/commands/support/project_logger.dart';
+import 'package:claudart/io/exit_reason.dart';
 
 const _usage = '''
 claudart — Dart CLI for structured project debug and suggestion sessions
@@ -57,7 +60,7 @@ Commands:
   status [--prompt]      Show current session state; --prompt outputs a compact colored string for shell RPROMPT/PS1
   teardown [--headless]  Close session: update knowledge, archive handoff, suggest commit; --headless resolves every decision itself and prints a summary instead of prompting
   suggest                Run suggest pipeline: haiku classifies the bug and reads scope files, routed model writes handoff KT
-  debug                  Run debug pipeline: haiku reads scope files, routed model emits EDIT_FILE edits written to disk
+  debug [--headless]     Run debug pipeline: haiku reads scope files, routed model emits EDIT_FILE edits written to disk; --headless applies the plan without review only when a verificationCommand can check it
   flow                   [experimental] Agent-constructed session: classify intent, plan, approve, build handoff
   save                   Checkpoint session: snapshot handoff, deposit confirmed facts to skills
   rotate [--headless]    Archive current session, run build gate, seed next handoff from Pending Issues; --headless skips the confirmation (needed when there is no terminal to ask on)
@@ -111,7 +114,7 @@ Future<void> main(List<String> rawArgs) async {
   if (projectOption.missingValue) {
     print('--project needs a project name. '
         'Run `claudart workspaces` to see the linked ones.');
-    exit(1);
+    leaveFor(ExitReason.projectOptionMissingName);
   }
   args
     ..clear()
@@ -119,12 +122,12 @@ Future<void> main(List<String> rawArgs) async {
 
   if (args.firstOrNull == '-h' || args.firstOrNull == '--help') {
     print(_usage);
-    exit(0);
+    leaveFor(ExitReason.usageShown);
   }
 
   if (args.firstOrNull == '--version' || args.firstOrNull == 'version') {
     print(claudartVersion);
-    exit(0);
+    leaveFor(ExitReason.versionShown);
   }
 
   final command = args.isEmpty ? 'launch' : args.first;
@@ -136,7 +139,7 @@ Future<void> main(List<String> rawArgs) async {
     if (claudartCommand == null) {
       print('Unknown command: $command\n');
       print(_usage);
-      exit(1);
+      leaveFor(ExitReason.unknownCommand);
     }
   }
 
@@ -148,12 +151,12 @@ Future<void> main(List<String> rawArgs) async {
     if (claudartCommand == null) {
       print('--project needs a command, '
           'e.g. claudart --project $projectName status');
-      exit(1);
+      leaveFor(ExitReason.projectOptionMissingCommand);
     }
     if (!claudartCommand.supportsProjectSelector) {
       print('--project is not supported by '
           '`claudart ${claudartCommand.wireName}`.');
-      exit(1);
+      leaveFor(ExitReason.projectOptionUnsupported);
     }
     final selection = selectProject(Registry.load(), projectName);
     switch (selection) {
@@ -162,7 +165,7 @@ Future<void> main(List<String> rawArgs) async {
         logProjectTargeted(entry, claudartCommand.wireName);
       case ProjectNotFound():
         print(selection.message);
-        exit(1);
+        leaveFor(ExitReason.projectOptionNotFound);
       case NoProjectSelected():
         break;
     }
@@ -173,7 +176,7 @@ Future<void> main(List<String> rawArgs) async {
   // only an explicit --debug does. The project is only looked up when it
   // matters, so no `git` process runs on an ordinary invocation.
   if (!explicitDebug &&
-      Platform.environment[kClaudartDebugEnvVar] ==
+      processEnvironment[kClaudartDebugEnvVar] ==
           kClaudartDebugEnabledValue) {
     final debugRoot = selectedRoot ?? detectGitContext()?.root;
     final debugEntry =
@@ -192,41 +195,31 @@ Future<void> main(List<String> rawArgs) async {
       // like running them directly would -- confirmed real, launch.dart
       // has no catch of its own, so this previously propagated uncaught.
       await runLauncher();
-      exit(0);
+      leaveFor(ExitReason.launcherClosed);
     }
-    await _dispatch(claudartCommand!, rest, projectRoot: selectedRoot);
-  } on ClaudartException catch (e) {
-    // Central catch: every command's ClaudartException lands here exactly
-    // once, so error logging doesn't depend on each command file
-    // remembering to call it -- SessionLogger.logError was only ever
-    // wired into 2 of many command files before this. Resolves the same
-    // registry entry every command resolves its own sensitivityMode
-    // from, and loads its real TokenMap, so a sensitive-mode project's
-    // error log is actually abstracted here (logError itself now
-    // abstracts `reason`, not just `stackTrace` -- found and fixed as a
-    // real gap while verifying this, previously leaked raw workspace
-    // paths/causes even with sensitivityMode on).
-    print('\n✗ ${e.toString()}');
-    print('  ${e.failureType.suggestedAction}\n');
-    final errorRoot = selectedRoot ?? detectGitContext()?.root;
-    final errorEntry = errorRoot != null ? Registry.load().findByProjectRoot(errorRoot) : null;
-    final errorTokenMap = errorEntry != null && errorEntry.sensitivityMode
-        ? TokenMap.load(tokenMapPathFor(errorEntry.workspacePath))
-        : null;
-    SessionLogger(
-      sensitivityMode: errorEntry?.sensitivityMode ?? false,
-      tokenMap: errorTokenMap,
-      workspacePath: errorEntry?.workspacePath,
-    ).logError(
-      command: command,
-      // Machine-keyed, not e.errorType.label's display text -- matches
-      // the existing snake_case/name convention other logError callers
-      // already write (e.g. scan.dart's 'threshold_hit').
-      errorType: e.errorType.name,
-      fingerprint: '$command.${e.failureType.name}',
-      reason: e.toString(),
+    // Every command runs inside the one boundary that records how it ended,
+    // so no command can be outside it (see interaction_boundary.dart). The
+    // launcher above is not a ClaudartCommand and is not recorded.
+    final dispatched = claudartCommand!;
+    await runRecorded(
+      command: dispatched,
+      logger: loggerForProject(projectRoot: selectedRoot),
+      body: () => _dispatch(dispatched, rest, projectRoot: selectedRoot),
     );
-    exit(1);
+  } on Object catch (error, stackTrace) {
+    // The one boundary: every command's failure, typed or not, lands here
+    // exactly once and is logged by reportFailure before the process exits, so
+    // logging never depends on a command file remembering to do it and no
+    // failure is dropped for lacking a FailureType (see failure_boundary.dart).
+    final failure = reportFailure(
+      command: command,
+      error: error,
+      stackTrace: stackTrace,
+      projectRoot: selectedRoot,
+    );
+    print('\n✗ ${failure.toString()}');
+    print('  ${failure.failureType.suggestedAction}\n');
+    leaveFor(ExitReason.commandFailed);
   }
 }
 
@@ -239,7 +232,7 @@ Future<void> _dispatch(
     case ClaudartCommand.chat:
       await runChatShell();
     case ClaudartCommand.archives:
-      await runArchives(projectRootOverride: projectRoot);
+      await runArchives(seams: CommandSeams(projectRootOverride: projectRoot));
     case ClaudartCommand.add:
       await runAdd();
     case ClaudartCommand.init:
@@ -254,10 +247,7 @@ Future<void> _dispatch(
             projectRoot ?? (rest.isNotEmpty ? rest.first : null),
       );
     case ClaudartCommand.status:
-      await runStatus(
-        projectRootOverride: projectRoot,
-        prompt: rest.contains('--prompt'),
-      );
+      await runStatus(seams: CommandSeams(projectRootOverride: projectRoot), prompt: rest.contains('--prompt'));
     case ClaudartCommand.teardown:
       await runTeardown(
         projectRootOverride: projectRoot,
@@ -266,23 +256,20 @@ Future<void> _dispatch(
     case ClaudartCommand.suggest:
       await runSuggest(projectRootOverride: projectRoot);
     case ClaudartCommand.debug:
-      await runDebug(projectRootOverride: projectRoot);
+      await runDebug(
+        seams: CommandSeams(projectRootOverride: projectRoot),
+        mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
+      );
     case ClaudartCommand.flow:
       await runFlow(projectRootOverride: projectRoot);
     case ClaudartCommand.save:
-      await runSave(projectRootOverride: projectRoot);
+      await runSave(seams: CommandSeams(projectRootOverride: projectRoot));
     case ClaudartCommand.rotate:
-      final rotated = await runRotate(
-        projectRootOverride: projectRoot,
-        mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
-      );
+      final rotated = await runRotate(seams: CommandSeams(projectRootOverride: projectRoot), mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive);
       // A failed build gate must be visible to scripts (zedup, CI): exit 1.
-      if (rotated == RotateResult.buildFailed) exit(1);
+      if (rotated == RotateResult.buildFailed) leaveFor(ExitReason.rotateBuildFailed);
     case ClaudartCommand.kill:
-      await runKill(
-        projectRootOverride: projectRoot,
-        mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive,
-      );
+      await runKill(seams: CommandSeams(projectRootOverride: projectRoot), mode: rest.contains('--headless') ? RunMode.headless : RunMode.interactive);
     case ClaudartCommand.resume:
       await runResume(projectRootOverride: projectRoot);
     case ClaudartCommand.confirmPending:
@@ -329,7 +316,13 @@ Future<void> _dispatch(
     case ClaudartCommand.experiment:
       await runExperiment(rest);
     case ClaudartCommand.compile:
-      exit(_compile());
+      final compileCode = _compile();
+      leaveFor(
+        compileCode == 0
+            ? ExitReason.compileSucceeded
+            : ExitReason.compileFailed,
+        childCode: compileCode == 0 ? null : compileCode,
+      );
     case ClaudartCommand.workspaces:
       await runWorkspaces(
         projectRootOverride: projectRoot,
@@ -340,7 +333,7 @@ Future<void> _dispatch(
         stderr.writeln(
             'Usage: claudart hook ${HookWire.preEditSubcommand} (reads the '
             'tool call as JSON on stdin)');
-        exit(1);
+        leaveFor(ExitReason.hookUsageShown);
       }
       runHook(stdinText: await utf8.decoder.bind(stdin).join());
     case ClaudartCommand.doctor:
@@ -353,7 +346,7 @@ Future<void> _dispatch(
 }
 
 int _compile() {
-  final home = Platform.environment['HOME'] ?? '';
+  final home = homeDirectory ?? '';
   final out  = '$home/bin/claudart';
   final src  = _resolveClaudartSource();
 
@@ -366,7 +359,7 @@ int _compile() {
   }
 
   stdout.writeln('Compiling claudart → $out');
-  final result = Process.runSync('dart', ['compile', 'exe', src, '-o', out]);
+  final result = const RealProcessRunner().runSync('dart', ['compile', 'exe', src, '-o', out]);
 
   stdout.write(result.stdout);
   if (result.stderr.toString().trim().isNotEmpty) {
@@ -384,12 +377,18 @@ int _compile() {
   return 0;
 }
 
+/// Where the path of the claudart source is remembered after a compile. The
+/// one place its location is spelled out; saving and reading both use it.
+File get _savedSourceFile =>
+    File('${homeDirectory ?? ''}/.config/claudart/source');
+
 void _saveSourcePath(String repoRoot) {
   try {
-    final dir = Directory('${Platform.environment['HOME']}/.config/claudart');
-    dir.createSync(recursive: true);
-    File('${dir.path}/source').writeAsStringSync(repoRoot);
-  } on Exception catch (_) {}
+    _savedSourceFile.parent.createSync(recursive: true);
+    _savedSourceFile.writeAsStringSync(repoRoot);
+  } on Exception catch (error) {
+    stderr.writeln('warning: could not save the claudart source path: $error');
+  }
 }
 
 /// Locates bin/claudart.dart by walking up from the running executable,
@@ -427,18 +426,28 @@ String? _resolveClaudartSource() {
         }
       }
     }
-  } on Exception catch (_) {}
+  } on Exception catch (error) {
+    stderr.writeln(
+      'warning: could not read .dart_tool/package_config.json to find the '
+      'claudart source: $error',
+    );
+  }
 
-  // 3. Persisted path from last successful compile.
-  try {
-    final saved = File('${Platform.environment['HOME']}/.config/claudart/source')
-        .readAsStringSync()
-        .trim();
-    if (saved.isNotEmpty) {
-      final candidate = File('$saved/bin/claudart.dart');
-      if (candidate.existsSync()) return candidate.path;
+  // 3. Persisted path from last successful compile. A missing file is the
+  // normal first run, not a failure; only a file that cannot be read warns.
+  if (_savedSourceFile.existsSync()) {
+    try {
+      final saved = _savedSourceFile.readAsStringSync().trim();
+      if (saved.isNotEmpty) {
+        final candidate = File('$saved/bin/claudart.dart');
+        if (candidate.existsSync()) return candidate.path;
+      }
+    } on Exception catch (error) {
+      stderr.writeln(
+        'warning: could not read the saved claudart source path: $error',
+      );
     }
-  } on Exception catch (_) {}
+  }
 
   return null;
 }

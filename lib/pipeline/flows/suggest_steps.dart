@@ -7,8 +7,8 @@
 //
 //   Refinement (called on [r] in review loop):
 //     [planner]  sonnet — plans changes from feedback; emits <CHANGES> or <QUESTION>
-//     [lookup]   haiku  — searches phase1 findings for an answer; emits <ANSWER> or <UNKNOWN>
-//     [applier]  haiku  — applies the change plan surgically; emits updated XML sections
+//     [lookup]   sonnet — searches phase1 findings for an answer; emits <ANSWER> or <UNKNOWN>
+//     [applier]  sonnet — applies the change plan surgically; emits updated XML sections
 //
 // Routing (refinement only):
 //   planner: CHANGES   → GoTo('applier')
@@ -19,6 +19,7 @@
 
 import '../agent_model.dart';
 import '../agent_step.dart';
+import '../step_role.dart';
 import '../agents/categorization.dart';
 import '../pipeline_context.dart';
 import '../route_tag.dart';
@@ -45,6 +46,7 @@ abstract final class SuggestSteps {
   static AgentStep reader(int fileCount) => AgentStep(
     id:           'reader',
     label:        'Reading $fileCount scope files (haiku)…',
+    role:        StepRole.fileReading,
     model:        AgentModel.haiku,
     systemPrompt: _readerSystem,
     buildPrompt:  _readerPrompt,
@@ -58,6 +60,7 @@ abstract final class SuggestSteps {
   static const AgentStep reasoner = AgentStep(
     id:            'reasoner',
     label:         'Reasoning over findings…',
+    role:         StepRole.reasoning,
     model:         AgentModel.sonnet,
     modelSelector: _reasonerModelSelector,
     systemPrompt:  _reasonerSystem,
@@ -83,6 +86,7 @@ abstract final class SuggestSteps {
   static AgentStep planner(int pass) => AgentStep(
     id:           'planner',
     label:        'Planning changes (sonnet)… pass $pass',
+    role:        StepRole.reasoning,
     model:        AgentModel.sonnet,
     systemPrompt: _reasonerSystem,
     buildPrompt:  _plannerPrompt,
@@ -96,8 +100,9 @@ abstract final class SuggestSteps {
   /// Emits `ANSWER` when found; emits `UNKNOWN` when not determinable.
   static AgentStep lookup(int pass) => AgentStep(
     id:           'lookup',
-    label:        'Looking up in scope files (haiku)… pass $pass',
-    model:        AgentModel.haiku,
+    label:        'Looking up in scope files… pass $pass',
+    role:        StepRole.reasoning,
+    model:        AgentModel.sonnet,
     systemPrompt: _readerSystem,
     buildPrompt:  _lookupPrompt,
     routes: const {
@@ -110,8 +115,9 @@ abstract final class SuggestSteps {
   /// No routes — executor returns updated ctx after this runs.
   static AgentStep applier(int pass) => AgentStep(
     id:           'applier',
-    label:        'Applying changes (haiku)… pass $pass',
-    model:        AgentModel.haiku,
+    label:        'Applying changes… pass $pass',
+    role:        StepRole.implementation,
+    model:        AgentModel.sonnet,
     systemPrompt: _reasonerSystem,
     buildPrompt:  _applierPrompt,
     routes:       const {}, // terminal

@@ -1,6 +1,8 @@
 import 'dart:convert';
-import '../file_io.dart';
-import '../paths.dart';
+import '../errors/claudart_exception.dart';
+import '../errors/failure_type.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
 import '../pipeline/agent_flow.dart';
 import '../util/enum_util.dart';
 
@@ -9,6 +11,27 @@ import '../util/enum_util.dart';
 // workspace.json string values are the canonical serialised form; the CLI
 // parses them into these enums so no command ever compares raw strings.
 // ---------------------------------------------------------------------------
+
+/// [value] when it is a value this version knows; otherwise the workspace file
+/// is unreadable, because a value it does not know is never guessed at.
+T _required<T>(T? value, String field) =>
+    value ??
+    (throw FormatException(
+      '"$field" holds a value this version does not know',
+    ));
+
+/// workspace.json exists but cannot be read: malformed JSON, or JSON of the
+/// wrong shape.
+class WorkspaceConfigUnreadableException extends ClaudartException {
+  WorkspaceConfigUnreadableException(this.path, this.cause)
+      : super(FailureType.workspaceConfigUnreadable);
+
+  final String path;
+  final String cause;
+
+  @override
+  String toString() => 'Workspace config is unreadable ($path): $cause';
+}
 
 /// Tech stack declared by the workspace.
 ///
@@ -36,10 +59,9 @@ enum WorkspaceRole {
   maintainer,
   contributor;
 
-  static WorkspaceRole fromString(String s) => switch (s) {
-        'maintainer' => maintainer,
-        _ => contributor,
-      };
+  /// The role named [s], or null when [s] names none: an unknown role is never
+  /// taken for the least-privileged one.
+  static WorkspaceRole? fromString(String s) => enumByName(values, s);
 
   /// Returns `true` when this role permits updating the project README.md.
   bool get canUpdateReadme => this == maintainer;
@@ -51,31 +73,36 @@ enum WorkspaceRole {
 ///
 /// Governs how agents write invariants and proofs in comments and docs.
 enum ProofNotation {
-  dartGrounded,
-  tsGrounded,
-  generic;
+  dartGrounded(
+    value: 'dart-grounded',
+    description: 'Use ∀/∃/∧/∨/↔ with Dart expressions. '
+        'Never use iff — express bidirectional logic as ↔ with Dart on both '
+        'sides.',
+  ),
+  tsGrounded(
+    value: 'ts-grounded',
+    description: 'Use ∀/∃/∧/∨/↔ with TypeScript expressions.',
+  ),
+  generic(
+    value: 'generic',
+    description: 'Use plain English for invariants.',
+  );
 
-  static ProofNotation fromString(String s) => switch (s) {
-        'dart-grounded' => dartGrounded,
-        'ts-grounded' => tsGrounded,
-        _ => generic,
-      };
+  const ProofNotation({required this.value, required this.description});
 
-  String get value => switch (this) {
-        dartGrounded => 'dart-grounded',
-        tsGrounded => 'ts-grounded',
-        generic => 'generic',
-      };
+  final String value;
 
   /// Human-readable description loaded into scaffold.md.
-  String get description => switch (this) {
-        dartGrounded =>
-          'Use ∀/∃/∧/∨/↔ with Dart expressions. '
-              'Never use iff — express bidirectional logic as ↔ with Dart on both sides.',
-        tsGrounded =>
-          'Use ∀/∃/∧/∨/↔ with TypeScript expressions.',
-        generic => 'Use plain English for invariants.',
-      };
+  final String description;
+
+  /// The notation written as [s], or null when [s] names none: an unknown
+  /// notation is never taken for `generic`.
+  static ProofNotation? fromString(String s) {
+    for (final notation in values) {
+      if (notation.value == s) return notation;
+    }
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +164,12 @@ class WorkspaceProject {
           .map(StackType.fromString)
           .whereType<StackType>()
           .toList(),
-      role: WorkspaceRole.fromString(json['role'] as String? ?? 'contributor'),
+      role: _required(
+        WorkspaceRole.fromString(
+          json['role'] as String? ?? WorkspaceRole.contributor.name,
+        ),
+        'role',
+      ),
       repo: json['repo'] as String?,
       org: json['org'] as String?,
     );
@@ -174,8 +206,12 @@ class WorkspaceSession {
           .toList(),
       knowledge:
           (json['knowledge'] as List<dynamic>? ?? []).cast<String>(),
-      proofNotation: ProofNotation.fromString(
-          json['proofNotation'] as String? ?? 'generic'),
+      proofNotation: _required(
+        ProofNotation.fromString(
+          json['proofNotation'] as String? ?? ProofNotation.generic.value,
+        ),
+        'proofNotation',
+      ),
       sensitivityMode: json['sensitivityMode'] as bool? ?? false,
     );
   }
@@ -217,8 +253,10 @@ class WorkspaceConfig {
 
   /// Loads and parses workspace.json for the given workspace directory.
   ///
-  /// Returns `null` when the file is missing or unparseable — callers should
-  /// stop and tell the user to run `/setup`.
+  /// Returns `null` when the file is missing or empty: the workspace has no
+  /// owner config yet. Throws [WorkspaceConfigUnreadableException] when the
+  /// file is there but cannot be read, so a caller never mistakes an unreadable
+  /// file for settings that are off.
   static WorkspaceConfig? load(String workspaceDir, {FileIO? io}) {
     final fileIO = io ?? const RealFileIO();
     final path = workspaceConfigPathFor(workspaceDir);
@@ -227,12 +265,12 @@ class WorkspaceConfig {
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
       return WorkspaceConfig.fromJson(json);
-    } on Exception catch (_) {
-      return null;
-    } on TypeError catch (_) {
+    } on Exception catch (e) {
+      throw WorkspaceConfigUnreadableException(path, e.toString());
+    } on TypeError catch (e) {
       // Valid JSON of the wrong shape (a missing section, a field of the wrong
       // type) throws a TypeError, which is an Error and not an Exception.
-      return null;
+      throw WorkspaceConfigUnreadableException(path, e.toString());
     }
   }
 

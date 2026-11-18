@@ -1,18 +1,25 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
+import 'package:claudart/commands/support/claudart_command.dart';
 import 'package:claudart/commands/save.dart';
-import 'package:claudart/git_utils.dart';
+import 'package:claudart/io/git_utils.dart';
 import 'package:claudart/registry.dart';
-import 'package:claudart/paths.dart';
+import 'package:claudart/session/md_io.dart' show readHandoffStatus;
+import 'package:claudart/config/paths.dart';
+import 'package:claudart/session/handoff_event.dart';
+import 'package:claudart/session/session_state.dart' show HandoffStatus;
 import 'package:claudart/templates/handoff_template.dart' show blankHandoff;
+import '../helpers/logged_moves.dart';
 import '../helpers/mocks.dart';
 import '../matrix/handoff_expectation.dart';
 import '../matrix/handoff_status_matrix.dart' as handoff_matrix;
 import '../matrix/handoff_status_type.dart';
+import '../helpers/project_fixture.dart';
+import 'package:claudart/commands/support/command_seams.dart';
 
-const _projectRoot = '/projects/my-app';
-const _workspace = '/workspaces/my-app';
+const _projectRoot = ProjectFixture.root;
+const _workspace = ProjectFixture.workspace;
 
 // Handoff with root cause confirmed and files changed.
 const _fullHandoff = '''# Agent Handoff — my-app
@@ -265,15 +272,65 @@ List<String> _checkpoints(MemoryFileIO io) => io.files.keys
     .toList();
 
 void main() {
+  group('save — a sensitive project', () {
+    MemoryFileIO sensitiveIo() {
+      final io = MemoryFileIO(
+        files: {
+          handoffPathFor(_workspace): _fullHandoff
+              .replaceFirst(
+                'ConfigLoader splits path on spaces before resolving.',
+                'VolumeBloc splits the path',
+              )
+              .replaceFirst(
+                'lib/config/loader.dart — added path quoting.',
+                'ApexBloc quotes the path',
+              ),
+        },
+      );
+      Registry.empty()
+          .add(
+            const RegistryEntry(
+              name: 'my-app',
+              projectRoot: _projectRoot,
+              workspacePath: _workspace,
+              createdAt: '2026-01-01',
+              lastSession: '2026-03-15',
+              sensitivityMode: true,
+            ),
+          )
+          .save(io: io);
+      return io;
+    }
+
+    Future<MemoryFileIO> saved() async {
+      final io = sensitiveIo();
+      await runZoned(
+        () => runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
+        zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+      );
+      return io;
+    }
+
+    test('two names of the same kind get two different tokens', () async {
+      final skills = (await saved()).read(skillsPathFor(_workspace));
+      expect(skills, isNot(contains('VolumeBloc')));
+      expect(skills, isNot(contains('ApexBloc')));
+      expect(skills, contains('Bloc:A'));
+      expect(skills, contains('Bloc:B'));
+    });
+
+    test('the tokens it assigned are saved', () async {
+      final map = (await saved()).read(tokenMapPathFor(_workspace));
+      expect(map, contains('VolumeBloc'));
+      expect(map, contains('ApexBloc'));
+    });
+  });
+
   group('save — report', () {
     Future<String> report(MemoryFileIO io) async {
       final output = <String>[];
       await runZoned(
-        () => runSave(
-          io: io,
-          projectRootOverride: _projectRoot,
-          exitFn: _throwExit,
-        ),
+        () => runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -290,6 +347,90 @@ void main() {
 
     test('a live handoff is reported with its own status', () async {
       expect(await report(_io()), contains('Status : ready-for-debug'));
+    });
+  });
+
+  // A save is a checkpoint. Where the table has a move for it, the save also
+  // moves the handoff: unconfirmed while the root cause is open, confirmed once
+  // it is. Where the table has no move, the save changes nothing.
+  group('save — handoff events', () {
+    final investigatingWithRootCause =
+        _fullHandoff.replaceFirst('ready-for-debug', 'suggest-investigating');
+    final debuggingWithoutRootCause = _unconfirmedHandoff.replaceFirst(
+      'suggest-investigating',
+      'debug-in-progress',
+    );
+
+    Future<MemoryFileIO> savedFrom(String handoff) async {
+      final io = _io(handoff: handoff);
+      await runZoned(
+        () => runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
+        zoneSpecification: ZoneSpecification(print: (_, __, ___, ____) {}),
+      );
+      return io;
+    }
+
+    HandoffStatus statusOf(MemoryFileIO io) =>
+        readHandoffStatus(io.read(handoffPathFor(_workspace)));
+
+    Map<String, String> move(
+      HandoffStatus from,
+      HandoffEvent event,
+      HandoffStatus to,
+    ) =>
+        {
+          'command': ClaudartCommand.save.name,
+          'from': from.name,
+          'event': event.name,
+          'to': to.name,
+        };
+
+    test('an open root cause, investigating: saveUnconfirmed', () async {
+      final io = await savedFrom(_unconfirmedHandoff);
+      expect(statusOf(io), HandoffStatus.suggestInvestigating);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.suggestInvestigating,
+          HandoffEvent.saveUnconfirmed,
+          HandoffStatus.suggestInvestigating,
+        ),
+      ]);
+    });
+
+    test('a confirmed root cause, investigating: saveConfirmedExploring',
+        () async {
+      final io = await savedFrom(investigatingWithRootCause);
+      expect(statusOf(io), HandoffStatus.readyForSuggest);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.suggestInvestigating,
+          HandoffEvent.saveConfirmedExploring,
+          HandoffStatus.readyForSuggest,
+        ),
+      ]);
+    });
+
+    test('an open root cause, debugging: saveUnconfirmed', () async {
+      final io = await savedFrom(debuggingWithoutRootCause);
+      expect(statusOf(io), HandoffStatus.debugInProgress);
+      expect(loggedMoves(io, _workspace), [
+        move(
+          HandoffStatus.debugInProgress,
+          HandoffEvent.saveUnconfirmed,
+          HandoffStatus.debugInProgress,
+        ),
+      ]);
+    });
+
+    test('where the table has no move the save changes nothing', () async {
+      final io = await savedFrom(_fullHandoff);
+      expect(statusOf(io), HandoffStatus.readyForDebug);
+      expect(loggedMoves(io, _workspace), isEmpty);
+    });
+
+    test('a blank handoff logs no move', () async {
+      final io = await savedFrom(blankHandoff);
+      expect(loggedMoves(io, _workspace), isEmpty);
     });
   });
 
@@ -315,7 +456,7 @@ void main() {
 
       final output = <String>[];
       await runZoned(
-        () => runSave(io: io, projectRootOverride: null, exitFn: _throwExit),
+        () => runSave(seams: CommandSeams(io: io, projectRootOverride: null, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -333,33 +474,33 @@ void main() {
   group('save — checkpoint writing', () {
     test('writes exactly one checkpoint file', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(_checkpoints(io), hasLength(1));
       handoff_matrix.cover(HandoffStatusType.readyForDebug, HandoffExpectation.debug);
     });
 
     test('checkpoint filename has checkpoint_ prefix', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(p.basename(_checkpoints(io).first), startsWith('checkpoint_'));
     });
 
     test('checkpoint filename contains sanitised branch name', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       // fix/null-ref → fix_null-ref
       expect(p.basename(_checkpoints(io).first), contains('fix_null-ref'));
     });
 
     test('checkpoint filename ends with .md', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(_checkpoints(io).first, endsWith('.md'));
     });
 
     test('checkpoint content contains handoff data and updated timestamp', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final content = io.read(_checkpoints(io).first);
       // Checkpoint is the stamped handoff — verify key content is present and
       // an Updated: timestamp was injected.
@@ -371,17 +512,39 @@ void main() {
 
     test('multiple saves write multiple distinct checkpoints', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
-      // Small pause ensures distinct timestamp in filename.
-      await Future<void>.delayed(const Duration(seconds: 1));
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      var now = DateTime.utc(2026, 1, 1, 12);
+      CommandSeams seams() => CommandSeams(
+            io: io,
+            projectRootOverride: _projectRoot,
+            exitFn: _throwExit,
+            clock: () => now,
+          );
+      await runSave(seams: seams());
+      now = now.add(const Duration(seconds: 1));
+      await runSave(seams: seams());
       expect(_checkpoints(io), hasLength(2));
+    });
+
+    test('the Updated line and the checkpoint name carry the clock\'s time',
+        () async {
+      final io = _io();
+      await runSave(
+        seams: CommandSeams(
+          io: io,
+          projectRootOverride: _projectRoot,
+          exitFn: _throwExit,
+          clock: () => DateTime.utc(2026, 1, 1, 12, 30, 45),
+        ),
+      );
+      expect(io.read(_checkpoints(io).single), contains('> Updated: 2026-01-01T12:30:45'));
+      expect(io.read(handoffPathFor(_workspace)), contains('> Updated: 2026-01-01T12:30:45'));
+      expect(_checkpoints(io).single, contains('2026-01-01'));
     });
 
     test('writes checkpoint even when root cause not confirmed (audit trail)',
         () async {
       final io = _io(handoff: _unconfirmedHandoff);
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(_checkpoints(io), hasLength(1));
       handoff_matrix.cover(HandoffStatusType.suggestInvestigating, HandoffExpectation.suggest);
     });
@@ -392,21 +555,20 @@ void main() {
   group('save — skills.md with confirmed root cause', () {
     test('returns SkillsUpdateResult.written', () async {
       final io = _io();
-      final result = await runSave(
-          io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      final result = await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(result, equals(SkillsUpdateResult.written));
     });
 
     test('creates skills.md when missing', () async {
       final io = _io();
       expect(io.fileExists(skillsPathFor(_workspace)), isFalse);
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(io.fileExists(skillsPathFor(_workspace)), isTrue);
     });
 
     test('pending entry contains branch name', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final skills = io.read(skillsPathFor(_workspace));
       // Branch name in skills entries is the real branch — not sanitized.
       expect(skills, contains('fix/null-ref'));
@@ -414,7 +576,7 @@ void main() {
 
     test('pending entry contains root cause text', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final skills = io.read(skillsPathFor(_workspace));
       expect(skills, contains('ConfigLoader splits path on spaces'));
     });
@@ -422,7 +584,7 @@ void main() {
     test('pending entry contains hot files when changed files are named',
         () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final skills = io.read(skillsPathFor(_workspace));
       expect(skills, contains('loader.dart'));
     });
@@ -430,7 +592,7 @@ void main() {
     test('root cause entry without changed files writes only one pending entry',
         () async {
       final io = _io(handoff: _confirmedNoFilesHandoff);
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final skills = io.read(skillsPathFor(_workspace));
       // Only one pending entry (root cause). No hot files entry.
       final pendingEntries =
@@ -444,7 +606,7 @@ void main() {
         skillsPathFor(_workspace),
         '# Accumulated Skills\n\n## Hot Paths\n\nexisting entry\n',
       );
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final skills = io.read(skillsPathFor(_workspace));
       expect(skills, contains('existing entry'));
       expect(skills, contains('ConfigLoader'));
@@ -453,8 +615,8 @@ void main() {
     test('multiple saves on the same branch upsert one Pending entry, not duplicates',
         () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final skills = io.read(skillsPathFor(_workspace));
       // One entry, keyed by branch — repeated /save on the same branch
       // updates in place instead of accumulating duplicate bullets.
@@ -465,8 +627,8 @@ void main() {
 
     test('Pending section header appears exactly once', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final skills = io.read(skillsPathFor(_workspace));
       expect('## Pending'.allMatches(skills).length, equals(1));
     });
@@ -477,14 +639,13 @@ void main() {
   group('save — skills.md with unconfirmed root cause', () {
     test('returns SkillsUpdateResult.skipped', () async {
       final io = _io(handoff: _unconfirmedHandoff);
-      final result = await runSave(
-          io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      final result = await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(result, equals(SkillsUpdateResult.skipped));
     });
 
     test('does not create skills.md when root cause unconfirmed', () async {
       final io = _io(handoff: _unconfirmedHandoff);
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(io.fileExists(skillsPathFor(_workspace)), isFalse);
     });
 
@@ -493,7 +654,7 @@ void main() {
       final io = _io(handoff: _unconfirmedHandoff);
       const existing = '# Accumulated Skills\n\n## Hot Paths\n\nsome entry\n';
       io.write(skillsPathFor(_workspace), existing);
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       expect(io.read(skillsPathFor(_workspace)), equals(existing));
     });
   });
@@ -503,7 +664,7 @@ void main() {
   group('save — registry', () {
     test('touches lastSession in registry', () async {
       final io = _io();
-      await runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit);
+      await runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit));
       final entry = Registry.load(io: io).findByName('my-app')!;
       final today = DateTime.now().toIso8601String().substring(0, 10);
       expect(entry.lastSession, equals(today));
@@ -513,7 +674,7 @@ void main() {
       final io = _io();
       final output = <String>[];
       await runZoned(
-        () => runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit),
+        () => runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         zoneSpecification: ZoneSpecification(
           print: (_, __, ___, line) => output.add(line),
         ),
@@ -530,7 +691,7 @@ void main() {
       Registry.empty().save(io: io); // empty registry
 
       await expectLater(
-        runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit),
+        runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         throwsA(isA<_ExitException>()),
       );
     });
@@ -547,7 +708,7 @@ void main() {
       Registry.empty().add(entry).save(io: io);
 
       await expectLater(
-        runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit),
+        runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         throwsA(isA<_ExitException>()),
       );
       // No checkpoint written.
@@ -559,7 +720,7 @@ void main() {
       Registry.empty().save(io: io);
 
       await expectLater(
-        runSave(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit),
+        runSave(seams: CommandSeams(io: io, projectRootOverride: _projectRoot, exitFn: _throwExit)),
         throwsA(isA<_ExitException>()),
       );
       expect(io.fileExists(skillsPathFor(_workspace)), isFalse);

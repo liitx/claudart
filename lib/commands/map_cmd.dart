@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:path/path.dart' as p;
-import '../file_io.dart';
-import '../paths.dart';
+import '../io/file_io.dart';
+import '../config/paths.dart';
+import '../generated/user_text.g.dart';
 
 /// Generates a human-readable token_map.md from token_map.json on demand.
 /// [workspacePath] routes token_map.json to the per-project workspace.
@@ -17,8 +18,8 @@ void runMap({FileIO? io, String? workspacePath}) {
 
   final raw = fileIO.read(tokenMapPath);
   if (raw.isEmpty) {
-    print('\n✗ No token map found at $tokenMapPath');
-    print('  Run `claudart scan` first to build the token map.\n');
+    print(UserText.mapCmdNoTokenMapFoundAt.format({'tokenMapPath': tokenMapPath}));
+    print(UserText.mapCmdRunClaudartScanFirstToBuild.template);
     return;
   }
 
@@ -26,7 +27,7 @@ void runMap({FileIO? io, String? workspacePath}) {
   try {
     allTokens = jsonDecode(raw) as Map<String, dynamic>;
   } on FormatException catch (_) {
-    print('\n✗ token_map.json is malformed.\n');
+    print(UserText.mapCmdTokenMapJsonIsMalformed.template);
     return;
   }
 
@@ -57,8 +58,8 @@ void runMap({FileIO? io, String? workspacePath}) {
       '($activeCount active)');
 
   fileIO.write(tokenMapMdPath, buf.toString());
-  print('\n✓ Token map written to $tokenMapMdPath');
-  print('  ${allTokens.length} tokens ($activeCount active)\n');
+  print(UserText.mapCmdTokenMapWrittenTo.format({'tokenMapMdPath': tokenMapMdPath}));
+  print(UserText.mapCmdTokensActive.format({'length': allTokens.length, 'activeCount': activeCount}));
 }
 
 String _formatExtra(Map<String, dynamic> meta) {
