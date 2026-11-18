@@ -87,3 +87,7 @@ behavior is owned (extend, never duplicate), no Co-Authored-By in this repo.
   dartrix API. Going forward dartrix's `verify` first checks main is inside the branch,
   then deprecations, analysis and suites; push order is dartrix, merge, bump the pin,
   claudart.
+
+- **Pin bumped** to dartrix `cf54b36` (PR #33 merged: typed handoff return, dependents
+  flow). Order followed: verify against dependents, push dartrix, merge, bump pin, full
+  suite (5296), push. zedup still `floating` (no ref), left to the owner.

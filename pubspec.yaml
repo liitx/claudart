@@ -40,7 +40,7 @@ dev_dependencies:
     git:
       url: https://github.com/liitx/dartrix.git
       # Pinned: bump deliberately, with the full suite, so claudart and dartrix stay 1:1.
-      ref: 53c0b0dad465763809cf03f998a7c21379cdccaf
+      ref: cf54b363bbc34c8b95d92a724ab650797c13b079
   custom_lint: ^0.8.1
   # This repo's own hand-ported custom_lint rules (bare_string_for_enum,
   # enum_values_loop_in_single_test, ungrouped_identical_switch_cases).
